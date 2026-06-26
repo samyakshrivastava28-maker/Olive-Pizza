@@ -1,0 +1,113 @@
+import pkg from 'pg';
+const { Pool } = pkg;
+import dotenv from 'dotenv';
+dotenv.config();
+
+export const pgPool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+});
+
+export const initPostgres = async () => {
+  try {
+    const client = await pgPool.connect();
+    
+    // Create delivery_locations table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS delivery_locations (
+        id SERIAL PRIMARY KEY,
+        delivery_partner_id VARCHAR(255) NOT NULL UNIQUE,
+        active_order_id VARCHAR(255),
+        latitude DOUBLE PRECISION NOT NULL,
+        longitude DOUBLE PRECISION NOT NULL,
+        accuracy DOUBLE PRECISION,
+        speed DOUBLE PRECISION,
+        heading DOUBLE PRECISION,
+        online_status BOOLEAN DEFAULT false,
+        last_updated TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Create delivery_routes table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS delivery_routes (
+        id SERIAL PRIMARY KEY,
+        order_id VARCHAR(255) NOT NULL,
+        delivery_partner_id VARCHAR(255) NOT NULL,
+        restaurant_lat DOUBLE PRECISION,
+        restaurant_lng DOUBLE PRECISION,
+        customer_lat DOUBLE PRECISION,
+        customer_lng DOUBLE PRECISION,
+        distance_km DOUBLE PRECISION,
+        estimated_minutes INTEGER,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Create delivery_history table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS delivery_history (
+        id SERIAL PRIMARY KEY,
+        order_id VARCHAR(255) NOT NULL,
+        delivery_partner_id VARCHAR(255) NOT NULL,
+        pickup_time TIMESTAMP WITH TIME ZONE,
+        delivery_time TIMESTAMP WITH TIME ZONE,
+        distance_km DOUBLE PRECISION,
+        avg_speed DOUBLE PRECISION,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Create email_templates table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS email_templates (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        type VARCHAR(50) NOT NULL, -- e.g., 'transactional', 'marketing', 'festival'
+        subject VARCHAR(255) NOT NULL,
+        html_content TEXT NOT NULL,
+        variables JSONB, -- list of supported variables like {{customer_name}}
+        is_festival BOOLEAN DEFAULT false,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Create email_campaigns table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS email_campaigns (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        target_audience VARCHAR(50) NOT NULL, -- e.g., 'all', 'active', 'vip'
+        template_id INTEGER REFERENCES email_templates(id),
+        status VARCHAR(50) DEFAULT 'draft', -- 'draft', 'scheduled', 'sending', 'completed'
+        scheduled_at TIMESTAMP WITH TIME ZONE,
+        sent_count INTEGER DEFAULT 0,
+        open_count INTEGER DEFAULT 0,
+        fail_count INTEGER DEFAULT 0,
+        bounce_count INTEGER DEFAULT 0,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Create email_queue table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS email_queue (
+        id SERIAL PRIMARY KEY,
+        recipient VARCHAR(255) NOT NULL,
+        subject VARCHAR(255) NOT NULL,
+        html_content TEXT NOT NULL,
+        campaign_id INTEGER REFERENCES email_campaigns(id),
+        type VARCHAR(50) NOT NULL, -- 'transactional', 'marketing'
+        status VARCHAR(50) DEFAULT 'pending', -- 'pending', 'sent', 'failed'
+        retry_count INTEGER DEFAULT 0,
+        last_error TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        sent_at TIMESTAMP WITH TIME ZONE
+      );
+    `);
+
+    client.release();
+    console.log('PostgreSQL initialized successfully');
+  } catch (error) {
+    console.error('Error initializing PostgreSQL:', error);
+  }
+};

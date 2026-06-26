@@ -1,0 +1,64 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", "Outfit", system-ui, sans-serif;
+  
+  /* Primary Brand Color - Deep Olive Green */
+  --color-primary-50: #f4f7f4;
+  --color-primary-100: #e3ebe3;
+  --color-primary-200: #c7d7c8;
+  --color-primary-300: #9eb8a1;
+  --color-primary-400: #749578;
+  --color-primary-500: #55775a;
+  --color-primary-600: #425e47;
+  --color-primary-700: #354a3a;
+  --color-primary-800: #2c3d31;
+  --color-primary-900: #25332a;
+  --color-primary-950: #131c17;
+
+  /* Secondary Color - Warm Pizza Orange */
+  --color-secondary-400: #fb923c;
+  --color-secondary-500: #f97316;
+  --color-secondary-600: #ea580c;
+
+  /* Accent Color - Premium Gold */
+  --color-accent-400: #fbbf24;
+  --color-accent-500: #f59e0b;
+  --color-accent-600: #d97706;
+
+  /* Background - Near Black & Cards - Dark Slate */
+  --color-dark-950: #0a0a0a;
+  --color-dark-900: #121212;
+  --color-dark-800: #1e1e1e;
+  --color-dark-700: #2d2d2d;
+  
+  /* Utilities */
+  --color-success: #4ade80;
+  --color-error: #f87171;
+}
+
+@layer utilities {
+  .premium-card {
+    @apply bg-dark-800 border border-dark-700 shadow-md rounded-2xl overflow-hidden;
+  }
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 20px);
+  }
+}
+
+body {
+  @apply bg-dark-950 text-white font-sans antialiased selection:bg-primary-500 selection:text-white transition-colors duration-200;
+  cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><g transform="rotate(180 16 16)"><text y="24" font-size="24">🍕</text></g></svg>'), auto;
+}
+
+/* Make sure pointer elements still use the default pointer if we want, or also a pizza slice */
+a, button, [role="button"] {
+  cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><g transform="rotate(180 16 16)"><text y="24" font-size="24">🍕</text></g></svg>'), pointer;
+}

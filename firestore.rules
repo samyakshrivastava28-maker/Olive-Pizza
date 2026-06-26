@@ -1,0 +1,162 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return request.auth != null && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    function isAppOwner() {
+      return request.auth != null && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'owner';
+    }
+
+    function hasFullAccess() {
+      return isAdmin() || isAppOwner();
+    }
+
+    function isDeliveryPartner() {
+      return request.auth != null && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'delivery_partner';
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || hasFullAccess();
+      allow create: if isOwner(userId);
+      // PREVENT ROLE EDITS: Only allow updates if role/isAdmin/isOwner/isDeliveryPartner/permissions don't change, OR user is Admin/Owner.
+      allow update: if hasFullAccess() || (
+        isOwner(userId) && 
+        request.resource.data.role == resource.data.role &&
+        request.resource.data.isAdmin == resource.data.isAdmin &&
+        request.resource.data.isOwner == resource.data.isOwner &&
+        request.resource.data.isDeliveryPartner == resource.data.isDeliveryPartner &&
+        request.resource.data.approvalStatus == resource.data.approvalStatus
+      );
+      allow delete: if hasFullAccess();
+    }
+
+    match /menu_categories/{categoryId} {
+      allow read: if true; 
+      allow write: if hasFullAccess();
+    }
+
+    match /menu_items/{itemId} {
+      allow read: if true; 
+      allow write: if hasFullAccess();
+    }
+    
+    // Alias products to menu_items logic just in case
+    match /products/{productId} {
+      allow read: if true;
+      allow write: if hasFullAccess();
+    }
+
+    match /orders/{orderId} {
+      allow read: if isSignedIn() && (
+        hasFullAccess() || 
+        (isDeliveryPartner() && resource.data.deliveryPartnerId == request.auth.uid) ||
+        (resource.data.userId == request.auth.uid) ||
+        (resource.data.customerId == request.auth.uid)
+      );
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && (
+        hasFullAccess() || 
+        (isDeliveryPartner() && resource.data.deliveryPartnerId == request.auth.uid) ||
+        (resource.data.userId == request.auth.uid) ||
+        (resource.data.customerId == request.auth.uid)
+      );
+      allow delete: if hasFullAccess();
+    }
+
+    match /addresses/{addressId} {
+      allow read, update, delete: if isSignedIn() && (resource.data.userId == request.auth.uid || hasFullAccess());
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+    }
+
+    match /delivery_partners/{partnerId} {
+      allow read: if isSignedIn(); 
+      allow write: if hasFullAccess() || (isOwner(partnerId) && isDeliveryPartner());
+    }
+    
+    match /delivery_locations/{locationId} {
+      allow read: if hasFullAccess() || (isDeliveryPartner() && isOwner(locationId));
+      allow write: if hasFullAccess() || (isDeliveryPartner() && isOwner(locationId));
+    }
+
+    match /notifications/{notificationId} {
+      allow read, update, delete: if isSignedIn() && (resource.data.userId == request.auth.uid || hasFullAccess());
+      allow create: if hasFullAccess();
+    }
+
+    match /coupons/{couponId} {
+      allow read: if true; 
+      allow write: if hasFullAccess();
+    }
+    
+    match /ads/{adId} {
+      allow read: if true;
+      allow write: if hasFullAccess();
+    }
+    
+    match /events/{eventId} {
+      allow read: if true;
+      allow write: if hasFullAccess();
+    }
+    
+    match /reports/{reportId} {
+      allow read, write: if hasFullAccess();
+    }
+    
+    match /monthly_reports/{reportId} {
+      allow read, write: if hasFullAccess();
+    }
+    
+    match /analytics/{docId} {
+      allow read, write: if hasFullAccess();
+    }
+    
+    match /media_library/{mediaId} {
+      allow read: if true;
+      allow write: if hasFullAccess();
+    }
+    
+    match /security_logs/{logId} {
+      allow create: if true; // Let backend & frontend create logs
+      allow read, update, delete: if hasFullAccess();
+    }
+
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow create: if isSignedIn() && request.resource.data.customerId == request.auth.uid;
+      allow update, delete: if hasFullAccess();
+    }
+
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if hasFullAccess();
+    }
+
+    match /customer_identities/{identityId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    // FINAL DEFAULT DENY
+    // Everything not explicitly allowed above is denied
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

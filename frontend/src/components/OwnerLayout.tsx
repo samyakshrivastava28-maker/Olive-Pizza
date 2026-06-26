@@ -1,0 +1,137 @@
+import { Outlet, Link, useLocation, useNavigate } from 'react-router';
+import { useAuthStore } from '../lib/store';
+import { useState, useEffect } from 'react';
+import { db } from '../lib/firebase';
+import { doc, getDoc } from 'firebase/firestore';
+import { PremiumBackground } from './ui/glass/PremiumBackground';
+import { GlassPanel } from './ui/glass/GlassSystem';
+import OwnerAlertManager from './owner/OwnerAlertManager';
+
+export default function OwnerLayout() {
+  const { user, logout } = useAuthStore();
+  const location = useLocation();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [profilePic, setProfilePic] = useState('https://ui-avatars.com/api/?name=Owner&background=random');
+  const [ownerName, setOwnerName] = useState(user?.name || 'Restaurant Owner');
+
+  useEffect(() => {
+    // Attempt to load custom profile pic if available
+    const fetchProfile = async () => {
+      if (!user) return;
+      try {
+        const d = await getDoc(doc(db, 'users', user.uid));
+        if (d.exists() && d.data().photoURL) {
+          setProfilePic(d.data().photoURL);
+        }
+        if (d.exists() && d.data().name) {
+          setOwnerName(d.data().name);
+        }
+      } catch (e) {}
+    };
+    fetchProfile();
+  }, [user]);
+
+  const navLinks = [
+    { name: 'Back to Home Page', path: '/', icon: '🏠' },
+    { name: 'Dashboard', path: '/owner/dashboard', icon: '📊' },
+    { name: 'Live Orders', path: '/owner/orders', icon: '⏳' },
+    { name: 'Order History', path: '/owner/order-history', icon: '📚' },
+    { name: 'Notifications', path: '/owner/notifications', icon: '🔔' },
+    { name: 'Products', path: '/owner/products', icon: '🍕' },
+    { name: 'Promotions & Ads', path: '/owner/ads', icon: '📢' },
+    { name: 'Coupons', path: '/owner/coupons', icon: '🎟️' },
+    { name: 'Media Library', path: '/owner/media', icon: '📂' },
+    { name: 'Customers', path: '/owner/customers', icon: '👥' },
+    { name: 'Delivery Partners', path: '/owner/partners', icon: '🛵' },
+    { name: 'Reports', path: '/owner/reports', icon: '📑' },
+    { name: 'Email Center', path: '/owner/email', icon: '✉️' },
+    { name: 'Slack Center', path: '/owner/slack', icon: '💬' },
+    { name: 'Special Categories', path: '/owner/special-categories', icon: '🎪' },
+    { name: 'Homepage Manager', path: '/owner/homepage', icon: '🏗️' },
+    { name: 'Settings', path: '/owner/settings', icon: '⚙️' },
+  ];
+
+  return (
+    <div className="dark min-h-[100dvh] flex font-sans relative w-full text-slate-200">
+      <PremiumBackground />
+      <OwnerAlertManager />
+      
+      {/* Mobile Sidebar Overlay */}
+      {isMobileMenuOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden" onClick={() => setIsMobileMenuOpen(false)} />
+      )}
+
+      {/* Sidebar */}
+      <GlassPanel className={`fixed md:sticky top-0 left-0 h-[100dvh] w-64 flex flex-col z-50 transform transition-transform duration-300 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
+        <div className="p-6 flex items-center justify-between border-b border-white/10">
+          <Link to="/" className="text-2xl font-black text-white tracking-tight flex items-center gap-2 drop-shadow-md">
+            🍕 <span className="hidden md:inline">Olive Pizza</span>
+          </Link>
+          <button className="md:hidden text-slate-300" onClick={() => setIsMobileMenuOpen(false)}>✕</button>
+        </div>
+        
+        <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
+          {navLinks.map(link => {
+            const isActive = location.pathname.startsWith(link.path);
+            return (
+              <Link 
+                key={link.name} 
+                to={link.path} 
+                onClick={() => setIsMobileMenuOpen(false)}
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 border ${isActive ? 'bg-primary-500/20 border-primary-500/50 shadow-[0_0_15px_rgba(249,115,22,0.15)] text-white font-black backdrop-blur-md' : 'border-transparent text-slate-400 font-bold hover:bg-white/5 hover:text-slate-200'}`}
+              >
+                <span className="text-xl opacity-90">{link.icon}</span>
+                {link.name}
+              </Link>
+            )
+          })}
+        </nav>
+      </GlassPanel>
+
+      {/* Main Content Area */}
+      <main className="flex-1 flex flex-col min-w-0 h-[100dvh] overflow-hidden relative z-10">
+        
+        {/* Top Navigation Bar */}
+        <header className="h-20 bg-white/5 backdrop-blur-xl border-b border-white/10 flex items-center justify-between px-6 z-30 sticky top-0 shadow-[0_8px_40px_rgba(0,0,0,0.15)]">
+          <div className="flex items-center gap-4">
+            <button className="md:hidden p-2 text-white" onClick={() => setIsMobileMenuOpen(true)}>
+              ☰
+            </button>
+            <div className="hidden sm:block">
+              <h2 className="text-xl font-black text-white">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</h2>
+              <div className="flex items-center gap-2 mt-0.5">
+                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                <p className="text-xs font-bold text-green-400 uppercase tracking-wider">System Online</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-6">
+            {/* Notification Center goes here if added back later */}
+            
+            <div className="flex items-center gap-3 border-l border-white/10 pl-6">
+              <div className="text-right hidden sm:block">
+                <p className="text-sm font-black text-white">{ownerName}</p>
+                <p className="text-xs font-bold text-slate-400">Store Owner</p>
+              </div>
+              <img src={profilePic} alt="Owner" className="w-10 h-10 rounded-full border-2 border-primary-500 object-cover shadow-lg" />
+              <button onClick={logout} className="ml-2 text-xs font-bold text-white bg-red-500 hover:bg-red-600 px-4 py-2 rounded-xl transition-all shadow-lg shadow-red-500/20">Logout</button>
+            </div>
+          </div>
+        </header>
+
+        {/* Scrollable Page Content */}
+        <div className="flex-1 overflow-y-auto flex flex-col">
+          <div className={`p-4 md:p-8 flex-1 ${location.pathname === '/owner/dashboard' ? '' : 'bg-[#1E293B] border border-white/10 rounded-tl-[40px] shadow-[0_0_50px_rgba(0,0,0,0.5)] m-4 md:m-6 relative z-10'}`}>
+            <Outlet />
+          </div>
+          
+          <footer className="w-full text-center py-6 mt-8 text-xs font-medium text-slate-500 border-t border-slate-200 dark:border-slate-800">
+            A Premium Website By <a href="https://28webhub.netlify.app" target="_blank" rel="noopener noreferrer" className="text-primary-500 hover:text-primary-600 hover:underline transition-colors">S-Web Hub</a>
+          </footer>
+        </div>
+
+      </main>
+    </div>
+  );
+}
