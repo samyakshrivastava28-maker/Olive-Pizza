@@ -5,12 +5,12 @@ import { getStorage } from 'firebase/storage';
 import { getMessaging } from 'firebase/messaging';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyDx57bciljPxJsEZFhDXg44q1UT6_PMIaw",
+  apiKey: "AIzaSyAqkcY-WQrW3WoZWRrv8oo7MTAI_nVrLw4",
   authDomain: "olive-pizza-08.firebaseapp.com",
   projectId: "olive-pizza-08",
   storageBucket: "olive-pizza-08.firebasestorage.app",
-  messagingSenderId: "932564309735",
-  appId: "1:932564309735:web:3dfef47c4ce0a211087442"
+  messagingSenderId: "1017239455106",
+  appId: "1:1017239455106:web:ea5dd73d10722020007b9b"
 };
 
 export const app = initializeApp(firebaseConfig);
