@@ -19,6 +19,7 @@ import {
   Gift,
   Settings,
   MapPin,
+  Home,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router";
 import { useCartStore, useAuthStore } from "../lib/store";
@@ -195,9 +196,14 @@ export default function CustomerDashboard() {
       <div className="relative z-10 max-w-7xl mx-auto p-4 md:p-8 pt-8">
         {/* Top Navigation/Tabs */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-          <h1 className="text-3xl md:text-4xl font-black text-white drop-shadow-md">
-            {activeTab === "orders" ? `Welcome back, ${user?.name || "Customer"}` : "Your Profile"}
-          </h1>
+          <div>
+            <Link to="/" className="inline-flex items-center gap-2 text-primary-500 hover:text-primary-400 font-bold mb-4 transition-colors">
+              <Home size={18} /> Back to Homepage
+            </Link>
+            <h1 className="text-3xl md:text-4xl font-black text-white drop-shadow-md">
+              {activeTab === "orders" ? `Welcome back, ${user?.name || "Customer"}` : "Your Profile"}
+            </h1>
+          </div>
           <div className="flex bg-white/5 backdrop-blur-[20px] p-1 rounded-[24px] border border-white/10 shadow-lg">
             <button
               onClick={() => setActiveTab("orders")}

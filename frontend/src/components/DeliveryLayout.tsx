@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 import { GlassPanel, GlassCard } from './ui/glass/GlassSystem';
 import DeliveryAlertManager from './delivery/DeliveryAlertManager';
 import Particles from './ui/Particles';
+import { Home } from 'lucide-react';
 
 
 export default function DeliveryLayout() {
@@ -50,6 +51,10 @@ export default function DeliveryLayout() {
           >
             Check Status Again
           </button>
+          
+          <Link to="/" className="w-full mt-4 bg-white/10 hover:bg-white/20 border border-white/20 text-white py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2">
+            <Home className="w-5 h-5" /> Back to Homepage
+          </Link>
         </GlassCard>
       </div>
     );
@@ -91,6 +96,9 @@ export default function DeliveryLayout() {
       <header className="bg-white/5 backdrop-blur-xl border-b border-white/10 p-4 sticky top-0 z-50 flex items-center justify-between shadow-[0_8px_40px_rgba(0,0,0,0.15)]">
         <div className="flex justify-between items-center container mx-auto max-w-md w-full">
           <div className="flex items-center gap-3">
+            <Link to="/" className="w-10 h-10 bg-white/10 hover:bg-primary-500 rounded-full flex items-center justify-center transition-colors shadow-sm border border-white/20">
+              <Home className="w-5 h-5 text-white" />
+            </Link>
             <img 
               src={user.photoUrl || `https://ui-avatars.com/api/?name=${user.name}&background=f97316&color=fff`} 
               alt={user.name} 

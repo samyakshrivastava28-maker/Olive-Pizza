@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   createUserWithEmailAndPassword,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   GoogleAuthProvider,
 } from "firebase/auth";
 import { auth, db } from "../lib/firebase";
@@ -27,6 +29,59 @@ export default function Register() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+
+  // Handle redirect result on mount (for mobile Google Sign-In)
+  useEffect(() => {
+    getRedirectResult(auth).then(async (result) => {
+      if (result && result.user) {
+        try {
+          const userRef = doc(db, "users", result.user.uid);
+          const userDoc = await getDoc(userRef);
+
+          const userEmail = result.user.email?.toLowerCase() || "";
+          const initialRole = userEmail === "olivepizzarjn@gmail.com" ? "owner" : "customer";
+          let finalRole = initialRole;
+
+          if (!userDoc.exists()) {
+            await setDoc(userRef, {
+              email: userEmail,
+              name: result.user.displayName || "",
+              role: initialRole,
+              createdAt: new Date().toISOString(),
+            });
+
+            fetch("/api/email/transactional", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                event: "REGISTER",
+                data: { name: result.user.displayName || "", email: userEmail },
+              }),
+            }).catch((e) => console.error("Email trigger failed:", e));
+          } else {
+            finalRole = userDoc.data()?.role || "customer";
+          }
+
+          if (finalRole === "owner" || finalRole === "admin")
+            navigate("/owner/dashboard");
+          else if (finalRole === "delivery_partner")
+            navigate("/delivery/dashboard");
+          else {
+            if (userDoc.exists() && userDoc.data()?.phoneSetupCompleted) {
+               navigate("/");
+            } else {
+               navigate("/onboarding/phone");
+            }
+          }
+        } catch (err) {
+          console.error("Firestore sync failed on redirect result", err);
+          navigate("/onboarding/phone");
+        }
+      }
+    }).catch((err) => {
+      console.error("Redirect sign-in error", err);
+    });
+  }, [navigate]);
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -156,6 +211,14 @@ export default function Register() {
     setLoading(true);
     try {
       const provider = new GoogleAuthProvider();
+      
+      // Directly use redirect on mobile to prevent popup blocking
+      const isMobile = window.innerWidth <= 768 || 'ontouchstart' in window;
+      if (isMobile) {
+        await signInWithRedirect(auth, provider);
+        return; // Exit here, the page will redirect
+      }
+
       const result = await signInWithPopup(auth, provider);
 
       try {
@@ -202,6 +265,11 @@ export default function Register() {
         navigate("/onboarding/phone");
       }
     } catch (err: any) {
+      if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
+        const provider = new GoogleAuthProvider();
+        signInWithRedirect(auth, provider).catch(console.error);
+        return;
+      }
       setError(err.message || "Failed to sign in with Google");
     } finally {
       setLoading(false);

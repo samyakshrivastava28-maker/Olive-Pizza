@@ -105,6 +105,14 @@ export default function Login() {
     setLoading(true);
     try {
       const provider = new GoogleAuthProvider();
+      
+      // Directly use redirect on mobile to prevent popup blocking
+      const isMobile = window.innerWidth <= 768 || 'ontouchstart' in window;
+      if (isMobile) {
+        await signInWithRedirect(auth, provider);
+        return; // Exit here, the page will redirect
+      }
+
       const result = await signInWithPopup(auth, provider);
 
       try {
