@@ -32,6 +32,15 @@ const lazyWithRetry = <T extends ComponentType<any>>(
             console.error('Failed to unregister SW', e);
           }
         }
+
+        if ('caches' in window) {
+          try {
+            const keys = await caches.keys();
+            await Promise.all(keys.map(key => caches.delete(key)));
+          } catch (e) {
+            console.error('Failed to clear caches', e);
+          }
+        }
         
         // Try to bust the cache by adding a timestamp
         window.location.href = window.location.pathname + '?v=' + new Date().getTime();

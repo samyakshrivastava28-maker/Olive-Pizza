@@ -3,8 +3,19 @@ const { Pool } = pkg;
 import dotenv from 'dotenv';
 dotenv.config();
 
+let dbUrl = process.env.DATABASE_URL;
+
+// Auto-fix Render IPv6 issue for Supabase (Forces IPv4 Connection Pooler)
+if (dbUrl && dbUrl.includes('.supabase.co')) {
+  dbUrl = dbUrl.replace('db.tdjrkqmhdynbaciguyvr.supabase.co:5432', 'aws-1-ap-south-1.pooler.supabase.com:6543');
+  if (!dbUrl.includes('pgbouncer=true')) {
+    dbUrl += (dbUrl.includes('?') ? '&' : '?') + 'pgbouncer=true';
+  }
+}
+
 export const pgPool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: dbUrl,
+  connectionTimeoutMillis: 10000, // Fail fast if still unreachable (10s instead of default hanging)
 });
 
 export const initPostgres = async () => {

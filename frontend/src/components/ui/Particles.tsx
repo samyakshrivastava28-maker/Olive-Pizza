@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Renderer, Camera, Geometry, Program, Mesh } from 'ogl';
 
 import './Particles.css';
@@ -102,8 +102,18 @@ const Particles = ({
 }: any) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const mouseRef = useRef({ x: 0, y: 0 });
+  const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  useEffect(() => {
+    if (isMobile) return;
+    
     const container = containerRef.current;
     if (!container) return;
 
@@ -237,6 +247,8 @@ const Particles = ({
     disableRotation,
     pixelRatio
   ]);
+
+  if (isMobile) return null;
 
   return <div ref={containerRef} className={`particles-container ${className || ""}`} />;
 };
