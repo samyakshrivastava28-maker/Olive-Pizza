@@ -1,7 +1,8 @@
-import { Routes, Route, useLocation } from 'react-router';
+import { Routes, Route, useLocation, useNavigate } from 'react-router';
 import { AnimatePresence, MotionConfig } from 'framer-motion';
 import { Toaster } from 'react-hot-toast';
-import { lazy, Suspense, ComponentType } from 'react';
+import { lazy, Suspense, ComponentType, useEffect } from 'react';
+import { useAuthStore } from './lib/store';
 
 // Custom lazy loading with retry for chunk errors (prevents black screen on PWA update)
 const lazyWithRetry = <T extends ComponentType<any>>(
@@ -94,6 +95,30 @@ const DeliveryNotificationCenter = lazyWithRetry(() => import('./pages/delivery/
 
 function AppContent() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { isAuthenticated, user, role } = useAuthStore();
+
+  // Global Onboarding Enforcer: Make phone and location setup strictly compulsory for customers
+  useEffect(() => {
+    if (
+      !isAuthenticated || 
+      role !== 'customer' || 
+      !user || 
+      location.pathname.startsWith('/onboarding') || 
+      location.pathname.startsWith('/login') || 
+      location.pathname.startsWith('/register') ||
+      location.pathname.startsWith('/auth')
+    ) {
+      return;
+    }
+
+    if (!user.phoneSetupCompleted && !user.phone) {
+      navigate('/onboarding/phone', { replace: true });
+    } else if (!user.locationSetupCompleted && !user.lat) {
+      navigate('/onboarding/location', { replace: true });
+    }
+  }, [isAuthenticated, user, role, location.pathname, navigate]);
+
   return (
     <>
       <GlobalLoader />
