@@ -23,7 +23,7 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
-      registerType: 'prompt', // Use prompt to show "New Version Available" manually
+      registerType: 'autoUpdate', // Automatically update in background without prompting the user
       includeAssets: [
         'favicon.ico', 
         'apple-touch-icon.png', 
