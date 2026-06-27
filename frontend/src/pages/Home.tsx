@@ -385,8 +385,8 @@ export default function Home() {
         </div>
       )}
 
-      {/* ─── Hero Section ─────────────────────────────────────────────────── */}
-      <div className="relative w-full h-[85vh] md:h-[90dvh] overflow-hidden rounded-b-[2rem] md:rounded-b-[3rem] shadow-2xl flex flex-col justify-end">
+      {/* ─── Mobile Hero Section (<= 768px) ─────────────────────────────── */}
+      <div className="md:hidden relative w-full h-[100svh] overflow-hidden bg-dark-950">
         <video
           ref={(el) => {
             if (el) {
@@ -398,33 +398,81 @@ export default function Home() {
           poster={desktopBgUrl.replace('.mp4', '.jpg')}
           muted loop playsInline
           preload="none"
-          className="absolute inset-0 w-full h-full object-cover pointer-events-none z-0"
+          className="absolute inset-0 w-full h-full object-cover"
+          style={{ objectPosition: 'center center' }}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-dark-950 via-dark-950/70 to-transparent z-10" />
-        <div className="relative z-20 w-full pb-16 md:pb-24 px-6 md:px-12 max-w-7xl mx-auto text-center md:text-left">
+        <div className="relative z-20 w-full h-full flex flex-col justify-end pb-[120px] px-6 text-center">
           <motion.div
             initial={{ y: 30, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             transition={{ duration: 0.8, delay: showIntro ? 1 : 0 }}
-            className="max-w-2xl mx-auto md:mx-0 flex flex-col items-center md:items-start"
+            className="flex flex-col items-center w-full max-w-full"
           >
-            <h1 className="text-[2.5rem] sm:text-5xl md:text-7xl font-black text-white mb-4 tracking-tight leading-[1.1] [text-wrap:balance]">
+            <h1 className="text-[2.5rem] font-black text-white mb-4 tracking-tight leading-[1.1] w-full break-words">
               Fresh Pizza Delivered Hot To Your Door
             </h1>
-            <p className="text-base sm:text-lg md:text-2xl text-slate-200 mb-8 font-medium leading-relaxed max-w-lg [text-wrap:balance]">
+            <p className="text-base text-slate-200 mb-8 font-medium leading-relaxed max-w-[90%] mx-auto">
               Premium ingredients. Fast delivery. Unforgettable taste.
             </p>
-            <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
+            <div className="flex flex-col gap-4 w-full">
               <Link
                 to="/menu"
-                className="bg-primary-600/90 backdrop-blur-md border border-primary-500/50 text-white px-8 py-4 rounded-full font-bold text-lg text-center flex items-center justify-center gap-2 hover:bg-primary-500 transition-all shadow-lg active:scale-95 w-full sm:w-auto h-[56px]"
+                className="bg-primary-600/90 backdrop-blur-md border border-primary-500/50 text-white w-full h-[56px] rounded-full font-bold text-lg flex items-center justify-center gap-2 hover:bg-primary-500 transition-all shadow-[0_8px_30px_rgb(0,0,0,0.12)] active:scale-95"
               >
                 {storeStatus.isRestaurantOpen && storeStatus.isWithinBusinessHours ? "Order Now" : "Store Closed"}
                 <ChevronRight className="w-5 h-5" />
               </Link>
               <Link
                 to="/menu"
-                className="bg-dark-800/80 backdrop-blur-md border border-dark-700 text-white px-8 py-4 rounded-full font-bold text-lg text-center flex items-center justify-center hover:bg-dark-700 transition-all active:scale-95 w-full sm:w-auto h-[56px]"
+                className="bg-dark-800/80 backdrop-blur-md border border-dark-700 text-white w-full h-[56px] rounded-full font-bold text-lg flex items-center justify-center hover:bg-dark-700 transition-all shadow-[0_8px_30px_rgb(0,0,0,0.12)] active:scale-95"
+              >
+                Explore Menu
+              </Link>
+            </div>
+          </motion.div>
+        </div>
+      </div>
+
+      {/* ─── Desktop Hero Section (> 768px) ─────────────────────────────── */}
+      <div className="hidden md:flex relative w-full h-[90dvh] overflow-hidden rounded-b-[3rem] shadow-2xl flex-col justify-end">
+        <video
+          ref={(el) => {
+            if (el) {
+              if (showIntro) el.pause();
+              else el.play().catch(() => {});
+            }
+          }}
+          src={desktopBgUrl}
+          muted loop playsInline
+          preload="none"
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 min-w-full min-h-full w-auto h-auto object-cover pointer-events-none z-0"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-dark-950 via-dark-950/60 to-dark-950/30 z-10" />
+        <div className="relative z-20 h-full flex flex-col justify-end pb-24 px-8 max-w-7xl mx-auto w-full">
+          <motion.div
+            initial={{ y: 30, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ duration: 0.8, delay: showIntro ? 1 : 0 }}
+            className="max-w-2xl"
+          >
+            <h1 className="text-5xl md:text-7xl font-black text-white mb-4 tracking-tight leading-[1.1]">
+              Fresh Pizza Delivered Hot To Your Door
+            </h1>
+            <p className="text-2xl text-slate-300 mb-8 font-medium leading-relaxed max-w-lg">
+              Premium ingredients. Fast delivery. Unforgettable taste.
+            </p>
+            <div className="flex flex-row gap-4">
+              <Link
+                to="/menu"
+                className="bg-primary-600 text-white px-8 py-4 rounded-full font-bold text-lg text-center flex items-center justify-center gap-2 hover:bg-primary-500 transition-colors shadow-lg active:scale-95"
+              >
+                {storeStatus.isRestaurantOpen && storeStatus.isWithinBusinessHours ? "Order Now" : "Store Closed"}
+                <ChevronRight className="w-5 h-5" />
+              </Link>
+              <Link
+                to="/menu"
+                className="bg-dark-800 text-white border border-dark-700 px-8 py-4 rounded-full font-bold text-lg text-center flex items-center justify-center hover:bg-dark-700 transition-colors active:scale-95"
               >
                 Explore Menu
               </Link>
