@@ -43,8 +43,7 @@ export class FirestoreListener {
                 type: 'scheduled_order_received',
                 category: 'orders',
                 title: `📅 New Scheduled Order — #${orderData.id.slice(-6).toUpperCase()}`,
-                blocks,
-                skipWebPush: true // If the notificationService supports it, otherwise just use a different type that isn't mapped to an alarm sound
+                blocks
               });
               if (ts) {
                 try { await change.doc.ref.update({ slackThreadTs: ts }); } catch (e) {}
