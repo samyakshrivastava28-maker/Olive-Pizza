@@ -10,13 +10,13 @@ const firebaseConfig = {
     : "AIzaSyDx57bciljPxJsEZFhDXg44q1UT6_PMIaw",
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN && import.meta.env.VITE_FIREBASE_AUTH_DOMAIN !== 'your_firebase_auth_domain'
     ? import.meta.env.VITE_FIREBASE_AUTH_DOMAIN
-    : "olive-pizza.firebaseapp.com",
+    : "olive-pizza-08.firebaseapp.com",
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID && import.meta.env.VITE_FIREBASE_PROJECT_ID !== 'your_firebase_project_id'
     ? import.meta.env.VITE_FIREBASE_PROJECT_ID
-    : "olive-pizza",
+    : "olive-pizza-08",
   storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET && import.meta.env.VITE_FIREBASE_STORAGE_BUCKET !== 'your_firebase_storage_bucket'
     ? import.meta.env.VITE_FIREBASE_STORAGE_BUCKET
-    : "olive-pizza.firebasestorage.app",
+    : "olive-pizza-08.firebasestorage.app",
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID && import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID !== 'your_firebase_messaging_sender_id'
     ? import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID
     : "932564309735",
