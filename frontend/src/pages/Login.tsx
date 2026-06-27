@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   signInWithEmailAndPassword,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   GoogleAuthProvider,
 } from "firebase/auth";
 import { auth, db } from "../lib/firebase";
@@ -16,11 +18,68 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
+  // Handle redirect result on mount
+  useEffect(() => {
+    getRedirectResult(auth).then(async (result) => {
+      if (result && result.user) {
+        try {
+          const userRef = doc(db, "users", result.user.uid);
+          const { getDoc } = await import("firebase/firestore");
+          const userDoc = await getDoc(userRef);
+
+          const userEmail = result.user.email?.toLowerCase() || "";
+          const initialRole = userEmail === "olivepizzarjn@gmail.com" ? "owner" : "customer";
+          let finalRole = initialRole;
+
+          if (!userDoc.exists()) {
+            await setDoc(userRef, {
+              email: userEmail,
+              name: result.user.displayName || "",
+              role: initialRole,
+              createdAt: new Date().toISOString(),
+            });
+          } else {
+            finalRole = userDoc.data()?.role || "customer";
+          }
+
+          if (finalRole === "owner" || finalRole === "admin") navigate("/owner/dashboard");
+          else if (finalRole === "delivery_partner") navigate("/delivery/dashboard");
+          else navigate("/");
+        } catch (err) {
+          console.error("Firestore sync failed on redirect result", err);
+        }
+      }
+    }).catch((err) => {
+      console.error("Redirect sign-in error", err);
+    });
+  }, [navigate]);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
     try {
+      // ReCaptcha Enterprise Assessment (Non-blocking as requested)
+      try {
+        if (typeof (window as any).grecaptcha !== 'undefined') {
+          const grecaptcha = (window as any).grecaptcha;
+          await new Promise<void>((resolve) => grecaptcha.enterprise.ready(resolve));
+          const token = await grecaptcha.enterprise.execute('6LdqyDctAAAAABn8isXOdDe-0roVqILKuAdIl_x-', {action: 'LOGIN'});
+          
+          const response = await fetch('/api/auth/verify-recaptcha', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token, action: 'LOGIN' })
+          });
+          const data = await response.json();
+          if (data.success === false) {
+             console.warn("Recaptcha assessment failed or flagged:", data.reason);
+          }
+        }
+      } catch (recaptchaError) {
+        console.warn("Recaptcha execution failed, proceeding to login to not block workflow:", recaptchaError);
+      }
+
       const userCredential = await signInWithEmailAndPassword(
         auth,
         email,
@@ -80,6 +139,15 @@ export default function Login() {
         navigate("/");
       }
     } catch (err: any) {
+      if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
+        console.warn("Popup blocked or closed, falling back to redirect...");
+        const provider = new GoogleAuthProvider();
+        signInWithRedirect(auth, provider).catch((redirectErr) => {
+          setError(redirectErr.message || "Failed to sign in with redirect");
+          setLoading(false);
+        });
+        return; // Return early, let the redirect happen
+      }
       setError(err.message || "Failed to sign in with Google");
     } finally {
       setLoading(false);

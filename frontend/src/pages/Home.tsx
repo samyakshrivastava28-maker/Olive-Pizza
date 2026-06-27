@@ -4,7 +4,6 @@ import { Link, useNavigate } from "react-router";
 import { db } from "../lib/firebase";
 import {
   collection,
-  onSnapshot,
   query,
   orderBy,
   getDocs,
@@ -12,6 +11,7 @@ import {
   limit,
 } from "firebase/firestore";
 import PageTransition from "../components/PageTransition";
+import { useDataStore } from "../lib/dataStore";
 import { useStoreStatus } from "../lib/useStoreStatus";
 import { ChevronRight, ShoppingBag, RefreshCw, Heart } from "lucide-react";
 import Ferrofluid from "../components/ui/Ferrofluid";
@@ -57,17 +57,30 @@ export default function Home() {
   }, []);
 
   // ─── Data State ───────────────────────────────────────────────────────────
-  const [ads, setAds] = useState<any[]>([]);
-  const [coupons, setCoupons] = useState<any[]>([]);
-  const [specialCategories, setSpecialCategories] = useState<any[]>([]);
-  const [allProducts, setAllProducts] = useState<any[]>([]);
-  const [topSelling, setTopSelling] = useState<any[]>([]);
+  const {
+    ads,
+    coupons,
+    specialCategories,
+    products,
+    combos,
+    isInitialized,
+    initialize,
+  } = useDataStore();
+
+  useEffect(() => {
+    initialize();
+  }, [initialize]);
+
+  const allProducts = [...products, ...combos];
+  
+  // Auto top selling: weighted score
+  const topSelling = [...allProducts]
+    .sort((a, b) => computeRankingScore(b as any) - computeRankingScore(a as any))
+    .slice(0, 8);
+
   const [wishlistIds, setWishlistIds] = useState<string[]>([]);
   const [previousOrders, setPreviousOrders] = useState<any[]>([]);
   const [savedProducts, setSavedProducts] = useState<any[]>([]);
-  const [dataLoaded, setDataLoaded] = useState({
-    ads: false, coupons: false, categories: false, products: false,
-  });
 
   // ─── Intro Video ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -91,85 +104,7 @@ export default function Home() {
     sessionStorage.setItem("olive_intro_seen", "true");
   };
 
-  // ─── Fetch Ads ────────────────────────────────────────────────────────────
-  useEffect(() => {
-    const unsub = onSnapshot(
-      query(collection(db, "ads"), where("isActive", "==", true), orderBy("createdAt", "desc")),
-      (snap) => {
-        const all = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        setAds(filterActive(all as any));
-        setDataLoaded((p) => ({ ...p, ads: true }));
-      }
-    );
-    return unsub;
-  }, []);
 
-  // ─── Fetch Coupons ────────────────────────────────────────────────────────
-  useEffect(() => {
-    const unsub = onSnapshot(
-      query(collection(db, "coupons"), where("isActive", "==", true)),
-      (snap) => {
-        const all = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        setCoupons(filterActive(all as any));
-        setDataLoaded((p) => ({ ...p, coupons: true }));
-      }
-    );
-    return unsub;
-  }, []);
-
-  // ─── Fetch Special Categories ─────────────────────────────────────────────
-  useEffect(() => {
-    const unsub = onSnapshot(
-      query(collection(db, "special_categories"), orderBy("displayPriority", "desc")),
-      (snap) => {
-        const all = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        setSpecialCategories(filterActive(all as any));
-        setDataLoaded((p) => ({ ...p, categories: true }));
-      }
-    );
-    return unsub;
-  }, []);
-
-  // ─── Fetch Products & Combos ───────────────────────────────────────────────
-  useEffect(() => {
-    let currentProducts: any[] = [];
-    let currentCombos: any[] = [];
-
-    const mergeAndSet = () => {
-      const all = [...currentProducts, ...currentCombos];
-      setAllProducts(all);
-      // Auto top selling: weighted score
-      const ranked = [...all].sort(
-        (a, b) => computeRankingScore(b as any) - computeRankingScore(a as any)
-      );
-      setTopSelling(ranked.slice(0, 8));
-      setDataLoaded((p) => ({ ...p, products: true }));
-    };
-
-    const unsubProducts = onSnapshot(
-      query(collection(db, "products"), where("isActive", "==", true), orderBy("createdAt", "desc")),
-      (snap) => {
-        currentProducts = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        mergeAndSet();
-      }
-    );
-
-    const unsubCombos = onSnapshot(
-      query(collection(db, "combos"), where("isActive", "==", true), orderBy("createdAt", "desc")),
-      (snap) => {
-        currentCombos = snap.docs.map((d) => {
-          const data = d.data();
-          return { id: d.id, ...data, isCombo: true, productName: data.name };
-        });
-        mergeAndSet();
-      }
-    );
-
-    return () => {
-      unsubProducts();
-      unsubCombos();
-    };
-  }, []);
 
   // ─── Wishlist ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -229,7 +164,7 @@ export default function Home() {
         return null; // Hero is always rendered at the top
 
       case "ads":
-        if (!dataLoaded.ads) return <SectionSkeleton rows={1} />;
+        if (!isInitialized) return <SectionSkeleton rows={1} />;
         if (ads.length === 0) return null;
         return (
           <SectionWrapper
@@ -251,7 +186,7 @@ export default function Home() {
         );
 
       case "coupons":
-        if (!dataLoaded.coupons) return <SectionSkeleton rows={1} />;
+        if (!isInitialized) return <SectionSkeleton rows={1} />;
         if (coupons.length === 0) return null;
         return (
           <SectionWrapper
@@ -269,7 +204,7 @@ export default function Home() {
         );
 
       case "special_categories":
-        if (!dataLoaded.categories || !dataLoaded.products) return <SectionSkeleton rows={2} />;
+        if (!isInitialized) return <SectionSkeleton rows={2} />;
         if (specialCategories.length === 0) return null;
         return (
           <div key="special_categories" className="space-y-8">
@@ -286,7 +221,7 @@ export default function Home() {
         );
 
       case "top_selling":
-        if (!dataLoaded.products) return <SectionSkeleton rows={2} />;
+        if (!isInitialized) return <SectionSkeleton rows={2} />;
         if (topSelling.length === 0) return null;
         return (
           <SectionWrapper
@@ -333,7 +268,7 @@ export default function Home() {
 
       case "personalization":
         if (!isAuthenticated) return null;
-        if (!dataLoaded.products || allProducts.length === 0) return null;
+        if (!isInitialized || allProducts.length === 0) return null;
         // Simple personalization: show recently viewed or a shuffled featured set
         const recommended = [...allProducts].sort(() => Math.random() - 0.5).slice(0, 4);
         return (
@@ -407,9 +342,9 @@ export default function Home() {
     }
   };
 
-  const desktopIntroUrl = "https://res.cloudinary.com/dxmlvkff1/video/upload/v1782199127/Olive_Pizza_logo_reveal_202606231247_rrtc3u.mp4";
-  const mobileIntroUrl = "https://res.cloudinary.com/dxmlvkff1/video/upload/v1782199117/Olive_Pizza_logo_reveal_202606231246_xeyk9t.mp4";
-  const desktopBgUrl = "https://res.cloudinary.com/dxmlvkff1/video/upload/f_auto,q_auto/v1782200264/Artisan_pizza_emerging_from_oven_202606231307_qmognm.mp4";
+  const desktopIntroUrl = "https://res.cloudinary.com/dxmlvkff1/video/upload/f_auto,q_auto:eco,w_800/v1782199127/Olive_Pizza_logo_reveal_202606231247_rrtc3u.mp4";
+  const mobileIntroUrl = "https://res.cloudinary.com/dxmlvkff1/video/upload/f_auto,q_auto:eco,w_480/v1782199117/Olive_Pizza_logo_reveal_202606231246_xeyk9t.mp4";
+  const desktopBgUrl = "https://res.cloudinary.com/dxmlvkff1/video/upload/f_auto,q_auto:eco,w_1080/v1782200264/Artisan_pizza_emerging_from_oven_202606231307_qmognm.mp4";
 
   return (
     <PageTransition className="relative w-full">
@@ -425,6 +360,7 @@ export default function Home() {
             <video
               src={isMobile ? mobileIntroUrl : desktopIntroUrl}
               autoPlay muted playsInline
+              preload="auto"
               onEnded={handleIntroEnd}
               onError={() => setTimeout(handleIntroEnd, 2000)}
               className="w-full h-full object-cover"
@@ -449,8 +385,14 @@ export default function Home() {
       {/* ─── Hero Section ─────────────────────────────────────────────────── */}
       <div className="relative w-full h-[85vh] md:h-[90dvh] overflow-hidden rounded-b-[2rem] md:rounded-b-[3rem] shadow-2xl">
         <video
+          ref={(el) => {
+            if (el) {
+              if (showIntro) el.pause();
+              else el.play().catch(() => {});
+            }
+          }}
           src={desktopBgUrl}
-          autoPlay muted loop playsInline
+          muted loop playsInline
           className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 min-w-full min-h-full w-auto h-auto object-cover pointer-events-none z-0"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-dark-950 via-dark-950/60 to-dark-950/30 z-10" />

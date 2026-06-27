@@ -3,11 +3,12 @@ import { MenuItem } from "../types/models";
 import { db } from "../lib/firebase";
 import {
   collection,
-  onSnapshot,
   query,
   where,
   getDocs,
 } from "firebase/firestore";
+import { useDataStore } from "../lib/dataStore";
+import { useDebounce } from "../hooks/useDebounce";
 import { motion, Variants } from "framer-motion";
 import PageTransition from "../components/PageTransition";
 import ProductCard from "../components/ProductCard";
@@ -18,15 +19,19 @@ import Galaxy from "../components/ui/Galaxy";
 import { useLocation } from "react-router";
 
 export default function Menu() {
-  const [items, setItems] = useState<MenuItem[]>([]);
-  const [activeAds, setActiveAds] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [category, setCategory] = useState<
-    "all" | "pizza" | "sides" | "beverage" | "combo"
-  >("all");
+  const {
+    products,
+    combos,
+    ads,
+    isInitialized,
+    initialize,
+  } = useDataStore();
+
   const [searchQuery, setSearchQuery] = useState("");
-  const location = useLocation();
+  const debouncedSearch = useDebounce(searchQuery, 300);
+  const [category, setCategory] = useState<"all" | "pizza" | "sides" | "beverage" | "combo">("all");
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const location = useLocation();
 
   useEffect(() => {
     if (location.search.includes("search=1") && searchInputRef.current) {
@@ -35,104 +40,48 @@ export default function Menu() {
   }, [location.search]);
 
   useEffect(() => {
-    let unsubscribeProducts: () => void;
-    let unsubscribeCombos: () => void;
+    initialize();
+  }, [initialize]);
 
-    const initializeMenu = async () => {
-      try {
-        const adsSnap = await getDocs(
-          query(collection(db, "ads"), where("isActive", "==", true)),
-        );
-        const now = new Date().toISOString();
-        const validAds = adsSnap.docs
-          .map((doc) => ({ id: doc.id, ...doc.data() }))
-          .filter(
-            (a: any) =>
-              (!a.startDate || now >= a.startDate) &&
-              (!a.endDate || now <= a.endDate),
-          );
-        setActiveAds(validAds);
+  // Combine products and combos, matching the MenuItem interface exactly
+  const allItems: MenuItem[] = useMemo(() => {
+    const parsedProducts = products.map((data) => ({
+      id: data.id,
+      name: data.productName,
+      description: data.description,
+      category: data.category,
+      pricingMode: data.pricingMode || "fixed",
+      basePrice: data.basePrice,
+      offerPrice: data.offerPrice || 0,
+      discountPercentage: data.discountPercentage || 0,
+      image: data.imageUrl,
+      isVegetarian: data.isVegetarian,
+      isAvailable: data.isActive,
+    } as MenuItem));
 
-        let currentProducts: MenuItem[] = [];
-        let currentCombos: MenuItem[] = [];
+    const parsedCombos = combos.map((data) => ({
+      id: data.id,
+      name: data.name,
+      description: data.description,
+      category: "combo",
+      pricingMode: data.pricingMode || "fixed",
+      basePrice: data.basePrice,
+      offerPrice: data.offerPrice || 0,
+      discountPercentage: data.discountPercentage || 0,
+      image: data.imageUrl,
+      isVegetarian: false,
+      isAvailable: data.isActive,
+      productIds: data.productIds
+    } as MenuItem));
 
-        const mergeAndSetItems = () => {
-          setItems([...currentProducts, ...currentCombos]);
-          setLoading(false);
-        };
-
-        unsubscribeProducts = onSnapshot(
-          collection(db, "products"),
-          (snapshot) => {
-            currentProducts = snapshot.docs.map((doc) => {
-              const data = doc.data();
-              return {
-                id: doc.id,
-                name: data.productName,
-                description: data.description,
-                category: data.category,
-                pricingMode: data.pricingMode || "fixed",
-                basePrice: data.basePrice,
-                offerPrice: data.offerPrice || 0,
-                discountPercentage: data.discountPercentage || 0,
-                image: data.imageUrl,
-                isVegetarian: data.isVegetarian,
-                isAvailable: data.isActive,
-              } as MenuItem;
-            });
-            mergeAndSetItems();
-          },
-          (error) => {
-            console.error("Failed to fetch menu products:", error);
-            setLoading(false);
-          },
-        );
-
-        unsubscribeCombos = onSnapshot(
-          collection(db, "combos"),
-          (snapshot) => {
-            currentCombos = snapshot.docs.map((doc) => {
-              const data = doc.data();
-              return {
-                id: doc.id,
-                name: data.name,
-                description: data.description,
-                category: "combo",
-                pricingMode: data.pricingMode || "fixed",
-                basePrice: data.basePrice,
-                offerPrice: data.offerPrice || 0,
-                discountPercentage: data.discountPercentage || 0,
-                image: data.imageUrl,
-                isVegetarian: false,
-                isAvailable: data.isActive,
-                productIds: data.productIds
-              } as MenuItem;
-            });
-            mergeAndSetItems();
-          },
-          (error) => {
-            console.error("Failed to fetch combos:", error);
-          }
-        );
-      } catch (error) {
-        console.error("Failed to initialize menu:", error);
-        setLoading(false);
-      }
-    };
-
-    initializeMenu();
-
-    return () => {
-      if (unsubscribeProducts) unsubscribeProducts();
-      if (unsubscribeCombos) unsubscribeCombos();
-    };
-  }, []);
+    return [...parsedProducts, ...parsedCombos];
+  }, [products, combos]);
 
   const filteredItems = useMemo(() => {
-    return items.filter((item) => {
+    return allItems.filter((item) => {
       const matchesCategory = category === "all" || item.category === category;
       
-      const q = searchQuery.toLowerCase();
+      const q = debouncedSearch.toLowerCase();
       
       // Simulate AI Food Finder semantic search
       const isSpicyQuery = q.includes("spicy") || q.includes("hot");
@@ -165,7 +114,7 @@ export default function Menu() {
 
       return matchesCategory && matchesSearch;
     });
-  }, [items, category, searchQuery]);
+  }, [allItems, category, debouncedSearch]);
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -214,9 +163,9 @@ export default function Menu() {
           )}
 
           {/* Promotional Ads Section */}
-          {activeAds.length > 0 && (
+          {ads.length > 0 && (
             <div className="space-y-4">
-              {activeAds.map((ad, idx) => (
+              {ads.map((ad, idx) => (
                 <div
                   key={idx}
                   className="w-full rounded-2xl overflow-hidden shadow-xl relative group bg-dark-900 min-h-[140px] md:min-h-[200px] flex items-center justify-center"
@@ -293,7 +242,7 @@ export default function Menu() {
           </div>
 
           {/* Product Grid */}
-          {loading ? (
+          {!isInitialized ? (
             <PizzaLoader message="Preparing menu..." />
           ) : filteredItems.length === 0 ? (
             <div className="text-center text-slate-400 py-12">

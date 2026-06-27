@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { adminDb as db } from '../config/firebase.js';
+import * as admin from 'firebase-admin';
 import { notificationScheduler } from '../services/notification/NotificationScheduler';
 import { NotificationTemplates } from '../services/notification/NotificationTemplates';
 import { verifyToken } from '../middleware/auth.middleware.js';
@@ -133,6 +134,75 @@ router.post('/action', verifyToken, async (req: Request, res: Response): Promise
   } catch (error) {
     console.error('[NotificationRoutes] Error processing action:', error);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Handle custom push notifications from Owner Dashboard
+ */
+router.post('/send-custom', verifyToken, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { title, body, audience } = req.body;
+    const userId = (req as any).user.uid;
+
+    // Verify owner role
+    const ownerDoc = await db.collection('users').doc(userId).get();
+    if (!ownerDoc.exists || ownerDoc.data()?.role !== 'owner') {
+      res.status(403).json({ error: 'Unauthorized: Owner access required' });
+      return;
+    }
+
+    if (!title || !body) {
+      res.status(400).json({ error: 'Title and body are required' });
+      return;
+    }
+
+    // Fetch targets based on audience
+    let usersQuery: FirebaseFirestore.Query = db.collection('users');
+    
+    if (audience === 'customers') {
+      usersQuery = usersQuery.where('role', '==', 'customer');
+    } else if (audience === 'delivery') {
+      usersQuery = usersQuery.where('role', '==', 'delivery_partner');
+    }
+
+    const usersSnapshot = await usersQuery.get();
+    
+    // Collect all valid FCM tokens
+    const tokens: string[] = [];
+    usersSnapshot.forEach(doc => {
+      const data = doc.data();
+      if (data.fcmTokens && Array.isArray(data.fcmTokens)) {
+        tokens.push(...data.fcmTokens);
+      }
+    });
+
+    if (tokens.length === 0) {
+      res.json({ success: true, sentCount: 0, message: 'No registered devices found for this audience' });
+      return;
+    }
+
+    // Batch send via Firebase Admin
+    const message = {
+      notification: { title, body },
+      data: { url: '/', source: 'owner_broadcast' },
+      tokens: tokens,
+    };
+
+    const response = await admin.messaging().sendEachForMulticast(message);
+    
+    console.log(`[NotificationRoutes] Broadcast sent: ${response.successCount} successful, ${response.failureCount} failed.`);
+    
+    // Optionally: prune failed tokens here (e.g., if error.code === 'messaging/invalid-registration-token')
+
+    res.json({
+      success: true,
+      sentCount: response.successCount,
+      failedCount: response.failureCount
+    });
+  } catch (error: any) {
+    console.error('[NotificationRoutes] Error sending custom push:', error);
+    res.status(500).json({ error: 'Failed to send notification', details: error.message });
   }
 });
 

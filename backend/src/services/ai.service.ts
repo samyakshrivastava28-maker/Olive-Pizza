@@ -4,8 +4,9 @@ import cloudinary from '../config/cloudinary.js';
 
 dotenv.config();
 
-const nvidiaApiKey = process.env.NVIDIA_API_KEY || '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';
+const nvidiaApiKey = process.env.NVIDIA_API_KEY || '';
 const openRouterApiKey = process.env.OPENROUTER_API_KEY || '';
+const geminiApiKey = process.env.GEMINI_API_KEY || '';
 
 const nvidiaClient = new OpenAI({
   apiKey: nvidiaApiKey,
@@ -21,14 +22,19 @@ const openRouterClient = new OpenAI({
   },
 });
 
+const geminiClient = new OpenAI({
+  apiKey: geminiApiKey,
+  baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai/',
+});
+
 // ── Model fallback chain ───────────────────────────────────────────────────────
 const MODEL_CHAIN = [
-  { client: nvidiaClient, model: 'deepseek-ai/deepseek-r1-distill-qwen-32b', name: 'DeepSeek R1 (NVIDIA)' },
-  { client: nvidiaClient, model: 'qwen/qwen3-235b-a22b', name: 'Qwen 3 235B (NVIDIA)' },
-  { client: nvidiaClient, model: 'z-ai/glm-5.1', name: 'GLM 5.1 (NVIDIA)' },
-  { client: nvidiaClient, model: 'google/gemma-2-27b-it', name: 'Gemma 2 27B (NVIDIA)' },
+  { client: geminiClient, model: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash' },
+  { client: geminiClient, model: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro' },
+  { client: nvidiaClient, model: 'deepseek-ai/deepseek-r1', name: 'DeepSeek R1 (NVIDIA)' },
+  { client: nvidiaClient, model: 'meta/llama-3.1-70b-instruct', name: 'Llama 3.1 70B (NVIDIA)' },
+  { client: nvidiaClient, model: 'meta/llama-3.1-8b-instruct', name: 'Llama 3.1 8B (NVIDIA)' },
   { client: openRouterClient, model: 'google/gemma-2-27b-it', name: 'Gemma 2 (OpenRouter)' },
-  { client: openRouterClient, model: 'qwen/qwen-2.5-72b-instruct', name: 'Qwen 2.5 (OpenRouter)' },
 ];
 
 // ── Fetch product details safely ────────────────────────────────────────────────
@@ -566,8 +572,9 @@ Type context: ${type === 'banner' ? 'Wide promotional marketing banner, dynamic 
 
   // Explicit chain for this task: DeepSeek R1 -> Qwen
   const chain = [
+    { client: geminiClient, model: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash' },
     { client: nvidiaClient, model: 'deepseek-ai/deepseek-r1', name: 'DeepSeek R1' },
-    { client: nvidiaClient, model: 'qwen/qwen2.5-72b-instruct', name: 'Qwen 2.5 72B' },
+    { client: nvidiaClient, model: 'meta/llama-3.1-70b-instruct', name: 'Llama 3.1 70B' },
     { client: nvidiaClient, model: 'meta/llama-3.1-8b-instruct', name: 'Llama 3.1 8B' }
   ];
 

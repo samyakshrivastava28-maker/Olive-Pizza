@@ -14,6 +14,7 @@ import couponRoutes from './routes/coupon.routes.js';
 import trackingRoutes from './routes/tracking.routes.js';
 import slackRoutes from './routes/slack.routes.js';
 import notificationRoutes from './routes/notification.routes.js';
+import authRoutes from './routes/auth.routes.js';
 
 const app = express();
 
@@ -62,6 +63,7 @@ app.use('/admin', adminRoutes);
 app.use('/ai', aiRoutes);
 app.use('/delivery', deliveryRoutes);
 app.use('/users', userRoutes);
+app.use('/auth', authRoutes);
 app.use('/menu', menuRoutes);
 app.use('/reports', reportRoutes);
 app.use('/notifications', notificationRoutes);

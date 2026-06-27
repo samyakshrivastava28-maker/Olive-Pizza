@@ -63,6 +63,16 @@ service cloud.firestore {
       allow write: if hasFullAccess();
     }
 
+    match /combos/{comboId} {
+      allow read: if true;
+      allow write: if hasFullAccess();
+    }
+
+    match /special_categories/{categoryId} {
+      allow read: if true;
+      allow write: if hasFullAccess();
+    }
+
     match /orders/{orderId} {
       allow read: if isSignedIn() && (
         hasFullAccess() || 
@@ -149,8 +159,11 @@ service cloud.firestore {
     }
 
     match /customer_identities/{identityId} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow read, write: if isSignedIn() && (
+        hasFullAccess() || 
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.phone == identityId)
+      );
     }
 
     // FINAL DEFAULT DENY

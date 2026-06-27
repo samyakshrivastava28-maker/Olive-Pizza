@@ -1,5 +1,6 @@
-import * as admin from 'firebase-admin';
-import { messagingProvider } from './FirebaseMessagingProvider';
+import { adminDb } from '../../config/firebase.js';
+import { FieldValue } from 'firebase-admin/firestore';
+import { messagingProvider } from './FirebaseMessagingProvider.js';
 
 export class NotificationScheduler {
   private activeIntervals: Map<string, NodeJS.Timeout> = new Map();
@@ -13,7 +14,7 @@ export class NotificationScheduler {
    */
   private async resumeAlarms() {
     try {
-      const snapshot = await admin.firestore().collection('active_alarms').get();
+      const snapshot = await adminDb.collection('active_alarms').get();
       snapshot.docs.forEach(doc => {
         const data = doc.data();
         this.scheduleAlarm(doc.id, data.targetUserId, data.payload, data.stage);
@@ -27,7 +28,7 @@ export class NotificationScheduler {
   /**
    * Starts a persistent alarm for a specific order and user.
    */
-  public async startAlarm(orderId: string, targetUserId: string, payload: admin.messaging.MessagingPayload, stage: string) {
+  public async startAlarm(orderId: string, targetUserId: string, payload: any, stage: string) {
     const alarmId = `${orderId}_${stage}`;
     
     if (this.activeIntervals.has(alarmId)) {
@@ -35,18 +36,18 @@ export class NotificationScheduler {
     }
 
     // Save to Firestore for persistence
-    await admin.firestore().collection('active_alarms').doc(alarmId).set({
+    await adminDb.collection('active_alarms').doc(alarmId).set({
       orderId,
       targetUserId,
       payload,
       stage,
-      createdAt: admin.firestore.FieldValue.serverTimestamp()
+      createdAt: FieldValue.serverTimestamp()
     });
 
     this.scheduleAlarm(alarmId, targetUserId, payload, stage);
   }
 
-  private scheduleAlarm(alarmId: string, targetUserId: string, payload: admin.messaging.MessagingPayload, stage: string) {
+  private scheduleAlarm(alarmId: string, targetUserId: string, payload: any, stage: string) {
     // Initial send
     this.sendToUser(targetUserId, payload);
 
@@ -71,7 +72,7 @@ export class NotificationScheduler {
     }
 
     // Remove from Firestore
-    await admin.firestore().collection('active_alarms').doc(alarmId).delete().catch(e => {
+    await adminDb.collection('active_alarms').doc(alarmId).delete().catch(e => {
       console.error(`[NotificationScheduler] Failed to delete active alarm ${alarmId}:`, e);
     });
   }
@@ -81,7 +82,7 @@ export class NotificationScheduler {
    */
   public async sendToUser(userId: string, payload: any) {
     try {
-      const userDoc = await admin.firestore().collection('users').doc(userId).get();
+      const userDoc = await adminDb.collection('users').doc(userId).get();
       if (!userDoc.exists) return;
       
       const userData = userDoc.data();

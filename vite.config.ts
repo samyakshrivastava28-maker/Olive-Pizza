@@ -5,6 +5,20 @@ import { VitePWA } from 'vite-plugin-pwa';
 import path from 'path';
 
 export default defineConfig({
+  build: {
+    outDir: 'dist/client',
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom', 'react-router'],
+          'vendor-firebase': ['firebase/app', 'firebase/firestore', 'firebase/auth'],
+          'vendor-motion': ['framer-motion'],
+          'vendor-leaflet': ['leaflet', 'react-leaflet'],
+          'vendor-supabase': ['@supabase/supabase-js']
+        }
+      }
+    }
+  },
   plugins: [
     react(),
     tailwindcss(),
@@ -59,8 +73,7 @@ export default defineConfig({
           {
             src: '/icons/apple-touch-icon-180x180.webp',
             sizes: '180x180',
-            type: 'image/webp',
-            purpose: 'apple touch icon'
+            type: 'image/webp'
           }
         ],
         shortcuts: [
@@ -94,7 +107,7 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg,webp,jpg,jpeg}'],
         runtimeCaching: [
           {
-            urlPattern: /^https:\/\/res\.cloudinary\.com\/.*/i,
+            urlPattern: /^https:\/\/res\.cloudinary\.com\/.*\/image\/.*/i,
             handler: 'CacheFirst',
             options: {
               cacheName: 'cloudinary-images',

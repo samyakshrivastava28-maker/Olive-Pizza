@@ -14,7 +14,20 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok' });
+  res.json({
+    status: 'ok',
+    uptime: process.uptime(),
+    memoryUsage: process.memoryUsage(),
+    version: process.env.npm_package_version || '1.0.0',
+    timestamp: new Date().toISOString()
+  });
+});
+
+app.get('/keep-alive', (req, res) => {
+  res.json({
+    status: 'alive',
+    timestamp: new Date().toISOString()
+  });
 });
 
 app.use('/api', apiApp);
@@ -22,6 +35,7 @@ app.use('/api', apiApp);
 import { initScheduler } from './src/scripts/scheduler.js';
 import { initPostgres } from './src/config/postgres.js';
 import { FirestoreListener } from './src/listeners/firestore.listener.js';
+import { initKeepAlive } from './src/scripts/keepAlive.js';
 
 // Setup Vite in development or static files in production
 async function setupVite() {
@@ -56,6 +70,9 @@ async function setupVite() {
         }
       }
     }
+    
+    // Initialize Keep Alive Scheduler after server starts
+    initKeepAlive();
   });
 }
 

@@ -6,10 +6,6 @@
     {
       "source": "/api/(.*)",
       "destination": "https://olive-pizza-api.koyeb.app/api/$1"
-    },
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
     }
   ]
 }

@@ -46,7 +46,71 @@ export default function OwnerNotificationCenter() {
         </GlassCard>
       </div>
 
+      {/* Compose Push Notification */}
       <GlassCard className="p-6">
+        <h2 className="text-xl font-bold text-white mb-4">Compose Broadcast</h2>
+        <form 
+          className="space-y-4"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            const form = e.target as HTMLFormElement;
+            const title = (form.elements.namedItem('title') as HTMLInputElement).value;
+            const body = (form.elements.namedItem('body') as HTMLTextAreaElement).value;
+            const audience = (form.elements.namedItem('audience') as HTMLSelectElement).value;
+
+            if (!title || !body) {
+              alert('Title and Message are required');
+              return;
+            }
+
+            try {
+              const { getCurrentAuthToken } = await import('../../lib/firebase');
+              const token = await getCurrentAuthToken();
+              const res = await fetch('/api/notifications/send-custom', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ title, body, audience })
+              });
+              const data = await res.json();
+              if (data.success) {
+                alert(`Broadcast sent successfully! Delivered to ${data.sentCount} devices.`);
+                form.reset();
+              } else {
+                alert(`Failed: ${data.error}`);
+              }
+            } catch (err: any) {
+              alert(`Error: ${err.message}`);
+            }
+          }}
+        >
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-bold text-slate-400 mb-1">Notification Title</label>
+              <input name="title" required placeholder="e.g. 50% Off Pizza Today!" className="w-full bg-dark-900 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary-500" />
+            </div>
+            <div>
+              <label className="block text-sm font-bold text-slate-400 mb-1">Target Audience</label>
+              <select name="audience" className="w-full bg-dark-900 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary-500">
+                <option value="all">All Users</option>
+                <option value="customers">Customers Only</option>
+                <option value="delivery">Delivery Partners Only</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-bold text-slate-400 mb-1">Message Body</label>
+            <textarea name="body" required placeholder="Enter the push notification text here..." className="w-full bg-dark-900 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary-500 min-h-[100px]"></textarea>
+          </div>
+          <div className="flex justify-end">
+            <button type="submit" className="px-6 py-3 bg-primary-600 hover:bg-primary-500 text-white font-bold rounded-xl transition-colors">
+              Send Broadcast
+            </button>
+          </div>
+        </form>
+      </GlassCard>
+
+      <GlassCard className="p-6">
+        <h2 className="text-xl font-bold text-white mb-4">Notification History</h2>
         <div className="flex gap-2 mb-6">
           {['all', 'pending', 'completed', 'failed'].map(f => (
             <button

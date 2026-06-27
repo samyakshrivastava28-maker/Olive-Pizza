@@ -1,135 +1,149 @@
 import { Routes, Route, useLocation } from 'react-router';
 import { AnimatePresence, MotionConfig } from 'framer-motion';
 import { Toaster } from 'react-hot-toast';
+import { lazy, Suspense } from 'react';
+
+// Eager imports for layout, guards, and critical UI
 import MainLayout from './components/MainLayout';
-import OwnerLayout from './components/OwnerLayout';
-import DeliveryLayout from './components/DeliveryLayout';
-import OnboardingGuard from './components/OnboardingGuard';
 import AuthProvider from './components/AuthProvider';
-import AIAssistant from './components/AIAssistant';
 import ClickSpark from './components/ui/ClickSpark';
-import LocationPrompt from './components/ui/LocationPrompt';
-import FloatingCart from './components/ui/FloatingCart';
-import FloatingTracker from './components/ui/FloatingTracker';
 import GlobalLoader from './components/GlobalLoader';
 import { CartAnimationProvider } from './components/ui/CartAnimationProvider';
 import { OwnerGuard, DeliveryGuard, CustomerGuard, AuthGuard } from './components/auth/RouteGuards';
+import FloatingCart from './components/ui/FloatingCart';
+import LocationPrompt from './components/ui/LocationPrompt';
+import PushNotificationManager from './components/PushNotificationManager';
 
-import Login from './pages/Login';
-import Register from './pages/Register';
-import ForgotPassword from './pages/ForgotPassword';
+// Lazy loaded heavy components
+const AIAssistant = lazy(() => import('./components/AIAssistant'));
+const FloatingTracker = lazy(() => import('./components/ui/FloatingTracker'));
 
-import VerifyEmail from './pages/onboarding/VerifyEmail';
-import SetupPhone from './pages/onboarding/SetupPhone';
-import SetupLocation from './pages/onboarding/SetupLocation';
+// Lazy loaded layouts & guards
+const OwnerLayout = lazy(() => import('./components/OwnerLayout'));
+const DeliveryLayout = lazy(() => import('./components/DeliveryLayout'));
+const OnboardingGuard = lazy(() => import('./components/OnboardingGuard'));
 
-import Home from './pages/Home';
-import Menu from './pages/Menu';
-import Cart from './pages/Cart';
-import Checkout from './pages/Checkout';
-import ProductDetail from './pages/ProductDetail';
-import OrderTracking from './pages/OrderTracking';
-import Contact from './pages/Contact';
+// Lazy loaded public pages
+const Home = lazy(() => import('./pages/Home'));
+const Menu = lazy(() => import('./pages/Menu'));
+const Cart = lazy(() => import('./pages/Cart'));
+const Checkout = lazy(() => import('./pages/Checkout'));
+const ProductDetail = lazy(() => import('./pages/ProductDetail'));
+const OrderTracking = lazy(() => import('./pages/OrderTracking'));
+const Contact = lazy(() => import('./pages/Contact'));
+const Login = lazy(() => import('./pages/Login'));
+const Register = lazy(() => import('./pages/Register'));
+const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
 
-import OwnerDashboard from './pages/owner/OwnerDashboard';
-import OwnerProducts from './pages/owner/OwnerProducts';
-import OwnerOrders from './pages/owner/OwnerOrders';
-import OwnerOrderHistory from './pages/owner/OwnerOrderHistory';
-import OwnerAnalytics from './pages/owner/OwnerAnalytics';
-import DeliveryPartners from './pages/owner/DeliveryPartners';
-import OwnerEvents from './pages/owner/OwnerEvents';
-import OwnerReports from './pages/owner/OwnerReports';
-import OwnerAds from './pages/owner/OwnerAds';
-import OwnerMediaLibrary from './pages/owner/OwnerMediaLibrary';
-import OwnerSettings from './pages/owner/OwnerSettings';
-import OwnerCustomers from './pages/owner/OwnerCustomers';
-import OwnerCoupons from './pages/owner/OwnerCoupons';
-import OwnerSecurity from './pages/owner/OwnerSecurity';
-import OwnerEmailCenter from './pages/owner/OwnerEmailCenter';
-import OwnerSpecialCategories from './pages/owner/OwnerSpecialCategories';
-import OwnerHomepageManager from './pages/owner/OwnerHomepageManager';
-import OwnerSlackCenter from './pages/owner/OwnerSlackCenter';
-import OwnerNotificationCenter from './pages/owner/OwnerNotificationCenter';
+// Lazy loaded onboarding
+const VerifyEmail = lazy(() => import('./pages/onboarding/VerifyEmail'));
+const SetupPhone = lazy(() => import('./pages/onboarding/SetupPhone'));
+const SetupLocation = lazy(() => import('./pages/onboarding/SetupLocation'));
 
-import CustomerDashboard from './pages/CustomerDashboard';
-import DeliveryDashboard from './pages/delivery/DeliveryDashboard';
-import DeliveryEarnings from './pages/delivery/DeliveryEarnings';
-import DeliveryPerformance from './pages/delivery/DeliveryPerformance';
-import DeliveryProfile from './pages/delivery/DeliveryProfile';
-import DeliveryNotificationCenter from './pages/delivery/DeliveryNotificationCenter';
+// Lazy loaded owner pages
+const OwnerDashboard = lazy(() => import('./pages/owner/OwnerDashboard'));
+const OwnerProducts = lazy(() => import('./pages/owner/OwnerProducts'));
+const OwnerOrders = lazy(() => import('./pages/owner/OwnerOrders'));
+const OwnerOrderHistory = lazy(() => import('./pages/owner/OwnerOrderHistory'));
+const OwnerAnalytics = lazy(() => import('./pages/owner/OwnerAnalytics'));
+const DeliveryPartners = lazy(() => import('./pages/owner/DeliveryPartners'));
+const OwnerEvents = lazy(() => import('./pages/owner/OwnerEvents'));
+const OwnerReports = lazy(() => import('./pages/owner/OwnerReports'));
+const OwnerAds = lazy(() => import('./pages/owner/OwnerAds'));
+const OwnerMediaLibrary = lazy(() => import('./pages/owner/OwnerMediaLibrary'));
+const OwnerSettings = lazy(() => import('./pages/owner/OwnerSettings'));
+const OwnerCustomers = lazy(() => import('./pages/owner/OwnerCustomers'));
+const OwnerCoupons = lazy(() => import('./pages/owner/OwnerCoupons'));
+const OwnerSecurity = lazy(() => import('./pages/owner/OwnerSecurity'));
+const OwnerEmailCenter = lazy(() => import('./pages/owner/OwnerEmailCenter'));
+const OwnerSpecialCategories = lazy(() => import('./pages/owner/OwnerSpecialCategories'));
+const OwnerHomepageManager = lazy(() => import('./pages/owner/OwnerHomepageManager'));
+const OwnerSlackCenter = lazy(() => import('./pages/owner/OwnerSlackCenter'));
+const OwnerNotificationCenter = lazy(() => import('./pages/owner/OwnerNotificationCenter'));
+
+// Lazy loaded delivery pages
+const CustomerDashboard = lazy(() => import('./pages/CustomerDashboard'));
+const DeliveryDashboard = lazy(() => import('./pages/delivery/DeliveryDashboard'));
+const DeliveryEarnings = lazy(() => import('./pages/delivery/DeliveryEarnings'));
+const DeliveryPerformance = lazy(() => import('./pages/delivery/DeliveryPerformance'));
+const DeliveryProfile = lazy(() => import('./pages/delivery/DeliveryProfile'));
+const DeliveryNotificationCenter = lazy(() => import('./pages/delivery/DeliveryNotificationCenter'));
 
 function AppContent() {
   const location = useLocation();
   return (
     <>
       <GlobalLoader />
+      <PushNotificationManager />
       <AnimatePresence mode="wait">
-      <Routes location={location} key={location.pathname}>
-        {/* Public Routes */}
-        <Route element={<MainLayout />}>
-          <Route path="/" element={<Home />} />
-          <Route path="/menu" element={<Menu />} />
-          <Route path="/product/:productId" element={<ProductDetail />} />
-          <Route path="/cart" element={<Cart />} />
-          <Route path="/contact" element={<Contact />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="/forgot-password" element={<ForgotPassword />} />
-          
-          {/* Protected Customer Routes */}
-          <Route element={<CustomerGuard />}>
-            <Route path="/checkout" element={<Checkout />} />
-            <Route element={<OnboardingGuard />}>
-              <Route path="/dashboard" element={<CustomerDashboard />} />
-              <Route path="/order-tracking/:orderId" element={<OrderTracking />} />
+      <Suspense fallback={<div className="min-h-[100dvh] w-full bg-dark-950 flex flex-col items-center justify-center pointer-events-none"><div className="w-12 h-12 border-4 border-primary-500/20 border-t-primary-500 rounded-full animate-spin" /></div>}>
+        <Routes location={location} key={location.pathname}>
+          {/* Public Routes */}
+          <Route element={<MainLayout />}>
+            <Route path="/" element={<Home />} />
+            <Route path="/menu" element={<Menu />} />
+            <Route path="/product/:productId" element={<ProductDetail />} />
+            <Route path="/cart" element={<Cart />} />
+            <Route path="/contact" element={<Contact />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            
+            {/* Protected Customer Routes */}
+            <Route element={<CustomerGuard />}>
+              <Route path="/checkout" element={<Checkout />} />
+              <Route element={<OnboardingGuard />}>
+                <Route path="/dashboard" element={<CustomerDashboard />} />
+                <Route path="/order-tracking/:orderId" element={<OrderTracking />} />
+              </Route>
             </Route>
           </Route>
-        </Route>
 
-        {/* Onboarding Routes (Auth Required) */}
-        <Route element={<AuthGuard />}>
-          <Route path="/onboarding/verify" element={<VerifyEmail />} />
-          <Route path="/onboarding/phone" element={<SetupPhone />} />
-          <Route path="/onboarding/location" element={<SetupLocation />} />
-        </Route>
-
-        {/* Owner Routes */}
-        <Route element={<OwnerGuard />}>
-          <Route path="/owner" element={<OwnerLayout />}>
-            <Route path="dashboard" element={<OwnerDashboard />} />
-            <Route path="menu" element={<OwnerProducts />} />
-            <Route path="products" element={<OwnerProducts />} />
-            <Route path="orders" element={<OwnerOrders />} />
-            <Route path="order-history" element={<OwnerOrderHistory />} />
-            <Route path="analytics" element={<OwnerAnalytics />} />
-            <Route path="partners" element={<DeliveryPartners />} />
-            <Route path="events" element={<OwnerEvents />} />
-            <Route path="reports" element={<OwnerReports />} />
-            <Route path="ads" element={<OwnerAds />} />
-            <Route path="media" element={<OwnerMediaLibrary />} />
-            <Route path="coupons" element={<OwnerCoupons />} />
-            <Route path="settings" element={<OwnerSettings />} />
-            <Route path="security" element={<OwnerSecurity />} />
-            <Route path="customers" element={<OwnerCustomers />} />
-            <Route path="email" element={<OwnerEmailCenter />} />
-            <Route path="slack" element={<OwnerSlackCenter />} />
-            <Route path="special-categories" element={<OwnerSpecialCategories />} />
-            <Route path="homepage" element={<OwnerHomepageManager />} />
-            <Route path="notifications" element={<OwnerNotificationCenter />} />
+          {/* Onboarding Routes (Auth Required) */}
+          <Route element={<AuthGuard />}>
+            <Route path="/onboarding/verify" element={<VerifyEmail />} />
+            <Route path="/onboarding/phone" element={<SetupPhone />} />
+            <Route path="/onboarding/location" element={<SetupLocation />} />
           </Route>
-        </Route>
 
-        {/* Delivery Routes */}
-        <Route element={<DeliveryGuard />}>
-          <Route path="/delivery" element={<DeliveryLayout />}>
-            <Route path="dashboard" element={<DeliveryDashboard />} />
-            <Route path="earnings" element={<DeliveryEarnings />} />
-            <Route path="performance" element={<DeliveryPerformance />} />
-            <Route path="profile" element={<DeliveryProfile />} />
-            <Route path="notifications" element={<DeliveryNotificationCenter />} />
+          {/* Owner Routes */}
+          <Route element={<OwnerGuard />}>
+            <Route path="/owner" element={<OwnerLayout />}>
+              <Route path="dashboard" element={<OwnerDashboard />} />
+              <Route path="menu" element={<OwnerProducts />} />
+              <Route path="products" element={<OwnerProducts />} />
+              <Route path="orders" element={<OwnerOrders />} />
+              <Route path="order-history" element={<OwnerOrderHistory />} />
+              <Route path="analytics" element={<OwnerAnalytics />} />
+              <Route path="partners" element={<DeliveryPartners />} />
+              <Route path="events" element={<OwnerEvents />} />
+              <Route path="reports" element={<OwnerReports />} />
+              <Route path="ads" element={<OwnerAds />} />
+              <Route path="media" element={<OwnerMediaLibrary />} />
+              <Route path="coupons" element={<OwnerCoupons />} />
+              <Route path="settings" element={<OwnerSettings />} />
+              <Route path="security" element={<OwnerSecurity />} />
+              <Route path="customers" element={<OwnerCustomers />} />
+              <Route path="email" element={<OwnerEmailCenter />} />
+              <Route path="slack" element={<OwnerSlackCenter />} />
+              <Route path="special-categories" element={<OwnerSpecialCategories />} />
+              <Route path="homepage" element={<OwnerHomepageManager />} />
+              <Route path="notifications" element={<OwnerNotificationCenter />} />
+            </Route>
           </Route>
-        </Route>
-      </Routes>
+
+          {/* Delivery Routes */}
+          <Route element={<DeliveryGuard />}>
+            <Route path="/delivery" element={<DeliveryLayout />}>
+              <Route path="dashboard" element={<DeliveryDashboard />} />
+              <Route path="earnings" element={<DeliveryEarnings />} />
+              <Route path="performance" element={<DeliveryPerformance />} />
+              <Route path="profile" element={<DeliveryProfile />} />
+              <Route path="notifications" element={<DeliveryNotificationCenter />} />
+            </Route>
+          </Route>
+        </Routes>
+      </Suspense>
     </AnimatePresence>
     </>
   );
@@ -155,10 +169,14 @@ function App() {
                 duration: 3000 
               }} 
             />
-            <AIAssistant />
+            <Suspense fallback={null}>
+              <AIAssistant />
+            </Suspense>
             <LocationPrompt />
             <FloatingCart />
-            <FloatingTracker />
+            <Suspense fallback={null}>
+              <FloatingTracker />
+            </Suspense>
           </CartAnimationProvider>
         </ClickSpark>
       </AuthProvider>

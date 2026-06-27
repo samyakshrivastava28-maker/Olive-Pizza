@@ -107,7 +107,10 @@ export const initPostgres = async () => {
 
     client.release();
     console.log('PostgreSQL initialized successfully');
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error initializing PostgreSQL:', error);
+    if (error.code === 'ENETUNREACH' && error.address?.includes(':')) {
+      console.error('⚠️ IPv6 CONNECTION ERROR: Render does not support IPv6 outbound. If using Supabase, you must change your DATABASE_URL in Render Environment Variables to use the IPv4 connection pooler string (e.g., aws-0-...pooler.supabase.com) and ensure it uses port 6543 instead of 5432.');
+    }
   }
 };

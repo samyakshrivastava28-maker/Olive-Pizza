@@ -2,26 +2,30 @@
 importScripts('https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.8.0/firebase-messaging-compat.js');
 
-// To implement full FCM later, initialize the app here with your config
-// firebase.initializeApp({
-//   apiKey: "YOUR_API_KEY",
-//   projectId: "YOUR_PROJECT_ID",
-//   messagingSenderId: "YOUR_SENDER_ID",
-//   appId: "YOUR_APP_ID"
-// });
+const params = new URL(location).searchParams;
+firebase.initializeApp({
+  apiKey: params.get("apiKey"),
+  authDomain: params.get("authDomain"),
+  projectId: params.get("projectId"),
+  storageBucket: params.get("storageBucket"),
+  messagingSenderId: params.get("messagingSenderId"),
+  appId: params.get("appId")
+});
 
-// const messaging = firebase.messaging();
+const messaging = firebase.messaging();
 
-// messaging.onBackgroundMessage(function(payload) {
-//   console.log('[firebase-messaging-sw.js] Received background message ', payload);
-//   const notificationTitle = payload.notification.title;
-//   const notificationOptions = {
-//     body: payload.notification.body,
-//     icon: '/icons/icon-192x192.webp'
-//   };
-//
-//   self.registration.showNotification(notificationTitle, notificationOptions);
-// });
+messaging.onBackgroundMessage(function(payload) {
+  console.log('[firebase-messaging-sw.js] Received background message ', payload);
+  const notificationTitle = payload.notification?.title || payload.data?.title || 'Olive Pizza';
+  const notificationOptions = {
+    body: payload.notification?.body || payload.data?.body || 'You have a new message',
+    icon: payload.notification?.image || payload.data?.icon || '/icons/icon-192x192.webp',
+    badge: '/icons/icon-192x192.webp',
+    data: payload.data?.url || '/'
+  };
+
+  self.registration.showNotification(notificationTitle, notificationOptions);
+});
 
 self.addEventListener('install', (event) => {
   console.log('[SW] Push Notification Service Worker Installed');

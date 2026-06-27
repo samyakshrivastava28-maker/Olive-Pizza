@@ -191,6 +191,8 @@ function SmoothMarker({ position, heading, icon, popupText }: { position: [numbe
   );
 }
 
+import React from 'react';
+
 // ─── Main Map Component ──────────────────────────────────────────────
 interface TrackingMapProps {
   restaurantLat: number;
@@ -203,7 +205,7 @@ interface TrackingMapProps {
   status: string;
 }
 
-export default function TrackingMap({
+const TrackingMap = React.memo(function TrackingMap({
   restaurantLat, restaurantLng,
   customerLat, customerLng,
   partnerLat, partnerLng,
@@ -360,4 +362,6 @@ export default function TrackingMap({
       `}</style>
     </div>
   );
-}
+});
+
+export default TrackingMap;

@@ -122,9 +122,25 @@ router.get('/active', verifyToken, requireRole(['owner']), async (req: Request, 
 });
 
 // Returns Partner location, ETA, Distance for an order
-router.get('/order/:orderId', async (req: Request, res: Response) => {
+router.get('/order/:orderId', verifyToken, async (req: AuthRequest, res: Response) => {
   try {
     const { orderId } = req.params;
+
+    // Security Check: Verify user is authorized to view this GPS data
+    const orderDoc = await adminDb.collection('orders').doc(orderId).get();
+    if (!orderDoc.exists) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    
+    const order = orderDoc.data();
+    const isOwner = req.user?.role === 'owner' || req.user?.role === 'admin';
+    const isAssignedPartner = req.user?.uid === order?.deliveryPartnerId;
+    const isCustomer = req.user?.uid === order?.userId || req.user?.uid === order?.customerId;
+
+    if (!isOwner && !isAssignedPartner && !isCustomer) {
+      return res.status(403).json({ error: 'Forbidden: You do not have permission to track this order' });
+    }
+
     const client = await pgPool.connect();
     
     const result = await client.query(`

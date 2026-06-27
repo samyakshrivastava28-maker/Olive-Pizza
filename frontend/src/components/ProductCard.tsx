@@ -36,8 +36,9 @@ export default function ProductCard({ item, discount = 0 }: ProductCardProps) {
       {/* Large Image Container */}
       <div className="w-full aspect-[4/3] md:aspect-square relative overflow-hidden bg-dark-900 border-b border-dark-700">
         <img 
-          src={item.image} 
+          src={item.image.includes('cloudinary') ? item.image.replace("/upload/", "/upload/f_auto,q_auto,w_400/") : item.image} 
           alt={item.name} 
+          loading="lazy"
           className="w-full h-full object-cover transition-transform duration-500 hover:scale-105" 
         />
         {!item.isAvailable && (
