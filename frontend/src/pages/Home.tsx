@@ -386,7 +386,7 @@ export default function Home() {
       )}
 
       {/* ─── Hero Section ─────────────────────────────────────────────────── */}
-      <div className="relative w-full h-[85vh] md:h-[90dvh] overflow-hidden rounded-b-[2rem] md:rounded-b-[3rem] shadow-2xl">
+      <div className="relative w-full h-[85vh] md:h-[90dvh] overflow-hidden rounded-b-[2rem] md:rounded-b-[3rem] shadow-2xl flex flex-col justify-end">
         <video
           ref={(el) => {
             if (el) {
@@ -395,35 +395,36 @@ export default function Home() {
             }
           }}
           src={desktopBgUrl}
+          poster={desktopBgUrl.replace('.mp4', '.jpg')}
           muted loop playsInline
           preload="none"
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 min-w-full min-h-full w-auto h-auto object-cover pointer-events-none z-0"
+          className="absolute inset-0 w-full h-full object-cover pointer-events-none z-0"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-dark-950 via-dark-950/60 to-dark-950/30 z-10" />
-        <div className="relative z-20 h-full flex flex-col justify-end pb-12 md:pb-24 px-4 md:px-8 max-w-7xl mx-auto">
+        <div className="absolute inset-0 bg-gradient-to-t from-dark-950 via-dark-950/70 to-transparent z-10" />
+        <div className="relative z-20 w-full pb-16 md:pb-24 px-6 md:px-12 max-w-7xl mx-auto text-center md:text-left">
           <motion.div
             initial={{ y: 30, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             transition={{ duration: 0.8, delay: showIntro ? 1 : 0 }}
-            className="max-w-2xl"
+            className="max-w-2xl mx-auto md:mx-0 flex flex-col items-center md:items-start"
           >
-            <h1 className="text-4xl sm:text-5xl md:text-7xl font-black text-white mb-4 tracking-tight leading-[1.1]">
+            <h1 className="text-[2.5rem] sm:text-5xl md:text-7xl font-black text-white mb-4 tracking-tight leading-[1.1] [text-wrap:balance]">
               Fresh Pizza Delivered Hot To Your Door
             </h1>
-            <p className="text-lg md:text-2xl text-slate-300 mb-8 font-medium leading-relaxed max-w-lg">
+            <p className="text-base sm:text-lg md:text-2xl text-slate-200 mb-8 font-medium leading-relaxed max-w-lg [text-wrap:balance]">
               Premium ingredients. Fast delivery. Unforgettable taste.
             </p>
-            <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
               <Link
                 to="/menu"
-                className="bg-primary-600 text-white px-8 py-4 rounded-full font-bold text-lg text-center flex items-center justify-center gap-2 hover:bg-primary-500 transition-colors shadow-lg active:scale-95"
+                className="bg-primary-600/90 backdrop-blur-md border border-primary-500/50 text-white px-8 py-4 rounded-full font-bold text-lg text-center flex items-center justify-center gap-2 hover:bg-primary-500 transition-all shadow-lg active:scale-95 w-full sm:w-auto h-[56px]"
               >
                 {storeStatus.isRestaurantOpen && storeStatus.isWithinBusinessHours ? "Order Now" : "Store Closed"}
                 <ChevronRight className="w-5 h-5" />
               </Link>
               <Link
                 to="/menu"
-                className="bg-dark-800 text-white border border-dark-700 px-8 py-4 rounded-full font-bold text-lg text-center flex items-center justify-center hover:bg-dark-700 transition-colors active:scale-95"
+                className="bg-dark-800/80 backdrop-blur-md border border-dark-700 text-white px-8 py-4 rounded-full font-bold text-lg text-center flex items-center justify-center hover:bg-dark-700 transition-all active:scale-95 w-full sm:w-auto h-[56px]"
               >
                 Explore Menu
               </Link>

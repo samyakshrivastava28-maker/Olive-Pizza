@@ -53,6 +53,13 @@
   }
 }
 
+html, body {
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
+  -webkit-tap-highlight-color: transparent;
+  width: 100%;
+}
+
 body {
   @apply bg-dark-950 text-white font-sans antialiased selection:bg-primary-500 selection:text-white transition-colors duration-200;
   cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><g transform="rotate(180 16 16)"><text y="24" font-size="24">🍕</text></g></svg>'), auto;
@@ -61,4 +68,5 @@ body {
 /* Make sure pointer elements still use the default pointer if we want, or also a pizza slice */
 a, button, [role="button"] {
   cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><g transform="rotate(180 16 16)"><text y="24" font-size="24">🍕</text></g></svg>'), pointer;
+  touch-action: manipulation;
 }

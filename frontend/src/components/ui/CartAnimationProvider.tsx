@@ -27,18 +27,22 @@ export function CartAnimationProvider({ children }: { children: React.ReactNode 
   const [animations, setAnimations] = useState<AnimationData[]>([]);
   const idCounter = useRef(0);
 
-  /**
-   * Get the current screen coordinates of the floating cart bag icon.
-   * Falls back to bottom-right corner if element not found.
-   */
   const getCartTarget = (): { x: number; y: number } => {
-    const el = document.getElementById('cart-icon-target');
+    // Try to find the floating cart first (usually visible on desktop)
+    let el = document.getElementById('cart-icon-target');
+    
+    // If not found or if we are on a small screen where mobile nav is visible, look for mobile nav target
+    if (window.innerWidth < 768) {
+       const mobileNav = document.getElementById('mobile-cart-nav-target');
+       if (mobileNav) el = mobileNav;
+    }
+
     if (el) {
       const rect = el.getBoundingClientRect();
       return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
     }
-    // Fallback: bottom-right (where the floating cart lives)
-    return { x: window.innerWidth - 48, y: window.innerHeight - 80 };
+    // Fallback: bottom-right
+    return { x: window.innerWidth / 2, y: window.innerHeight - 40 };
   };
 
   const triggerAnimation = useCallback(

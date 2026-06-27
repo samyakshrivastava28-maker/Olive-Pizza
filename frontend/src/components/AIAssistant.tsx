@@ -109,6 +109,9 @@ export default function AIAssistant() {
     }
   };
 
+  const cartCount = cartStore.items.reduce((acc, item) => acc + item.quantity, 0);
+  const isCartVisible = cartCount > 0 && !['/cart', '/checkout'].includes(location.pathname) && !location.pathname.startsWith('/owner') && !location.pathname.startsWith('/delivery');
+
   if (isHidden) {
     return (
       <button 
@@ -123,7 +126,7 @@ export default function AIAssistant() {
   return (
     <>
       {/* Floating Action Button Group */}
-      <div className={`fixed bottom-24 md:bottom-6 right-6 z-50 flex flex-col items-end gap-2 transition-all duration-300 ${isOpen ? 'opacity-0 translate-y-10 pointer-events-none' : 'opacity-100 translate-y-0'}`}>
+      <div className={`fixed right-4 md:right-6 z-50 flex flex-col items-end gap-2 transition-all duration-300 ${isCartVisible ? 'bottom-[160px]' : 'bottom-20'} md:bottom-6 ${isOpen ? 'opacity-0 translate-y-10 pointer-events-none' : 'opacity-100 translate-y-0'}`}>
         
         <AnimatePresence>
           {showPopup && (

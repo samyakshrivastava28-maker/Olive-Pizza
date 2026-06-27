@@ -205,9 +205,10 @@ export default function MainLayout() {
 
       {/* Mobile Bottom Navigation */}
       <nav 
-        className={`md:hidden fixed bottom-0 left-0 right-0 bg-dark-900 border-t border-dark-800 flex items-center justify-between px-2 pb-safe pt-1 z-50 transition-transform duration-300 ease-in-out ${
+        className={`md:hidden fixed bottom-0 left-0 right-0 bg-dark-900/90 backdrop-blur-xl border-t border-dark-800/60 flex items-center justify-between px-2 z-[70] transition-transform duration-300 ease-in-out shadow-[0_-4px_24px_rgba(0,0,0,0.4)] ${
           showNav ? 'translate-y-0' : 'translate-y-full'
         }`}
+        style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 4px)', paddingTop: '4px' }}
       >
         {navItems.map((item) => {
           const isActive = location.pathname === item.path || (item.path === '/dashboard' && location.pathname.startsWith('/dashboard'));
@@ -215,17 +216,27 @@ export default function MainLayout() {
             <Link 
               key={item.name} 
               to={item.path} 
-              className={`flex flex-col items-center justify-center w-full py-2 relative transition-colors ${isActive ? 'text-primary-500' : 'text-slate-400 hover:text-slate-200'}`}
+              id={item.name === 'Cart' ? 'mobile-cart-nav-target' : undefined}
+              className="flex flex-col items-center justify-center w-full min-h-[56px] relative group touch-manipulation"
             >
-              <div className="relative">
+              {isActive && (
+                <motion.div
+                  layoutId="mobile-nav-pill"
+                  className="absolute inset-0 bg-primary-500/10 rounded-xl"
+                  transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                />
+              )}
+              <div className={`relative transition-all duration-200 ${isActive ? 'text-primary-500 -translate-y-0.5' : 'text-slate-400 group-hover:text-slate-200 group-active:scale-95'}`}>
                 {item.icon}
                 {item.badge ? (
-                  <span className="absolute -top-1.5 -right-2 bg-secondary-500 text-white text-[10px] font-black min-w-[16px] h-[16px] px-1 flex items-center justify-center rounded-full shadow-md">
+                  <span className="absolute -top-1.5 -right-2 bg-secondary-500 text-white text-[10px] font-black min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full shadow-md border border-dark-900">
                     {item.badge}
                   </span>
                 ) : null}
               </div>
-              <span className="text-[10px] font-semibold mt-1 tracking-wide">{item.name}</span>
+              <span className={`text-[10px] font-bold mt-1 tracking-wide transition-all duration-200 ${isActive ? 'text-primary-500 opacity-100' : 'text-slate-400 opacity-80'}`}>
+                {item.name}
+              </span>
             </Link>
           );
         })}
