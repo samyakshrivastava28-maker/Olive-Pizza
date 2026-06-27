@@ -342,9 +342,9 @@ export default function Home() {
     }
   };
 
-  const desktopIntroUrl = "https://res.cloudinary.com/dxmlvkff1/video/upload/f_auto,q_auto:eco,w_800/v1782199127/Olive_Pizza_logo_reveal_202606231247_rrtc3u.mp4";
-  const mobileIntroUrl = "https://res.cloudinary.com/dxmlvkff1/video/upload/f_auto,q_auto:eco,w_480/v1782199117/Olive_Pizza_logo_reveal_202606231246_xeyk9t.mp4";
-  const desktopBgUrl = "https://res.cloudinary.com/dxmlvkff1/video/upload/f_auto,q_auto:eco,w_1080/v1782200264/Artisan_pizza_emerging_from_oven_202606231307_qmognm.mp4";
+  const desktopIntroUrl = "https://res.cloudinary.com/dxmlvkff1/video/upload/f_auto,q_auto:low,w_600/v1782199127/Olive_Pizza_logo_reveal_202606231247_rrtc3u.mp4";
+  const mobileIntroUrl = "https://res.cloudinary.com/dxmlvkff1/video/upload/f_auto,q_auto:low,w_360/v1782199117/Olive_Pizza_logo_reveal_202606231246_xeyk9t.mp4";
+  const desktopBgUrl = "https://res.cloudinary.com/dxmlvkff1/video/upload/f_auto,q_auto:low,w_720/v1782200264/Artisan_pizza_emerging_from_oven_202606231307_qmognm.mp4";
 
   return (
     <PageTransition className="relative w-full">
@@ -393,6 +393,7 @@ export default function Home() {
           }}
           src={desktopBgUrl}
           muted loop playsInline
+          preload="none"
           className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 min-w-full min-h-full w-auto h-auto object-cover pointer-events-none z-0"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-dark-950 via-dark-950/60 to-dark-950/30 z-10" />
