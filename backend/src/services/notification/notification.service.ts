@@ -10,6 +10,7 @@ export interface NotificationEvent {
   details?: string;
   blocks?: any[];
   thread_ts?: string;
+  skipWebPush?: boolean;
 }
 
 interface QueueItem {
