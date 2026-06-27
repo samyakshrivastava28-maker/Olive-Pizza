@@ -42,16 +42,31 @@ export function CartAnimationProvider({ children }: { children: React.ReactNode 
   };
 
   const triggerAnimation = useCallback(
-    (e: React.MouseEvent | { clientX: number; clientY: number }, image: string) => {
+    (e: React.MouseEvent | React.TouchEvent | { clientX: number; clientY: number }, image: string) => {
       const newId = idCounter.current++;
       const target = getCartTarget();
+
+      let clientX = window.innerWidth / 2;
+      let clientY = window.innerHeight / 2;
+
+      if (e && 'touches' in e && (e as React.TouchEvent).touches.length > 0) {
+        clientX = (e as React.TouchEvent).touches[0].clientX;
+        clientY = (e as React.TouchEvent).touches[0].clientY;
+      } else if (e && 'clientX' in e && typeof e.clientX === 'number') {
+        clientX = e.clientX;
+        clientY = e.clientY;
+      }
+
+      if (window.navigator && window.navigator.vibrate) {
+        window.navigator.vibrate(50);
+      }
 
       setAnimations((prev) => [
         ...prev,
         {
           id: newId,
-          startX: e.clientX,
-          startY: e.clientY,
+          startX: clientX,
+          startY: clientY,
           endX: target.x,
           endY: target.y,
           image,
@@ -67,7 +82,7 @@ export function CartAnimationProvider({ children }: { children: React.ReactNode 
           cartIcon.classList.add('cart-bounce');
           setTimeout(() => cartIcon.classList.remove('cart-bounce'), 600);
         }
-      }, 1100);
+      }, 900);
     },
     []
   );
@@ -91,10 +106,10 @@ export function CartAnimationProvider({ children }: { children: React.ReactNode 
       `}</style>
 
       {/* Animation Portal — renders on top of everything */}
-      <div className="fixed inset-0 pointer-events-none z-[999] overflow-hidden">
+      <div className="fixed inset-0 pointer-events-none z-[9999] overflow-hidden">
         <AnimatePresence>
           {animations.map((anim) => (
-            <FlyingPizza key={anim.id} anim={anim} />
+            <FlyingBox key={anim.id} anim={anim} />
           ))}
         </AnimatePresence>
       </div>
@@ -102,75 +117,64 @@ export function CartAnimationProvider({ children }: { children: React.ReactNode 
   );
 }
 
-// ─── Flying Pizza Component ───────────────────────────────────────────────────
+// ─── Flying Box Component ───────────────────────────────────────────────────
+import { PackageOpen } from 'lucide-react';
 
-function FlyingPizza({ anim }: { anim: AnimationData }) {
-  const SIZE = 80; // px — size of the flying image
+function FlyingBox({ anim }: { anim: AnimationData }) {
+  const SIZE = 70; // px — size of the flying box
   const HALF = SIZE / 2;
 
   // Control point for the arc (curve the flight path)
-  const midX = (anim.startX + anim.endX) / 2 - 60;
+  const midX = (anim.startX + anim.endX) / 2 - 40;
   const midY = Math.min(anim.startY, anim.endY) - 150;
 
   return (
     <motion.div
-      className="absolute"
+      className="absolute flex items-center justify-center z-[9999] drop-shadow-2xl"
       style={{
         left: anim.startX - HALF,
         top: anim.startY - HALF,
         width: SIZE,
         height: SIZE,
       }}
-      initial={{ opacity: 1, scale: 1, x: 0, y: 0 }}
+      initial={{ opacity: 1, scale: 0.5, x: 0, y: 0 }}
       animate={{
         // Cubic bezier arc path via keyframes
         x: [0, midX - (anim.startX - HALF), anim.endX - anim.startX + HALF],
         y: [0, midY - (anim.startY - HALF), anim.endY - anim.startY + HALF],
-        scale: [1, 1.15, 0.15],
-        rotate: [0, -20, 360],
+        scale: [0.5, 1.3, 0.15],
+        rotate: [0, 10, 360],
         opacity: [1, 1, 0],
       }}
       transition={{
-        duration: 1.0,
+        duration: 0.9,
         times: [0, 0.45, 1],
         ease: ['easeOut', 'easeIn'],
       }}
     >
-      {/* Glow ring */}
-      <motion.div
-        className="absolute inset-0 rounded-full"
-        initial={{ boxShadow: '0 0 0px 0px rgba(249,115,22,0)' }}
-        animate={{
-          boxShadow: [
-            '0 0 0px 0px rgba(249,115,22,0)',
-            '0 0 20px 8px rgba(249,115,22,0.6)',
-            '0 0 0px 0px rgba(249,115,22,0)',
-          ],
-        }}
-        transition={{ duration: 1.0, times: [0, 0.4, 1] }}
-      />
+      {/* Box visual wrapper */}
+      <div className="relative w-[70px] h-[70px] flex items-center justify-center bg-orange-200/90 backdrop-blur-md rounded-lg border-2 border-orange-500 shadow-[0_10px_25px_rgba(249,115,22,0.6)] overflow-hidden">
+        
+        {/* The product image packing into the box */}
+        <motion.img
+          src={anim.image}
+          alt=""
+          className="absolute w-12 h-12 object-contain rounded-full shadow-md z-10"
+          initial={{ y: -30, scale: 1.2, opacity: 0 }}
+          animate={{ y: 0, scale: 0.8, opacity: 1 }}
+          transition={{ duration: 0.3, delay: 0.1 }}
+        />
 
-      {/* Pizza image */}
-      <img
-        src={anim.image}
-        alt=""
-        className="w-full h-full object-contain drop-shadow-2xl rounded-full"
-        style={{ filter: 'drop-shadow(0 8px 24px rgba(249,115,22,0.5))' }}
-      />
+        {/* Box flaps/lid */}
+        <motion.div 
+          className="absolute top-0 left-0 right-0 h-4 bg-orange-400 border-b-2 border-orange-600 z-20 origin-top"
+          initial={{ rotateX: 0 }}
+          animate={{ rotateX: -90 }}
+          transition={{ duration: 0.3, delay: 0.4 }}
+        />
 
-      {/* Bag icon appears at the end */}
-      <motion.div
-        className="absolute inset-0 flex items-center justify-center rounded-full bg-primary-600"
-        initial={{ opacity: 0, scale: 0 }}
-        animate={{ opacity: [0, 0, 1], scale: [0, 0, 1] }}
-        transition={{ duration: 1.0, times: [0, 0.7, 1] }}
-      >
-        <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" className="w-8 h-8">
-          <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" />
-          <line x1="3" y1="6" x2="21" y2="6" />
-          <path d="M16 10a4 4 0 01-8 0" />
-        </svg>
-      </motion.div>
+        <PackageOpen className="absolute bottom-1 right-1 w-4 h-4 text-orange-600/50" />
+      </div>
     </motion.div>
   );
 }

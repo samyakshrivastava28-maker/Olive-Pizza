@@ -22,6 +22,7 @@ import OwnerLiveMap from "../../components/owner/OwnerLiveMap";
 import BusinessIntelligence from "../../components/owner/BusinessIntelligence";
 import { GlassCard } from "../../components/ui/glass/GlassSystem";
 
+
 export default function OwnerDashboard() {
   const [loading, setLoading] = useState(true);
   const [metrics, setMetrics] = useState<any>({
@@ -221,8 +222,9 @@ export default function OwnerDashboard() {
   }
 
   return (
-    <div className="space-y-6 md:space-y-8 pb-12 w-full px-4 md:px-0">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 mb-4">
+    <>
+      <div className="relative z-10 space-y-6 md:space-y-8 pb-12 pt-6 w-full px-4 md:px-0">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 mb-4">
         <h1 className="text-2xl md:text-3xl font-black text-white tracking-tight drop-shadow-md">
           Overview
         </h1>
@@ -317,6 +319,7 @@ export default function OwnerDashboard() {
           </GlassCard>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 }

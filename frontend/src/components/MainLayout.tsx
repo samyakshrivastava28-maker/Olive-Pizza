@@ -7,6 +7,7 @@ import { db } from '../lib/firebase';
 import { Home, Menu as MenuIcon, ShoppingBag, User, Search, MapPin, ReceiptText, WifiOff, Download, ArrowDownToLine } from 'lucide-react';
 import PWAPrompts from './ui/PWAPrompts';
 import { usePWA } from '../lib/usePWA';
+import Aurora from './ui/Aurora';
 
 export default function MainLayout() {
   const { isAuthenticated, role, user, logout } = useAuthStore();
@@ -60,6 +61,13 @@ export default function MainLayout() {
 
   return (
     <div className="min-h-screen flex flex-col bg-dark-950 pb-[72px] md:pb-0">
+      <div className="fixed inset-0 z-0 pointer-events-none opacity-30">
+        <Aurora 
+          colorStops={["#749578", "#55775a", "#425e47"]}
+          amplitude={1.2}
+          blend={0.5}
+        />
+      </div>
       <PWAPrompts />
       
       <AnimatePresence>

@@ -6,6 +6,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { PremiumBackground } from './ui/glass/PremiumBackground';
 import { GlassPanel } from './ui/glass/GlassSystem';
 import OwnerAlertManager from './owner/OwnerAlertManager';
+import PixelSnow from './ui/PixelSnow';
 
 export default function OwnerLayout() {
   const { user, logout } = useAuthStore();
@@ -54,6 +55,18 @@ export default function OwnerLayout() {
   return (
     <div className="dark min-h-[100dvh] flex font-sans relative w-full text-slate-200">
       <PremiumBackground />
+      <div className="fixed inset-0 z-0 pointer-events-none opacity-50">
+        <PixelSnow 
+          color="#ffffff"
+          flakeSize={0.01}
+          minFlakeSize={1.25}
+          pixelResolution={200}
+          speed={1.25}
+          density={0.3}
+          direction={125}
+          brightness={1}
+        />
+      </div>
       <OwnerAlertManager />
       
       {/* Mobile Sidebar Overlay */}

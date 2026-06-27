@@ -41,6 +41,7 @@ import TrackingDebugPanel, {
 import { GlassCard, GlassButton } from "../../components/ui/glass/GlassSystem";
 import { playNotificationSound } from "../../hooks/useNotificationSound";
 
+
 // Create a custom pulsing marker icon
 const pulsingIcon = new L.DivIcon({
   className: "custom-div-icon",
@@ -605,7 +606,9 @@ export default function DeliveryDashboard() {
     );
 
   return (
-    <div className="space-y-6 pb-24 max-w-lg mx-auto w-full">
+    <>
+
+      <div className="relative z-10 space-y-6 pt-6 pb-24 max-w-lg mx-auto w-full px-4">
       {/* ── Supabase Connection Banner ── */}
       <div
         className={`flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-bold border transition-all backdrop-blur-md ${supabaseConnected ? "bg-green-500/10 border-green-500/20 text-green-400" : "bg-red-500/10 border-red-500/20 text-red-400"}`}
@@ -994,6 +997,7 @@ export default function DeliveryDashboard() {
 
       {/* ── Debug Panel ── */}
       <TrackingDebugPanel data={debugData} side="delivery" />
-    </div>
+      </div>
+    </>
   );
 }

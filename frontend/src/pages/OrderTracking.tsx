@@ -46,6 +46,7 @@ import "leaflet/dist/leaflet.css";
 import { GlassCard, GlassButton } from "../components/ui/glass/GlassSystem";
 import { toast } from "react-hot-toast";
 import { playNotificationSound, statusToSoundType } from "../hooks/useNotificationSound";
+import SideRays from "../components/ui/SideRays";
 
 
 // Lazy load map only when needed
@@ -596,6 +597,21 @@ export default function OrderTracking() {
         </Suspense>
         {/* Shadow overlays for depth */}
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-transparent via-dark-950/20 to-dark-950/80 pointer-events-none z-10" />
+        <div className="absolute inset-0 z-20 pointer-events-none opacity-60">
+          <SideRays
+            speed={2.5}
+            rayColor1="#EAB308"
+            rayColor2="#96c8ff"
+            intensity={2}
+            spread={2}
+            origin="top-right"
+            tilt={0}
+            saturation={1.5}
+            blend={0.75}
+            falloff={1.6}
+            opacity={1.0}
+          />
+        </div>
       </div>
 
       {/* ─── PREMIUM FLOATING TOP HUD ─── */}

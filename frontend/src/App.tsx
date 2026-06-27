@@ -1,7 +1,30 @@
 import { Routes, Route, useLocation } from 'react-router';
 import { AnimatePresence, MotionConfig } from 'framer-motion';
 import { Toaster } from 'react-hot-toast';
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, ComponentType } from 'react';
+
+// Custom lazy loading with retry for chunk errors (prevents black screen on PWA update)
+const lazyWithRetry = <T extends ComponentType<any>>(
+  componentImport: () => Promise<{ default: T }>
+) =>
+  lazy(async () => {
+    const pageHasAlreadyBeenForceRefreshed = JSON.parse(
+      window.sessionStorage.getItem('page-has-been-force-refreshed') || 'false'
+    );
+
+    try {
+      const component = await componentImport();
+      window.sessionStorage.setItem('page-has-been-force-refreshed', 'false');
+      return component;
+    } catch (error) {
+      if (!pageHasAlreadyBeenForceRefreshed) {
+        window.sessionStorage.setItem('page-has-been-force-refreshed', 'true');
+        window.location.reload();
+        return new Promise<{ default: T }>(() => {});
+      }
+      throw error;
+    }
+  });
 
 // Eager imports for layout, guards, and critical UI
 import MainLayout from './components/MainLayout';
@@ -15,59 +38,59 @@ import LocationPrompt from './components/ui/LocationPrompt';
 import PushNotificationManager from './components/PushNotificationManager';
 
 // Lazy loaded heavy components
-const AIAssistant = lazy(() => import('./components/AIAssistant'));
-const FloatingTracker = lazy(() => import('./components/ui/FloatingTracker'));
+const AIAssistant = lazyWithRetry(() => import('./components/AIAssistant'));
+const FloatingTracker = lazyWithRetry(() => import('./components/ui/FloatingTracker'));
 
 // Lazy loaded layouts & guards
-const OwnerLayout = lazy(() => import('./components/OwnerLayout'));
-const DeliveryLayout = lazy(() => import('./components/DeliveryLayout'));
-const OnboardingGuard = lazy(() => import('./components/OnboardingGuard'));
+const OwnerLayout = lazyWithRetry(() => import('./components/OwnerLayout'));
+const DeliveryLayout = lazyWithRetry(() => import('./components/DeliveryLayout'));
+const OnboardingGuard = lazyWithRetry(() => import('./components/OnboardingGuard'));
 
 // Lazy loaded public pages
-const Home = lazy(() => import('./pages/Home'));
-const Menu = lazy(() => import('./pages/Menu'));
-const Cart = lazy(() => import('./pages/Cart'));
-const Checkout = lazy(() => import('./pages/Checkout'));
-const ProductDetail = lazy(() => import('./pages/ProductDetail'));
-const OrderTracking = lazy(() => import('./pages/OrderTracking'));
-const Contact = lazy(() => import('./pages/Contact'));
-const Login = lazy(() => import('./pages/Login'));
-const Register = lazy(() => import('./pages/Register'));
-const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
+const Home = lazyWithRetry(() => import('./pages/Home'));
+const Menu = lazyWithRetry(() => import('./pages/Menu'));
+const Cart = lazyWithRetry(() => import('./pages/Cart'));
+const Checkout = lazyWithRetry(() => import('./pages/Checkout'));
+const ProductDetail = lazyWithRetry(() => import('./pages/ProductDetail'));
+const OrderTracking = lazyWithRetry(() => import('./pages/OrderTracking'));
+const Contact = lazyWithRetry(() => import('./pages/Contact'));
+const Login = lazyWithRetry(() => import('./pages/Login'));
+const Register = lazyWithRetry(() => import('./pages/Register'));
+const ForgotPassword = lazyWithRetry(() => import('./pages/ForgotPassword'));
 
 // Lazy loaded onboarding
-const VerifyEmail = lazy(() => import('./pages/onboarding/VerifyEmail'));
-const SetupPhone = lazy(() => import('./pages/onboarding/SetupPhone'));
-const SetupLocation = lazy(() => import('./pages/onboarding/SetupLocation'));
+const VerifyEmail = lazyWithRetry(() => import('./pages/onboarding/VerifyEmail'));
+const SetupPhone = lazyWithRetry(() => import('./pages/onboarding/SetupPhone'));
+const SetupLocation = lazyWithRetry(() => import('./pages/onboarding/SetupLocation'));
 
 // Lazy loaded owner pages
-const OwnerDashboard = lazy(() => import('./pages/owner/OwnerDashboard'));
-const OwnerProducts = lazy(() => import('./pages/owner/OwnerProducts'));
-const OwnerOrders = lazy(() => import('./pages/owner/OwnerOrders'));
-const OwnerOrderHistory = lazy(() => import('./pages/owner/OwnerOrderHistory'));
-const OwnerAnalytics = lazy(() => import('./pages/owner/OwnerAnalytics'));
-const DeliveryPartners = lazy(() => import('./pages/owner/DeliveryPartners'));
-const OwnerEvents = lazy(() => import('./pages/owner/OwnerEvents'));
-const OwnerReports = lazy(() => import('./pages/owner/OwnerReports'));
-const OwnerAds = lazy(() => import('./pages/owner/OwnerAds'));
-const OwnerMediaLibrary = lazy(() => import('./pages/owner/OwnerMediaLibrary'));
-const OwnerSettings = lazy(() => import('./pages/owner/OwnerSettings'));
-const OwnerCustomers = lazy(() => import('./pages/owner/OwnerCustomers'));
-const OwnerCoupons = lazy(() => import('./pages/owner/OwnerCoupons'));
-const OwnerSecurity = lazy(() => import('./pages/owner/OwnerSecurity'));
-const OwnerEmailCenter = lazy(() => import('./pages/owner/OwnerEmailCenter'));
-const OwnerSpecialCategories = lazy(() => import('./pages/owner/OwnerSpecialCategories'));
-const OwnerHomepageManager = lazy(() => import('./pages/owner/OwnerHomepageManager'));
-const OwnerSlackCenter = lazy(() => import('./pages/owner/OwnerSlackCenter'));
-const OwnerNotificationCenter = lazy(() => import('./pages/owner/OwnerNotificationCenter'));
+const OwnerDashboard = lazyWithRetry(() => import('./pages/owner/OwnerDashboard'));
+const OwnerProducts = lazyWithRetry(() => import('./pages/owner/OwnerProducts'));
+const OwnerOrders = lazyWithRetry(() => import('./pages/owner/OwnerOrders'));
+const OwnerOrderHistory = lazyWithRetry(() => import('./pages/owner/OwnerOrderHistory'));
+const OwnerAnalytics = lazyWithRetry(() => import('./pages/owner/OwnerAnalytics'));
+const DeliveryPartners = lazyWithRetry(() => import('./pages/owner/DeliveryPartners'));
+const OwnerEvents = lazyWithRetry(() => import('./pages/owner/OwnerEvents'));
+const OwnerReports = lazyWithRetry(() => import('./pages/owner/OwnerReports'));
+const OwnerAds = lazyWithRetry(() => import('./pages/owner/OwnerAds'));
+const OwnerMediaLibrary = lazyWithRetry(() => import('./pages/owner/OwnerMediaLibrary'));
+const OwnerSettings = lazyWithRetry(() => import('./pages/owner/OwnerSettings'));
+const OwnerCustomers = lazyWithRetry(() => import('./pages/owner/OwnerCustomers'));
+const OwnerCoupons = lazyWithRetry(() => import('./pages/owner/OwnerCoupons'));
+const OwnerSecurity = lazyWithRetry(() => import('./pages/owner/OwnerSecurity'));
+const OwnerEmailCenter = lazyWithRetry(() => import('./pages/owner/OwnerEmailCenter'));
+const OwnerSpecialCategories = lazyWithRetry(() => import('./pages/owner/OwnerSpecialCategories'));
+const OwnerHomepageManager = lazyWithRetry(() => import('./pages/owner/OwnerHomepageManager'));
+const OwnerSlackCenter = lazyWithRetry(() => import('./pages/owner/OwnerSlackCenter'));
+const OwnerNotificationCenter = lazyWithRetry(() => import('./pages/owner/OwnerNotificationCenter'));
 
 // Lazy loaded delivery pages
-const CustomerDashboard = lazy(() => import('./pages/CustomerDashboard'));
-const DeliveryDashboard = lazy(() => import('./pages/delivery/DeliveryDashboard'));
-const DeliveryEarnings = lazy(() => import('./pages/delivery/DeliveryEarnings'));
-const DeliveryPerformance = lazy(() => import('./pages/delivery/DeliveryPerformance'));
-const DeliveryProfile = lazy(() => import('./pages/delivery/DeliveryProfile'));
-const DeliveryNotificationCenter = lazy(() => import('./pages/delivery/DeliveryNotificationCenter'));
+const CustomerDashboard = lazyWithRetry(() => import('./pages/CustomerDashboard'));
+const DeliveryDashboard = lazyWithRetry(() => import('./pages/delivery/DeliveryDashboard'));
+const DeliveryEarnings = lazyWithRetry(() => import('./pages/delivery/DeliveryEarnings'));
+const DeliveryPerformance = lazyWithRetry(() => import('./pages/delivery/DeliveryPerformance'));
+const DeliveryProfile = lazyWithRetry(() => import('./pages/delivery/DeliveryProfile'));
+const DeliveryNotificationCenter = lazyWithRetry(() => import('./pages/delivery/DeliveryNotificationCenter'));
 
 function AppContent() {
   const location = useLocation();

@@ -22,9 +22,10 @@ import {
 } from "lucide-react";
 import { Link, useNavigate } from "react-router";
 import { useCartStore, useAuthStore } from "../lib/store";
-import { PremiumBackground } from "../components/ui/glass/PremiumBackground";
+
 import { GlassCard, GlassButton } from "../components/ui/glass/GlassSystem";
 import { toast } from "react-hot-toast";
+
 
 // 3D Card Component
 function TiltCard({
@@ -190,7 +191,7 @@ export default function CustomerDashboard() {
 
   return (
     <PageTransition className="w-full relative min-h-[100dvh] text-slate-200">
-      <PremiumBackground />
+
       <div className="relative z-10 max-w-7xl mx-auto p-4 md:p-8 pt-8">
         {/* Top Navigation/Tabs */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">

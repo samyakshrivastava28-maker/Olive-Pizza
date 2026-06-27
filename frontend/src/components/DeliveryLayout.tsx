@@ -4,9 +4,9 @@ import { db } from '../lib/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
 import { useState } from 'react';
 import toast from 'react-hot-toast';
-import { PremiumBackground } from './ui/glass/PremiumBackground';
 import { GlassPanel, GlassCard } from './ui/glass/GlassSystem';
 import DeliveryAlertManager from './delivery/DeliveryAlertManager';
+import Particles from './ui/Particles';
 
 
 export default function DeliveryLayout() {
@@ -24,7 +24,18 @@ export default function DeliveryLayout() {
   if (user.approvalStatus !== 'approved') {
     return (
       <div className="min-h-[100dvh] relative flex flex-col items-center justify-center p-6 text-center w-full text-slate-200">
-        <PremiumBackground />
+        <div className="fixed inset-0 z-0 pointer-events-none bg-dark-950">
+          <Particles
+            particleColors={["#ffffff", "#f97316", "#fb923c"]}
+            particleCount={150}
+            particleSpread={10}
+            speed={0.1}
+            particleBaseSize={100}
+            moveParticlesOnHover={false}
+            alphaParticles={false}
+            disableRotation={false}
+          />
+        </div>
         <DeliveryAlertManager />
         <GlassCard className="p-8 max-w-md w-full z-10 flex flex-col items-center">
           <div className="text-6xl mb-6">⏳</div>
@@ -64,7 +75,18 @@ export default function DeliveryLayout() {
 
   return (
     <div className="min-h-[100dvh] flex flex-col relative w-full text-white">
-      <PremiumBackground />
+      <div className="fixed inset-0 z-0 pointer-events-none bg-dark-950">
+        <Particles
+          particleColors={["#ffffff", "#f97316", "#fb923c"]}
+          particleCount={150}
+          particleSpread={10}
+          speed={0.1}
+          particleBaseSize={100}
+          moveParticlesOnHover={false}
+          alphaParticles={false}
+          disableRotation={false}
+        />
+      </div>
       <DeliveryAlertManager />
       <header className="bg-white/5 backdrop-blur-xl border-b border-white/10 p-4 sticky top-0 z-50 flex items-center justify-between shadow-[0_8px_40px_rgba(0,0,0,0.15)]">
         <div className="flex justify-between items-center container mx-auto max-w-md w-full">
