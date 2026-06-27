@@ -51,5 +51,53 @@ export function initScheduler() {
     }
   });
 
+  // Process Scheduled Orders every minute
+  cron.schedule('* * * * *', async () => {
+    try {
+      const { adminDb } = await import('../config/firebase.js');
+      const now = new Date();
+      const snapshot = await adminDb.collection('orders')
+        .where('orderTiming', '==', 'scheduled')
+        .where('alertSent', '==', false)
+        .where('status', 'in', ['pending', 'accepted'])
+        .get();
+
+      const PREP_TIME_MINUTES = 45; // Delay alarm until 45 minutes before scheduled time
+
+      snapshot.docs.forEach(async (doc) => {
+        const data = doc.data();
+        if (!data.scheduledDate || !data.scheduledTime) return;
+
+        // Parse scheduled time
+        const targetDate = new Date();
+        if (data.scheduledDate === 'tomorrow') {
+          targetDate.setDate(targetDate.getDate() + 1);
+        }
+
+        const timeStr = data.scheduledTime; // e.g. "6:30 PM"
+        const [time, period] = timeStr.split(' ');
+        let [hours, minutes] = time.split(':').map(Number);
+        
+        if (period === 'PM' && hours !== 12) hours += 12;
+        if (period === 'AM' && hours === 12) hours = 0;
+
+        targetDate.setHours(hours, minutes, 0, 0);
+
+        const diffMinutes = (targetDate.getTime() - now.getTime()) / (1000 * 60);
+
+        // If we are within the prep time (e.g. 45 mins) of the scheduled time
+        if (diffMinutes <= PREP_TIME_MINUTES && diffMinutes > -60) {
+          console.log(`⏰ Triggering scheduled order alarm for ${doc.id}`);
+          await adminDb.collection('orders').doc(doc.id).update({
+            alertSent: true,
+            status: 'accepted' // Auto-accept to start kitchen process
+          });
+        }
+      });
+    } catch (error) {
+      console.error('Failed to process scheduled orders:', error);
+    }
+  });
+
   console.log('Scheduler initialized.');
 }

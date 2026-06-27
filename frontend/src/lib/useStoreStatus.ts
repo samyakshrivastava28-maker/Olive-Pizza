@@ -8,6 +8,7 @@ interface StoreStatus {
   isDeliveryAvailable: boolean;
   isLoading: boolean;
   isWithinBusinessHours: boolean;
+  deliveryRadiusKm: number;
 }
 
 export function useStoreStatus(): StoreStatus {
@@ -15,7 +16,8 @@ export function useStoreStatus(): StoreStatus {
     isRestaurantOpen: true,
     isDeliveryAvailable: true,
     isLoading: true,
-    isWithinBusinessHours: true
+    isWithinBusinessHours: true,
+    deliveryRadiusKm: 5
   });
 
   useEffect(() => {
@@ -30,7 +32,8 @@ export function useStoreStatus(): StoreStatus {
           isRestaurantOpen: data.isRestaurantOpen ?? true,
           isDeliveryAvailable: data.isDeliveryAvailable ?? true,
           isLoading: false,
-          isWithinBusinessHours: isWithinHours
+          isWithinBusinessHours: isWithinHours,
+          deliveryRadiusKm: data.deliveryRadiusKm ?? 5
         });
       } else {
         setStatus(s => ({ ...s, isLoading: false, isWithinBusinessHours: isWithinHours }));

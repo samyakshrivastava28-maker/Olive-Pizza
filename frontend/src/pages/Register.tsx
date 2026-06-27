@@ -34,6 +34,27 @@ export default function Register() {
     setLoading(true);
 
     try {
+      // ReCaptcha Enterprise Assessment (Non-blocking as requested)
+      try {
+        if (typeof (window as any).grecaptcha !== 'undefined') {
+          const grecaptcha = (window as any).grecaptcha;
+          await new Promise<void>((resolve) => grecaptcha.enterprise.ready(resolve));
+          const token = await grecaptcha.enterprise.execute('6LdqyDctAAAAABn8isXOdDe-0roVqILKuAdIl_x-', {action: 'REGISTER'});
+          
+          const response = await fetch('/api/auth/verify-recaptcha', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token, action: 'REGISTER' })
+          });
+          const data = await response.json();
+          if (data.success === false) {
+             console.warn("Recaptcha assessment failed or flagged:", data.reason);
+          }
+        }
+      } catch (recaptchaError) {
+        console.warn("Recaptcha execution failed, proceeding to register to not block workflow:", recaptchaError);
+      }
+
       // 1. Phone validation
       let formattedPhone = "";
       try {

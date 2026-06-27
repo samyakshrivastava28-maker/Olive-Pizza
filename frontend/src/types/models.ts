@@ -130,6 +130,11 @@ export interface Order {
   updatedAt: string;
   deliveryPartnerId?: string;
   
+  orderTiming?: 'now' | 'scheduled';
+  scheduledDate?: string | null;
+  scheduledTime?: string | null;
+  noContactDelivery?: boolean;
+  
   // Proof of delivery
   deliveryProof?: {
     photoUrl?: string;

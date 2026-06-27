@@ -5,8 +5,9 @@ import L from 'leaflet';
 import { db } from '../../lib/firebase';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { User } from '../../types/models';
-import { RESTAURANT_LOCATION, MAX_DELIVERY_RADIUS_KM } from '../../lib/config';
+import { RESTAURANT_LOCATION } from '../../lib/config';
 import { restaurantIcon } from '../../lib/mapIcons';
+import { useStoreStatus } from '../../lib/useStoreStatus';
 
 // Fix leaflet icon issue in React
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -35,12 +36,14 @@ const offlineIcon = new L.Icon({
 export default function OwnerLiveMap() {
   const [partners, setPartners] = useState<User[]>([]);
   const [viewMode, setViewMode] = useState<'live' | 'heatmap'>('live');
+  const storeStatus = useStoreStatus();
 
   // Generate some simulated heatmap points around the restaurant
   const heatmapData = useMemo(() => {
     const points = [];
+    const maxRadius = storeStatus.deliveryRadiusKm || 5;
     for (let i = 0; i < 40; i++) {
-      const radius = Math.random() * MAX_DELIVERY_RADIUS_KM * 0.8;
+      const radius = Math.random() * maxRadius * 0.8;
       const angle = Math.random() * Math.PI * 2;
       const lat = RESTAURANT_LOCATION.lat + (radius / 111) * Math.cos(angle);
       const lng = RESTAURANT_LOCATION.lng + (radius / (111 * Math.cos(RESTAURANT_LOCATION.lat * Math.PI / 180))) * Math.sin(angle);
@@ -108,7 +111,7 @@ export default function OwnerLiveMap() {
           {/* Delivery Radius */}
           <Circle 
             center={[RESTAURANT_LOCATION.lat, RESTAURANT_LOCATION.lng]}
-            radius={MAX_DELIVERY_RADIUS_KM * 1000}
+            radius={(storeStatus.deliveryRadiusKm || 5) * 1000}
             pathOptions={{ color: '#55775a', fillColor: '#55775a', fillOpacity: 0.1, weight: 2 }}
           />
           {viewMode === 'live' ? (

@@ -807,6 +807,18 @@ export default function DeliveryDashboard() {
               </div>
             </div>
 
+            {activeTask.noContactDelivery && (
+              <div className="mt-4 p-4 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-start gap-3">
+                <div className="bg-orange-500/20 p-2 rounded-full">
+                  <Package className="w-5 h-5 text-orange-400" />
+                </div>
+                <div>
+                  <h4 className="text-orange-400 font-bold text-sm uppercase tracking-wider mb-1">No Contact Delivery</h4>
+                  <p className="text-white/80 text-sm">Please leave the package at the door and take a photo as proof of delivery.</p>
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-3 pt-4 border-t border-white/10">
               <a
                 href={`tel:${activeTask.contactPhone}`}

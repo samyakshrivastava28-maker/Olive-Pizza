@@ -36,6 +36,22 @@ export class FirestoreListener {
 
             this.orderStatusCache.set(orderData.id, orderData.status);
 
+            if (orderData.orderTiming === 'scheduled') {
+              console.log(`📅 Scheduled order: #${orderData.id.slice(-6).toUpperCase()} — sending Slack alert only`);
+              const blocks = SlackProvider.generateOrderBlock(orderData);
+              const ts = await notificationService.dispatchImmediate({
+                type: 'scheduled_order_received',
+                category: 'orders',
+                title: `📅 New Scheduled Order — #${orderData.id.slice(-6).toUpperCase()}`,
+                blocks,
+                skipWebPush: true // If the notificationService supports it, otherwise just use a different type that isn't mapped to an alarm sound
+              });
+              if (ts) {
+                try { await change.doc.ref.update({ slackThreadTs: ts }); } catch (e) {}
+              }
+              return; // Skip the kitchen alarm
+            }
+
             console.log(`🍕 New order: #${orderData.id.slice(-6).toUpperCase()} — sending Slack alert`);
 
             const blocks = SlackProvider.generateOrderBlock(orderData);

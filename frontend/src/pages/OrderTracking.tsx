@@ -38,7 +38,8 @@ import {
   Lock,
   Share2,
   MessageSquare,
-  Star
+  Star,
+  Camera
 } from "lucide-react";
 import "leaflet/dist/leaflet.css";
 
@@ -286,6 +287,26 @@ function DeliverySuccessScreen({ order, orderId, partnerDetails, navigate }: any
           Live tracking securely closed
           <Lock className="w-4 h-4 text-emerald-500" />
         </motion.div>
+
+        {order.deliveryProof && order.deliveryProof.photoUrl && (
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }} className="mt-6 w-full max-w-sm">
+            <GlassCard className="p-4 overflow-hidden border border-emerald-500/30 bg-emerald-500/5">
+              <h3 className="text-emerald-400 font-bold text-sm uppercase tracking-wider mb-3 flex items-center justify-center gap-2">
+                <Camera className="w-4 h-4" /> Delivery Proof
+              </h3>
+              <div className="w-full h-48 rounded-xl overflow-hidden border border-white/10 relative">
+                <img src={order.deliveryProof.photoUrl} alt="Delivery Proof" className="w-full h-full object-cover" />
+                <div className="absolute inset-0 ring-1 ring-inset ring-white/10 rounded-xl" />
+              </div>
+              {order.deliveryProof.note && (
+                <div className="mt-3 bg-dark-950 p-3 rounded-xl border border-white/5 text-sm text-slate-300">
+                  <span className="text-slate-500 font-bold mr-2">Note:</span>
+                  {order.deliveryProof.note}
+                </div>
+              )}
+            </GlassCard>
+          </motion.div>
+        )}
       </motion.div>
 
       <div className="w-full max-w-md px-5 space-y-4 relative z-10">

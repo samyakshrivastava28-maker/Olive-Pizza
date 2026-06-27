@@ -4,6 +4,7 @@ import { useNavigate } from "react-router";
 import { motion, AnimatePresence } from "framer-motion";
 import PageTransition from "../components/PageTransition";
 import { RESTAURANT_LOCATION, MAX_DELIVERY_RADIUS_KM } from "../lib/config";
+import { useStoreStatus } from "../lib/useStoreStatus";
 import { calculateDistance } from "../lib/utils";
 import { Minus, Plus, Trash2, ArrowRight, Sparkles } from "lucide-react";
 import { db } from "../lib/firebase";
@@ -12,13 +13,14 @@ import { MenuItem } from "../types/models";
 
 export default function Cart() {
   const { items, total, addItem, removeItem, updateQuantity } = useCartStore();
+  const storeStatus = useStoreStatus();
   const navigate = useNavigate();
 
   const [isOutsideDeliveryZone, setIsOutsideDeliveryZone] = useState(false);
   const [recommendations, setRecommendations] = useState<MenuItem[]>([]);
 
   useEffect(() => {
-    if (navigator.geolocation) {
+    if (navigator.geolocation && !storeStatus.isLoading) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
           const { latitude, longitude } = position.coords;
@@ -28,7 +30,7 @@ export default function Cart() {
             latitude,
             longitude,
           );
-          if (distance > MAX_DELIVERY_RADIUS_KM) {
+          if (distance > storeStatus.deliveryRadiusKm) {
             setIsOutsideDeliveryZone(true);
           }
         },

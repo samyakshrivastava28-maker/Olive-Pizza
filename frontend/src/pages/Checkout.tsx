@@ -65,6 +65,32 @@ export default function Checkout() {
   );
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "online">("cash");
 
+  const [orderTiming, setOrderTiming] = useState<"now" | "scheduled">("now");
+  const [scheduledDate, setScheduledDate] = useState<string>("today");
+  const [scheduledTime, setScheduledTime] = useState<string>("");
+  const [noContactDelivery, setNoContactDelivery] = useState(false);
+
+  const generateTimeSlots = (dateType: string) => {
+    const slots = [];
+    const now = new Date();
+    let startHour = 10; // 10 AM
+    const endHour = 23; // 11 PM
+    
+    if (dateType === "today") {
+      startHour = Math.max(startHour, now.getHours() + 1);
+    }
+    
+    for (let i = startHour; i < endHour; i++) {
+      const period = i >= 12 ? 'PM' : 'AM';
+      const displayHour = i > 12 ? i - 12 : (i === 0 ? 12 : i);
+      slots.push(`${displayHour}:00 ${period}`);
+      slots.push(`${displayHour}:30 ${period}`);
+    }
+    return slots;
+  };
+
+  const availableSlots = generateTimeSlots(scheduledDate);
+
   useEffect(() => {
     if (
       !storeStatus.isLoading &&
@@ -250,6 +276,10 @@ export default function Checkout() {
         deliveryFee,
         deliveryType,
         paymentMethod,
+        orderTiming,
+        scheduledDate: orderTiming === 'scheduled' ? scheduledDate : null,
+        scheduledTime: orderTiming === 'scheduled' ? scheduledTime : null,
+        noContactDelivery: deliveryType === 'delivery' ? noContactDelivery : false,
         address: deliveryType === "delivery" ? address : "Self Pickup",
         deliveryAddress:
           deliveryType === "delivery"
@@ -409,9 +439,9 @@ export default function Checkout() {
                       user.lat,
                       user.lng,
                     );
-                    if (distance > MAX_DELIVERY_RADIUS_KM) {
+                    if (distance > storeStatus.deliveryRadiusKm) {
                       toast.error(
-                        `Your address is ${distance.toFixed(1)}km away. We only deliver within ${MAX_DELIVERY_RADIUS_KM}km. Please select Self Pickup.`,
+                        `Your address is ${distance.toFixed(1)}km away. We only deliver within ${storeStatus.deliveryRadiusKm}km. Please select Self Pickup.`,
                       );
                       setDeliveryType("pickup");
                     }
@@ -488,6 +518,87 @@ export default function Checkout() {
                   </div>
                 </button>
               </div>
+
+              {/* Order Timing Options */}
+              <div className="mt-8">
+                <h3 className="font-bold text-white mb-4">When would you like your order?</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <button
+                    onClick={() => setOrderTiming("now")}
+                    className={`p-4 rounded-xl border text-center transition-colors ${orderTiming === "now" ? "bg-primary-600/10 border-primary-500 text-white" : "bg-dark-950 border-dark-800 text-slate-400"}`}
+                  >
+                    <p className="font-bold">ASAP</p>
+                    <p className="text-xs opacity-80 mt-1">Deliver/Pickup Now</p>
+                  </button>
+                  <button
+                    onClick={() => setOrderTiming("scheduled")}
+                    className={`p-4 rounded-xl border text-center transition-colors ${orderTiming === "scheduled" ? "bg-primary-600/10 border-primary-500 text-white" : "bg-dark-950 border-dark-800 text-slate-400"}`}
+                  >
+                    <p className="font-bold">Schedule</p>
+                    <p className="text-xs opacity-80 mt-1">For Later</p>
+                  </button>
+                </div>
+
+                <AnimatePresence>
+                  {orderTiming === "scheduled" && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="mt-4 space-y-4 overflow-hidden"
+                    >
+                      <div>
+                        <label className="block text-sm font-bold text-slate-400 mb-2">Select Date</label>
+                        <select
+                          value={scheduledDate}
+                          onChange={(e) => {
+                            setScheduledDate(e.target.value);
+                            setScheduledTime(""); // Reset time when date changes
+                          }}
+                          className="w-full bg-dark-950 border border-dark-800 rounded-xl p-3 text-white focus:outline-none focus:border-primary-500"
+                        >
+                          <option value="today">Today</option>
+                          <option value="tomorrow">Tomorrow</option>
+                        </select>
+                      </div>
+
+                      {availableSlots.length > 0 ? (
+                        <div>
+                          <label className="block text-sm font-bold text-slate-400 mb-2">Select Time</label>
+                          <select
+                            value={scheduledTime}
+                            onChange={(e) => setScheduledTime(e.target.value)}
+                            className="w-full bg-dark-950 border border-dark-800 rounded-xl p-3 text-white focus:outline-none focus:border-primary-500"
+                          >
+                            <option value="">-- Choose a Time --</option>
+                            {availableSlots.map((slot) => (
+                              <option key={slot} value={slot}>{slot}</option>
+                            ))}
+                          </select>
+                        </div>
+                      ) : (
+                        <div className="bg-orange-500/10 text-orange-500 p-3 rounded-lg text-sm">
+                          No more time slots available for {scheduledDate}. Please select another date.
+                        </div>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              {/* No Contact Delivery Toggle */}
+              {deliveryType === "delivery" && (
+                <div className="mt-8 bg-dark-950 border border-dark-800 p-4 rounded-xl flex items-center justify-between cursor-pointer" onClick={() => setNoContactDelivery(!noContactDelivery)}>
+                  <div>
+                    <h3 className="font-bold text-white">No-Contact Delivery</h3>
+                    <p className="text-xs text-slate-400 mt-1">Delivery partner will leave the order at your door and provide photo proof.</p>
+                  </div>
+                  <div className={`w-12 h-6 rounded-full transition-colors relative ${noContactDelivery ? 'bg-primary-500' : 'bg-dark-800'}`}>
+                    <div className={`absolute top-1 bottom-1 w-4 bg-white rounded-full transition-transform ${noContactDelivery ? 'translate-x-7' : 'translate-x-1'}`} />
+                  </div>
+                </div>
+              )}
+
               <button
                 onClick={() => {
                   if (storeStatus.isLoading) {
@@ -506,6 +617,10 @@ export default function Checkout() {
                       "Delivery is closed for now. You can pickup your order from our restaurant.",
                       { duration: 5000 },
                     );
+                    return;
+                  }
+                  if (orderTiming === 'scheduled' && !scheduledTime) {
+                    toast.error('Please select a scheduled time for your order.');
                     return;
                   }
                   setStep(3);
