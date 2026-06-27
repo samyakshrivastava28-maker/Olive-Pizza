@@ -20,7 +20,21 @@ const lazyWithRetry = <T extends ComponentType<any>>(
     } catch (error) {
       if (!pageHasAlreadyBeenForceRefreshed) {
         window.sessionStorage.setItem('page-has-been-force-refreshed', 'true');
-        window.location.reload();
+        
+        // Break infinite loop: clear PWA caches and unregister service workers before reloading
+        if ('serviceWorker' in navigator) {
+          try {
+            const registrations = await navigator.serviceWorker.getRegistrations();
+            for (let registration of registrations) {
+              await registration.unregister();
+            }
+          } catch (e) {
+            console.error('Failed to unregister SW', e);
+          }
+        }
+        
+        // Try to bust the cache by adding a timestamp
+        window.location.href = window.location.pathname + '?v=' + new Date().getTime();
         return new Promise<{ default: T }>(() => {});
       }
       throw error;
@@ -118,6 +132,17 @@ function AppContent() {
       navigate('/onboarding/location', { replace: true });
     }
   }, [isAuthenticated, user, role, location.pathname, navigate]);
+
+  // Role-based Landing Page Interceptor
+  useEffect(() => {
+    if (!isAuthenticated || !role || location.pathname !== '/') return;
+    
+    if (role === 'owner' || role === 'admin') {
+      navigate('/owner/dashboard', { replace: true });
+    } else if (role === 'delivery_partner') {
+      navigate('/delivery/dashboard', { replace: true });
+    }
+  }, [isAuthenticated, role, location.pathname, navigate]);
 
   return (
     <>

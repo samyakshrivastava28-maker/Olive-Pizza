@@ -10,6 +10,7 @@ import { auth, db } from "../lib/firebase";
 import { doc, setDoc, getDoc } from "firebase/firestore";
 import { useNavigate, Link } from "react-router";
 import { parsePhoneNumber } from "libphonenumber-js";
+import toast from "react-hot-toast";
 
 const getDeviceId = () => {
   let deviceId = localStorage.getItem('device_fingerprint');
@@ -62,11 +63,14 @@ export default function Register() {
             finalRole = userDoc.data()?.role || "customer";
           }
 
-          if (finalRole === "owner" || finalRole === "admin")
+          if (finalRole === "owner" || finalRole === "admin") {
+            toast.success("Welcome to Olive Pizza!");
             navigate("/owner/dashboard");
-          else if (finalRole === "delivery_partner")
+          } else if (finalRole === "delivery_partner") {
+            toast.success("Welcome to Olive Pizza!");
             navigate("/delivery/dashboard");
-          else {
+          } else {
+            toast.success("Welcome to Olive Pizza!");
             if (userDoc.exists() && userDoc.data()?.phoneSetupCompleted) {
                navigate("/");
             } else {
@@ -193,10 +197,13 @@ export default function Register() {
           }),
         }).catch((e) => console.error("Email trigger failed:", e));
 
+        toast.success("Welcome to Olive Pizza!");
+
         if (initialRole === "owner") navigate("/owner/dashboard");
         else navigate("/onboarding/location");
       } catch (syncErr) {
         console.warn("Firestore write failed. User created in Auth only.", syncErr);
+        toast.success("Welcome to Olive Pizza!");
         navigate("/onboarding/location");
       }
     } catch (err: any) {

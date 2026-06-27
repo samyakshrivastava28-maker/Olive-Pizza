@@ -32,8 +32,19 @@ export const queueEmail = async (
     const result = await pgPool.query(query, values);
     return result.rows[0].id;
   } catch (error) {
-    console.error('Error queuing email:', error);
-    throw error;
+    console.warn('Database queue failed (table might be missing). Falling back to direct send:', error);
+    try {
+      await transporter.sendMail({
+        from: process.env.SMTP_FROM || '"Olive Pizza" <noreply@olivepizza.app>',
+        to: recipient,
+        subject: subject,
+        html: htmlContent,
+      });
+      return -1; // Indicates direct send was used
+    } catch (directError) {
+      console.error('Direct send also failed:', directError);
+      throw directError;
+    }
   }
 };
 

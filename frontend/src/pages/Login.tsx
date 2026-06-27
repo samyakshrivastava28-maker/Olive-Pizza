@@ -9,6 +9,7 @@ import {
 import { auth, db } from "../lib/firebase";
 import { doc, setDoc } from "firebase/firestore";
 import { useNavigate, Link } from "react-router";
+import toast from 'react-hot-toast';
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -88,6 +89,8 @@ export default function Login() {
       const { getDoc } = await import("firebase/firestore");
       const userDoc = await getDoc(doc(db, "users", userCredential.user.uid));
       const userRole = userDoc.data()?.role || "customer";
+
+      toast.success("Welcome back!");
 
       if (userRole === "owner" || userRole === "admin")
         navigate("/owner/dashboard");
