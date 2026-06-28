@@ -30,12 +30,17 @@ export default function ComboBuilder() {
     const qProd = query(collection(db, "products"));
     const unsubProd = onSnapshot(qProd, (snap) => {
       setProducts(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      console.error("Error fetching products:", error);
     });
 
     // Fetch Combos
     const qCombo = query(collection(db, "combos"), orderBy("createdAt", "desc"));
     const unsubCombo = onSnapshot(qCombo, (snap) => {
       setCombos(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setLoading(false);
+    }, (error) => {
+      console.error("Error fetching combos:", error);
       setLoading(false);
     });
 

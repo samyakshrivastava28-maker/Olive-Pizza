@@ -83,6 +83,9 @@ export default function OwnerProducts() {
       }));
       setItems(productData);
       setLoading(false);
+    }, (error) => {
+      console.error("Error fetching products:", error);
+      setLoading(false);
     });
     return () => unsubscribe();
   }, []);
