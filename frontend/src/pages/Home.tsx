@@ -88,6 +88,14 @@ export default function Home() {
     if (!hasPlayed) {
       setShowIntro(true);
       document.body.style.overflow = "hidden";
+      
+      // FOOLPROOF FALLBACK: Force end the intro after 8 seconds no matter what.
+      // This prevents the "infinite loading glitch" if the video fails to load or autoplay.
+      const fallbackTimer = setTimeout(() => {
+        handleIntroEnd();
+      }, 8000);
+      
+      return () => clearTimeout(fallbackTimer);
     }
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
     checkMobile();
@@ -355,24 +363,35 @@ export default function Home() {
             initial={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.8 }}
-            className="fixed inset-0 z-[100] bg-dark-950 flex items-center justify-center"
+            className="fixed inset-0 z-[9999] bg-dark-950 flex items-center justify-center"
             style={{ willChange: 'opacity' }}
           >
             <video
+              ref={(el) => {
+                if (el) {
+                  // Catch autoplay failures on mobile and skip immediately
+                  const playPromise = el.play();
+                  if (playPromise !== undefined) {
+                    playPromise.catch(() => {
+                      handleIntroEnd();
+                    });
+                  }
+                }
+              }}
               src={isMobile ? mobileIntroUrl : desktopIntroUrl}
               poster={(isMobile ? mobileIntroUrl : desktopIntroUrl).replace('.mp4', '.jpg')}
               autoPlay muted playsInline
               preload="auto"
               onEnded={handleIntroEnd}
-              onError={() => setTimeout(handleIntroEnd, 2000)}
+              onError={() => setTimeout(handleIntroEnd, 1000)}
               className="w-full h-full object-cover"
               style={{ transform: 'translateZ(0)', willChange: 'transform' }}
             />
             <button
               onClick={handleIntroEnd}
-              className="absolute bottom-10 right-10 text-white/50 hover:text-white text-sm tracking-widest uppercase font-bold z-10"
+              className="absolute top-safe-6 right-6 mt-6 px-4 py-2 bg-white/10 backdrop-blur-md border border-white/20 rounded-full text-white text-xs tracking-widest uppercase font-bold z-10 shadow-xl hover:bg-white/20 transition-colors"
             >
-              Skip
+              Skip Intro ➔
             </button>
           </motion.div>
         )}

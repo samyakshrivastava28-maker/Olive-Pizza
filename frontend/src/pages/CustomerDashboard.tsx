@@ -98,7 +98,12 @@ export default function CustomerDashboard() {
   const cartItemCount = items.reduce((sum, item) => sum + item.quantity, 0);
 
   useEffect(() => {
-    if (!auth.currentUser) return;
+    if (!auth.currentUser) {
+      if (!useAuthStore.getState().isLoading) {
+        setLoading(false);
+      }
+      return;
+    }
     const fetchOrders = async () => {
       try {
         const q = query(
