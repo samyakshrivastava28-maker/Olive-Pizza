@@ -54,7 +54,6 @@ const lazyWithRetry = <T extends ComponentType<any>>(
 import MainLayout from './components/MainLayout';
 import AuthProvider from './components/AuthProvider';
 import ClickSpark from './components/ui/ClickSpark';
-import GlobalLoader from './components/GlobalLoader';
 import { CartAnimationProvider } from './components/ui/CartAnimationProvider';
 import { OwnerGuard, DeliveryGuard, CustomerGuard, AuthGuard } from './components/auth/RouteGuards';
 import FloatingCart from './components/ui/FloatingCart';
@@ -155,7 +154,6 @@ function AppContent() {
 
   return (
     <>
-      <GlobalLoader />
       <PushNotificationManager />
       <AnimatePresence mode="wait">
       <Suspense fallback={<div className="min-h-[100dvh] w-full bg-dark-950 flex flex-col items-center justify-center pointer-events-none"><div className="w-12 h-12 border-4 border-primary-500/20 border-t-primary-500 rounded-full animate-spin" /></div>}>

@@ -9,6 +9,7 @@ import toast from "react-hot-toast";
 import PageTransition from "../components/PageTransition";
 import PizzaLoader from "../components/ui/PizzaLoader";
 import { useCartAnimation } from "../components/ui/CartAnimationProvider";
+import { useDataStore } from "../lib/dataStore";
 
 export default function ProductDetail() {
   const { productId } = useParams();
@@ -32,18 +33,32 @@ export default function ProductDetail() {
     const fetchProduct = async () => {
       if (!productId) return;
       try {
-        let docSnap = await getDoc(doc(db, "products", productId));
+        const { products, combos } = useDataStore.getState();
+        let data: any = products.find(p => p.id === productId);
         let isCombo = false;
         
-        if (!docSnap.exists()) {
-          docSnap = await getDoc(doc(db, "combos", productId));
-          isCombo = true;
+        if (!data) {
+          data = combos.find(c => c.id === productId);
+          if (data) isCombo = true;
         }
 
-        if (docSnap.exists()) {
-          const data = docSnap.data();
+        // If not in cache, fallback to Firestore
+        if (!data) {
+          let docSnap = await getDoc(doc(db, "products", productId));
+          if (!docSnap.exists()) {
+            docSnap = await getDoc(doc(db, "combos", productId));
+            if (docSnap.exists()) {
+              isCombo = true;
+              data = { id: docSnap.id, ...docSnap.data() };
+            }
+          } else {
+            data = { id: docSnap.id, ...docSnap.data() };
+          }
+        }
+
+        if (data) {
           const productData: MenuItem = {
-            id: docSnap.id,
+            id: data.id,
             name: isCombo ? data.name : data.productName,
             description: data.description,
             category: isCombo ? "combo" : data.category,

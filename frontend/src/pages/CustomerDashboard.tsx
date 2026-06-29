@@ -89,8 +89,11 @@ function TiltCard({
 }
 
 export default function CustomerDashboard() {
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [orders, setOrders] = useState<Order[]>(() => {
+    const cached = sessionStorage.getItem("customer_orders");
+    return cached ? JSON.parse(cached) : [];
+  });
+  const [loading, setLoading] = useState(!sessionStorage.getItem("customer_orders"));
   const navigate = useNavigate();
   const { user } = useAuthStore();
 
@@ -119,6 +122,7 @@ export default function CustomerDashboard() {
             new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
         );
         setOrders(fetchedOrders);
+        sessionStorage.setItem("customer_orders", JSON.stringify(fetchedOrders));
       } catch (e) {
         console.error("Failed to fetch orders from Firestore", e);
       } finally {
