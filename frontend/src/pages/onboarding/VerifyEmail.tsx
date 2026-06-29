@@ -36,8 +36,18 @@ export default function VerifyEmail() {
     }
   };
 
-  const handleRefresh = () => {
-    window.location.reload();
+  const handleRefresh = async () => {
+    setLoading(true);
+    if (auth.currentUser) {
+      await auth.currentUser.reload();
+      if (auth.currentUser.emailVerified) {
+        useAuthStore.getState().setUser({
+          ...user,
+          emailVerified: true
+        }, useAuthStore.getState().role || 'customer');
+      }
+    }
+    setLoading(false);
   };
 
   return (

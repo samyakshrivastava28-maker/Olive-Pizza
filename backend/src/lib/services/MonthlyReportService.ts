@@ -1,5 +1,5 @@
 import { adminDb } from '../../config/firebase.js';
-import cloudinary from '../../config/cloudinary.js';
+import { googleDriveService } from '../../services/googleDrive.service.js';
 import nodemailer from 'nodemailer';
 import { PdfGenerator, MonthlyReportData } from './PdfGenerator.js';
 
@@ -128,27 +128,18 @@ export class MonthlyReportService {
       // 2. PDF Generation
       const pdfBuffer = await this.pdfGenerator.generateReport(reportData);
 
-      // 3. Cloudinary Upload
-      let cloudinaryUrl = '';
+      // 3. Google Drive Upload
+      let documentUrl = '';
       try {
-        cloudinaryUrl = await new Promise<string>((resolve, reject) => {
-          const uploadStream = cloudinary.uploader.upload_stream(
-            {
-              folder: 'olive-pizza/monthly-reports', // Updated per user request
-              public_id: `report-${startOfReportMonth.getFullYear()}-${(startOfReportMonth.getMonth() + 1).toString().padStart(2, '0')}`,
-              resource_type: 'raw',
-              format: 'pdf'
-            },
-            (error, result) => {
-              if (error) return reject(error);
-              if (result) resolve(result.secure_url);
-            }
-          );
-          uploadStream.end(pdfBuffer);
-        });
-        console.log(`Report uploaded to Cloudinary: ${cloudinaryUrl}`);
+        const fileName = `report-${startOfReportMonth.getFullYear()}-${(startOfReportMonth.getMonth() + 1).toString().padStart(2, '0')}.pdf`;
+        const fileId = await googleDriveService.uploadBuffer(fileName, pdfBuffer, 'application/pdf');
+        
+        if (!fileId) throw new Error("Upload failed, no file ID returned");
+
+        documentUrl = `https://drive.google.com/file/d/${fileId}/view`;
+        console.log(`Report uploaded to Google Drive: ${documentUrl}`);
       } catch (err) {
-        throw new Error(`Cloudinary Upload Failed: ${err}`);
+        throw new Error(`Google Drive Upload Failed: ${err}`);
       }
 
       // 4. Archiving to monthly_reports
@@ -159,7 +150,7 @@ export class MonthlyReportService {
           month: startOfReportMonth.getMonth() + 1,
           year: startOfReportMonth.getFullYear(),
           generatedAt: new Date().toISOString(),
-          pdfUrl: cloudinaryUrl,
+          pdfUrl: documentUrl,
           totalRevenue: reportData.totalRevenue,
           totalOrders: reportData.totalOrders,
           totalCustomers: reportData.topCustomers.length, // approximation of active customers
@@ -179,8 +170,8 @@ export class MonthlyReportService {
           from: process.env.SMTP_FROM || 'noreply@olivepizza.app',
           to: ownerEmail,
           subject: `Monthly Business Report - ${monthStr}`,
-          text: `Your monthly business report for ${monthStr} has been generated. You can view or download it here: ${cloudinaryUrl}`,
-          html: `<p>Your monthly business report for ${monthStr} has been generated.</p><p><a href="${cloudinaryUrl}">Click here to view or download the report</a></p>`,
+          text: `Your monthly business report for ${monthStr} has been generated. You can view or download it here: ${documentUrl}`,
+          html: `<p>Your monthly business report for ${monthStr} has been generated.</p><p><a href="${documentUrl}">Click here to view or download the report</a></p>`,
         });
         console.log(`Email sent successfully to ${ownerEmail}`);
       } catch (err) {
@@ -197,7 +188,7 @@ export class MonthlyReportService {
       await this.cleanupLogs(cleanupBeforeDate);
 
       console.log('Monthly report process fully completed successfully.');
-      return cloudinaryUrl;
+      return documentUrl;
 
     } catch (error) {
       console.error('CRITICAL: Error during monthly report generation. Aborting cleanup.', error);

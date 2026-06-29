@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
+import { useAppStore } from './store';
 
 interface BeforeInstallPromptEvent extends Event {
   readonly platforms: Array<string>;
@@ -35,6 +36,7 @@ export function usePWA() {
     },
     onNeedRefresh() {
       setNeedRefresh(true);
+      useAppStore.getState().setUpdateAvailable(true);
     },
     onOfflineReady() {
       setOfflineReady(true);

@@ -36,6 +36,12 @@ export default function PWAPrompts() {
     localStorage.setItem('pwa_install_dismissed', 'true');
   };
 
+  useEffect(() => {
+    const handleUpdateEvent = () => updateApp();
+    window.addEventListener('trigger-pwa-update', handleUpdateEvent);
+    return () => window.removeEventListener('trigger-pwa-update', handleUpdateEvent);
+  }, [updateApp]);
+
   const getDeviceIcon = () => {
     switch (deviceType) {
       case 'Mobile': return <Smartphone className="w-5 h-5 text-primary-500" />;

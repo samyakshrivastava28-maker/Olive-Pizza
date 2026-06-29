@@ -1,5 +1,16 @@
 import { create } from 'zustand';
 
+// App Store (For PWA and Global UI states)
+interface AppState {
+  updateAvailable: boolean;
+  setUpdateAvailable: (available: boolean) => void;
+}
+
+export const useAppStore = create<AppState>((set) => ({
+  updateAvailable: false,
+  setUpdateAvailable: (updateAvailable) => set({ updateAvailable }),
+}));
+
 // Authentication Store
 interface AuthState {
   user: any | null;
@@ -23,6 +34,7 @@ export const useAuthStore = create<AuthState>((set) => ({
 
 // Shopping Cart Store
 import { CartItem } from '../types/models';
+import toast from 'react-hot-toast';
 
 interface CartState {
   items: CartItem[];
@@ -37,6 +49,28 @@ export const useCartStore = create<CartState>((set) => ({
   items: [],
   total: 0,
   addItem: (item) => set((state) => {
+    if (useAppStore.getState().updateAvailable) {
+      toast.error(
+        (t) => (
+          <div className="flex flex-col gap-2 pointer-events-auto">
+            <p className="font-bold">Update Required</p>
+            <p className="text-sm">You are using an old version which does not support the current version.</p>
+            <button 
+              onClick={() => {
+                toast.dismiss(t.id);
+                window.dispatchEvent(new Event('trigger-pwa-update'));
+              }}
+              className="bg-primary-600 text-white px-3 py-1.5 rounded-lg text-sm font-bold mt-1"
+            >
+              Update Now
+            </button>
+          </div>
+        ),
+        { duration: 8000 }
+      );
+      return state;
+    }
+
     const existing = state.items.find(i => i.id === item.id);
     let newItems;
     if (existing) {

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { auth, db } from "../../lib/firebase";
 import { doc, updateDoc, getDoc, setDoc } from "firebase/firestore";
 import { useNavigate } from "react-router";
+import { useAuthStore } from "../../lib/store";
 import { parsePhoneNumber } from "libphonenumber-js";
 
 export default function SetupPhone() {
@@ -73,6 +74,16 @@ export default function SetupPhone() {
         firstOrderEligible:
           !identityDoc.exists() || !identityDoc.data()?.firstOrderCouponUsed,
       });
+
+      const currentUser = useAuthStore.getState().user;
+      const currentRole = useAuthStore.getState().role;
+      useAuthStore.getState().setUser({
+        ...currentUser,
+        phone: formattedPhone,
+        phoneSetupCompleted: true,
+        firstOrderEligible:
+          !identityDoc.exists() || !identityDoc.data()?.firstOrderCouponUsed,
+      }, currentRole || 'customer');
 
       navigate("/onboarding/location");
     } catch (err: any) {

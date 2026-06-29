@@ -1,10 +1,10 @@
 import { Outlet, Link, useNavigate, useLocation } from 'react-router';
-import { useAuthStore, useCartStore } from '../lib/store';
+import { useAuthStore, useCartStore, useAppStore } from '../lib/store';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useEffect, useState } from 'react';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { Home, Menu as MenuIcon, ShoppingBag, User, Search, MapPin, ReceiptText, WifiOff, Download, ArrowDownToLine } from 'lucide-react';
+import { Home, Menu as MenuIcon, ShoppingBag, User, Search, MapPin, ReceiptText, WifiOff, Download, ArrowDownToLine, RefreshCw } from 'lucide-react';
 import PWAPrompts from './ui/PWAPrompts';
 import { usePWA } from '../lib/usePWA';
 import Aurora from './ui/Aurora';
@@ -12,6 +12,7 @@ import Aurora from './ui/Aurora';
 export default function MainLayout() {
   const { isAuthenticated, role, user, logout } = useAuthStore();
   const cartItems = useCartStore(state => state.items);
+  const { updateAvailable } = useAppStore();
   const navigate = useNavigate();
   const location = useLocation();
   const { isOffline, canInstall, installApp, isStandalone, hasInstalled } = usePWA();
@@ -135,7 +136,15 @@ export default function MainLayout() {
             </Link>
             
             {/* Desktop PWA Install/Open Button */}
-            {!isStandalone && canInstall && (
+            {updateAvailable && (
+              <button 
+                onClick={() => window.dispatchEvent(new Event('trigger-pwa-update'))}
+                className="font-bold text-white hover:bg-green-500 bg-green-600 transition-all flex items-center gap-2 px-4 py-2 rounded-full shadow-md animate-pulse"
+              >
+                <RefreshCw className="w-4 h-4" /> Update App
+              </button>
+            )}
+            {!isStandalone && canInstall && !updateAvailable && (
               <button 
                 onClick={installApp}
                 className="font-bold text-primary-500 hover:text-white hover:bg-primary-600 transition-all flex items-center gap-2 bg-primary-500/10 px-4 py-2 rounded-full border border-primary-500/30"
@@ -169,7 +178,16 @@ export default function MainLayout() {
 
           {/* Mobile Header Actions */}
           <div className="flex md:hidden items-center gap-2">
-             {!isStandalone && canInstall && (
+             {updateAvailable && (
+               <button 
+                 onClick={() => window.dispatchEvent(new Event('trigger-pwa-update'))}
+                 className="bg-green-600 text-white hover:bg-green-500 transition-all px-3 py-1.5 rounded-full shadow-md flex items-center gap-1 font-bold text-[10px] whitespace-nowrap animate-pulse"
+                 aria-label="Update App"
+               >
+                 <RefreshCw className="w-3 h-3" /> Update App
+               </button>
+             )}
+             {!isStandalone && canInstall && !updateAvailable && (
                <button 
                  onClick={installApp}
                  className="bg-primary-500/10 text-primary-500 hover:bg-primary-600 hover:text-white transition-all px-3 py-1.5 rounded-full border border-primary-500/30 flex items-center gap-1 font-bold text-[10px] whitespace-nowrap"

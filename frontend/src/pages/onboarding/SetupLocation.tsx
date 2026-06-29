@@ -2,6 +2,7 @@ import { useState, useCallback, useRef } from "react";
 import { auth, db } from "../../lib/firebase";
 import { doc, updateDoc } from "firebase/firestore";
 import { useNavigate } from "react-router";
+import { useAuthStore } from "../../lib/store";
 import {
   MapContainer,
   TileLayer,
@@ -130,8 +131,20 @@ export default function SetupLocation() {
         locationSetupCompleted: true,
       });
 
+      const currentUser = useAuthStore.getState().user;
+      const currentRole = useAuthStore.getState().role;
+      useAuthStore.getState().setUser({
+        ...currentUser,
+        fullAddress: addressLine,
+        city,
+        state,
+        pincode,
+        lat: markerPos.lat,
+        lng: markerPos.lng,
+        locationSetupCompleted: true,
+      }, currentRole || 'customer');
+
       navigate("/");
-      window.location.reload();
     } catch (err: any) {
       setError(err.message || "Failed to complete setup");
     } finally {

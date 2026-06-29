@@ -57,6 +57,7 @@ app.get('/health', (req, res) => {
 });
 
 import emailRoutes from './routes/email.routes.js';
+import googleDriveRoutes from './routes/googleDrive.routes.js';
 
 app.use('/orders', orderRoutes);
 app.use('/admin', adminRoutes);
@@ -72,6 +73,7 @@ app.use('/coupons', couponRoutes);
 app.use('/tracking', trackingRoutes);
 app.use('/email', emailRoutes);
 app.use('/slack', slackRoutes);
+app.use('/google-drive', googleDriveRoutes);
 
 // Global Error Handler
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
