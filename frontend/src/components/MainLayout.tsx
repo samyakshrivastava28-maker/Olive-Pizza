@@ -5,8 +5,7 @@ import { useEffect, useState } from 'react';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Home, Menu as MenuIcon, ShoppingBag, User, Search, MapPin, ReceiptText, WifiOff, Download, ArrowDownToLine, RefreshCw } from 'lucide-react';
-import Header from './Header';
-import Footer from './Footer';
+
 import PWAPrompts from './ui/PWAPrompts';
 import { usePWA } from '../lib/usePWA';
 import Aurora from './ui/Aurora';

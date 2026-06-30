@@ -8,7 +8,7 @@ import { Order } from "../../types/models";
 import { useAuthStore } from "../../lib/store";
 import toast from "react-hot-toast";
 import { uploadMediaToCloudinary } from "../../lib/cloudinary";
-import { Navigation, PhoneCall, CheckCircle2, Camera, StickyNote, PackageOpen, MapPin, Package, Map as MapIcon, Power, Wifi, WifiOff, AlertTriangle, ShieldAlert, Clock, Navigation2, Zap, Battery, Crosshair, HelpCircle, Utensils, MessageSquare, AlertCircle } from "lucide-react";
+import { Navigation, PhoneCall, CheckCircle2, Camera, StickyNote, PackageOpen, MapPin, Package, Map as MapIcon, Power, Wifi, WifiOff, AlertTriangle, ShieldAlert, Clock, Navigation2, Zap, Battery, Crosshair, HelpCircle, Utensils, MessageSquare, AlertCircle, Star } from "lucide-react";
 import { MapContainer, TileLayer, Marker, Polyline } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -349,7 +349,7 @@ export default function DeliveryDashboard() {
               {/* Customer Info */}
               <div className="flex items-start justify-between mb-6 pb-6 border-b border-dark-800">
                 <div>
-                  <h3 className="text-xl font-black text-white mb-1 flex items-center gap-2">{activeTask.customerInfo?.name || "Customer"} {activeTask.customerInfo?.isVIP && <Star size={16} className="text-primary-500 fill-current" />}</h3>
+                  <h3 className="text-xl font-black text-white mb-1 flex items-center gap-2">{activeTask.customerInfo?.name || "Customer"} {(activeTask.customerInfo as any)?.isVIP && <Star size={16} className="text-primary-500 fill-current" />}</h3>
                   <p className="text-sm text-slate-400 font-medium">Order #{activeTask.id?.slice(-6).toUpperCase()}</p>
                 </div>
                 <a href={`tel:${activeTask.contactPhone}`} className="w-12 h-12 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 hover:bg-blue-500 hover:text-white transition-all">

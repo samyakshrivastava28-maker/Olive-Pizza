@@ -299,8 +299,6 @@ export default function ProductDetail() {
               key={`size-${selectedSize}`}          // Re-mounts spring on every size change
               initial={{ scale: sizeScale * 0.85, rotateX: 0, rotateY: 0 }}
               animate={{
-                rotateX,
-                rotateY,
                 scale: sizeScale,
               }}
               transition={{
@@ -310,7 +308,7 @@ export default function ProductDetail() {
                 mass: 0.7,
               }}
               className="relative z-10 w-3/4 h-3/4 flex items-center justify-center pointer-events-none"
-              style={{ transformStyle: "preserve-3d" }}
+              style={{ rotateX, rotateY, transformStyle: "preserve-3d" }}
             >
               {/* Ground shadow — scales with pizza */}
               <motion.div
@@ -318,7 +316,7 @@ export default function ProductDetail() {
                 animate={{
                   scaleX: sizeScale,
                   scaleY: sizeScale * 0.6,
-                  opacity: 0.6 - Math.abs(rotateX) / 40,
+                  opacity: 0.6,
                 }}
                 transition={{ type: "spring", stiffness: 260, damping: 18 }}
               />

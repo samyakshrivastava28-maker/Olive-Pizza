@@ -72,7 +72,7 @@ export default function SEO({
     }))
   } : null;
 
-  const schemas = [orgSchema, webPageSchema];
+  const schemas: any[] = [orgSchema, webPageSchema];
   if (breadcrumbSchema) schemas.push(breadcrumbSchema);
   if (schemaMarkup) {
     if (Array.isArray(schemaMarkup)) {
