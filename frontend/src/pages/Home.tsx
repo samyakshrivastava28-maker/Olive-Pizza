@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useInView } from "framer-motion";
 import { Link, useNavigate } from "react-router";
 import { db } from "../lib/firebase";
 import {
@@ -44,6 +44,14 @@ function SectionSkeleton({ rows = 3 }: { rows?: number }) {
 export default function Home() {
   const [showIntro, setShowIntro] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [heroVideoError, setHeroVideoError] = useState(false);
+
+  // Hero Video Optimization
+  const heroRef = useRef<HTMLHeadingElement>(null);
+  const isHeroInView = useInView(heroRef, { margin: "200px 0px" });
+  const heroVideoRefMobile = useRef<HTMLVideoElement>(null);
+  const heroVideoRefDesktop = useRef<HTMLVideoElement>(null);
+
   const storeStatus = useStoreStatus();
   const { user, isAuthenticated } = useAuthStore();
   const addItem = useCartStore((s) => s.addItem);
@@ -88,8 +96,12 @@ export default function Home() {
 
   // ─── Intro Video ──────────────────────────────────────────────────────────
   useEffect(() => {
+    const connection = (navigator as any).connection;
+    const isSlowNetwork = connection && (connection.effectiveType === 'slow-2g' || connection.effectiveType === '2g');
+
     const hasPlayed = sessionStorage.getItem("olive_intro_seen");
-    if (!hasPlayed) {
+    
+    if (!hasPlayed && !isSlowNetwork) {
       setShowIntro(true);
       document.body.style.overflow = "hidden";
       
@@ -111,14 +123,22 @@ export default function Home() {
   }, []);
 
   const handleIntroEnd = () => {
+    sessionStorage.setItem("olive_intro_seen", "true");
     setShowIntro(false);
     document.body.style.overflow = "";
-    sessionStorage.setItem("olive_intro_seen", "true");
   };
 
-  const [heroVideoError, setHeroVideoError] = useState(false);
-
-
+  useEffect(() => {
+    if (!showIntro) {
+      if (isHeroInView) {
+        heroVideoRefMobile.current?.play().catch(() => setHeroVideoError(true));
+        heroVideoRefDesktop.current?.play().catch(() => setHeroVideoError(true));
+      } else {
+        heroVideoRefMobile.current?.pause();
+        heroVideoRefDesktop.current?.pause();
+      }
+    }
+  }, [isHeroInView, showIntro]);
 
   // ─── Wishlist ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -416,19 +436,14 @@ export default function Home() {
       )}
 
       {/* ─── Mobile Hero Section (<= 768px) ─────────────────────────────── */}
-      <header className="md:hidden relative w-full h-[100svh] min-h-[600px] overflow-hidden bg-dark-950">
+      <header ref={heroRef} className="md:hidden relative w-full h-[100svh] min-h-[600px] overflow-hidden bg-dark-950">
         {!heroVideoError && (
           <video
-            ref={(el) => {
-              if (el) {
-                if (showIntro) el.pause();
-                else el.play().catch(() => setHeroVideoError(true));
-              }
-            }}
+            ref={heroVideoRefMobile}
             src={desktopBgUrl}
             poster={desktopBgUrl.replace('.mp4', '.jpg')}
             muted loop playsInline
-            preload="none"
+            preload="metadata"
             onError={() => setHeroVideoError(true)}
             className="absolute inset-0 w-full h-full object-cover z-0"
             style={{ objectPosition: 'center center' }}
@@ -479,16 +494,11 @@ export default function Home() {
       <header className="hidden md:flex relative w-full h-[90dvh] min-h-[700px] overflow-hidden rounded-b-[3rem] shadow-2xl flex-col justify-end">
         {!heroVideoError && (
           <video
-            ref={(el) => {
-              if (el) {
-                if (showIntro) el.pause();
-                else el.play().catch(() => setHeroVideoError(true));
-              }
-            }}
+            ref={heroVideoRefDesktop}
             src={desktopBgUrl}
             poster={desktopBgUrl.replace('.mp4', '.jpg')}
             muted loop playsInline
-            preload="none"
+            preload="metadata"
             onError={() => setHeroVideoError(true)}
             className="absolute inset-0 w-full h-full object-cover pointer-events-none z-0"
           />

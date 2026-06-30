@@ -8,6 +8,7 @@ import {
   getDocs,
 } from "firebase/firestore";
 import { useDataStore } from "../lib/dataStore";
+import { useShallow } from "zustand/react/shallow";
 import { useLoadingStore } from "../lib/loadingStore";
 import { useDebounce } from "../hooks/useDebounce";
 import { motion, Variants } from "framer-motion";
@@ -46,7 +47,13 @@ export default function Menu() {
     ads,
     isInitialized,
     initialize,
-  } = useDataStore();
+  } = useDataStore(useShallow((state) => ({
+    products: state.products,
+    combos: state.combos,
+    ads: state.ads,
+    isInitialized: state.isInitialized,
+    initialize: state.initialize,
+  })));
 
   const [searchQuery, setSearchQuery] = useState("");
   const debouncedSearch = useDebounce(searchQuery, 300);

@@ -133,7 +133,9 @@ const DeliveryNotificationCenter = lazyWithRetry(() => import('./pages/delivery/
 function AppContent() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { isAuthenticated, user, role } = useAuthStore();
+  const isAuthenticated = useAuthStore(state => state.isAuthenticated);
+  const user = useAuthStore(state => state.user);
+  const role = useAuthStore(state => state.role);
 
   // Global Onboarding Enforcer: Make phone and location setup strictly compulsory for customers
   useEffect(() => {
@@ -170,11 +172,6 @@ function AppContent() {
       <PushNotificationManager />
       <AnimatePresence mode="wait">
         <ErrorBoundary>
-          <Suspense fallback={
-            <div className="min-h-[100dvh] w-full bg-dark-950 flex flex-col items-center justify-center pointer-events-none">
-              <div className="w-12 h-12 border-4 border-dark-800 border-t-primary-500 rounded-full animate-spin" />
-            </div>
-          }>
         <Routes location={location} key={location.pathname}>
           {/* Public Routes */}
           <Route element={<MainLayout />}>
@@ -183,9 +180,9 @@ function AppContent() {
             <Route path="/product/:productId" element={<ProductDetail />} />
             <Route path="/cart" element={<Cart />} />
             <Route path="/contact" element={<Contact />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/login" element={<Suspense fallback={<PizzaLoader />}><Login /></Suspense>} />
+            <Route path="/register" element={<Suspense fallback={<PizzaLoader />}><Register /></Suspense>} />
+            <Route path="/forgot-password" element={<Suspense fallback={<PizzaLoader />}><ForgotPassword /></Suspense>} />
             
             {/* Legal Pages */}
             <Route path="/about" element={<About />} />
@@ -201,8 +198,8 @@ function AppContent() {
             
             {/* Protected Customer Routes */}
             <Route element={<CustomerGuard />}>
-              <Route path="/checkout" element={<Checkout />} />
-              <Route element={<OnboardingGuard />}>
+              <Route path="/checkout" element={<Suspense fallback={<PizzaLoader />}><Checkout /></Suspense>} />
+              <Route element={<Suspense fallback={<PizzaLoader />}><OnboardingGuard /></Suspense>}>
                 <Route path="/dashboard" element={<CustomerDashboard />} />
                 <Route path="/order-tracking/:orderId" element={<OrderTracking />} />
               </Route>
@@ -211,9 +208,9 @@ function AppContent() {
 
           {/* Onboarding Routes (Auth Required) */}
           <Route element={<AuthGuard />}>
-            <Route path="/onboarding/verify" element={<VerifyEmail />} />
-            <Route path="/onboarding/phone" element={<SetupPhone />} />
-            <Route path="/onboarding/location" element={<SetupLocation />} />
+            <Route path="/onboarding/verify" element={<Suspense fallback={<PizzaLoader />}><VerifyEmail /></Suspense>} />
+            <Route path="/onboarding/phone" element={<Suspense fallback={<PizzaLoader />}><SetupPhone /></Suspense>} />
+            <Route path="/onboarding/location" element={<Suspense fallback={<PizzaLoader />}><SetupLocation /></Suspense>} />
           </Route>
 
           {/* Owner Routes */}
@@ -253,7 +250,6 @@ function AppContent() {
             </Route>
           </Route>
         </Routes>
-        </Suspense>
       </ErrorBoundary>
       </AnimatePresence>
     </>

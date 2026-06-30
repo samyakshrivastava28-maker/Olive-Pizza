@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { useNavigate } from 'react-router';
 import { motion } from 'framer-motion';
 import { MenuItem } from '../types/models';
@@ -8,7 +9,7 @@ interface ProductCardProps {
   discount?: number;
 }
 
-export default function ProductCard({ item, discount = 0 }: ProductCardProps) {
+export default memo(function ProductCard({ item, discount = 0 }: ProductCardProps) {
   const navigate = useNavigate();
   const appliedDiscount = item.discountPercentage || discount;
   const finalPrice = item.pricingMode === 'offer' && item.offerPrice ? item.offerPrice : 
@@ -91,4 +92,4 @@ export default function ProductCard({ item, discount = 0 }: ProductCardProps) {
       </div>
     </div>
   );
-}
+});

@@ -8,22 +8,16 @@ import { Order } from "../../types/models";
 import { useAuthStore } from "../../lib/store";
 import toast from "react-hot-toast";
 import { uploadMediaToCloudinary } from "../../lib/cloudinary";
-import { Navigation, PhoneCall, CheckCircle2, Camera, StickyNote, PackageOpen, MapPin, Package, Map as MapIcon, Power, Wifi, WifiOff, AlertTriangle, ShieldAlert, Clock, Navigation2, Zap, Battery, Crosshair, HelpCircle, Utensils, MessageSquare, AlertCircle, Star } from "lucide-react";
-import { MapContainer, TileLayer, Marker, Polyline } from "react-leaflet";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
+import { MapPin, Package, Map as MapIcon, Power, Wifi, WifiOff, AlertTriangle, ShieldAlert, Clock, Navigation2, Zap, Battery, Crosshair, HelpCircle, Utensils, MessageSquare, AlertCircle, Star, PhoneCall, Navigation, PackageOpen, CheckCircle2, Camera } from "lucide-react";
 import { RESTAURANT_LOCATION } from "../../lib/config";
 import TrackingDebugPanel, { DebugData } from "../../components/tracking/TrackingDebugPanel";
 import { GlassCard, GlassButton } from "../../components/ui/glass/GlassSystem";
 import { playNotificationSound } from "../../hooks/useNotificationSound";
 import { motion, AnimatePresence } from 'framer-motion';
+import { useTrackingStore } from "../../lib/trackingStore";
+import { useShallow } from 'zustand/react/shallow';
+import DeliveryMap from "../../components/delivery/DeliveryMap";
 
-const pulsingIcon = new L.DivIcon({
-  className: "custom-div-icon",
-  html: `<div class="relative flex h-6 w-6"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span><span class="relative inline-flex rounded-full h-6 w-6 bg-blue-600 border-2 border-white shadow-lg flex items-center justify-center"><div class="w-2 h-2 bg-white rounded-full"></div></span></div>`,
-  iconSize: [24, 24],
-  iconAnchor: [12, 12],
-});
 
 export default function DeliveryDashboard() {
   const { user: authUser } = useAuthStore();
@@ -43,7 +37,10 @@ export default function DeliveryDashboard() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [supabaseConnected, setSupabaseConnected] = useState(false);
-  const [debugData, setDebugData] = useState<DebugData>({});
+  const { setLocation, setDebugData: setStoreDebugData } = useTrackingStore(useShallow(state => ({
+    setLocation: state.setLocation,
+    setDebugData: state.setDebugData
+  })));
   const gpsWriteCountRef = useRef(0);
 
   const lastLocationRef = useRef<{lat: number; lng: number; time: number} | null>(null);
@@ -80,7 +77,7 @@ export default function DeliveryDashboard() {
         const { error } = await supabase.from("delivery_locations").select("count").limit(1);
         if (!error) {
           setSupabaseConnected(true);
-          setDebugData((prev) => ({ ...prev, supabaseConnected: true }));
+          setStoreDebugData((prev) => ({ ...prev, supabaseConnected: true }));
         }
       } catch (e) {
         setSupabaseConnected(false);
@@ -120,7 +117,7 @@ export default function DeliveryDashboard() {
       const { error } = await supabase.from("delivery_locations").upsert(payload, { onConflict: "delivery_partner_id" });
       if (!error) {
         gpsWriteCountRef.current += 1;
-        setDebugData((prev) => ({
+        setStoreDebugData((prev) => ({
           ...prev, dbLat: lat, dbLng: lng, dbLastUpdated: new Date().toISOString(), gpsWriteCount: gpsWriteCountRef.current,
         }));
       }
@@ -149,7 +146,7 @@ export default function DeliveryDashboard() {
         const now = Date.now();
 
         lastGPSPositionRef.current = position;
-        setDebugData((prev) => ({
+        setStoreDebugData((prev) => ({
           ...prev, gpsLat: lat, gpsLng: lng, gpsHeading: heading ?? undefined, gpsSpeed: speed ?? undefined, gpsAccuracy: accuracy, gpsTimestamp: now, orderId: activeOrderId || prev.orderId, partnerId: user.uid,
         }));
 
@@ -159,7 +156,9 @@ export default function DeliveryDashboard() {
           if (distance < 5 && timeDiff < 4000) return; 
         }
 
-        lastLocationRef.current = { lat, lng, time: now };
+        const newLoc = { lat, lng, time: now, heading };
+        lastLocationRef.current = newLoc;
+        setLocation(newLoc);
         await writeLocationToSupabase(lat, lng, heading, speed, accuracy, activeOrderId);
       },
       (error) => console.error("GPS Error", error),
@@ -324,16 +323,10 @@ export default function DeliveryDashboard() {
             
             {/* Live Map Header */}
             <div className="h-56 w-full relative bg-dark-950">
-              <MapContainer center={[activeTask.deliveryAddress?.lat || 19.076, activeTask.deliveryAddress?.lng || 72.8777]} zoom={15} style={{ height: "100%", width: "100%" }} zoomControl={false} dragging={false}>
-                <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" attribution="&copy; CARTO" />
-                <Marker position={[activeTask.deliveryAddress?.lat || 19.076, activeTask.deliveryAddress?.lng || 72.8777]} icon={restaurantIcon} />
-                {lastLocationRef.current && (
-                  <>
-                    <Marker position={[lastLocationRef.current.lat, lastLocationRef.current.lng]} icon={pulsingIcon} />
-                    <Polyline positions={[[lastLocationRef.current.lat, lastLocationRef.current.lng], [activeTask.deliveryAddress?.lat || 19.076, activeTask.deliveryAddress?.lng || 72.8777]]} color="#3b82f6" weight={4} dashArray="5, 10" className="animate-pulse" />
-                  </>
-                )}
-              </MapContainer>
+              <DeliveryMap 
+                destinationLat={activeTask.deliveryAddress?.lat} 
+                destinationLng={activeTask.deliveryAddress?.lng} 
+              />
               
               <div className="absolute top-4 left-4 z-[400] bg-dark-950/80 backdrop-blur-xl px-4 py-2 rounded-full border border-dark-700 flex items-center gap-2 shadow-lg">
                 <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-ping" />
@@ -468,7 +461,7 @@ export default function DeliveryDashboard() {
         </motion.div>
       )}
       </AnimatePresence>
-      <TrackingDebugPanel data={debugData} side="delivery" />
+      <TrackingDebugPanel data={useTrackingStore.getState().debugData} side="delivery" />
     </div>
   );
 }

@@ -12,6 +12,8 @@ export const useAppStore = create<AppState>((set) => ({
 }));
 
 // Authentication Store
+import { useDataStore } from './dataStore';
+
 interface AuthState {
   user: any | null;
   role: 'customer' | 'owner' | 'delivery_partner' | 'admin' | null;
@@ -28,7 +30,10 @@ export const useAuthStore = create<AuthState>((set) => ({
   isAuthenticated: false,
   isLoading: true,
   setUser: (user, role) => set({ user, role, isAuthenticated: !!user, isLoading: false }),
-  logout: () => set({ user: null, role: null, isAuthenticated: false, isLoading: false }),
+  logout: () => {
+    useDataStore.getState().cleanup();
+    set({ user: null, role: null, isAuthenticated: false, isLoading: false });
+  },
   setLoading: (isLoading) => set({ isLoading }),
 }));
 

@@ -1,7 +1,7 @@
 import { Outlet, Link, useNavigate, useLocation } from 'react-router';
 import { useAuthStore, useCartStore, useAppStore } from '../lib/store';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Home, Menu as MenuIcon, ShoppingBag, User, Search, MapPin, ReceiptText, WifiOff, Download, ArrowDownToLine, RefreshCw } from 'lucide-react';
@@ -9,11 +9,15 @@ import { Home, Menu as MenuIcon, ShoppingBag, User, Search, MapPin, ReceiptText,
 import PWAPrompts from './ui/PWAPrompts';
 import { usePWA } from '../lib/usePWA';
 import Aurora from './ui/Aurora';
+import { prefetchRoute } from '../lib/prefetch';
 
 export default function MainLayout() {
-  const { isAuthenticated, role, user, logout } = useAuthStore();
+  const isAuthenticated = useAuthStore(state => state.isAuthenticated);
+  const role = useAuthStore(state => state.role);
+  const user = useAuthStore(state => state.user);
+  const logout = useAuthStore(state => state.logout);
   const cartItems = useCartStore(state => state.items);
-  const { updateAvailable } = useAppStore();
+  const updateAvailable = useAppStore(state => state.updateAvailable);
   const navigate = useNavigate();
   const location = useLocation();
   const { isOffline, canInstall, installApp, isStandalone, hasInstalled } = usePWA();
@@ -104,22 +108,22 @@ export default function MainLayout() {
               </div>
             )}
             
-            <Link to="/" className="font-medium text-slate-200 hover:text-primary-500 transition-colors">Home</Link>
-            <Link to="/menu" className="font-medium text-slate-200 hover:text-primary-500 transition-colors">Menu</Link>
-            <Link to="/contact" className="font-medium text-slate-200 hover:text-primary-500 transition-colors">Contact</Link>
+            <Link to="/" onMouseEnter={() => prefetchRoute('/')} onTouchStart={() => prefetchRoute('/')} className="font-medium text-slate-200 hover:text-primary-500 transition-colors">Home</Link>
+            <Link to="/menu" onMouseEnter={() => prefetchRoute('/menu')} onTouchStart={() => prefetchRoute('/menu')} className="font-medium text-slate-200 hover:text-primary-500 transition-colors">Menu</Link>
+            <Link to="/contact" onMouseEnter={() => prefetchRoute('/contact')} onTouchStart={() => prefetchRoute('/contact')} className="font-medium text-slate-200 hover:text-primary-500 transition-colors">Contact</Link>
             
             {/* Role-based Dashboard Links */}
             {isAuthenticated && role === 'owner' && (
-              <Link to="/owner/dashboard" className="font-bold text-accent-500 hover:text-accent-400 transition-colors">Owner Panel</Link>
+              <Link to="/owner/dashboard" onMouseEnter={() => prefetchRoute('/owner/dashboard')} onTouchStart={() => prefetchRoute('/owner/dashboard')} className="font-bold text-accent-500 hover:text-accent-400 transition-colors">Owner Panel</Link>
             )}
             {isAuthenticated && role === 'delivery_partner' && (
-              <Link to="/delivery/dashboard" className="font-bold text-secondary-500 hover:text-secondary-400 transition-colors">Delivery Panel</Link>
+              <Link to="/delivery/dashboard" onMouseEnter={() => prefetchRoute('/delivery/dashboard')} onTouchStart={() => prefetchRoute('/delivery/dashboard')} className="font-bold text-secondary-500 hover:text-secondary-400 transition-colors">Delivery Panel</Link>
             )}
             {isAuthenticated && (!role || role === 'customer') && (
-              <Link to="/dashboard" className="font-bold text-primary-500 hover:text-primary-400 transition-colors">Dashboard</Link>
+              <Link to="/dashboard" onMouseEnter={() => prefetchRoute('/dashboard')} onTouchStart={() => prefetchRoute('/dashboard')} className="font-bold text-primary-500 hover:text-primary-400 transition-colors">Dashboard</Link>
             )}
 
-            <Link to="/cart" className="font-medium text-slate-200 hover:text-primary-500 transition-colors flex items-center gap-2 relative">
+            <Link to="/cart" onMouseEnter={() => prefetchRoute('/cart')} onTouchStart={() => prefetchRoute('/cart')} className="font-medium text-slate-200 hover:text-primary-500 transition-colors flex items-center gap-2 relative">
               <ShoppingBag className="w-5 h-5" />
               <AnimatePresence>
                 {cartCount > 0 && (
@@ -219,7 +223,13 @@ export default function MainLayout() {
       </header>
       
       <main className={`flex-1 w-full ${location.pathname === '/' ? '' : 'max-w-7xl mx-auto py-2 md:py-8'}`}>
-        <Outlet />
+        <Suspense fallback={
+          <div className="w-full h-[60vh] flex flex-col items-center justify-center">
+            <div className="w-10 h-10 border-4 border-dark-800 border-t-primary-500 rounded-full animate-spin" />
+          </div>
+        }>
+          <Outlet />
+        </Suspense>
       </main>
 
       {/* Mobile Bottom Navigation */}
@@ -235,6 +245,8 @@ export default function MainLayout() {
             <Link 
               key={item.name} 
               to={item.path} 
+              onMouseEnter={() => prefetchRoute(item.path)}
+              onTouchStart={() => prefetchRoute(item.path)}
               id={item.name === 'Cart' ? 'mobile-cart-nav-target' : undefined}
               className="flex flex-col items-center justify-center w-full min-h-[56px] relative group touch-manipulation"
             >

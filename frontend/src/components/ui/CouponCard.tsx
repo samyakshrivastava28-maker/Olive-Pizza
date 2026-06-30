@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import { motion } from 'framer-motion';
 import { Copy, Check, Tag, Clock, ShoppingBag } from 'lucide-react';
 import { trackEvent } from '../../lib/analytics';
@@ -20,7 +20,7 @@ interface CouponCardProps {
   index?: number;
 }
 
-export default function CouponCard({ coupon, index = 0 }: CouponCardProps) {
+export default memo(function CouponCard({ coupon, index = 0 }: CouponCardProps) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
@@ -56,6 +56,7 @@ export default function CouponCard({ coupon, index = 0 }: CouponCardProps) {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.08, duration: 0.4 }}
+      style={{ willChange: 'transform, opacity' }}
       className="relative flex overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-[#1a2744] via-[#1E293B] to-[#0d1b35] shadow-xl group hover:border-primary-500/40 transition-all duration-300"
     >
       {/* Left color strip */}
@@ -140,4 +141,4 @@ export default function CouponCard({ coupon, index = 0 }: CouponCardProps) {
       </div>
     </motion.div>
   );
-}
+});

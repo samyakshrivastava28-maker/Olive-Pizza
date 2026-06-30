@@ -1,6 +1,6 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router';
 import { useAuthStore } from '../lib/store';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { db } from '../lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { PremiumBackground } from './ui/glass/PremiumBackground';
@@ -9,7 +9,8 @@ import OwnerAlertManager from './owner/OwnerAlertManager';
 import PixelSnow from './ui/PixelSnow';
 
 export default function OwnerLayout() {
-  const { user, logout } = useAuthStore();
+  const user = useAuthStore(state => state.user);
+  const logout = useAuthStore(state => state.logout);
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [profilePic, setProfilePic] = useState('https://ui-avatars.com/api/?name=Owner&background=random');
@@ -136,7 +137,13 @@ export default function OwnerLayout() {
         {/* Scrollable Page Content */}
         <div className="flex-1 overflow-y-auto flex flex-col">
           <div className={`p-4 md:p-8 flex-1 ${location.pathname === '/owner/dashboard' ? '' : 'bg-[#1E293B] border border-white/10 rounded-tl-[40px] shadow-[0_0_50px_rgba(0,0,0,0.5)] m-4 md:m-6 relative z-10'}`}>
-            <Outlet />
+            <Suspense fallback={
+              <div className="w-full h-full flex flex-col items-center justify-center min-h-[400px]">
+                <div className="w-10 h-10 border-4 border-dark-800 border-t-primary-500 rounded-full animate-spin" />
+              </div>
+            }>
+              <Outlet />
+            </Suspense>
           </div>
           
           <footer className="w-full text-center py-6 mt-8 text-xs font-medium text-slate-500 border-t border-slate-200 dark:border-slate-800">

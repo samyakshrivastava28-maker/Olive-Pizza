@@ -2,7 +2,7 @@ import { Outlet, Link, Navigate, useLocation } from 'react-router';
 import { useAuthStore } from '../lib/store';
 import { db } from '../lib/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
-import { useState } from 'react';
+import { useState, Suspense } from 'react';
 import toast from 'react-hot-toast';
 import { GlassPanel, GlassCard } from './ui/glass/GlassSystem';
 import DeliveryAlertManager from './delivery/DeliveryAlertManager';
@@ -11,7 +11,9 @@ import { Home } from 'lucide-react';
 
 
 export default function DeliveryLayout() {
-  const { user, role, isLoading } = useAuthStore();
+  const user = useAuthStore(state => state.user);
+  const role = useAuthStore(state => state.role);
+  const isLoading = useAuthStore(state => state.isLoading);
   const location = useLocation();
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
@@ -132,7 +134,13 @@ export default function DeliveryLayout() {
       
       <main className="flex-1 overflow-y-auto p-4 relative z-10">
         <div className="flex-1">
-          <Outlet />
+          <Suspense fallback={
+            <div className="w-full h-full flex flex-col items-center justify-center min-h-[400px]">
+              <div className="w-10 h-10 border-4 border-dark-800 border-t-primary-500 rounded-full animate-spin" />
+            </div>
+          }>
+            <Outlet />
+          </Suspense>
         </div>
         <div className="w-full text-center py-4 mt-8 text-[10px] font-medium text-slate-500 border-t border-slate-200 dark:border-slate-800">
           A Premium Website By <a href="https://28webhub.netlify.app" target="_blank" rel="noopener noreferrer" className="text-primary-500 hover:text-primary-600 hover:underline transition-colors">S-Web Hub</a>

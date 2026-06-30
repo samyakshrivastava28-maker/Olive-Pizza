@@ -14,7 +14,9 @@ export default defineConfig({
           'vendor-firebase': ['firebase/app', 'firebase/firestore', 'firebase/auth'],
           'vendor-motion': ['framer-motion'],
           'vendor-leaflet': ['leaflet', 'react-leaflet'],
-          'vendor-supabase': ['@supabase/supabase-js']
+          'vendor-supabase': ['@supabase/supabase-js'],
+          'vendor-ui': ['lucide-react', 'react-hot-toast'],
+          'vendor-state': ['zustand']
         }
       }
     }
@@ -108,7 +110,7 @@ export default defineConfig({
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/res\.cloudinary\.com\/.*\/image\/.*/i,
-            handler: 'CacheFirst',
+            handler: 'StaleWhileRevalidate',
             options: {
               cacheName: 'cloudinary-images',
               expiration: {

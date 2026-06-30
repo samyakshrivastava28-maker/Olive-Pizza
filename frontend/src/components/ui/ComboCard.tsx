@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { motion } from 'framer-motion';
 import { ShoppingBag, Star, Zap } from 'lucide-react';
 import { useCartStore } from '../../lib/store';
@@ -21,7 +22,7 @@ interface ComboCardProps {
   index?: number;
 }
 
-export default function ComboCard({ combo, wishlistIds = [], index = 0 }: ComboCardProps) {
+export default memo(function ComboCard({ combo, wishlistIds = [], index = 0 }: ComboCardProps) {
   const addItem = useCartStore((s) => s.addItem);
   const savings = combo.originalTotal - combo.price;
   const savingsPct = Math.round((savings / combo.originalTotal) * 100);
@@ -47,6 +48,7 @@ export default function ComboCard({ combo, wishlistIds = [], index = 0 }: ComboC
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
       transition={{ delay: index * 0.07, duration: 0.5 }}
+      style={{ willChange: 'transform, opacity' }}
       className="relative bg-gradient-to-br from-[#1a1a2e] via-[#16213e] to-[#0f3460] border border-white/10 rounded-2xl overflow-hidden group hover:border-primary-500/40 hover:shadow-[0_0_30px_rgba(249,115,22,0.12)] transition-all duration-300"
     >
       {/* Savings badge */}
@@ -120,4 +122,4 @@ export default function ComboCard({ combo, wishlistIds = [], index = 0 }: ComboC
       </div>
     </motion.div>
   );
-}
+});
