@@ -9,6 +9,7 @@ interface DataState {
   specialCategories: any[];
   coupons: any[];
   isInitialized: boolean;
+  isInitializing: boolean;
   initialize: () => void;
   cleanup: () => void;
 }
@@ -23,8 +24,15 @@ export const useDataStore = create<DataState>((set, get) => ({
   coupons: [],
   isInitialized: false,
   
+  isInitializing: false,
+  
   initialize: () => {
-    if (get().isInitialized) return;
+    if (get().isInitialized || get().isInitializing) return;
+    set({ isInitializing: true });
+
+    // Clear existing to prevent leaks in React Strict Mode double-invocations
+    unsubscribers.forEach((unsub) => unsub());
+    unsubscribers = [];
 
     // Fetch Products (Active only)
     const unsubProducts = onSnapshot(
@@ -80,12 +88,12 @@ export const useDataStore = create<DataState>((set, get) => ({
     );
     unsubscribers.push(unsubCoupons);
 
-    set({ isInitialized: true });
+    set({ isInitialized: true, isInitializing: false });
   },
 
   cleanup: () => {
     unsubscribers.forEach((unsub) => unsub());
     unsubscribers = [];
-    set({ isInitialized: false });
+    set({ isInitialized: false, isInitializing: false });
   }
 }));

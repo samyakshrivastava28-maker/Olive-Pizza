@@ -5,7 +5,6 @@ import { Order } from "../types/models";
 import { motion, useMotionValue, useTransform, useSpring } from "framer-motion";
 import PageTransition from "../components/PageTransition";
 import CustomerProfile from "../components/customer/CustomerProfile";
-import PizzaLoader from "../components/ui/PizzaLoader";
 import {
   Award,
   Clock,
@@ -23,11 +22,26 @@ import {
 } from "lucide-react";
 import { Link, useNavigate } from "react-router";
 import { useCartStore, useAuthStore } from "../lib/store";
-
+import { useLoadingStore } from "../lib/loadingStore";
 import { GlassCard, GlassButton } from "../components/ui/glass/GlassSystem";
 import { toast } from "react-hot-toast";
 
-
+function DashboardSkeleton() {
+  return (
+    <div className="w-full relative z-10 max-w-7xl mx-auto p-4 md:p-8 pt-8 animate-pulse">
+      <div className="h-8 w-1/4 bg-dark-800 rounded mb-8" />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+        <div className="lg:col-span-2 h-64 bg-dark-800 rounded-3xl" />
+        <div className="h-64 bg-dark-800 rounded-3xl" />
+      </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+        {[...Array(4)].map((_, i) => (
+          <div key={i} className="h-32 bg-dark-800 rounded-2xl" />
+        ))}
+      </div>
+    </div>
+  );
+}
 // 3D Card Component
 function TiltCard({
   children,
@@ -93,7 +107,7 @@ export default function CustomerDashboard() {
     const cached = sessionStorage.getItem("customer_orders");
     return cached ? JSON.parse(cached) : [];
   });
-  const [loading, setLoading] = useState(!sessionStorage.getItem("customer_orders"));
+  const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
   const { user } = useAuthStore();
 
@@ -101,12 +115,8 @@ export default function CustomerDashboard() {
   const cartItemCount = items.reduce((sum, item) => sum + item.quantity, 0);
 
   useEffect(() => {
-    if (!auth.currentUser) {
-      if (!useAuthStore.getState().isLoading) {
-        setLoading(false);
-      }
-      return;
-    }
+    if (!auth.currentUser) return;
+    
     const fetchOrders = async () => {
       try {
         const q = query(
@@ -126,7 +136,7 @@ export default function CustomerDashboard() {
       } catch (e) {
         console.error("Failed to fetch orders from Firestore", e);
       } finally {
-        setLoading(false);
+        setIsLoading(false);
       }
     };
 
@@ -174,10 +184,6 @@ export default function CustomerDashboard() {
       recommended
     };
   }, [orders]);
-
-  if (loading) return <PizzaLoader message="Loading your dashboard..." />;
-
-  // Check for active orders (for quick action button)
   const activeOrder = orders.find(
     (o) => !["delivered", "cancelled", "pending"].includes(o.status),
   );
@@ -198,6 +204,14 @@ export default function CustomerDashboard() {
     toast.success("Items added to cart! Redirecting...");
     setTimeout(() => navigate('/cart'), 1000);
   };
+
+  if (isLoading && orders.length === 0) {
+    return (
+      <PageTransition className="w-full relative min-h-[100dvh] text-slate-200">
+        <DashboardSkeleton />
+      </PageTransition>
+    );
+  }
 
   return (
     <PageTransition className="w-full relative min-h-[100dvh] text-slate-200">

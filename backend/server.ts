@@ -36,6 +36,7 @@ import { initScheduler } from './src/scripts/scheduler.js';
 import { initPostgres } from './src/config/postgres.js';
 import { FirestoreListener } from './src/listeners/firestore.listener.js';
 import { initKeepAlive } from './src/scripts/keepAlive.js';
+import { dynamicHtmlInjector } from './src/middleware/dynamicHtml.js';
 
 // Setup Vite in development or static files in production
 async function setupVite() {
@@ -54,10 +55,8 @@ async function setupVite() {
     app.use(vite.middlewares);
   } else {
     const clientPath = path.resolve(__dirname, '../dist/client');
-    app.use(express.static(clientPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(clientPath, 'index.html'));
-    });
+    app.use(express.static(clientPath, { index: false })); // Disable default index.html serving
+    app.get('*', dynamicHtmlInjector);
   }
 
   app.listen(PORT as number, '0.0.0.0', () => {

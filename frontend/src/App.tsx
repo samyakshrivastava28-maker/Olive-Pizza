@@ -1,4 +1,5 @@
 import { Routes, Route, useLocation, useNavigate } from 'react-router';
+import { HelmetProvider } from 'react-helmet-async';
 import { AnimatePresence, MotionConfig } from 'framer-motion';
 import { Toaster } from 'react-hot-toast';
 import { lazy, Suspense, ComponentType, useEffect } from 'react';
@@ -59,6 +60,8 @@ import { OwnerGuard, DeliveryGuard, CustomerGuard, AuthGuard } from './component
 import FloatingCart from './components/ui/FloatingCart';
 import LocationPrompt from './components/ui/LocationPrompt';
 import PushNotificationManager from './components/PushNotificationManager';
+import PizzaLoader from './components/ui/PizzaLoader';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 // Lazy loaded heavy components
 const AIAssistant = lazyWithRetry(() => import('./components/AIAssistant'));
@@ -76,7 +79,19 @@ const Cart = lazyWithRetry(() => import('./pages/Cart'));
 const Checkout = lazyWithRetry(() => import('./pages/Checkout'));
 const ProductDetail = lazyWithRetry(() => import('./pages/ProductDetail'));
 const OrderTracking = lazyWithRetry(() => import('./pages/OrderTracking'));
+
+// Lazy loaded Info & Legal pages
 const Contact = lazyWithRetry(() => import('./pages/Contact'));
+const About = lazyWithRetry(() => import('./pages/About'));
+const FAQ = lazyWithRetry(() => import('./pages/FAQ'));
+const DeleteAccount = lazyWithRetry(() => import('./pages/DeleteAccount'));
+const PrivacyPolicy = lazyWithRetry(() => import('./pages/legal/PrivacyPolicy'));
+const Terms = lazyWithRetry(() => import('./pages/legal/Terms'));
+const RefundPolicy = lazyWithRetry(() => import('./pages/legal/RefundPolicy'));
+const DeliveryPolicy = lazyWithRetry(() => import('./pages/legal/DeliveryPolicy'));
+const CookiePolicy = lazyWithRetry(() => import('./pages/legal/CookiePolicy'));
+const CancellationPolicy = lazyWithRetry(() => import('./pages/legal/CancellationPolicy'));
+const Accessibility = lazyWithRetry(() => import('./pages/legal/Accessibility'));
 const Login = lazyWithRetry(() => import('./pages/Login'));
 const Register = lazyWithRetry(() => import('./pages/Register'));
 const ForgotPassword = lazyWithRetry(() => import('./pages/ForgotPassword'));
@@ -147,8 +162,6 @@ function AppContent() {
     
     if (role === 'owner' || role === 'admin') {
       navigate('/owner/dashboard', { replace: true });
-    } else if (role === 'delivery_partner') {
-      navigate('/delivery/dashboard', { replace: true });
     }
   }, [isAuthenticated, role, location.pathname, navigate]);
 
@@ -156,7 +169,12 @@ function AppContent() {
     <>
       <PushNotificationManager />
       <AnimatePresence mode="wait">
-      <Suspense fallback={<div className="min-h-[100dvh] w-full bg-dark-950 flex flex-col items-center justify-center pointer-events-none"><div className="w-12 h-12 border-4 border-primary-500/20 border-t-primary-500 rounded-full animate-spin" /></div>}>
+        <ErrorBoundary>
+          <Suspense fallback={
+            <div className="min-h-[100dvh] w-full bg-dark-950 flex flex-col items-center justify-center pointer-events-none">
+              <div className="w-12 h-12 border-4 border-dark-800 border-t-primary-500 rounded-full animate-spin" />
+            </div>
+          }>
         <Routes location={location} key={location.pathname}>
           {/* Public Routes */}
           <Route element={<MainLayout />}>
@@ -168,6 +186,18 @@ function AppContent() {
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
+            
+            {/* Legal Pages */}
+            <Route path="/about" element={<About />} />
+            <Route path="/faq" element={<FAQ />} />
+            <Route path="/delete-account" element={<DeleteAccount />} />
+            <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+            <Route path="/terms" element={<Terms />} />
+            <Route path="/delivery-policy" element={<DeliveryPolicy />} />
+            <Route path="/refund-policy" element={<RefundPolicy />} />
+            <Route path="/cookie-policy" element={<CookiePolicy />} />
+            <Route path="/cancellation-policy" element={<CancellationPolicy />} />
+            <Route path="/accessibility" element={<Accessibility />} />
             
             {/* Protected Customer Routes */}
             <Route element={<CustomerGuard />}>
@@ -221,17 +251,18 @@ function AppContent() {
               <Route path="profile" element={<DeliveryProfile />} />
               <Route path="notifications" element={<DeliveryNotificationCenter />} />
             </Route>
-          </Route>
-        </Routes>
-      </Suspense>
-    </AnimatePresence>
+          </Routes>
+          </Suspense>
+        </ErrorBoundary>
+      </AnimatePresence>
     </>
   );
 }
 
 function App() {
   return (
-    <MotionConfig reducedMotion="user">
+    <HelmetProvider>
+      <MotionConfig reducedMotion="user">
       <AuthProvider>
         <ClickSpark
           sparkColor='#d4af37'
@@ -257,10 +288,12 @@ function App() {
             <Suspense fallback={null}>
               <FloatingTracker />
             </Suspense>
+            <PizzaLoader />
           </CartAnimationProvider>
         </ClickSpark>
       </AuthProvider>
     </MotionConfig>
+    </HelmetProvider>
   );
 }
 

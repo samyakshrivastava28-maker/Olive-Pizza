@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Link, useNavigate } from "react-router";
 import { db } from "../lib/firebase";
@@ -27,6 +27,8 @@ import { filterActive } from "../lib/scheduling";
 import { subscribeToWishlist } from "../lib/wishlist";
 import { trackEvent, computeRankingScore } from "../lib/analytics";
 import toast from "react-hot-toast";
+import SEO from "../components/SEO";
+import { generateRestaurantSchema } from "../lib/schema";
 
 // Skeleton loader
 function SectionSkeleton({ rows = 3 }: { rows?: number }) {
@@ -71,12 +73,14 @@ export default function Home() {
     initialize();
   }, [initialize]);
 
-  const allProducts = [...products, ...combos];
+  const allProducts = useMemo(() => [...products, ...combos], [products, combos]);
   
   // Auto top selling: weighted score
-  const topSelling = [...allProducts]
-    .sort((a, b) => computeRankingScore(b as any) - computeRankingScore(a as any))
-    .slice(0, 8);
+  const topSelling = useMemo(() => {
+    return [...allProducts]
+      .sort((a, b) => computeRankingScore(b as any) - computeRankingScore(a as any))
+      .slice(0, 8);
+  }, [allProducts]);
 
   const [wishlistIds, setWishlistIds] = useState<string[]>([]);
   const [previousOrders, setPreviousOrders] = useState<any[]>([]);
@@ -111,6 +115,8 @@ export default function Home() {
     document.body.style.overflow = "";
     sessionStorage.setItem("olive_intro_seen", "true");
   };
+
+  const [heroVideoError, setHeroVideoError] = useState(false);
 
 
 
@@ -355,8 +361,13 @@ export default function Home() {
   const desktopBgUrl = "https://res.cloudinary.com/dxmlvkff1/video/upload/f_auto,q_auto:eco,w_1080/v1782200264/Artisan_pizza_emerging_from_oven_202606231307_qmognm.mp4";
 
   return (
-    <PageTransition className="relative w-full">
-      <AnimatePresence>
+    <>
+      <SEO 
+        title="Home"
+        schemaMarkup={generateRestaurantSchema()}
+      />
+      <PageTransition className="relative w-full">
+        <AnimatePresence>
         {showIntro && (
           <motion.div
             key="intro"
@@ -381,7 +392,7 @@ export default function Home() {
               src={isMobile ? mobileIntroUrl : desktopIntroUrl}
               poster={(isMobile ? mobileIntroUrl : desktopIntroUrl).replace('.mp4', '.jpg')}
               autoPlay muted playsInline
-              preload="auto"
+              preload="metadata"
               onEnded={handleIntroEnd}
               onError={() => setTimeout(handleIntroEnd, 1000)}
               className="w-full h-full object-cover"
@@ -405,21 +416,32 @@ export default function Home() {
       )}
 
       {/* ─── Mobile Hero Section (<= 768px) ─────────────────────────────── */}
-      <div className="md:hidden relative w-full h-[100svh] overflow-hidden bg-dark-950">
-        <video
-          ref={(el) => {
-            if (el) {
-              if (showIntro) el.pause();
-              else el.play().catch(() => {});
-            }
-          }}
-          src={desktopBgUrl}
-          poster={desktopBgUrl.replace('.mp4', '.jpg')}
-          muted loop playsInline
-          preload="none"
-          className="absolute inset-0 w-full h-full object-cover"
-          style={{ objectPosition: 'center center' }}
-        />
+      <header className="md:hidden relative w-full h-[100svh] min-h-[600px] overflow-hidden bg-dark-950">
+        {!heroVideoError && (
+          <video
+            ref={(el) => {
+              if (el) {
+                if (showIntro) el.pause();
+                else el.play().catch(() => setHeroVideoError(true));
+              }
+            }}
+            src={desktopBgUrl}
+            poster={desktopBgUrl.replace('.mp4', '.jpg')}
+            muted loop playsInline
+            preload="none"
+            onError={() => setHeroVideoError(true)}
+            className="absolute inset-0 w-full h-full object-cover z-0"
+            style={{ objectPosition: 'center center' }}
+          />
+        )}
+        {heroVideoError && (
+          <img
+            src={desktopBgUrl.replace('.mp4', '.jpg')}
+            alt="Hero Background"
+            className="absolute inset-0 w-full h-full object-cover z-0"
+            style={{ objectPosition: 'center center' }}
+          />
+        )}
         <div className="absolute inset-0 bg-gradient-to-t from-dark-950 via-dark-950/70 to-transparent z-10" />
         <div className="relative z-20 w-full h-full flex flex-col justify-end pb-[120px] px-6 text-center">
           <motion.div
@@ -451,22 +473,33 @@ export default function Home() {
             </div>
           </motion.div>
         </div>
-      </div>
+      </header>
 
       {/* ─── Desktop Hero Section (> 768px) ─────────────────────────────── */}
-      <div className="hidden md:flex relative w-full h-[90dvh] overflow-hidden rounded-b-[3rem] shadow-2xl flex-col justify-end">
-        <video
-          ref={(el) => {
-            if (el) {
-              if (showIntro) el.pause();
-              else el.play().catch(() => {});
-            }
-          }}
-          src={desktopBgUrl}
-          muted loop playsInline
-          preload="none"
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 min-w-full min-h-full w-auto h-auto object-cover pointer-events-none z-0"
-        />
+      <header className="hidden md:flex relative w-full h-[90dvh] min-h-[700px] overflow-hidden rounded-b-[3rem] shadow-2xl flex-col justify-end">
+        {!heroVideoError && (
+          <video
+            ref={(el) => {
+              if (el) {
+                if (showIntro) el.pause();
+                else el.play().catch(() => setHeroVideoError(true));
+              }
+            }}
+            src={desktopBgUrl}
+            poster={desktopBgUrl.replace('.mp4', '.jpg')}
+            muted loop playsInline
+            preload="none"
+            onError={() => setHeroVideoError(true)}
+            className="absolute inset-0 w-full h-full object-cover pointer-events-none z-0"
+          />
+        )}
+        {heroVideoError && (
+          <img
+            src={desktopBgUrl.replace('.mp4', '.jpg')}
+            alt="Hero Background"
+            className="absolute inset-0 w-full h-full object-cover pointer-events-none z-0"
+          />
+        )}
         <div className="absolute inset-0 bg-gradient-to-t from-dark-950 via-dark-950/60 to-dark-950/30 z-10" />
         <div className="relative z-20 h-full flex flex-col justify-end pb-24 px-8 max-w-7xl mx-auto w-full">
           <motion.div
@@ -498,10 +531,10 @@ export default function Home() {
             </div>
           </motion.div>
         </div>
-      </div>
+      </header>
 
-      {/* ─── Dynamic Sections + Location (shared Ferrofluid background) ─── */}
-      <div className="bg-dark-950 relative z-10 overflow-hidden border-t border-dark-800">
+      {/* Main Content Area */}
+      <main className="w-full pt-16 pb-24 md:pb-32 bg-dark-950 overflow-hidden relative">
         {/* Ferrofluid background — same as Visit Olive Pizza section */}
         <div className="absolute inset-0 pointer-events-none opacity-20 z-0">
           <Ferrofluid />
@@ -530,10 +563,10 @@ export default function Home() {
             />
           </div>
         </div>
-      </div>
-
+      </main>
     </PageTransition>
-  );
+  </>
+);
 }
 
 // ─── Helper Components ─────────────────────────────────────────────────────────

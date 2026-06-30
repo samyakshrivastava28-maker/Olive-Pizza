@@ -5,6 +5,8 @@ import { useEffect, useState } from 'react';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Home, Menu as MenuIcon, ShoppingBag, User, Search, MapPin, ReceiptText, WifiOff, Download, ArrowDownToLine, RefreshCw } from 'lucide-react';
+import Header from './Header';
+import Footer from './Footer';
 import PWAPrompts from './ui/PWAPrompts';
 import { usePWA } from '../lib/usePWA';
 import Aurora from './ui/Aurora';
@@ -267,8 +269,11 @@ export default function MainLayout() {
           <p className="text-sm text-slate-400 mb-1">Dongargaon Rd, near Saraswati School, Gokul Nagar</p>
           <p className="text-sm text-slate-400 mb-6">Rajnandgaon, Chhattisgarh 491441</p>
           
-          <div className="flex justify-center gap-6 mb-8 text-sm">
+          <div className="flex justify-center gap-6 mb-8 text-sm flex-wrap">
             <Link to="/contact" className="text-slate-300 hover:text-white transition-colors">Contact Us</Link>
+            <Link to="/privacy-policy" className="text-slate-300 hover:text-white transition-colors">Privacy Policy</Link>
+            <Link to="/terms" className="text-slate-300 hover:text-white transition-colors">Terms of Service</Link>
+            <Link to="/delivery-policy" className="text-slate-300 hover:text-white transition-colors">Delivery Policy</Link>
             <a href={`https://www.google.com/maps/dir/?api=1&destination=21.0810244,81.0123793`} target="_blank" rel="noopener noreferrer" className="text-slate-300 hover:text-white transition-colors">Get Directions</a>
           </div>
 

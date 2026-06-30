@@ -26,9 +26,14 @@ router.get('/sitemap.xml', async (req, res) => {
       '/about',
       '/contact',
       '/faq',
+      '/delete-account',
       '/delivery-policy',
       '/privacy-policy',
-      '/terms'
+      '/terms',
+      '/refund-policy',
+      '/cookie-policy',
+      '/cancellation-policy',
+      '/accessibility'
     ];
 
     // Fetch products for dynamic URLs
