@@ -251,9 +251,10 @@ function AppContent() {
               <Route path="profile" element={<DeliveryProfile />} />
               <Route path="notifications" element={<DeliveryNotificationCenter />} />
             </Route>
-          </Routes>
-          </Suspense>
-        </ErrorBoundary>
+          </Route>
+        </Routes>
+        </Suspense>
+      </ErrorBoundary>
       </AnimatePresence>
     </>
   );

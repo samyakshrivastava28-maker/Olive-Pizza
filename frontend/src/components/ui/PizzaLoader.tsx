@@ -10,8 +10,8 @@ export default function PizzaLoader() {
         <motion.div 
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.2, exit: { duration: 0 } }}
+          exit={{ opacity: 0, transition: { duration: 0 } }}
+          transition={{ duration: 0.2 }}
           className="fixed inset-0 z-[100] backdrop-blur-md bg-black/40 flex flex-col items-center justify-center pointer-events-auto"
         >
           <div className="glass-card bg-white/10 dark:bg-slate-900/40 p-8 rounded-[40px] border border-white/20 shadow-2xl flex flex-col items-center justify-center relative overflow-hidden backdrop-blur-2xl w-72 h-72">
