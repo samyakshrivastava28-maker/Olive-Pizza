@@ -3,6 +3,7 @@ import { adminDb as db } from '../config/firebase.js';
 import * as admin from 'firebase-admin';
 import { notificationScheduler } from '../services/notification/NotificationScheduler';
 import { NotificationTemplates } from '../services/notification/NotificationTemplates';
+import { notificationDebugger } from '../services/notification/NotificationDebugger';
 import { verifyToken } from '../middleware/auth.middleware.js';
 
 const router = Router();

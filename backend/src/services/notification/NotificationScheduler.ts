@@ -91,6 +91,7 @@ export class NotificationScheduler {
         category,
         title: payload.notification?.title || 'Notification',
         body: payload.notification?.body || '',
+        tokensFound: 0,
       });
 
       const userDoc = await adminDb.collection('users').doc(userId).get();

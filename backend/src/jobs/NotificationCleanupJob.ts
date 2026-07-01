@@ -1,4 +1,4 @@
-import { adminDb as db } from '../../config/firebase.js';
+import { adminDb as db } from '../config/firebase.js';
 
 export class NotificationCleanupJob {
   /**
@@ -28,7 +28,7 @@ export class NotificationCleanupJob {
         }
         
         const batch = db.batch();
-        snapshot.docs.forEach((doc) => {
+        snapshot.docs.forEach((doc: any) => {
           batch.delete(doc.ref);
         });
         
