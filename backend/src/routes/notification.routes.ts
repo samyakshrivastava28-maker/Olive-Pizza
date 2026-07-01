@@ -1,9 +1,9 @@
 import { Router, Request, Response } from 'express';
 import { adminDb as db } from '../config/firebase.js';
 import * as admin from 'firebase-admin';
-import { notificationScheduler } from '../services/notification/NotificationScheduler';
-import { NotificationTemplates } from '../services/notification/NotificationTemplates';
-import { notificationDebugger } from '../services/notification/NotificationDebugger';
+import { notificationScheduler } from '../services/notification/NotificationScheduler.js';
+import { NotificationTemplates } from '../services/notification/NotificationTemplates.js';
+import { notificationDebugger } from '../services/notification/NotificationDebugger.js';
 import { verifyToken } from '../middleware/auth.middleware.js';
 
 const router = Router();

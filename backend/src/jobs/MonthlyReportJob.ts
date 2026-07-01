@@ -1,8 +1,8 @@
 import cron from 'node-cron';
-import { pgPool } from '../config/database.js';
-import { adminDb } from '../../config/firebase.js';
-import { googleDriveService } from '../services/GoogleDriveService.js';
-import { emailService } from '../services/EmailService.js';
+import { pgPool } from '../config/postgres';
+import { adminDb } from '../config/firebase';
+import { googleDriveService } from '../services/googleDrive.service';
+import { transporter } from '../services/email.service';
 import PDFDocument from 'pdfkit';
 import fs from 'fs';
 import path from 'path';
@@ -36,7 +36,7 @@ export class MonthlyReportJob {
       // 1. Upload to Google Drive
       if (process.env.GOOGLE_DRIVE_ENABLED === 'true') {
         try {
-          await googleDriveService.uploadFile(filename, reportBuffer, 'application/pdf');
+          await googleDriveService.uploadBuffer(filename, reportBuffer, 'application/pdf');
           console.log('[MonthlyReportJob] Uploaded to Google Drive successfully.');
         } catch (e) {
           console.error('[MonthlyReportJob] Google Drive upload failed:', e);
@@ -46,32 +46,18 @@ export class MonthlyReportJob {
       // 2. Email to Owner
       try {
         const ownerEmail = process.env.OWNER_EMAIL || 'olivepizzarjn@gmail.com';
-        await emailService.sendOrderReceipt(
-          ownerEmail, 
-          { 
-            id: 'monthly-report',
-            user_id: 'owner',
-            delivery_partner_id: null,
-            total_amount: 0,
-            status: 'completed',
-            delivery_address_line: '',
-            delivery_landmark: '',
-            delivery_pincode: '',
-            contact_phone: '',
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          }, // Mock order for the receipt shape
-          [], // Mock items
-          {
-            name: 'Olive Pizza Owner',
-            email: ownerEmail,
-            firebase_uid: '',
-            role: 'owner'
-          },
-          reportBuffer // Pass the PDF buffer
-        );
-        // Assuming emailService has a specific method or we can send it as an attachment. 
-        // For now, we will simulate this by logging, as actual email attachments need a dedicated method.
+        await transporter.sendMail({
+          from: process.env.SMTP_FROM || 'Olive Pizza <noreply@olivepizza.app>',
+          to: ownerEmail,
+          subject: `Monthly Sales & Operations Report - ${new Date().toLocaleString('default', { month: 'long' })} ${new Date().getFullYear()}`,
+          text: `Please find attached the Monthly Sales & Operations Report.`,
+          attachments: [
+            {
+              filename,
+              content: reportBuffer,
+            }
+          ]
+        });
         console.log(`[MonthlyReportJob] Emailed monthly report to ${ownerEmail}.`);
       } catch (e) {
         console.error('[MonthlyReportJob] Email sending failed:', e);

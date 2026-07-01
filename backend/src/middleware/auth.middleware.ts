@@ -93,3 +93,5 @@ export const requireRole = (allowedRoles: string[]) => {
     next();
   };
 };
+
+export const requireAuth = verifyToken;

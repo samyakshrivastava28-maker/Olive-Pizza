@@ -10,7 +10,7 @@ import toast from "react-hot-toast";
 import { uploadMediaToCloudinary } from "../../lib/cloudinary";
 import { MapPin, Package, Map as MapIcon, Power, Wifi, WifiOff, AlertTriangle, ShieldAlert, Clock, Navigation2, Zap, Battery, Crosshair, HelpCircle, Utensils, MessageSquare, AlertCircle, Star, PhoneCall, Navigation, PackageOpen, CheckCircle2, Camera } from "lucide-react";
 import { RESTAURANT_LOCATION } from "../../lib/config";
-import TrackingDebugPanel, { DebugData } from "../../components/tracking/TrackingDebugPanel";
+
 import { GlassCard, GlassButton } from "../../components/ui/glass/GlassSystem";
 import { playNotificationSound } from "../../hooks/useNotificationSound";
 import { motion, AnimatePresence } from 'framer-motion';
@@ -461,7 +461,7 @@ export default function DeliveryDashboard() {
         </motion.div>
       )}
       </AnimatePresence>
-      <TrackingDebugPanel data={useTrackingStore.getState().debugData} side="delivery" />
+
     </div>
   );
 }

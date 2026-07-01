@@ -14,6 +14,8 @@
   "dependencies": {
     "@google-cloud/recaptcha-enterprise": "^6.4.2",
     "@google/genai": "latest",
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.6.1",
     "@slack/web-api": "^7.17.0",
     "@supabase/supabase-js": "^2.108.2",
     "@tailwindcss/vite": "^4.0.0",

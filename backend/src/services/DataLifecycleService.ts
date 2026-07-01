@@ -1,5 +1,5 @@
 import cron from 'node-cron';
-import { pgPool } from '../config/database.js';
+import { pgPool } from '../config/postgres.js';
 
 export class DataLifecycleService {
   constructor() {

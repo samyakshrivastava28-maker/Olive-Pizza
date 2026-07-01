@@ -11,7 +11,7 @@ export function useHeartbeat() {
     const sendHeartbeat = async () => {
       try {
         let batteryLevel = null;
-        let connectionQuality = navigator.connection?.effectiveType || 'unknown';
+        let connectionQuality = (navigator as any).connection?.effectiveType || 'unknown';
 
         if ('getBattery' in navigator) {
           const battery: any = await (navigator as any).getBattery();
