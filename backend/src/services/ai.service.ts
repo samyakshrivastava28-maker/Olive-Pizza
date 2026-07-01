@@ -568,14 +568,14 @@ export async function enhancePrompt(prompt: string, type: string): Promise<{ suc
 Your task is to take a short, basic prompt from the user and expand it into a highly detailed, evocative, and professional image generation prompt.
 Do not include any conversational filler, explanations, or quotes. Output ONLY the enhanced prompt.
 Always include cinematic lighting, photorealism, and appetizing food photography descriptors.
-Type context: ${type === 'banner' ? 'Wide promotional marketing banner, dynamic composition' : 'Close-up product photography, mouth-watering details'}.`;
+Type context: ${type === 'banner' ? 'Wide promotional marketing banner, dynamic composition' : 'Close-up product photography, mouth-watering details'}.
+CRITICAL INSTRUCTION: You must provide the final prompt immediately. Keep your <think> reasoning extremely brief (under 3 sentences) to ensure a fast response under 20 seconds.`;
 
-  // Explicit chain for this task: DeepSeek R1 -> Qwen
+  // Explicit chain for this task: DeepSeek R1 -> Gemini
   const chain = [
+    { client: openRouterClient, model: 'deepseek/deepseek-r1', name: 'DeepSeek R1' },
+    { client: nvidiaClient, model: 'deepseek-ai/deepseek-r1', name: 'DeepSeek R1 (Nvidia)' },
     { client: geminiClient, model: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash' },
-    { client: nvidiaClient, model: 'deepseek-ai/deepseek-r1', name: 'DeepSeek R1' },
-    { client: nvidiaClient, model: 'meta/llama-3.1-70b-instruct', name: 'Llama 3.1 70B' },
-    { client: nvidiaClient, model: 'meta/llama-3.1-8b-instruct', name: 'Llama 3.1 8B' }
   ];
 
   let lastError: Error | null = null;
@@ -589,7 +589,7 @@ Type context: ${type === 'banner' ? 'Wide promotional marketing banner, dynamic 
           { role: 'user', content: prompt }
         ],
         temperature: 0.7,
-        max_tokens: 300,
+        max_tokens: 1500,
       });
       let text = response.choices[0]?.message?.content || '';
       if (!text) throw new Error('Empty response');

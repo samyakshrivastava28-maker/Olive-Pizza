@@ -2,7 +2,7 @@ import { Routes, Route, useLocation, useNavigate } from 'react-router';
 import { HelmetProvider } from 'react-helmet-async';
 import { AnimatePresence, MotionConfig } from 'framer-motion';
 import { Toaster } from 'react-hot-toast';
-import { lazy, Suspense, ComponentType, useEffect } from 'react';
+import { lazy, Suspense, ComponentType, useEffect, useRef } from 'react';
 import { useAuthStore } from './lib/store';
 
 // Custom lazy loading with retry for chunk errors (prevents black screen on PWA update)
@@ -136,6 +136,7 @@ function AppContent() {
   const isAuthenticated = useAuthStore(state => state.isAuthenticated);
   const user = useAuthStore(state => state.user);
   const role = useAuthStore(state => state.role);
+  const hasRedirectedToDashboard = useRef(false);
 
   // Global Onboarding Enforcer: Make phone and location setup strictly compulsory for customers
   useEffect(() => {
@@ -162,7 +163,8 @@ function AppContent() {
   useEffect(() => {
     if (!isAuthenticated || !role || location.pathname !== '/') return;
     
-    if (role === 'owner' || role === 'admin') {
+    if ((role === 'owner' || role === 'admin') && !hasRedirectedToDashboard.current) {
+      hasRedirectedToDashboard.current = true;
       navigate('/owner/dashboard', { replace: true });
     }
   }, [isAuthenticated, role, location.pathname, navigate]);

@@ -1,4 +1,5 @@
 import * as admin from 'firebase-admin';
+import { notificationDebugger } from './NotificationDebugger.js';
 
 export class FirebaseMessagingProvider {
   /**
@@ -6,22 +7,42 @@ export class FirebaseMessagingProvider {
    */
   public async sendMulticast(
     tokens: string[],
-    payload: any
+    payload: any,
+    notificationId?: string
   ): Promise<admin.messaging.BatchResponse> {
     if (!tokens || tokens.length === 0) {
+      if (notificationId) {
+        await notificationDebugger.markFailed(notificationId, 'No tokens provided');
+      }
       throw new Error('No tokens provided');
     }
 
     try {
+      if (notificationId) {
+        await notificationDebugger.updateStage(notificationId, 'Sent to Firebase', { tokensFound: tokens.length });
+      }
+
       const message: admin.messaging.MulticastMessage = {
         tokens,
         notification: payload.notification,
         data: payload.data
       };
       const response = await admin.messaging().sendEachForMulticast(message);
+      
+      if (notificationId) {
+        if (response.failureCount === tokens.length) {
+          await notificationDebugger.updateStage(notificationId, 'Failed', { error: 'All tokens failed' });
+        } else {
+          await notificationDebugger.updateStage(notificationId, 'Firebase Response');
+        }
+      }
+
       return response;
-    } catch (error) {
+    } catch (error: any) {
       console.error('[FirebaseMessagingProvider] Error sending message:', error);
+      if (notificationId) {
+        await notificationDebugger.markFailed(notificationId, error.message || 'Unknown error');
+      }
       throw error;
     }
   }

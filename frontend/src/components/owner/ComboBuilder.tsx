@@ -1,12 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { db } from '../../lib/firebase';
 import { collection, onSnapshot, query, addDoc, updateDoc, doc, deleteDoc, orderBy } from 'firebase/firestore';
-import { Sparkles, Image as ImageIcon, CheckCircle, Trash2, Edit2, Play, Calendar, Eye } from 'lucide-react';
+import { Sparkles, Image as ImageIcon, CheckCircle, Trash2, Edit2, Play, Calendar, Eye, Send, PackagePlus } from 'lucide-react';
 import { uploadMediaToCloudinary } from '../../lib/cloudinary';
 import { useAuthStore } from '../../lib/store';
 import toast from 'react-hot-toast';
 
-export default function ComboBuilder() {
+interface ComboBuilderProps {
+  onAddComboProduct?: () => void;
+}
+
+export default function ComboBuilder({ onAddComboProduct }: ComboBuilderProps) {
   const { user } = useAuthStore();
   const [products, setProducts] = useState<any[]>([]);
   const [combos, setCombos] = useState<any[]>([]);
@@ -24,6 +28,21 @@ export default function ComboBuilder() {
   const [cloudinaryPublicId, setCloudinaryPublicId] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [editingComboId, setEditingComboId] = useState<string | null>(null);
+
+  // New AI states
+  const [customImagePrompt, setCustomImagePrompt] = useState("");
+  const [isEnhancingPrompt, setIsEnhancingPrompt] = useState(false);
+  
+  const [chatMessages, setChatMessages] = useState<{ role: string; content: string }[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [isChatLoading, setIsChatLoading] = useState(false);
+  const chatScrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (chatScrollRef.current) {
+      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+    }
+  }, [chatMessages]);
 
   useEffect(() => {
     // Fetch Products
@@ -52,22 +71,82 @@ export default function ComboBuilder() {
 
   const selectedProductsData = products.filter(p => selectedProductIds.includes(p.id));
 
+  const handleEnhanceImagePrompt = async () => {
+    const productNames = selectedProductsData.map(p => p.productName).join(' and ');
+    const basePrompt = customImagePrompt || `Delicious combo meal containing ${productNames}. ${description || ""}`;
+    setIsEnhancingPrompt(true);
+    try {
+      const res = await fetch("/api/ai/enhance-prompt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: basePrompt, type: "product" }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setCustomImagePrompt(data.text);
+      } else {
+        toast.error("Failed to enhance prompt: " + data.error);
+      }
+    } catch (e: any) {
+      toast.error("Error enhancing prompt: " + e.message);
+    } finally {
+      setIsEnhancingPrompt(false);
+    }
+  };
+
+  const handleChatSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!chatInput.trim() || isChatLoading) return;
+
+    const newMessages = [...chatMessages, { role: "user", content: chatInput }];
+    setChatMessages(newMessages);
+    setChatInput("");
+    setIsChatLoading(true);
+
+    try {
+      const res = await fetch("/api/ai/product-description", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: newMessages }),
+      });
+      const data = await res.json();
+
+      if (data.text) {
+        let aiResponse = data.text;
+        const finalDescMatch = aiResponse.match(/FINAL_DESCRIPTION:\s*(.*)/is);
+
+        if (finalDescMatch) {
+          const newDesc = finalDescMatch[1].trim();
+          setDescription(newDesc);
+          aiResponse = aiResponse.replace(/FINAL_DESCRIPTION:\s*.*/is, "").trim() + "\n\n✨ I have filled in the description for you!";
+        }
+
+        setChatMessages(prev => [...prev, { role: "assistant", content: aiResponse }]);
+      }
+    } catch (error) {
+      console.error(error);
+      setChatMessages(prev => [...prev, { role: "assistant", content: "Oops! Something went wrong trying to connect to the AI." }]);
+    } finally {
+      setIsChatLoading(false);
+    }
+  };
+
   const handleGenerateImage = async () => {
-    if (selectedProductIds.length === 0) {
-      toast.error("Select products first!");
+    if (selectedProductIds.length === 0 && !comboName) {
+      toast.error("Select products or enter combo name first!");
       return;
     }
     setIsGenerating(true);
     try {
       const productNames = selectedProductsData.map(p => p.productName).join(' and ');
-      const prompt = `A highly professional, realistic 4k advertisement food photography of a combo meal containing ${productNames}. Natural lighting, premium restaurant look.`;
+      const fallbackPrompt = `A highly professional, realistic 4k advertisement food photography of a combo meal containing ${productNames}. Natural lighting, premium restaurant look.`;
       
       const res = await fetch("/api/ai/generate-product-image", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           productName: `${comboName || 'Combo Meal'}`,
-          customPrompt: prompt,
+          customPrompt: customImagePrompt || fallbackPrompt,
           modelName: "qwen-image"
         })
       });
@@ -197,12 +276,56 @@ export default function ComboBuilder() {
                   onChange={(e) => setDescription(e.target.value)}
                   className="w-full p-3 rounded-lg bg-slate-900 border border-slate-700 h-24 text-white focus:outline-none focus:border-primary-500"
                 />
+                
+                {/* AI Description Generator */}
+                <div className="bg-[#0B0F14] rounded-xl border border-white/5 overflow-hidden flex flex-col h-64 mt-4">
+                  <div className="bg-primary-500/10 p-3 border-b border-primary-500/20 flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-primary-400">
+                      <Sparkles className="w-4 h-4" />
+                      <span className="text-sm font-bold">AI Description Assistant</span>
+                    </div>
+                  </div>
+                  <div ref={chatScrollRef} className="flex-1 p-4 overflow-y-auto space-y-4 custom-scrollbar">
+                    {chatMessages.length === 0 && (
+                      <div className="text-center text-slate-500 text-sm mt-8">
+                        Describe your combo, and I'll generate a catchy description for you!
+                      </div>
+                    )}
+                    {chatMessages.map((msg, idx) => (
+                      <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`max-w-[80%] p-3 rounded-2xl text-sm ${msg.role === 'user' ? 'bg-primary-500 text-white rounded-tr-none' : 'bg-slate-800 text-slate-300 rounded-tl-none border border-white/5'}`}>
+                          {msg.content}
+                        </div>
+                      </div>
+                    ))}
+                    {isChatLoading && (
+                      <div className="flex justify-start">
+                        <div className="bg-slate-800 border border-white/5 p-3 rounded-2xl rounded-tl-none text-slate-400 text-sm flex gap-1">
+                          <span className="animate-bounce">●</span><span className="animate-bounce delay-100">●</span><span className="animate-bounce delay-200">●</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <form onSubmit={handleChatSubmit} className="p-3 bg-slate-900 border-t border-white/5 flex gap-2">
+                    <input type="text" value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder="E.g. A romantic combo for two..." className="flex-1 bg-slate-800 text-white text-sm rounded-lg px-3 py-2 border border-slate-700 focus:outline-none focus:border-primary-500" />
+                    <button type="submit" disabled={isChatLoading || !chatInput.trim()} className="bg-primary-500 hover:bg-primary-600 disabled:opacity-50 text-white p-2 rounded-lg transition-colors"><Send className="w-4 h-4" /></button>
+                  </form>
+                </div>
               </div>
             </div>
 
             {/* Step 2 */}
             <div className="bg-slate-800 p-6 rounded-xl border border-white/10">
-              <h3 className="text-lg font-bold text-primary-400 mb-4">Step 2: Select Products</h3>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-bold text-primary-400">Step 2: Select Products</h3>
+                <button 
+                  onClick={onAddComboProduct} 
+                  type="button" 
+                  className="bg-primary-500/10 hover:bg-primary-500/20 text-primary-400 text-xs font-bold py-1 px-3 rounded-full flex items-center gap-1 transition-colors border border-primary-500/30"
+                >
+                  <PackagePlus className="w-3 h-3" /> Add Product (Combo Only)
+                </button>
+              </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 max-h-96 overflow-y-auto pr-2 custom-scrollbar">
                 {products.map(p => {
                   const isSelected = selectedProductIds.includes(p.id);
@@ -278,13 +401,29 @@ export default function ComboBuilder() {
             {/* Step 4 */}
             <div className="bg-slate-800 p-6 rounded-xl border border-white/10">
               <h3 className="text-lg font-bold text-primary-400 mb-4">Step 4: AI Image Generation</h3>
-              <button 
-                onClick={handleGenerateImage}
-                disabled={isGenerating || selectedProductIds.length === 0}
-                className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
-              >
-                {isGenerating ? <span className="animate-pulse">Generating...</span> : <><Sparkles className="w-5 h-5"/> Generate Promotional Image</>}
-              </button>
+              <div className="space-y-4">
+                <textarea
+                  value={customImagePrompt}
+                  onChange={(e) => setCustomImagePrompt(e.target.value)}
+                  placeholder="Describe the combo image (e.g., A delicious pizza and coke on a wooden table)"
+                  className="w-full p-3 rounded-lg bg-slate-900 border border-slate-700 h-24 text-white focus:outline-none focus:border-primary-500 text-sm"
+                />
+                <button
+                  type="button"
+                  onClick={handleEnhanceImagePrompt}
+                  disabled={isEnhancingPrompt}
+                  className="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 rounded-lg flex items-center justify-center gap-2 transition-colors disabled:opacity-50 text-sm"
+                >
+                  {isEnhancingPrompt ? "Enhancing with DeepSeek R1..." : <><Sparkles className="w-4 h-4" /> Enhance Prompt with DeepSeek</>}
+                </button>
+                <button 
+                  onClick={handleGenerateImage}
+                  disabled={isGenerating || (selectedProductIds.length === 0 && !comboName)}
+                  className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+                >
+                  {isGenerating ? <span className="animate-pulse">Generating...</span> : <><ImageIcon className="w-5 h-5"/> Generate Promotional Image</>}
+                </button>
+              </div>
             </div>
             
             <div className="flex gap-4">

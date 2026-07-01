@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { messaging, db, auth } from '../lib/firebase';
-import { getToken } from 'firebase/messaging';
+import { getToken, onMessage } from 'firebase/messaging';
 import { doc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { Bell, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import toast from 'react-hot-toast';
 
 export default function PushNotificationManager() {
   const [showPrompt, setShowPrompt] = useState(false);
@@ -14,9 +15,7 @@ export default function PushNotificationManager() {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         setUserUid(user.uid);
-        // Only show prompt if permission is 'default' (not yet asked)
         if (Notification.permission === 'default') {
-          // Add a small delay so it doesn't pop up instantly over loaders
           const timer = setTimeout(() => setShowPrompt(true), 3000);
           return () => clearTimeout(timer);
         } else if (Notification.permission === 'granted') {
@@ -26,7 +25,40 @@ export default function PushNotificationManager() {
         setUserUid(null);
       }
     });
-    return () => unsubscribe();
+
+    let messageUnsub: any = undefined;
+    if (messaging) {
+      messageUnsub = onMessage(messaging, (payload) => {
+        console.log('[PushManager] Foreground message:', payload);
+        
+        // Show in-app toast
+        if (payload.notification?.title) {
+          toast(
+            (t) => (
+              <div onClick={() => toast.dismiss(t.id)} className="cursor-pointer">
+                <b>{payload.notification?.title}</b>
+                <p className="text-sm">{payload.notification?.body}</p>
+              </div>
+            ),
+            { duration: 6000, icon: '🔔' }
+          );
+        }
+
+        // Report Delivered
+        if (payload.data?.notificationId) {
+          fetch('/api/notifications/track', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ notificationId: payload.data.notificationId, stage: 'Delivered' })
+          }).catch(console.error);
+        }
+      });
+    }
+
+    return () => {
+      unsubscribe();
+      if (messageUnsub) messageUnsub();
+    };
   }, []);
 
   const requestPermissionAndSaveToken = async (uid: string) => {

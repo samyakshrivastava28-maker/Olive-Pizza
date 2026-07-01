@@ -68,8 +68,17 @@ messaging.onBackgroundMessage((payload) => {
     ];
   }
 
+  // Report Delivered
+  if (payload.data?.notificationId) {
+    fetch('/api/notifications/track', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ notificationId: payload.data.notificationId, stage: 'Delivered' })
+    }).catch(console.error);
+  }
+
   // Use collapse_key or a tag to replace existing notifications for this order
-  notificationOptions.tag = `order_${payload.data?.orderId}`;
+  notificationOptions.tag = `order_${payload.data?.orderId || Date.now()}`;
 
   self.registration.showNotification(notificationTitle, notificationOptions);
 });
@@ -77,11 +86,22 @@ messaging.onBackgroundMessage((payload) => {
 self.addEventListener('notificationclick', function(event) {
   event.notification.close();
   const action = event.action;
-  const data = event.notification.data;
+  const data = event.notification.data || {};
+  
+  // Report Clicked
+  if (data.notificationId) {
+    event.waitUntil(
+      fetch('/api/notifications/track', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notificationId: data.notificationId, stage: 'Clicked' })
+      }).catch(console.error)
+    );
+  }
   
   if (action === 'dashboard' || action === '') {
     // Open the app dashboard
-    clients.openWindow('/');
+    clients.openWindow(data.url || '/');
     return;
   }
 
@@ -91,9 +111,6 @@ self.addEventListener('notificationclick', function(event) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        // In a real scenario, the SW needs a way to get the auth token.
-        // Easiest is to store it in IndexedDB or broadcast to active clients.
-        // 'Authorization': 'Bearer ...'
       },
       body: JSON.stringify({
         orderId: data.orderId,

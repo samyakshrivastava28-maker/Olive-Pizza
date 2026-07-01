@@ -36,6 +36,7 @@ export default function OwnerProducts() {
     discountPercentage: 0,
     isVegetarian: true,
     isActive: true,
+    isComboOnly: false,
     variants: [],
     crusts: [],
     addons: [],
@@ -279,6 +280,7 @@ export default function OwnerProducts() {
         discountPercentage: 0,
         isVegetarian: true,
         isActive: true,
+        isComboOnly: false,
         variants: [],
         crusts: [],
         addons: [],
@@ -393,7 +395,11 @@ export default function OwnerProducts() {
       </div>
 
       {activeTab === 'combos' && (
-        <ComboBuilder />
+        <ComboBuilder onAddComboProduct={() => {
+          setIsAdding(true);
+          setActiveTab('products');
+          setNewItem((prev: any) => ({ ...prev, isComboOnly: true }));
+        }} />
       )}
 
       {activeTab === 'products' && isAdding && (
@@ -412,6 +418,11 @@ export default function OwnerProducts() {
               }
               className="p-3 rounded-lg border dark:bg-slate-900 dark:border-slate-700"
             />
+            {newItem.isComboOnly && (
+              <div className="md:col-span-2 bg-blue-500/20 text-blue-300 p-3 rounded-xl border border-blue-500/30 text-sm font-bold flex items-center gap-2">
+                ℹ️ This product is being created for COMBOS ONLY and will not appear on the regular public menu.
+              </div>
+            )}
             <div className="md:col-span-2 bg-[#0B0F14] border border-white/5 p-4 rounded-xl border dark:border-slate-700 space-y-4">
               <h4 className="font-bold text-sm text-slate-400">Pricing Configuration</h4>
               <div className="flex gap-4">

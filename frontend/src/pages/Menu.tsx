@@ -75,7 +75,9 @@ export default function Menu() {
 
   // Combine products and combos, matching the MenuItem interface exactly
   const allItems: MenuItem[] = useMemo(() => {
-    const parsedProducts = products.map((data) => ({
+    const parsedProducts = products
+      .filter((data) => !data.isComboOnly)
+      .map((data) => ({
       id: data.id,
       name: data.productName,
       description: data.description,

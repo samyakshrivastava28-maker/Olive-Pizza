@@ -81,7 +81,7 @@ export default function Home() {
     initialize();
   }, [initialize]);
 
-  const allProducts = useMemo(() => [...products, ...combos], [products, combos]);
+  const allProducts = useMemo(() => [...products.filter(p => !p.isComboOnly), ...combos], [products, combos]);
   
   // Auto top selling: weighted score
   const topSelling = useMemo(() => {

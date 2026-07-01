@@ -57,6 +57,19 @@ router.get('/sign-upload', verifyAdminOrOwner, (req: Request, res: Response) => 
   }
 });
 
+router.get('/ai-images', verifyAdminOrOwner, async (req: Request, res: Response) => {
+  try {
+    const result = await cloudinary.search
+      .expression('folder:olive-pizza/ai-generated OR folder:olive-pizza/ai-product-images')
+      .sort_by('created_at', 'desc')
+      .max_results(500)
+      .execute();
+    res.json({ success: true, images: result.resources });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 router.delete('/:publicId(*)', verifyAdminOrOwner, async (req: Request, res: Response) => {
   try {
     const { publicId } = req.params;

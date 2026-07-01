@@ -142,7 +142,7 @@ router.post('/action', verifyToken, async (req: Request, res: Response): Promise
  */
 router.post('/send-custom', verifyToken, async (req: Request, res: Response): Promise<void> => {
   try {
-    const { title, body, audience } = req.body;
+    const { title, body, audience, type, category, schedule } = req.body;
     const userId = (req as any).user.uid;
 
     // Verify owner role
@@ -167,42 +167,144 @@ router.post('/send-custom', verifyToken, async (req: Request, res: Response): Pr
     }
 
     const usersSnapshot = await usersQuery.get();
-    
-    // Collect all valid FCM tokens
-    const tokens: string[] = [];
-    usersSnapshot.forEach(doc => {
-      const data = doc.data();
-      if (data.fcmTokens && Array.isArray(data.fcmTokens)) {
-        tokens.push(...data.fcmTokens);
-      }
-    });
+    let queuedCount = 0;
 
-    if (tokens.length === 0) {
-      res.json({ success: true, sentCount: 0, message: 'No registered devices found for this audience' });
-      return;
-    }
-
-    // Batch send via Firebase Admin
-    const message = {
+    const payload = {
       notification: { title, body },
-      data: { url: '/', source: 'owner_broadcast' },
-      tokens: tokens,
+      data: { url: '/', source: 'owner_broadcast' }
     };
 
-    const response = await admin.messaging().sendEachForMulticast(message);
-    
-    console.log(`[NotificationRoutes] Broadcast sent: ${response.successCount} successful, ${response.failureCount} failed.`);
-    
-    // Optionally: prune failed tokens here (e.g., if error.code === 'messaging/invalid-registration-token')
+    // Async processing for each user to track individual status
+    const promises = usersSnapshot.docs.map(doc => {
+      queuedCount++;
+      // We will let NotificationScheduler handle the logging per user
+      return notificationScheduler.sendToUser(doc.id, payload, category || 'custom');
+    });
+
+    // Fire and forget so we don't block the request if there are thousands
+    Promise.allSettled(promises).catch(console.error);
 
     res.json({
       success: true,
-      sentCount: response.successCount,
-      failedCount: response.failureCount
+      message: `Notification queued for ${queuedCount} users.`
     });
   } catch (error: any) {
     console.error('[NotificationRoutes] Error sending custom push:', error);
     res.status(500).json({ error: 'Failed to send notification', details: error.message });
+  }
+});
+
+/**
+ * Public: Track notification opens/clicks from Service Worker or Client
+ */
+router.post('/track', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { notificationId, stage } = req.body; // stage: 'Delivered', 'Opened', 'Clicked'
+    if (notificationId && stage) {
+       await notificationDebugger.updateStage(notificationId, stage as any);
+    }
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Owner: Retry Failed Notifications
+ */
+router.post('/retry-failed', verifyToken, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = (req as any).user.uid;
+    const ownerDoc = await db.collection('users').doc(userId).get();
+    if (ownerDoc.data()?.role !== 'owner') {
+      res.status(403).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    // Query failed notifications
+    const failedSnapshot = await db.collection('notification_history')
+      .where('status', '==', 'failed')
+      .get();
+    
+    let retriedCount = 0;
+    const promises = failedSnapshot.docs.map(async (doc) => {
+      const data = doc.data();
+      const payload = {
+        notification: { title: data.title, body: data.body },
+        data: { source: 'retry' }
+      };
+      retriedCount++;
+      // Clean up old log and send new one
+      await doc.ref.delete();
+      return notificationScheduler.sendToUser(data.userId, payload, data.category);
+    });
+
+    Promise.allSettled(promises).catch(console.error);
+    res.json({ success: true, message: `Retrying ${retriedCount} notifications.` });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Owner: Delete Notification Log
+ */
+router.delete('/log/:id', verifyToken, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = (req as any).user.uid;
+    const ownerDoc = await db.collection('users').doc(userId).get();
+    if (ownerDoc.data()?.role !== 'owner') {
+      res.status(403).json({ error: 'Unauthorized' });
+      return;
+    }
+    
+    await db.collection('notification_history').doc(req.params.id).delete();
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Owner: Delete History (Today or Yesterday)
+ */
+router.post('/clear-history', verifyToken, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = (req as any).user.uid;
+    const { timeRange } = req.body; // 'today' or 'yesterday'
+    
+    const ownerDoc = await db.collection('users').doc(userId).get();
+    if (ownerDoc.data()?.role !== 'owner') {
+      res.status(403).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    const now = new Date();
+    let startTime, endTime;
+    
+    if (timeRange === 'today') {
+      startTime = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+      endTime = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toISOString();
+    } else if (timeRange === 'yesterday') {
+      startTime = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1).toISOString();
+      endTime = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+    } else {
+      res.status(400).json({ error: 'Invalid timeRange' });
+      return;
+    }
+
+    const snapshot = await db.collection('notification_history')
+      .where('timestamp', '>=', startTime)
+      .where('timestamp', '<', endTime)
+      .get();
+      
+    const batch = db.batch();
+    snapshot.docs.forEach(doc => batch.delete(doc.ref));
+    await batch.commit();
+
+    res.json({ success: true, deleted: snapshot.size });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
   }
 });
 

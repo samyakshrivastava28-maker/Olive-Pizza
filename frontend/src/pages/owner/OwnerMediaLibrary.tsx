@@ -17,6 +17,10 @@ export default function OwnerMediaLibrary() {
   const [media, setMedia] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const [activeTab, setActiveTab] = useState<'general' | 'ai'>('general');
+  const [aiImages, setAiImages] = useState<any[]>([]);
+  const [loadingAi, setLoadingAi] = useState(false);
+
   const [searchQuery, setSearchQuery] = useState("");
   const [filterType, setFilterType] = useState("all"); // all, image, video
   const [sortBy, setSortBy] = useState("newest"); // newest, oldest, largest, smallest
@@ -58,6 +62,40 @@ export default function OwnerMediaLibrary() {
     }
   };
 
+  useEffect(() => {
+    if (activeTab === 'ai' && aiImages.length === 0) {
+      const fetchAiImages = async () => {
+        setLoadingAi(true);
+        try {
+          const token = await getCurrentAuthToken();
+          const res = await fetch('/api/media/ai-images', {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          const data = await res.json();
+          if (data.success) {
+            setAiImages(data.images);
+          }
+        } catch (error) {
+          console.error("Failed to fetch AI images", error);
+        }
+        setLoadingAi(false);
+      };
+      fetchAiImages();
+    }
+  }, [activeTab]);
+
+  const deleteAiImage = async (item: any) => {
+    if (!confirm("Are you sure you want to delete this AI image? Warning: If this is actively used in a product, it will break the image link.")) return;
+    if (!user) return;
+    try {
+      const token = await getCurrentAuthToken();
+      await deleteMediaFromCloudinary(item.public_id, token).catch((e: any) => console.error(e));
+      setAiImages(prev => prev.filter(img => img.public_id !== item.public_id));
+    } catch (error) {
+      console.error("Error deleting AI media", error);
+    }
+  };
+
   const filteredAndSortedMedia = useMemo(() => {
     let result = media;
 
@@ -94,6 +132,22 @@ export default function OwnerMediaLibrary() {
     return result;
   }, [media, searchQuery, filterType, sortBy]);
 
+  const filteredAndSortedAiMedia = useMemo(() => {
+    let result = aiImages;
+    if (searchQuery.trim()) {
+      const lowerQuery = searchQuery.toLowerCase();
+      result = result.filter(m => m.public_id?.toLowerCase().includes(lowerQuery));
+    }
+    result = [...result].sort((a, b) => {
+      if (sortBy === "newest") return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      if (sortBy === "oldest") return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      if (sortBy === "largest") return (b.bytes || 0) - (a.bytes || 0);
+      if (sortBy === "smallest") return (a.bytes || 0) - (b.bytes || 0);
+      return 0;
+    });
+    return result;
+  }, [aiImages, searchQuery, sortBy]);
+
   const formatBytes = (bytes: number) => {
     if (!bytes) return "0 B";
     const k = 1024;
@@ -116,7 +170,24 @@ export default function OwnerMediaLibrary() {
         </p>
       </div>
 
-      <div className="bg-[#1E293B] dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-white/10 flex flex-col md:flex-row gap-4 items-center">
+      <div className="flex gap-4 border-b border-white/10 pb-4">
+        <button 
+          onClick={() => setActiveTab('general')} 
+          className={`px-6 py-2 rounded-full font-bold transition-all ${activeTab === 'general' ? 'bg-white text-slate-900' : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white'}`}
+        >
+          General Media
+        </button>
+        <button 
+          onClick={() => setActiveTab('ai')} 
+          className={`px-6 py-2 rounded-full font-bold transition-all flex items-center gap-2 ${activeTab === 'ai' ? 'bg-primary-500 text-white shadow-[0_0_20px_rgba(249,115,22,0.4)]' : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white'}`}
+        >
+          AI Images 🤖
+        </button>
+      </div>
+
+      {activeTab === 'general' ? (
+        <>
+          <div className="bg-[#1E293B] dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-white/10 flex flex-col md:flex-row gap-4 items-center">
         <input
           type="text"
           placeholder="Search by Public ID..."
@@ -206,6 +277,74 @@ export default function OwnerMediaLibrary() {
         <div className="text-center py-12 text-slate-400">
           No media found matching your filters.
         </div>
+      )}
+      </>
+      ) : (
+        <>
+          <div className="bg-[#1E293B] dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-white/10 flex flex-col md:flex-row gap-4 items-center">
+            <input
+              type="text"
+              placeholder="Search AI images by ID..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="flex-1 p-3 rounded-lg border dark:bg-slate-900 dark:border-slate-700 w-full"
+            />
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="p-3 rounded-lg border dark:bg-slate-900 dark:border-slate-700 w-full md:w-48"
+            >
+              <option value="newest">Newest First</option>
+              <option value="oldest">Oldest First</option>
+              <option value="largest">Largest File</option>
+              <option value="smallest">Smallest File</option>
+            </select>
+          </div>
+
+          {loadingAi ? (
+            <div className="p-8 font-bold text-center text-slate-400">Loading AI Images from Cloudinary...</div>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+              {filteredAndSortedAiMedia.map((item) => (
+                <div key={item.public_id} className="bg-[#1E293B] dark:bg-slate-800 rounded-xl overflow-hidden shadow-sm border border-white/10 group flex flex-col">
+                  <div className="aspect-square bg-slate-100 dark:bg-slate-900 relative overflow-hidden flex items-center justify-center">
+                    <img
+                      src={item.secure_url?.replace("/upload/", "/upload/w_300,f_auto,q_auto/")}
+                      loading="lazy"
+                      alt="AI Generated"
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <button
+                        onClick={() => deleteAiImage(item)}
+                        className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg transform scale-90 group-hover:scale-100 transition-transform"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                    <div className="absolute top-2 left-2 px-2 py-0.5 bg-primary-600/90 text-white text-[10px] font-bold rounded uppercase tracking-wider backdrop-blur-sm shadow-md">
+                      AI GENERATED
+                    </div>
+                  </div>
+                  <div className="p-3 flex flex-col justify-between flex-1">
+                    <p className="text-xs font-mono text-slate-400 truncate" title={item.public_id}>
+                      {item.public_id.split('/').pop()}
+                    </p>
+                    <div className="flex justify-between items-end mt-2">
+                      <p className="text-xs font-bold text-slate-400">{formatBytes(item.bytes)}</p>
+                      <p className="text-[10px] text-slate-400">{new Date(item.created_at).toLocaleDateString()}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {filteredAndSortedAiMedia.length === 0 && (
+                <div className="col-span-full text-center py-12 text-slate-400">
+                  No AI images found. Use the Product or Combo builder to generate some!
+                </div>
+              )}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
