@@ -2,8 +2,7 @@ import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
-import { getMessaging } from 'firebase/messaging';
-
+// Dynamic import for messaging to prevent initial heavy load
 const firebaseConfig = {
   apiKey: "AIzaSyAqkcY-WQrW3WoZWRrv8oo7MTAI_nVrLw4",
   authDomain: "olive-pizza-08.firebaseapp.com",
@@ -18,9 +17,12 @@ export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
 
-// Messaging might fail if the browser doesn't support it or if it's run in a restricted environment
-export const messaging = typeof window !== 'undefined' && 'Notification' in window ? getMessaging(app) : null;
-
+// Async getter for messaging
+export const getMessagingInstance = async () => {
+  if (typeof window === 'undefined' || !('Notification' in window)) return null;
+  const { getMessaging } = await import('firebase/messaging');
+  return getMessaging(app);
+};
 export const getCurrentAuthToken = async (): Promise<string> => {
   const firebaseUser = auth.currentUser;
   if (!firebaseUser) {

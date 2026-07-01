@@ -174,85 +174,87 @@ function AppContent() {
       <PushNotificationManager />
       <AnimatePresence mode="wait">
         <ErrorBoundary>
-        <Routes location={location} key={location.pathname}>
-          {/* Public Routes */}
-          <Route element={<MainLayout />}>
-            <Route path="/" element={<Home />} />
-            <Route path="/menu" element={<Menu />} />
-            <Route path="/product/:productId" element={<ProductDetail />} />
-            <Route path="/cart" element={<Cart />} />
-            <Route path="/contact" element={<Contact />} />
-            <Route path="/login" element={<Suspense fallback={<PizzaLoader />}><Login /></Suspense>} />
-            <Route path="/register" element={<Suspense fallback={<PizzaLoader />}><Register /></Suspense>} />
-            <Route path="/forgot-password" element={<Suspense fallback={<PizzaLoader />}><ForgotPassword /></Suspense>} />
-            
-            {/* Legal Pages */}
-            <Route path="/about" element={<About />} />
-            <Route path="/faq" element={<FAQ />} />
-            <Route path="/delete-account" element={<DeleteAccount />} />
-            <Route path="/privacy-policy" element={<PrivacyPolicy />} />
-            <Route path="/terms" element={<Terms />} />
-            <Route path="/delivery-policy" element={<DeliveryPolicy />} />
-            <Route path="/refund-policy" element={<RefundPolicy />} />
-            <Route path="/cookie-policy" element={<CookiePolicy />} />
-            <Route path="/cancellation-policy" element={<CancellationPolicy />} />
-            <Route path="/accessibility" element={<Accessibility />} />
-            
-            {/* Protected Customer Routes */}
-            <Route element={<CustomerGuard />}>
-              <Route path="/checkout" element={<Suspense fallback={<PizzaLoader />}><Checkout /></Suspense>} />
-              <Route element={<Suspense fallback={<PizzaLoader />}><OnboardingGuard /></Suspense>}>
-                <Route path="/dashboard" element={<CustomerDashboard />} />
-                <Route path="/order-tracking/:orderId" element={<OrderTracking />} />
+          <Suspense fallback={<PizzaLoader />}>
+            <Routes location={location} key={location.pathname}>
+              {/* Public Routes */}
+              <Route element={<MainLayout />}>
+                <Route path="/" element={<Home />} />
+                <Route path="/menu" element={<Menu />} />
+                <Route path="/product/:productId" element={<ProductDetail />} />
+                <Route path="/cart" element={<Cart />} />
+                <Route path="/contact" element={<Contact />} />
+                <Route path="/login" element={<Suspense fallback={<PizzaLoader />}><Login /></Suspense>} />
+                <Route path="/register" element={<Suspense fallback={<PizzaLoader />}><Register /></Suspense>} />
+                <Route path="/forgot-password" element={<Suspense fallback={<PizzaLoader />}><ForgotPassword /></Suspense>} />
+                
+                {/* Legal Pages */}
+                <Route path="/about" element={<About />} />
+                <Route path="/faq" element={<FAQ />} />
+                <Route path="/delete-account" element={<DeleteAccount />} />
+                <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+                <Route path="/terms" element={<Terms />} />
+                <Route path="/delivery-policy" element={<DeliveryPolicy />} />
+                <Route path="/refund-policy" element={<RefundPolicy />} />
+                <Route path="/cookie-policy" element={<CookiePolicy />} />
+                <Route path="/cancellation-policy" element={<CancellationPolicy />} />
+                <Route path="/accessibility" element={<Accessibility />} />
+                
+                {/* Protected Customer Routes */}
+                <Route element={<CustomerGuard />}>
+                  <Route path="/checkout" element={<Suspense fallback={<PizzaLoader />}><Checkout /></Suspense>} />
+                  <Route element={<Suspense fallback={<PizzaLoader />}><OnboardingGuard /></Suspense>}>
+                    <Route path="/dashboard" element={<CustomerDashboard />} />
+                    <Route path="/order-tracking/:orderId" element={<OrderTracking />} />
+                  </Route>
+                </Route>
               </Route>
-            </Route>
-          </Route>
-
-          {/* Onboarding Routes (Auth Required) */}
-          <Route element={<AuthGuard />}>
-            <Route path="/onboarding/verify" element={<Suspense fallback={<PizzaLoader />}><VerifyEmail /></Suspense>} />
-            <Route path="/onboarding/phone" element={<Suspense fallback={<PizzaLoader />}><SetupPhone /></Suspense>} />
-            <Route path="/onboarding/location" element={<Suspense fallback={<PizzaLoader />}><SetupLocation /></Suspense>} />
-          </Route>
-
-          {/* Owner Routes */}
-          <Route element={<OwnerGuard />}>
-            <Route path="/owner" element={<OwnerLayout />}>
-              <Route path="dashboard" element={<OwnerDashboard />} />
-              <Route path="menu" element={<OwnerProducts />} />
-              <Route path="products" element={<OwnerProducts />} />
-              <Route path="orders" element={<OwnerOrders />} />
-              <Route path="order-history" element={<OwnerOrderHistory />} />
-              <Route path="analytics" element={<OwnerAnalytics />} />
-              <Route path="partners" element={<DeliveryPartners />} />
-              <Route path="events" element={<OwnerEvents />} />
-              <Route path="reports" element={<OwnerReports />} />
-              <Route path="ads" element={<OwnerAds />} />
-              <Route path="media" element={<OwnerMediaLibrary />} />
-              <Route path="coupons" element={<OwnerCoupons />} />
-              <Route path="settings" element={<OwnerSettings />} />
-              <Route path="security" element={<OwnerSecurity />} />
-              <Route path="customers" element={<OwnerCustomers />} />
-              <Route path="email" element={<OwnerEmailCenter />} />
-              <Route path="slack" element={<OwnerSlackCenter />} />
-              <Route path="special-categories" element={<OwnerSpecialCategories />} />
-              <Route path="homepage" element={<OwnerHomepageManager />} />
-              <Route path="notifications" element={<OwnerNotificationCenter />} />
-            </Route>
-          </Route>
-
-          {/* Delivery Routes */}
-          <Route element={<DeliveryGuard />}>
-            <Route path="/delivery" element={<DeliveryLayout />}>
-              <Route path="dashboard" element={<DeliveryDashboard />} />
-              <Route path="earnings" element={<DeliveryEarnings />} />
-              <Route path="performance" element={<DeliveryPerformance />} />
-              <Route path="profile" element={<DeliveryProfile />} />
-              <Route path="notifications" element={<DeliveryNotificationCenter />} />
-            </Route>
-          </Route>
-        </Routes>
-      </ErrorBoundary>
+    
+              {/* Onboarding Routes (Auth Required) */}
+              <Route element={<AuthGuard />}>
+                <Route path="/onboarding/verify" element={<Suspense fallback={<PizzaLoader />}><VerifyEmail /></Suspense>} />
+                <Route path="/onboarding/phone" element={<Suspense fallback={<PizzaLoader />}><SetupPhone /></Suspense>} />
+                <Route path="/onboarding/location" element={<Suspense fallback={<PizzaLoader />}><SetupLocation /></Suspense>} />
+              </Route>
+    
+              {/* Owner Routes */}
+              <Route element={<OwnerGuard />}>
+                <Route path="/owner" element={<OwnerLayout />}>
+                  <Route path="dashboard" element={<OwnerDashboard />} />
+                  <Route path="menu" element={<OwnerProducts />} />
+                  <Route path="products" element={<OwnerProducts />} />
+                  <Route path="orders" element={<OwnerOrders />} />
+                  <Route path="order-history" element={<OwnerOrderHistory />} />
+                  <Route path="analytics" element={<OwnerAnalytics />} />
+                  <Route path="partners" element={<DeliveryPartners />} />
+                  <Route path="events" element={<OwnerEvents />} />
+                  <Route path="reports" element={<OwnerReports />} />
+                  <Route path="ads" element={<OwnerAds />} />
+                  <Route path="media" element={<OwnerMediaLibrary />} />
+                  <Route path="coupons" element={<OwnerCoupons />} />
+                  <Route path="settings" element={<OwnerSettings />} />
+                  <Route path="security" element={<OwnerSecurity />} />
+                  <Route path="customers" element={<OwnerCustomers />} />
+                  <Route path="email" element={<OwnerEmailCenter />} />
+                  <Route path="slack" element={<OwnerSlackCenter />} />
+                  <Route path="special-categories" element={<OwnerSpecialCategories />} />
+                  <Route path="homepage" element={<OwnerHomepageManager />} />
+                  <Route path="notifications" element={<OwnerNotificationCenter />} />
+                </Route>
+              </Route>
+    
+              {/* Delivery Routes */}
+              <Route element={<DeliveryGuard />}>
+                <Route path="/delivery" element={<DeliveryLayout />}>
+                  <Route path="dashboard" element={<DeliveryDashboard />} />
+                  <Route path="earnings" element={<DeliveryEarnings />} />
+                  <Route path="performance" element={<DeliveryPerformance />} />
+                  <Route path="profile" element={<DeliveryProfile />} />
+                  <Route path="notifications" element={<DeliveryNotificationCenter />} />
+                </Route>
+              </Route>
+            </Routes>
+          </Suspense>
+        </ErrorBoundary>
       </AnimatePresence>
     </>
   );

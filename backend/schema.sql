@@ -89,7 +89,49 @@ CREATE TABLE active_deliveries (
     last_updated TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- =========================================
+-- 6. DEVICE HEARTBEATS
+-- =========================================
+CREATE TABLE device_heartbeats (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    device_name VARCHAR(255),
+    browser VARCHAR(100),
+    platform VARCHAR(100),
+    app_version VARCHAR(50),
+    is_online BOOLEAN DEFAULT TRUE,
+    last_seen TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    notification_ready BOOLEAN DEFAULT TRUE,
+    battery_level DOUBLE PRECISION,
+    connection_quality VARCHAR(50)
+);
 
+-- =========================================
+-- 7. NOTIFICATION QUEUE (Ultra-lightweight)
+-- =========================================
+CREATE TABLE notification_queue (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    target_user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    payload JSONB NOT NULL,
+    status VARCHAR(50) DEFAULT 'queued' CHECK (status IN ('queued', 'sending', 'sent', 'delivered', 'opened', 'action_performed', 'failed')),
+    priority VARCHAR(20) DEFAULT 'normal' CHECK (priority IN ('normal', 'high', 'silent')),
+    retry_count INTEGER DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- =========================================
+-- 8. NOTIFICATION HISTORY (Aggressive pruning)
+-- =========================================
+CREATE TABLE notification_history (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    target_user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    title VARCHAR(255),
+    body TEXT,
+    category VARCHAR(50),
+    status VARCHAR(50) DEFAULT 'delivered',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
 -- =========================================
 -- MOCK DATA (SEEDING)
 -- =========================================

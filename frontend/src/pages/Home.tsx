@@ -14,8 +14,10 @@ import PageTransition from "../components/PageTransition";
 import { useDataStore } from "../lib/dataStore";
 import { useStoreStatus } from "../lib/useStoreStatus";
 import { ChevronRight, ShoppingBag, RefreshCw, Heart } from "lucide-react";
-import Ferrofluid from "../components/ui/Ferrofluid";
-import LocationMap, { OpenInMapsButton } from "../components/ui/LocationMap";
+import { lazy, Suspense } from "react";
+const Ferrofluid = lazy(() => import("../components/ui/Ferrofluid"));
+const LocationMap = lazy(() => import("../components/ui/LocationMap"));
+import { OpenInMapsButton } from "../components/ui/OpenInMapsButton";
 import BannerCarousel from "../components/ui/BannerCarousel";
 import CouponCard from "../components/ui/CouponCard";
 import ComboCard from "../components/ui/ComboCard";
@@ -547,7 +549,9 @@ export default function Home() {
       <main className="w-full pt-16 pb-24 md:pb-32 bg-dark-950 overflow-hidden relative">
         {/* Ferrofluid background — same as Visit Olive Pizza section */}
         <div className="absolute inset-0 pointer-events-none opacity-20 z-0">
-          <Ferrofluid />
+          <Suspense fallback={null}>
+            <Ferrofluid />
+          </Suspense>
         </div>
 
         {/* Dynamic Sections */}
@@ -567,10 +571,12 @@ export default function Home() {
               </p>
               <OpenInMapsButton />
             </div>
-            <LocationMap
-              className="w-full h-80 md:h-[500px] rounded-3xl shadow-2xl border-4 border-dark-800 z-0"
-              showRadius
-            />
+            <Suspense fallback={<div className="w-full h-80 md:h-[500px] rounded-3xl bg-dark-800 animate-pulse border-4 border-dark-800" />}>
+              <LocationMap
+                className="w-full h-80 md:h-[500px] rounded-3xl shadow-2xl border-4 border-dark-800 z-0"
+                showRadius
+              />
+            </Suspense>
           </div>
         </div>
       </main>

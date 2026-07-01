@@ -4,6 +4,10 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import os from 'os';
 import apiApp from './src/app.js';
+import { DataRetentionJob } from './src/jobs/DataRetentionJob.js';
+import './src/services/DataLifecycleService.js';
+import './src/services/notification/NotificationQueueService.js';
+import './src/jobs/MonthlyReportJob.js';
 
 dotenv.config();
 
@@ -42,6 +46,7 @@ import { dynamicHtmlInjector } from './src/middleware/dynamicHtml.js';
 async function setupVite() {
   await initPostgres();
   initScheduler();
+  DataRetentionJob.schedule();
 
   // Initialize Slack Notification Listeners
   FirestoreListener.init();

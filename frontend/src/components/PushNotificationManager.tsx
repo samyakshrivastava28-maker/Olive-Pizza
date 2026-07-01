@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { messaging, db, auth } from '../lib/firebase';
-import { getToken, onMessage } from 'firebase/messaging';
+import { getMessagingInstance, db, auth } from '../lib/firebase';
+import { getToken, onMessage, Messaging } from 'firebase/messaging';
 import { doc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { Bell, X } from 'lucide-react';
@@ -27,42 +27,84 @@ export default function PushNotificationManager() {
     });
 
     let messageUnsub: any = undefined;
-    if (messaging) {
-      messageUnsub = onMessage(messaging, (payload) => {
-        console.log('[PushManager] Foreground message:', payload);
-        
-        // Show in-app toast
-        if (payload.notification?.title) {
-          toast(
-            (t) => (
-              <div onClick={() => toast.dismiss(t.id)} className="cursor-pointer">
-                <b>{payload.notification?.title}</b>
-                <p className="text-sm">{payload.notification?.body}</p>
-              </div>
-            ),
-            { duration: 6000, icon: '🔔' }
-          );
-        }
+    
+    const initMessaging = async () => {
+      const messaging = await getMessagingInstance();
+      if (messaging) {
+        messageUnsub = onMessage(messaging, (payload) => {
+          console.log('[PushManager] Foreground message:', payload);
+          
+          // Show in-app toast
+          if (payload.notification?.title) {
+            toast(
+              (t) => (
+                <div onClick={() => toast.dismiss(t.id)} className="cursor-pointer">
+                  <b>{payload.notification?.title}</b>
+                  <p className="text-sm">{payload.notification?.body}</p>
+                </div>
+              ),
+              { duration: 6000, icon: '🔔' }
+            );
+          }
 
-        // Report Delivered
-        if (payload.data?.notificationId) {
-          fetch('/api/notifications/track', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ notificationId: payload.data.notificationId, stage: 'Delivered' })
-          }).catch(console.error);
-        }
-      });
+          // Report Delivered
+          if (payload.data?.notificationId) {
+            fetch('/api/notifications/track', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ notificationId: payload.data.notificationId, stage: 'Delivered' })
+            }).catch(console.error);
+          }
+        });
+      }
+    };
+    
+    initMessaging();
+
+    // Heartbeat Interval (every 5 minutes)
+    const heartbeatInterval = setInterval(() => {
+      if (userUid) {
+        fetch('/api/heartbeat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+          body: JSON.stringify({
+            deviceName: navigator.userAgent,
+            browser: navigator.userAgent,
+            platform: navigator.platform,
+            appVersion: navigator.appVersion,
+            notificationReady: Notification.permission === 'granted'
+          })
+        }).catch(() => {});
+      }
+    }, 5 * 60 * 1000);
+
+    // Initial heartbeat
+    if (userUid) {
+      setTimeout(() => {
+        fetch('/api/heartbeat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+          body: JSON.stringify({
+            deviceName: navigator.userAgent,
+            browser: navigator.userAgent,
+            platform: navigator.platform,
+            appVersion: navigator.appVersion,
+            notificationReady: Notification.permission === 'granted'
+          })
+        }).catch(() => {});
+      }, 5000);
     }
 
     return () => {
       unsubscribe();
+      clearInterval(heartbeatInterval);
       if (messageUnsub) messageUnsub();
     };
-  }, []);
+  }, [userUid]);
 
   const requestPermissionAndSaveToken = async (uid: string) => {
     try {
+      const messaging = await getMessagingInstance();
       if (!messaging) return; // Browser doesn't support notifications
 
       const permission = await Notification.requestPermission();

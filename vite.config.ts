@@ -16,7 +16,10 @@ export default defineConfig({
           'vendor-leaflet': ['leaflet', 'react-leaflet'],
           'vendor-supabase': ['@supabase/supabase-js'],
           'vendor-ui': ['lucide-react', 'react-hot-toast'],
-          'vendor-state': ['zustand']
+          'vendor-state': ['zustand'],
+          'vendor-three': ['three', '@react-three/fiber', '@react-three/drei'],
+          'vendor-charts': ['chart.js', 'react-chartjs-2'],
+          'vendor-utils': ['date-fns', 'html2canvas', 'jspdf']
         }
       }
     }

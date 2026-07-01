@@ -15,6 +15,8 @@ import trackingRoutes from './routes/tracking.routes.js';
 import slackRoutes from './routes/slack.routes.js';
 import notificationRoutes from './routes/notification.routes.js';
 import authRoutes from './routes/auth.routes.js';
+import heartbeatRoutes from './routes/heartbeat.routes.js';
+import healthRoutes from './routes/health.routes.js';
 import seoRoutes from './routes/seo.routes.js';
 
 const app = express();
@@ -75,6 +77,8 @@ app.use('/tracking', trackingRoutes);
 app.use('/email', emailRoutes);
 app.use('/slack', slackRoutes);
 app.use('/google-drive', googleDriveRoutes);
+app.use('/heartbeat', heartbeatRoutes);
+app.use('/health/metrics', healthRoutes);
 
 // SEO Routes (mounted at root via app in server.ts, but we map them here)
 app.use('/', seoRoutes);

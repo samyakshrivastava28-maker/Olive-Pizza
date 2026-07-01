@@ -1,7 +1,8 @@
 import LegalPageLayout from '../components/layout/LegalPageLayout';
 import { Mail, Phone, MapPin, Clock } from 'lucide-react';
-import LocationMap, { OpenInMapsButton } from '../components/ui/LocationMap';
-
+import { lazy, Suspense } from 'react';
+import { OpenInMapsButton } from '../components/ui/OpenInMapsButton';
+const LocationMap = lazy(() => import('../components/ui/LocationMap'));
 export default function Contact() {
   return (
     <LegalPageLayout
@@ -65,7 +66,9 @@ export default function Contact() {
           </form>
           
           <div className="h-64 rounded-3xl overflow-hidden border border-slate-200 dark:border-slate-700">
-            <LocationMap className="w-full h-full" showRadius={true} />
+            <Suspense fallback={<div className="w-full h-full bg-slate-200 dark:bg-slate-700 animate-pulse" />}>
+              <LocationMap className="w-full h-full" showRadius={true} />
+            </Suspense>
           </div>
         </div>
       </div>

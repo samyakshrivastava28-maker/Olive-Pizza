@@ -1,6 +1,6 @@
 import { adminDb } from '../../config/firebase.js';
 import { FieldValue } from 'firebase-admin/firestore';
-import { messagingProvider } from './FirebaseMessagingProvider.js';
+import { notificationQueue } from './NotificationQueueService.js';
 import { notificationDebugger } from './NotificationDebugger.js';
 
 export class NotificationScheduler {
@@ -81,7 +81,7 @@ export class NotificationScheduler {
   /**
    * Helper to send payload to a specific user by fetching their tokens.
    */
-  public async sendToUser(userId: string, payload: any, category: string = 'general') {
+  public async sendToUser(userId: string, payload: any, category: string = 'general', isHighPriority: boolean = false, isSilent: boolean = false) {
     let notificationId: string | undefined;
     try {
       // Log creation
@@ -89,19 +89,12 @@ export class NotificationScheduler {
         userId,
         type: 'push',
         category,
-        title: payload.notification?.title || 'Notification',
-        body: payload.notification?.body || '',
+        title: isSilent ? 'Silent Sync' : (payload.notification?.title || 'Notification'),
+        body: isSilent ? '' : (payload.notification?.body || ''),
         tokensFound: 0,
       });
 
-      const userDoc = await adminDb.collection('users').doc(userId).get();
-      if (!userDoc.exists) {
-        await notificationDebugger.markFailed(notificationId, 'User not found');
-        return;
-      }
-      
-      const userData = userDoc.data();
-      const tokens: string[] = userData?.fcmTokens || [];
+      const priority = isSilent ? 'silent' : (isHighPriority ? 'high' : 'normal');
       
       const payloadCopy = JSON.parse(JSON.stringify(payload));
       
@@ -110,17 +103,16 @@ export class NotificationScheduler {
         payloadCopy.data = payloadCopy.data || {};
         payloadCopy.data.notificationId = notificationId;
       }
-
-      if (tokens.length > 0) {
-        await notificationDebugger.updateStage(notificationId, 'FCM Tokens Found', { tokensFound: tokens.length });
-        await notificationDebugger.updateStage(notificationId, 'Payload Generated');
-        const response = await messagingProvider.sendMulticast(tokens, payloadCopy, notificationId);
-        await messagingProvider.cleanupTokens(userId, tokens, response);
-      } else {
-        await notificationDebugger.markFailed(notificationId, 'User has no FCM tokens');
+      
+      // Enqueue the notification instead of sending directly
+      const queueId = await notificationQueue.enqueue(userId, payloadCopy, priority);
+      
+      if (notificationId) {
+        await notificationDebugger.updateStage(notificationId, 'Queued', { queueId });
       }
+
     } catch (error: any) {
-      console.error(`[NotificationScheduler] Error sending to user ${userId}:`, error);
+      console.error(`[NotificationScheduler] Error enqueuing for user ${userId}:`, error);
       if (notificationId) {
         await notificationDebugger.markFailed(notificationId, error.message || 'Unknown scheduler error');
       }

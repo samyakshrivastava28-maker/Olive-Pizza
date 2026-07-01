@@ -13,17 +13,23 @@ import { motion } from "framer-motion";
 import { DashboardCardSkeleton } from "../../components/ui/SkeletonLoader";
 
 import StatCard from "../../components/owner/StatCard";
-import DashboardCharts from "../../components/owner/DashboardCharts";
+import LiveDeliveriesMap from '../../components/tracking/LiveDeliveriesMap';
+import { useHeartbeat } from '../../hooks/useHeartbeat';
+import { SystemHealthPanel } from '../../components/owner/SystemHealthPanel';
 import LiveOrdersTable from "../../components/owner/LiveOrdersTable";
 import ActivityFeed from "../../components/owner/ActivityFeed";
 import SystemStatusPanel from "../../components/owner/SystemStatusPanel";
 import QuickActions from "../../components/owner/QuickActions";
-import OwnerLiveMap from "../../components/owner/OwnerLiveMap";
-import BusinessIntelligence from "../../components/owner/BusinessIntelligence";
 import { GlassCard } from "../../components/ui/glass/GlassSystem";
+import { lazy, Suspense } from 'react';
+
+const DashboardCharts = lazy(() => import("../../components/owner/DashboardCharts"));
+const OwnerLiveMap = lazy(() => import("../../components/owner/OwnerLiveMap"));
+const BusinessIntelligence = lazy(() => import("../../components/owner/BusinessIntelligence"));
 
 
 export default function OwnerDashboard() {
+  useHeartbeat();
   const [loading, setLoading] = useState(true);
   const [metrics, setMetrics] = useState<any>({
     todayRevenue: 0,
@@ -289,17 +295,28 @@ export default function OwnerDashboard() {
         />
       </div>
 
+      {/* System Health Panel */}
+      <div className="w-full">
+        <SystemHealthPanel />
+      </div>
+
       {/* 5. Charts */}
       <div className="w-full overflow-hidden">
-        <DashboardCharts ordersData={chartOrders} productsData={[]} />
+        <Suspense fallback={<DashboardCardSkeleton />}>
+          <DashboardCharts ordersData={chartOrders} productsData={[]} />
+        </Suspense>
       </div>
 
       {/* Business Intelligence & Delivery Performance */}
-      <BusinessIntelligence ordersData={chartOrders} deliveryPartners={deliveryPartners} />
+      <Suspense fallback={<DashboardCardSkeleton />}>
+        <BusinessIntelligence ordersData={chartOrders} deliveryPartners={deliveryPartners} />
+      </Suspense>
 
       {/* Live Map */}
       <div className="w-full h-[400px] md:h-[500px] rounded-3xl overflow-hidden border border-dark-800">
-        <OwnerLiveMap />
+        <Suspense fallback={<div className="w-full h-full bg-dark-800 animate-pulse" />}>
+          <OwnerLiveMap />
+        </Suspense>
       </div>
 
       {/* 6. Live Feed & Control Center */}
