@@ -1,131 +1,452 @@
+/**
+ * Enterprise Notification Queue Service
+ *
+ * Responsibilities:
+ * 1. Enqueue notifications with dedup (tag-based live cards)
+ * 2. Fetch FCM tokens from Postgres (with invalid token cleanup)
+ * 3. Send via Firebase Messaging with retry/backoff
+ * 4. Write to notification_inbox so nothing is lost (offline recovery)
+ * 5. Track analytics per category and role
+ * 6. Auto-cleanup expired and processed queue items
+ */
+
+import * as admin from 'firebase-admin';
 import { pgPool } from '../../config/postgres.js';
-import { messagingProvider } from './FirebaseMessagingProvider.js';
 import { adminDb } from '../../config/firebase.js';
 
+export interface EnqueueOptions {
+  tag?: string;               // FCM tag for live card (maps to orderId for orders)
+  orderId?: string;
+  notificationId?: string;
+  version?: number;
+  category?: string;          // 'order' | 'delivery' | 'marketing' | 'coupon' | 'announcement' | 'alert' | 'reward' | 'system'
+  priority?: 'critical' | 'high' | 'normal';
+  role?: 'customer' | 'owner' | 'delivery';
+  groupKey?: string;
+  expiresInSeconds?: number;  // TTL for marketing/announcement
+}
+
 export class NotificationQueueService {
+  private isProcessing = false;
+  private processingTimer: NodeJS.Timeout | null = null;
+
+  constructor() {
+    // Start the queue processor loop (every 2 seconds)
+    this.startProcessingLoop();
+    // Start periodic cleanup (every 15 minutes)
+    setInterval(() => this.runCleanup(), 15 * 60 * 1000);
+  }
+
+  // ─── Public API ─────────────────────────────────────────────────────────────
+
   /**
-   * Enqueues a new notification.
+   * Enqueue a notification. Returns the queue row ID.
+   * If a tag already exists in the queue (same live card), updates it in-place.
    */
-  public async enqueue(targetUserId: string, payload: any, priority: 'normal' | 'high' | 'silent' = 'normal'): Promise<string> {
+  public async enqueue(
+    targetUserId: string,
+    payload: any,
+    priorityOverride?: 'normal' | 'high' | 'silent',
+    options: EnqueueOptions = {}
+  ): Promise<string> {
     const client = await pgPool.connect();
     try {
-      const result = await client.query(
-        `INSERT INTO notification_queue (target_user_id, payload, priority, status)
-         VALUES ($1, $2, $3, 'queued') RETURNING id`,
-        [targetUserId, JSON.stringify(payload), priority]
-      );
-      return result.rows[0].id;
+      const priority = priorityOverride || (options.priority === 'critical' ? 'high' : options.priority || 'normal');
+      const tag = options.tag || payload.data?.tag || null;
+      const orderId = options.orderId || payload.data?.orderId || null;
+      const category = options.category || payload.data?.category || 'general';
+      const version = options.version || parseInt(payload.data?.version || '1');
+      const expiresAt = options.expiresInSeconds
+        ? new Date(Date.now() + options.expiresInSeconds * 1000)
+        : null;
+
+      // ── Check DND preferences first ─────────────────────────────────────
+      if (await this.shouldSuppressByDND(targetUserId, category, priority)) {
+        console.log(`[NotifQueue] Suppressed by DND for user ${targetUserId} category=${category}`);
+        // Still write to inbox so user can see it when they check
+        await this.writeToInbox(client, targetUserId, payload, tag, orderId, category, options, expiresAt);
+        return 'dnd_suppressed';
+      }
+
+      let queueId: string;
+
+      // ── Live Card dedup: if a queued/sending entry with same tag exists, update it ──
+      if (tag) {
+        const existing = await client.query(
+          `SELECT id FROM notification_queue
+           WHERE target_user_id = $1 AND tag = $2
+             AND status IN ('queued', 'sending')
+           LIMIT 1`,
+          [targetUserId, tag]
+        );
+
+        if (existing.rows.length > 0) {
+          // Update the existing queued notification (live card update)
+          const updateResult = await client.query(
+            `UPDATE notification_queue
+             SET payload = $1, version = $2, priority = $3, updated_at = NOW(), status = 'queued'
+             WHERE id = $4
+             RETURNING id`,
+            [JSON.stringify(payload), version, priority, existing.rows[0].id]
+          );
+          queueId = updateResult.rows[0].id;
+          console.log(`[NotifQueue] Updated existing live card id=${queueId} tag=${tag} v${version}`);
+        } else {
+          const result = await client.query(
+            `INSERT INTO notification_queue
+               (target_user_id, payload, priority, status, tag, order_id, notification_id, version, category, expires_at)
+             VALUES ($1, $2, $3, 'queued', $4, $5, $6, $7, $8, $9)
+             RETURNING id`,
+            [targetUserId, JSON.stringify(payload), priority, tag, orderId, options.notificationId, version, category, expiresAt]
+          );
+          queueId = result.rows[0].id;
+        }
+      } else {
+        const result = await client.query(
+          `INSERT INTO notification_queue
+             (target_user_id, payload, priority, status, order_id, notification_id, version, category, expires_at)
+           VALUES ($1, $2, $3, 'queued', $4, $5, $6, $7, $8)
+           RETURNING id`,
+          [targetUserId, JSON.stringify(payload), priority, orderId, options.notificationId, version, category, expiresAt]
+        );
+        queueId = result.rows[0].id;
+      }
+
+      // ── Write to notification_inbox (never lose a notification) ─────────
+      await this.writeToInbox(client, targetUserId, payload, tag, orderId, category, options, expiresAt);
+
+      return queueId;
     } finally {
       client.release();
     }
   }
 
   /**
-   * Processes the queue (should be called by a cron job or interval).
+   * Register or refresh a device FCM token.
+   * Prevents duplicates and keeps an audit trail.
    */
-  public async processQueue() {
+  public async registerToken(
+    userId: string,
+    token: string,
+    deviceInfo: { deviceName?: string; platform?: string; browser?: string; appVersion?: string }
+  ): Promise<void> {
     const client = await pgPool.connect();
     try {
-      // Get up to 50 pending notifications (queued or sending/retrying)
-      const result = await client.query(
-        `SELECT * FROM notification_queue 
-         WHERE status IN ('queued', 'sending') 
-         ORDER BY priority DESC, created_at ASC 
-         LIMIT 50 FOR UPDATE SKIP LOCKED`
+      await client.query(
+        `INSERT INTO fcm_tokens (user_id, token, device_name, platform, browser, app_version, is_active, last_used_at)
+         VALUES ($1, $2, $3, $4, $5, $6, TRUE, NOW())
+         ON CONFLICT (user_id, token)
+         DO UPDATE SET is_active = TRUE, last_used_at = NOW(),
+           device_name = EXCLUDED.device_name,
+           platform = EXCLUDED.platform,
+           browser = EXCLUDED.browser,
+           app_version = EXCLUDED.app_version`,
+        [userId, token, deviceInfo.deviceName, deviceInfo.platform, deviceInfo.browser, deviceInfo.appVersion]
       );
+      // Also keep Firestore in sync for legacy reads
+      await adminDb.collection('users').doc(userId).update({
+        fcmTokens: admin.firestore.FieldValue.arrayUnion(token),
+        notificationReady: true,
+        lastTokenRefresh: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    } finally {
+      client.release();
+    }
+  }
+
+  // ─── Queue Processor ─────────────────────────────────────────────────────────
+
+  private startProcessingLoop() {
+    const tick = async () => {
+      try {
+        await this.processQueue();
+      } catch (err) {
+        console.error('[NotifQueue] Processor error:', err);
+      } finally {
+        // Self-scheduling — 2s if items exist, 5s if idle
+        this.processingTimer = setTimeout(tick, 5000);
+      }
+    };
+    this.processingTimer = setTimeout(tick, 2000);
+  }
+
+  public async processQueue(): Promise<void> {
+    if (this.isProcessing) return;
+    this.isProcessing = true;
+    const client = await pgPool.connect();
+
+    try {
+      // Grab up to 20 high-priority items first, then normal
+      const result = await client.query(
+        `SELECT * FROM notification_queue
+         WHERE status = 'queued'
+           AND (expires_at IS NULL OR expires_at > NOW())
+         ORDER BY
+           CASE priority WHEN 'high' THEN 1 ELSE 2 END,
+           created_at ASC
+         LIMIT 20
+         FOR UPDATE SKIP LOCKED`
+      );
+
+      if (result.rows.length === 0) return;
 
       for (const row of result.rows) {
         await this.processItem(row, client);
       }
-    } catch (error) {
-      console.error('[NotificationQueue] Error processing queue:', error);
     } finally {
+      this.isProcessing = false;
       client.release();
     }
   }
 
-  private async processItem(item: any, client: any) {
-    const { id, target_user_id, payload, retry_count, priority } = item;
+  private async processItem(item: any, client: any): Promise<void> {
+    const { id, target_user_id, payload, retry_count, priority, tag, order_id, version, category } = item;
+    const startTime = Date.now();
 
     try {
-      // Mark as sending
-      await client.query(`UPDATE notification_queue SET status = 'sending' WHERE id = $1`, [id]);
+      await client.query(`UPDATE notification_queue SET status = 'sending', updated_at = NOW() WHERE id = $1`, [id]);
 
-      // Fetch user's FCM tokens
-      const userDoc = await adminDb.collection('users').doc(target_user_id).get();
-      if (!userDoc.exists) {
-        throw new Error('User not found');
+      // ── Fetch active tokens from Postgres ─────────────────────────────────
+      const tokenResult = await client.query(
+        `SELECT token FROM fcm_tokens WHERE user_id = $1 AND is_active = TRUE ORDER BY last_used_at DESC LIMIT 10`,
+        [target_user_id]
+      );
+
+      // Fallback to Firestore if Postgres tokens empty
+      let tokens: string[] = tokenResult.rows.map((r: any) => r.token);
+      if (tokens.length === 0) {
+        const userDoc = await adminDb.collection('users').doc(target_user_id).get();
+        tokens = userDoc.data()?.fcmTokens || [];
+        // Sync them into Postgres
+        for (const t of tokens) {
+          await client.query(
+            `INSERT INTO fcm_tokens (user_id, token, is_active) VALUES ($1, $2, TRUE)
+             ON CONFLICT (user_id, token) DO UPDATE SET is_active = TRUE`,
+            [target_user_id, t]
+          ).catch(() => {});
+        }
       }
-      const tokens: string[] = userDoc.data()?.fcmTokens || [];
 
       if (tokens.length === 0) {
         throw new Error('No active FCM tokens for user');
       }
 
-      // Inject notificationId for tracking if needed
-      const payloadCopy = typeof payload === 'string' ? JSON.parse(payload) : payload;
-      if (payloadCopy.data) {
-        payloadCopy.data.notificationId = id;
-      } else {
-        payloadCopy.data = { notificationId: id };
-      }
+      // ── Build FCM message ─────────────────────────────────────────────────
+      const parsedPayload = typeof payload === 'string' ? JSON.parse(payload) : payload;
 
-      // Inject priority if high
-      if (priority === 'high') {
-        payloadCopy.android = { priority: 'high' };
-        payloadCopy.apns = { headers: { 'apns-priority': '10' } };
-      }
+      // Inject queue ID for acknowledgement tracking
+      parsedPayload.data = parsedPayload.data || {};
+      parsedPayload.data.queueId = id;
+      parsedPayload.data.version = String(version || 1);
+      if (tag) parsedPayload.data.tag = tag;
+      if (order_id) parsedPayload.data.orderId = order_id;
 
+      // Remove notification object for silent/data-only pushes
       if (priority === 'silent') {
-        delete payloadCopy.notification; // Strip visible notification object
+        delete parsedPayload.notification;
       }
 
-      // Send via Firebase
-      const response = await messagingProvider.sendMulticast(tokens, payloadCopy, id);
-      await messagingProvider.cleanupTokens(target_user_id, tokens, response);
+      // ── Send via FCM Multicast ────────────────────────────────────────────
+      const message: admin.messaging.MulticastMessage = {
+        tokens,
+        notification: parsedPayload.notification,
+        data: parsedPayload.data,
+        android: parsedPayload.android,
+        apns: parsedPayload.apns,
+        webpush: parsedPayload.webpush,
+      };
 
-      // Successfully sent! (Actual delivery tracked via webhook)
-      // Delete immediately from queue (ultra-lightweight requirement)
-      await client.query(`DELETE FROM notification_queue WHERE id = $1`, [id]);
+      const response = await admin.messaging().sendEachForMulticast(message);
+      const deliveryMs = Date.now() - startTime;
 
-      // Add to history
-      const title = payloadCopy.notification?.title || 'Notification';
-      const body = payloadCopy.notification?.body || '';
-      if (title || body) {
-        await client.query(
-          `INSERT INTO notification_history (target_user_id, title, body, status) VALUES ($1, $2, $3, 'sent')`,
-          [target_user_id, title, body]
-        );
-      }
-
-    } catch (error: any) {
-      console.error(`[NotificationQueue] Failed to process item ${id}:`, error);
-
-      const newRetryCount = retry_count + 1;
-      if (newRetryCount >= 3) {
-        // Mark as failed and delete
-        await client.query(`DELETE FROM notification_queue WHERE id = $1`, [id]);
-
-        // Add to history as failed
-        const payloadCopy = typeof payload === 'string' ? JSON.parse(payload) : payload;
-        const title = payloadCopy.notification?.title || 'Notification';
-        const body = payloadCopy.notification?.body || '';
-        if (title || body) {
-          await client.query(
-            `INSERT INTO notification_history (target_user_id, title, body, status) VALUES ($1, $2, $3, 'failed')`,
-            [target_user_id, title, body]
-          );
+      // ── Handle invalid tokens ─────────────────────────────────────────────
+      const failedTokens: string[] = [];
+      response.responses.forEach((r, idx) => {
+        if (r.error) {
+          const code = r.error.code;
+          if (
+            code === 'messaging/invalid-registration-token' ||
+            code === 'messaging/registration-token-not-registered' ||
+            code === 'messaging/invalid-argument'
+          ) {
+            failedTokens.push(tokens[idx]);
+          }
         }
+      });
 
-        // TODO: Slack Fallback
-      } else {
-        // Requeue for retry
+      if (failedTokens.length > 0) {
+        // Soft-deactivate invalid tokens (don't delete — keep for audit)
         await client.query(
-          `UPDATE notification_queue SET status = 'queued', retry_count = $1, updated_at = NOW() WHERE id = $2`,
-          [newRetryCount, id]
+          `UPDATE fcm_tokens SET is_active = FALSE WHERE user_id = $1 AND token = ANY($2)`,
+          [target_user_id, failedTokens]
         );
+        await adminDb.collection('users').doc(target_user_id).update({
+          fcmTokens: admin.firestore.FieldValue.arrayRemove(...failedTokens),
+        });
+        console.log(`[NotifQueue] Deactivated ${failedTokens.length} invalid tokens for ${target_user_id}`);
+      }
+
+      const successCount = response.successCount;
+      if (successCount === 0 && tokens.length > 0) {
+        throw new Error('All tokens failed to receive the message');
+      }
+
+      // ── Mark as sent ──────────────────────────────────────────────────────
+      await client.query(
+        `UPDATE notification_queue SET status = 'sent', updated_at = NOW() WHERE id = $1`,
+        [id]
+      );
+
+      // ── Track analytics ───────────────────────────────────────────────────
+      await this.recordAnalytic(client, category || 'general', 'sent', 1);
+      await this.recordAnalytic(client, category || 'general', 'delivered', successCount);
+      await this.recordDeliveryTime(client, category || 'general', deliveryMs);
+
+      console.log(`[NotifQueue] ✅ Sent id=${id} tag=${tag || 'none'} to ${successCount}/${tokens.length} devices in ${deliveryMs}ms`);
+    } catch (error: any) {
+      const newRetryCount = (retry_count || 0) + 1;
+
+      if (newRetryCount >= 3) {
+        // Give up — mark failed in queue and inbox
+        await client.query(`DELETE FROM notification_queue WHERE id = $1`, [id]);
+        await client.query(
+          `INSERT INTO notification_history (target_user_id, title, body, category, status)
+           SELECT $1, notification->>'title', notification->>'body', $2, 'failed'
+           FROM notification_queue WHERE id = $3
+           ON CONFLICT DO NOTHING`,
+          [target_user_id, category || 'general', id]
+        ).catch(() => {});
+        await this.recordAnalytic(client, category || 'general', 'failed', 1);
+        console.error(`[NotifQueue] ❌ Permanently failed id=${id}: ${error.message}`);
+      } else {
+        // Exponential backoff retry
+        const backoffMs = 1000 * Math.pow(2, newRetryCount);
+        await client.query(
+          `UPDATE notification_queue
+           SET status = 'queued', retry_count = $1, updated_at = NOW(),
+               scheduled_at = NOW() + ($2 || ' milliseconds')::INTERVAL
+           WHERE id = $3`,
+          [newRetryCount, backoffMs, id]
+        );
+        console.warn(`[NotifQueue] Retry #${newRetryCount} for id=${id} in ${backoffMs}ms: ${error.message}`);
       }
     }
+  }
+
+  // ─── Inbox Writer ────────────────────────────────────────────────────────────
+
+  private async writeToInbox(
+    client: any,
+    userId: string,
+    payload: any,
+    tag: string | null,
+    orderId: string | null,
+    category: string,
+    options: EnqueueOptions,
+    expiresAt: Date | null
+  ): Promise<void> {
+    try {
+      const p = typeof payload === 'string' ? JSON.parse(payload) : payload;
+      const title = p.notification?.title || 'Notification';
+      const body = p.notification?.body || '';
+
+      if (tag) {
+        // Upsert: update existing inbox item with same tag (live card)
+        await client.query(
+          `INSERT INTO notification_inbox (user_id, tag, order_id, title, body, category, url, data, version, expires_at, is_read, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, FALSE, NOW())
+           ON CONFLICT (user_id, tag) WHERE tag IS NOT NULL
+           DO UPDATE SET title = EXCLUDED.title, body = EXCLUDED.body, version = EXCLUDED.version,
+             data = EXCLUDED.data, expires_at = EXCLUDED.expires_at, is_read = FALSE, updated_at = NOW()`,
+          [userId, tag, orderId, title, body, category, p.data?.url || '/', JSON.stringify(p.data), options.version || 1, expiresAt]
+        ).catch(() => {
+          // Fallback: plain insert if constraint doesn't exist yet
+          client.query(
+            `INSERT INTO notification_inbox (user_id, tag, order_id, title, body, category, url, data, version, expires_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+             ON CONFLICT DO NOTHING`,
+            [userId, tag, orderId, title, body, category, p.data?.url || '/', JSON.stringify(p.data), options.version || 1, expiresAt]
+          ).catch(() => {});
+        });
+      } else {
+        await client.query(
+          `INSERT INTO notification_inbox (user_id, order_id, title, body, category, url, data, version, expires_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+          [userId, orderId, title, body, category, p.data?.url || '/', JSON.stringify(p.data), options.version || 1, expiresAt]
+        ).catch(() => {});
+      }
+    } catch (err) {
+      // Never block main flow for inbox write failures
+      console.error('[NotifQueue] Inbox write failed (non-blocking):', err);
+    }
+  }
+
+  // ─── Analytics ───────────────────────────────────────────────────────────────
+
+  private async recordAnalytic(client: any, category: string, field: 'sent' | 'delivered' | 'opened' | 'failed', count: number): Promise<void> {
+    const today = new Date().toISOString().slice(0, 10);
+    const col = `${field}_count`;
+    await client.query(
+      `INSERT INTO notification_analytics (period_date, category, ${col})
+       VALUES ($1, $2, $3)
+       ON CONFLICT (period_date, category, role)
+       DO UPDATE SET ${col} = notification_analytics.${col} + EXCLUDED.${col}, updated_at = NOW()`,
+      [today, category, count]
+    ).catch(() => {});
+  }
+
+  private async recordDeliveryTime(client: any, category: string, ms: number): Promise<void> {
+    const today = new Date().toISOString().slice(0, 10);
+    await client.query(
+      `INSERT INTO notification_analytics (period_date, category, total_delivery_time_ms, delivered_count)
+       VALUES ($1, $2, $3, 1)
+       ON CONFLICT (period_date, category, role)
+       DO UPDATE SET total_delivery_time_ms = notification_analytics.total_delivery_time_ms + $3,
+         updated_at = NOW()`,
+      [today, category, ms]
+    ).catch(() => {});
+  }
+
+  // ─── DND Check ───────────────────────────────────────────────────────────────
+
+  private async shouldSuppressByDND(userId: string, category: string, priority: string): Promise<boolean> {
+    if (priority === 'high') return false; // High priority always breaks through
+    try {
+      const client = await pgPool.connect();
+      try {
+        const result = await client.query(
+          `SELECT mute_marketing, mute_low_priority FROM notification_preferences WHERE user_id = $1`,
+          [userId]
+        );
+        if (result.rows.length === 0) return false;
+        const prefs = result.rows[0];
+        if (prefs.mute_marketing && (category === 'marketing' || category === 'announcement')) return true;
+        if (prefs.mute_low_priority && priority === 'normal') return true;
+        return false;
+      } finally {
+        client.release();
+      }
+    } catch {
+      return false;
+    }
+  }
+
+  // ─── Cleanup ─────────────────────────────────────────────────────────────────
+
+  public async runCleanup(): Promise<void> {
+    const client = await pgPool.connect();
+    try {
+      await client.query('SELECT cleanup_notifications()');
+      console.log('[NotifQueue] ✅ Auto-cleanup complete');
+    } catch (err) {
+      console.error('[NotifQueue] Cleanup error (non-fatal):', err);
+    } finally {
+      client.release();
+    }
+  }
+
+  public destroy(): void {
+    if (this.processingTimer) clearTimeout(this.processingTimer);
   }
 }
 

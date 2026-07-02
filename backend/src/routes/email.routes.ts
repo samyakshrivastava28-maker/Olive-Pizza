@@ -95,7 +95,7 @@ router.post('/transactional', async (req, res) => {
     const ownerEmail = process.env.OWNER_EMAIL || 'webhub2811@gmail.com';
     
     if (event === 'REGISTER') {
-      // Welcome Email to Customer
+      // Welcome Email to Customer (kept — only automatic email for customers)
       await queueEmail(
         data.email,
         'Welcome to Olive Pizza! 🍕',
@@ -109,94 +109,14 @@ router.post('/transactional', async (req, res) => {
         `),
         'transactional'
       );
-
-      // Notification to Owner
-      await queueEmail(
-        ownerEmail,
-        '🔔 New User Registration',
-        wrapper(`
-          <h3>New Customer Registered</h3>
-          <p><strong>Name:</strong> ${data.name}</p>
-          <p><strong>Email:</strong> ${data.email}</p>
-          <p><strong>Phone:</strong> ${data.phone}</p>
-        `),
-        'transactional'
-      );
-    }
-    
-    else if (event === 'ORDER_PLACED') {
-      const orderHtml = `
-        <h3>Order #${data.orderId.slice(-6).toUpperCase()}</h3>
-        <p>Your order has been successfully placed and is pending restaurant confirmation.</p>
-        <p><strong>Total:</strong> ₹${data.totalAmount}</p>
-        <p><strong>Delivery Method:</strong> ${data.deliveryType}</p>
-      `;
-
-      // To Customer
-      if (data.customerEmail) {
-        await queueEmail(data.customerEmail, 'Order Received - Olive Pizza', wrapper(orderHtml), 'transactional');
-      }
-
-      // To Owner
-      await queueEmail(
-        ownerEmail,
-        `🔔 New Order Placed (#${data.orderId.slice(-6).toUpperCase()})`,
-        wrapper(`
-          <h3>New Order Alert</h3>
-          <p><strong>Customer:</strong> ${data.customerName}</p>
-          <p><strong>Total:</strong> ₹${data.totalAmount}</p>
-          <p><a href="https://olivepizza.app/owner/dashboard">View in Dashboard</a></p>
-        `),
-        'transactional'
-      );
     }
 
-    else if (event === 'ORDER_STATUS_CHANGED') {
-      if (!data.customerEmail) return res.json({ success: true, message: 'No customer email provided' });
-
-      let subject = '';
-      let content = '';
-
-      if (data.status === 'preparing') {
-        subject = 'Your Pizza is in the Oven! 🔥';
-        content = `<h3>Good news!</h3><p>Your order #${data.orderId.slice(-6).toUpperCase()} is now being prepared by our chefs.</p>`;
-      } else if (data.status === 'out_for_delivery') {
-        subject = 'Your Pizza is Out for Delivery! 🛵';
-        content = `
-          <h3>It's on the way!</h3>
-          <p>Your order is out for delivery. Our partner will arrive soon.</p>
-          <div style="text-align: center; margin: 30px 0;">
-            <a href="https://olivepizza.app/tracking/${data.orderId}" style="background-color: #f97316; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold;">Track Live</a>
-          </div>
-        `;
-      } else if (data.status === 'delivered') {
-        subject = 'Order Delivered! 🎉';
-        content = `
-          <h3>Thank you for ordering!</h3>
-          <p>Your order #${data.orderId.slice(-6).toUpperCase()} has been delivered.</p>
-          <p>We hope you enjoy your meal. Please leave us a rating!</p>
-        `;
-        // Notification to Owner
-        await queueEmail(
-          ownerEmail,
-          `✅ Delivery Completed (#${data.orderId.slice(-6).toUpperCase()})`,
-          wrapper(`<p>Order #${data.orderId.slice(-6).toUpperCase()} was successfully delivered to ${data.customerName || 'Customer'}.</p>`),
-          'transactional'
-        );
-      } else if (data.status === 'cancelled') {
-        subject = 'Order Cancelled';
-        content = `<h3>Order Update</h3><p>Your order #${data.orderId.slice(-6).toUpperCase()} has been cancelled. If you have any questions, please contact us.</p>`;
-        
-        // Notify owner too
-        await queueEmail(ownerEmail, `⚠️ Order Cancelled (#${data.orderId.slice(-6).toUpperCase()})`, wrapper(content), 'transactional');
-      }
-
-      if (subject && content) {
-        await queueEmail(data.customerEmail, subject, wrapper(content), 'transactional');
-      }
-    }
+    // ORDER_PLACED and ORDER_STATUS_CHANGED emails have been removed.
+    // All order event communications are now handled by FCM Push Notifications.
+    // See: backend/src/routes/notification.routes.ts
 
     res.json({ success: true });
+
   } catch (error) {
     console.error('Trigger Email Error:', error);
     res.status(500).json({ error: 'Failed to process trigger' });

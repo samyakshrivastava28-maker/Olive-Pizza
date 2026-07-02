@@ -1,309 +1,594 @@
+/**
+ * Enterprise Notification Routes
+ *
+ * Endpoints:
+ * POST /notifications/action         — Service Worker quick actions (order state machine)
+ * POST /notifications/send-custom    — Owner broadcast push notifications
+ * POST /notifications/track          — Acknowledge delivered/opened/clicked
+ * POST /notifications/token          — Register/refresh FCM token
+ * GET  /notifications/inbox          — Fetch user's notification inbox
+ * PATCH /notifications/inbox/:id     — Mark inbox item read / archived
+ * GET  /notifications/analytics      — Owner notification analytics
+ * POST /notifications/preferences    — Update DND preferences
+ * GET  /notifications/preferences    — Get DND preferences
+ * POST /notifications/retry-failed   — Owner: retry failed notifications
+ * POST /notifications/cleanup        — Owner: trigger manual cleanup
+ */
+
 import { Router, Request, Response } from 'express';
 import { adminDb as db } from '../config/firebase.js';
 import * as admin from 'firebase-admin';
+import { pgPool } from '../config/postgres.js';
 import { notificationScheduler } from '../services/notification/NotificationScheduler.js';
-import { NotificationTemplates } from '../services/notification/NotificationTemplates.js';
-import { notificationDebugger } from '../services/notification/NotificationDebugger.js';
-import { verifyToken } from '../middleware/auth.middleware.js';
+import { OwnerTemplates, CustomerTemplates, DeliveryTemplates, MarketingTemplates, type OrderStatus } from '../services/notification/NotificationTemplates.js';
+import { notificationQueue } from '../services/notification/NotificationQueueService.js';
+import { verifyToken, AuthRequest } from '../middleware/auth.middleware.js';
 
 const router = Router();
 
-/**
- * Handle notification action button clicks from Service Worker
- */
-router.post('/action', verifyToken, async (req: Request, res: Response): Promise<void> => {
+// ─── Helper: Resolve owner UIDs ───────────────────────────────────────────────
+async function getOwnerUserIds(): Promise<string[]> {
+  const snapshot = await db.collection('users').where('role', '==', 'owner').get();
+  return snapshot.docs.map(d => d.id);
+}
+
+// ─── Helper: Resolve user's Postgres UUID from Firebase UID ───────────────────
+async function getPostgresUserId(firebaseUid: string): Promise<string | null> {
+  const client = await pgPool.connect();
   try {
-    const { orderId, action, currentStage } = req.body;
-    const userId = (req as any).user.uid;
+    const result = await client.query('SELECT id FROM users WHERE firebase_uid = $1', [firebaseUid]);
+    return result.rows[0]?.id || null;
+  } finally {
+    client.release();
+  }
+}
 
-    if (!orderId || !action || !currentStage) {
-      res.status(400).json({ error: 'Missing required fields' });
-      return;
-    }
+// ─── Helper: Acquire order lock (prevent race conditions) ─────────────────────
+async function acquireOrderLock(orderId: string, userId: string, action: string): Promise<boolean> {
+  const client = await pgPool.connect();
+  try {
+    const result = await client.query(
+      `INSERT INTO order_locks (order_id, locked_by, action, locked_at)
+       VALUES ($1, $2, $3, NOW())
+       ON CONFLICT (order_id) DO NOTHING
+       RETURNING order_id`,
+      [orderId, userId, action]
+    );
+    return result.rows.length > 0;
+  } catch {
+    return false;
+  } finally {
+    client.release();
+  }
+}
 
-    const orderRef = db.collection('orders').doc(orderId);
-    const orderDoc = await orderRef.get();
+async function releaseOrderLock(orderId: string): Promise<void> {
+  const client = await pgPool.connect();
+  try {
+    await client.query('DELETE FROM order_locks WHERE order_id = $1', [orderId]);
+  } finally {
+    client.release();
+  }
+}
 
-    if (!orderDoc.exists) {
+// =============================================================================
+// POST /notifications/action
+// Service Worker quick actions — handles Accept, Reject, Start Cooking, etc.
+// =============================================================================
+router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Promise<void> => {
+  const { orderId, action, currentStage, partnerId } = req.body;
+  const userId = req.user!.uid;
+
+  if (!orderId || !action) {
+    res.status(400).json({ error: 'Missing orderId or action' });
+    return;
+  }
+
+  // ── Security: Verify user exists and has permission ──
+  const userDoc = await db.collection('users').doc(userId).get();
+  if (!userDoc.exists) {
+    res.status(403).json({ error: 'Unauthorized' });
+    return;
+  }
+  const userRole = userDoc.data()?.role as string;
+
+  // ── Order Locking: prevent race conditions ──────────────────────────────
+  const lockAcquired = await acquireOrderLock(orderId, userId, action);
+  if (!lockAcquired) {
+    res.status(409).json({ error: 'Order is currently being processed by another request' });
+    return;
+  }
+
+  const pgClient = await pgPool.connect();
+  try {
+    // ── Fetch order from Postgres (source of truth) ─────────────────────
+    await pgClient.query('BEGIN');
+
+    const orderResult = await pgClient.query(
+      'SELECT * FROM orders WHERE id = $1 FOR UPDATE',
+      [orderId]
+    );
+    if (orderResult.rows.length === 0) {
+      await pgClient.query('ROLLBACK');
       res.status(404).json({ error: 'Order not found' });
       return;
     }
 
-    const orderData = orderDoc.data()!;
-    let newStatus = orderData.status;
+    const order = orderResult.rows[0];
+    const customerFirebaseUid = await getCustomerFirebaseUid(pgClient, order.user_id);
+    const shortId = orderId.slice(-6).toUpperCase();
+    let newStatus = order.status;
+    let responseData: any = {};
 
-    console.log(`[NotificationAction] User ${userId} triggered ${action} on order ${orderId} from stage ${currentStage}`);
+    // ─── State Machine ─────────────────────────────────────────────────────
+    if (action === 'accept' && currentStage === 'new_order' && userRole === 'owner') {
+      newStatus = 'accepted';
+      await pgClient.query("UPDATE orders SET status = 'accepted', updated_at = NOW() WHERE id = $1", [orderId]);
 
-    // State Machine Transitions
-    if (currentStage === 'new_order') {
-      if (action === 'accept') {
-        newStatus = 'accepted';
-        await notificationScheduler.stopAlarm(orderId, 'new_order');
-        
-        // Trigger next stage: Kitchen Control
-        const payload = NotificationTemplates.kitchenControl(orderId, {
-          customerName: orderData.customerInfo?.name || 'Customer',
-          prepTime: '15'
+      // Notify customer
+      if (customerFirebaseUid) {
+        const payload = CustomerTemplates.orderUpdate(orderId, {
+          orderNumber: shortId, status: 'accepted', totalAmount: Number(order.total_amount),
+          eta: '20-30 mins', version: 2
         });
-        // Send to owner immediately (just an example, normally we'd target all owners)
-        await notificationScheduler.sendToUser(userId, payload);
-      } else if (action === 'reject') {
-        newStatus = 'cancelled';
-        await notificationScheduler.stopAlarm(orderId, 'new_order');
+        await notificationQueue.enqueue(customerFirebaseUid, payload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 2 });
       }
-    } 
-    else if (currentStage === 'kitchen_control') {
-      if (action === 'start_cooking') {
-        newStatus = 'preparing';
-        
-        // Trigger next stage: Assign Delivery
-        const payload = NotificationTemplates.assignDelivery(orderId, {
-          customerName: orderData.customerInfo?.name || 'Customer',
-          availableCount: 3 // Mock count
-        });
-        await notificationScheduler.sendToUser(userId, payload);
-      }
+      // Update owner live card
+      const ownerPayload = OwnerTemplates.orderStatusUpdate(orderId, {
+        orderNumber: shortId, customerName: order.contact_phone, status: 'accepted', totalAmount: Number(order.total_amount), version: 2
+      });
+      await notificationQueue.enqueue(userId, ownerPayload, 'normal', { tag: `order_owner_${orderId}`, orderId, category: 'order', version: 2 });
+      responseData = { message: 'Order accepted' };
     }
-    else if (currentStage === 'assign_delivery') {
-      // Typically the 'assign' action would include a partnerId
-      const partnerId = req.body.partnerId;
-      if (action === 'assign' && partnerId) {
-        newStatus = 'partner_assigned';
-        await orderRef.update({ deliveryPartnerId: partnerId });
-        
-        // Trigger Delivery Partner Alarm
-        const payload = NotificationTemplates.deliveryAssigned(orderId, {
-          distance: '2.5 km',
-          paymentMethod: orderData.paymentMethod || 'Online'
-        });
-        await notificationScheduler.startAlarm(orderId, partnerId, payload, 'delivery_assigned');
-      }
-    }
-    else if (currentStage === 'delivery_assigned') {
-      // Must be delivery partner
-      if (orderData.deliveryPartnerId !== userId) {
-         res.status(403).json({ error: 'Unauthorized' });
-         return;
-      }
 
-      if (action === 'accept') {
-        await notificationScheduler.stopAlarm(orderId, 'delivery_assigned');
-        // Next stage
-        const payload = NotificationTemplates.navigateToRestaurant(orderId, {
-          restaurantAddress: 'Olive Pizza Main St'
-        });
-        await notificationScheduler.sendToUser(userId, payload);
-      } else if (action === 'reject') {
-        await notificationScheduler.stopAlarm(orderId, 'delivery_assigned');
-        await orderRef.update({ deliveryPartnerId: null });
-        newStatus = 'ready'; // Revert status so owner can reassign
+    else if (action === 'reject' && userRole === 'owner') {
+      newStatus = 'cancelled';
+      await pgClient.query("UPDATE orders SET status = 'cancelled', updated_at = NOW() WHERE id = $1", [orderId]);
+
+      if (customerFirebaseUid) {
+        const payload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'cancelled', totalAmount: Number(order.total_amount), version: 2 });
+        await notificationQueue.enqueue(customerFirebaseUid, payload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 2 });
       }
+      responseData = { message: 'Order rejected' };
     }
-    else if (currentStage === 'navigate_restaurant' && action === 'arrived') {
-      const payload = NotificationTemplates.arrivedRestaurant(orderId, {
-        customerName: orderData.customerInfo?.name || 'Customer'
+
+    else if (action === 'start_cooking' && userRole === 'owner') {
+      newStatus = 'preparing';
+      await pgClient.query("UPDATE orders SET status = 'preparing', updated_at = NOW() WHERE id = $1", [orderId]);
+
+      if (customerFirebaseUid) {
+        const payload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'preparing', totalAmount: Number(order.total_amount), version: 3 });
+        await notificationQueue.enqueue(customerFirebaseUid, payload, 'normal', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 3 });
+      }
+      responseData = { message: 'Cooking started' };
+    }
+
+    else if (action === 'ready' && userRole === 'owner') {
+      newStatus = 'ready';
+      await pgClient.query("UPDATE orders SET status = 'ready', updated_at = NOW() WHERE id = $1", [orderId]);
+
+      if (customerFirebaseUid) {
+        const payload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'ready', totalAmount: Number(order.total_amount), version: 4 });
+        await notificationQueue.enqueue(customerFirebaseUid, payload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 4 });
+      }
+      responseData = { message: 'Order marked ready' };
+    }
+
+    else if (action === 'assign_delivery' && userRole === 'owner' && partnerId) {
+      // Verify partner exists
+      const partnerResult = await pgClient.query(
+        "SELECT firebase_uid, name FROM users WHERE id = $1 AND role = 'delivery'",
+        [partnerId]
+      );
+      if (partnerResult.rows.length === 0) {
+        await pgClient.query('ROLLBACK');
+        res.status(400).json({ error: 'Invalid delivery partner' });
+        return;
+      }
+      const partner = partnerResult.rows[0];
+
+      newStatus = 'partner_assigned';
+      await pgClient.query(
+        "UPDATE orders SET status = 'partner_assigned', delivery_partner_id = $1, updated_at = NOW() WHERE id = $2",
+        [partnerId, orderId]
+      );
+
+      // Notify delivery partner
+      const deliveryPayload = DeliveryTemplates.newAssignment(orderId, {
+        orderNumber: shortId, customerName: 'Customer', customerPhone: order.contact_phone,
+        deliveryAddress: order.delivery_address_line, distance: '?', eta: '15 mins',
+        totalAmount: Number(order.total_amount), paymentMethod: 'COD', version: 1
       });
-      await notificationScheduler.sendToUser(userId, payload);
+      await notificationQueue.enqueue(partner.firebase_uid, deliveryPayload, 'high', { tag: `order_delivery_${orderId}`, orderId, category: 'delivery', priority: 'critical', version: 1 });
+
+      // Update customer
+      if (customerFirebaseUid) {
+        const cPayload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'partner_assigned', totalAmount: Number(order.total_amount), deliveryPartnerName: partner.name || 'Partner', version: 5 });
+        await notificationQueue.enqueue(customerFirebaseUid, cPayload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 5 });
+      }
+      responseData = { message: 'Partner assigned' };
     }
-    else if (currentStage === 'arrived_restaurant' && action === 'picked_up') {
-      newStatus = 'picked_up';
-      const payload = NotificationTemplates.startDelivery(orderId, {
-        deliveryAddress: orderData.deliveryAddress?.addressLine || 'Customer Address'
-      });
-      await notificationScheduler.sendToUser(userId, payload);
+
+    else if (action === 'accept_delivery' && userRole === 'delivery') {
+      if (order.delivery_partner_id !== userId) {
+        await pgClient.query('ROLLBACK');
+        res.status(403).json({ error: 'You are not assigned to this order' });
+        return;
+      }
+      const dPayload = DeliveryTemplates.deliveryUpdate(orderId, { orderNumber: shortId, customerName: 'Customer', deliveryAddress: order.delivery_address_line, stage: 'navigate_restaurant', version: 2 });
+      await notificationQueue.enqueue(userId, dPayload, 'high', { tag: `order_delivery_${orderId}`, orderId, category: 'delivery', version: 2 });
+      responseData = { message: 'Delivery accepted' };
     }
-    else if (currentStage === 'start_delivery' && action === 'arrived_customer') {
-      const payload = NotificationTemplates.arrivedCustomer(orderId, {
-        customerName: orderData.customerInfo?.name || 'Customer'
-      });
-      await notificationScheduler.sendToUser(userId, payload);
+
+    else if (action === 'picked_up' && userRole === 'delivery') {
+      newStatus = 'out_for_delivery';
+      await pgClient.query("UPDATE orders SET status = 'out_for_delivery', updated_at = NOW() WHERE id = $1", [orderId]);
+
+      const dPayload = DeliveryTemplates.deliveryUpdate(orderId, { orderNumber: shortId, customerName: 'Customer', deliveryAddress: order.delivery_address_line, stage: 'out_for_delivery', version: 3 });
+      await notificationQueue.enqueue(userId, dPayload, 'high', { tag: `order_delivery_${orderId}`, orderId, category: 'delivery', version: 3 });
+
+      if (customerFirebaseUid) {
+        const cPayload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'out_for_delivery', totalAmount: Number(order.total_amount), version: 6 });
+        await notificationQueue.enqueue(customerFirebaseUid, cPayload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 6 });
+      }
+      responseData = { message: 'Picked up — out for delivery' };
     }
-    else if (currentStage === 'arrived_customer' && action === 'delivered') {
+
+    else if (action === 'delivered' && userRole === 'delivery') {
       newStatus = 'delivered';
-      await orderRef.update({ deliveredAt: new Date().toISOString() });
+      await pgClient.query(
+        "UPDATE orders SET status = 'delivered', updated_at = NOW() WHERE id = $1",
+        [orderId]
+      );
+
+      if (customerFirebaseUid) {
+        const cPayload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'delivered', totalAmount: Number(order.total_amount), version: 7 });
+        await notificationQueue.enqueue(customerFirebaseUid, cPayload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 7 });
+      }
+
+      // Notify owner of completion
+      const ownerIds = await getOwnerUserIds();
+      for (const ownerId of ownerIds) {
+        const oPayload = OwnerTemplates.orderStatusUpdate(orderId, { orderNumber: shortId, customerName: '', status: 'delivered', totalAmount: Number(order.total_amount), version: 99 });
+        await notificationQueue.enqueue(ownerId, oPayload, 'normal', { tag: `order_owner_${orderId}`, orderId, category: 'order', version: 99 });
+      }
+      responseData = { message: 'Delivered — order complete' };
     }
 
-    // Update the final status in Firestore
-    if (newStatus !== orderData.status) {
-      await orderRef.update({ 
-        status: newStatus,
-        updatedAt: new Date().toISOString()
-      });
+    else if (action === 'stop_alert') {
+      // Send a silent push to all devices of this user to stop the alert.
+      const stopPayload = {
+        notification: { title: '', body: '' }, // Dummy, will be ignored by SW if we use data-only, wait, FCM requires notification or data. Let's just send data-only.
+        data: { action: 'STOP_ALERT', orderId, stage: currentStage, category: 'system' }
+      };
+      // For data-only, we can just omit notification property. But NotificationPayload type requires it.
+      // So we send an empty one and handle it in SW.
+      await notificationQueue.enqueue(userId, { notification: { title: 'Stop Alert', body: '' }, data: stopPayload.data }, 'high', { tag: `stop_alert_${orderId}`, orderId, category: 'system' });
+      responseData = { message: 'Alert stopped' };
     }
 
-    res.json({ success: true, newStatus });
-  } catch (error) {
-    console.error('[NotificationRoutes] Error processing action:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-/**
- * Handle custom push notifications from Owner Dashboard
- */
-router.post('/send-custom', verifyToken, async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { title, body, audience, type, category, schedule } = req.body;
-    const userId = (req as any).user.uid;
-
-    // Verify owner role
-    const ownerDoc = await db.collection('users').doc(userId).get();
-    if (!ownerDoc.exists || ownerDoc.data()?.role !== 'owner') {
-      res.status(403).json({ error: 'Unauthorized: Owner access required' });
+    else {
+      await pgClient.query('ROLLBACK');
+      res.status(400).json({ error: `Unknown action "${action}" for role "${userRole}" at stage "${currentStage}"` });
       return;
     }
 
+    await pgClient.query('COMMIT');
+    res.json({ success: true, newStatus, ...responseData });
+
+  } catch (error: any) {
+    await pgClient.query('ROLLBACK').catch(() => {});
+    console.error('[NotificationRoutes] Action error:', error);
+    res.status(500).json({ error: 'Internal server error', details: error.message });
+  } finally {
+    pgClient.release();
+    await releaseOrderLock(orderId);
+  }
+});
+
+// ─── Helper: Get customer firebase UID from order ─────────────────────────────
+async function getCustomerFirebaseUid(client: any, pgUserId: string): Promise<string | null> {
+  try {
+    const result = await client.query('SELECT firebase_uid FROM users WHERE id = $1', [pgUserId]);
+    return result.rows[0]?.firebase_uid || null;
+  } catch {
+    return null;
+  }
+}
+
+// =============================================================================
+// POST /notifications/token
+// Frontend registers/refreshes FCM token
+// =============================================================================
+router.post('/token', verifyToken, async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { token, deviceName, platform, browser, appVersion } = req.body;
+    const userId = req.user!.uid;
+
+    if (!token) {
+      res.status(400).json({ error: 'Token is required' });
+      return;
+    }
+
+    await notificationQueue.registerToken(userId, token, { deviceName, platform, browser, appVersion });
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('[NotificationRoutes] Token registration error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// =============================================================================
+// POST /notifications/track
+// Service Worker and client report delivery/open/action events
+// =============================================================================
+router.post('/track', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { queueId, stage, orderId, openTimeMs } = req.body;
+    if (!queueId || !stage) {
+      res.status(400).json({ error: 'queueId and stage required' });
+      return;
+    }
+
+    const client = await pgPool.connect();
+    try {
+      if (stage === 'delivered') {
+        await client.query(`UPDATE notification_queue SET status = 'delivered' WHERE id = $1`, [queueId]);
+      } else if (stage === 'opened') {
+        await client.query(`UPDATE notification_queue SET status = 'opened' WHERE id = $1`, [queueId]);
+        // Track open time in inbox
+        if (orderId) {
+          await client.query(
+            `UPDATE notification_inbox SET is_read = TRUE, read_at = NOW() WHERE tag LIKE $1`,
+            [`%${orderId}%`]
+          );
+        }
+      } else if (stage === 'action_performed') {
+        await client.query(`UPDATE notification_queue SET status = 'action_performed' WHERE id = $1`, [queueId]);
+      }
+    } finally {
+      client.release();
+    }
+
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// =============================================================================
+// GET /notifications/inbox
+// Fetch user's notification inbox (persistent, never lost)
+// =============================================================================
+router.get('/inbox', verifyToken, async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user!.uid;
+    const pgUserId = await getPostgresUserId(userId);
+    if (!pgUserId) {
+      res.json({ items: [] });
+      return;
+    }
+
+    const client = await pgPool.connect();
+    try {
+      const result = await client.query(
+        `SELECT * FROM notification_inbox
+         WHERE user_id = $1
+           AND (expires_at IS NULL OR expires_at > NOW())
+         ORDER BY created_at DESC
+         LIMIT 100`,
+        [pgUserId]
+      );
+      res.json({ items: result.rows });
+    } finally {
+      client.release();
+    }
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// =============================================================================
+// PATCH /notifications/inbox/:id
+// Mark inbox item as read or archived
+// =============================================================================
+router.patch('/inbox/:id', verifyToken, async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { isRead, isArchived } = req.body;
+    const userId = req.user!.uid;
+    const pgUserId = await getPostgresUserId(userId);
+    if (!pgUserId) { res.status(404).json({ error: 'User not found' }); return; }
+
+    const client = await pgPool.connect();
+    try {
+      await client.query(
+        `UPDATE notification_inbox
+         SET is_read = COALESCE($1, is_read),
+             is_archived = COALESCE($2, is_archived),
+             read_at = CASE WHEN $1 = TRUE AND read_at IS NULL THEN NOW() ELSE read_at END,
+             updated_at = NOW()
+         WHERE id = $3 AND user_id = $4`,
+        [isRead, isArchived, id, pgUserId]
+      );
+      res.json({ success: true });
+    } finally {
+      client.release();
+    }
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// =============================================================================
+// POST /notifications/send-custom
+// Owner: broadcast push notification to a segment
+// =============================================================================
+router.post('/send-custom', verifyToken, async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user!.uid;
+    const ownerDoc = await db.collection('users').doc(userId).get();
+    if (!ownerDoc.exists || ownerDoc.data()?.role !== 'owner') {
+      res.status(403).json({ error: 'Owner access required' });
+      return;
+    }
+
+    const { title, body, audience, category, url, couponCode, expiryDate } = req.body;
     if (!title || !body) {
       res.status(400).json({ error: 'Title and body are required' });
       return;
     }
 
-    // Fetch targets based on audience
+    // Fetch targets
     let usersQuery: FirebaseFirestore.Query = db.collection('users');
-    
-    if (audience === 'customers') {
-      usersQuery = usersQuery.where('role', '==', 'customer');
-    } else if (audience === 'delivery') {
-      usersQuery = usersQuery.where('role', '==', 'delivery_partner');
-    }
+    if (audience === 'customers') usersQuery = usersQuery.where('role', '==', 'customer');
+    else if (audience === 'delivery') usersQuery = usersQuery.where('role', '==', 'delivery');
+    // audience === 'all' fetches everyone
 
-    const usersSnapshot = await usersQuery.get();
+    const snapshot = await usersQuery.get();
     let queuedCount = 0;
 
-    const payload = {
-      notification: { title, body },
-      data: { url: '/', source: 'owner_broadcast' }
-    };
+    for (const doc of snapshot.docs) {
+      const targetId = doc.id;
+      let payload: any;
 
-    // Async processing for each user to track individual status
-    const promises = usersSnapshot.docs.map(doc => {
+      if (category === 'coupon' && couponCode) {
+        payload = MarketingTemplates.couponAlert({ title, body, couponCode, expiryDate: expiryDate || 'soon' });
+      } else if (category === 'announcement') {
+        payload = MarketingTemplates.announcement({ title, body, url });
+      } else {
+        payload = {
+          notification: { title, body },
+          data: { url: url || '/', category: category || 'marketing', source: 'owner_broadcast' }
+        };
+      }
+
+      await notificationQueue.enqueue(targetId, payload, 'normal', {
+        category: category || 'marketing',
+        expiresInSeconds: category === 'marketing' || category === 'announcement' ? 86400 : undefined,
+      });
       queuedCount++;
-      // We will let NotificationScheduler handle the logging per user
-      return notificationScheduler.sendToUser(doc.id, payload, category || 'custom');
-    });
+    }
 
-    // Fire and forget so we don't block the request if there are thousands
-    Promise.allSettled(promises).catch(console.error);
-
-    res.json({
-      success: true,
-      message: `Notification queued for ${queuedCount} users.`
-    });
+    res.json({ success: true, message: `Queued for ${queuedCount} users` });
   } catch (error: any) {
-    console.error('[NotificationRoutes] Error sending custom push:', error);
-    res.status(500).json({ error: 'Failed to send notification', details: error.message });
+    console.error('[NotificationRoutes] send-custom error:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 
-/**
- * Public: Track notification opens/clicks from Service Worker or Client
- */
-router.post('/track', async (req: Request, res: Response): Promise<void> => {
+// =============================================================================
+// GET /notifications/analytics
+// Owner: notification system analytics
+// =============================================================================
+router.get('/analytics', verifyToken, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { notificationId, stage } = req.body; // stage: 'Delivered', 'Opened', 'Clicked'
-    if (notificationId && stage) {
-       await notificationDebugger.updateStage(notificationId, stage as any);
+    const userId = req.user!.uid;
+    const ownerDoc = await db.collection('users').doc(userId).get();
+    if (!ownerDoc.exists || ownerDoc.data()?.role !== 'owner') {
+      res.status(403).json({ error: 'Owner access required' });
+      return;
     }
-    res.json({ success: true });
+
+    const client = await pgPool.connect();
+    try {
+      const [analytics, queueStats, tokenStats] = await Promise.all([
+        client.query(
+          `SELECT * FROM notification_analytics
+           WHERE period_date >= CURRENT_DATE - INTERVAL '7 days'
+           ORDER BY period_date DESC, category`
+        ),
+        client.query(
+          `SELECT status, COUNT(*) as count FROM notification_queue GROUP BY status`
+        ),
+        client.query(
+          `SELECT is_active, COUNT(*) as count FROM fcm_tokens GROUP BY is_active`
+        ),
+      ]);
+
+      res.json({
+        analytics: analytics.rows,
+        queue: queueStats.rows,
+        tokens: tokenStats.rows,
+      });
+    } finally {
+      client.release();
+    }
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
 });
 
-/**
- * Owner: Retry Failed Notifications
- */
-router.post('/retry-failed', verifyToken, async (req: Request, res: Response): Promise<void> => {
+// =============================================================================
+// POST /notifications/preferences
+// Update DND preferences for the current user
+// =============================================================================
+router.post('/preferences', verifyToken, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).user.uid;
-    const ownerDoc = await db.collection('users').doc(userId).get();
-    if (ownerDoc.data()?.role !== 'owner') {
-      res.status(403).json({ error: 'Unauthorized' });
-      return;
+    const userId = req.user!.uid;
+    const pgUserId = await getPostgresUserId(userId);
+    if (!pgUserId) { res.status(404).json({ error: 'User not found' }); return; }
+
+    const { muteMarketing, muteLowPriority, alwaysReceiveOrders, alwaysReceiveAlerts, quietHoursStart, quietHoursEnd } = req.body;
+
+    const client = await pgPool.connect();
+    try {
+      await client.query(
+        `INSERT INTO notification_preferences (user_id, mute_marketing, mute_low_priority, always_receive_orders, always_receive_alerts, quiet_hours_start, quiet_hours_end)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT (user_id) DO UPDATE SET
+           mute_marketing = EXCLUDED.mute_marketing,
+           mute_low_priority = EXCLUDED.mute_low_priority,
+           always_receive_orders = EXCLUDED.always_receive_orders,
+           always_receive_alerts = EXCLUDED.always_receive_alerts,
+           quiet_hours_start = EXCLUDED.quiet_hours_start,
+           quiet_hours_end = EXCLUDED.quiet_hours_end,
+           updated_at = NOW()`,
+        [pgUserId, muteMarketing ?? false, muteLowPriority ?? false, alwaysReceiveOrders ?? true, alwaysReceiveAlerts ?? true, quietHoursStart, quietHoursEnd]
+      );
+      res.json({ success: true });
+    } finally {
+      client.release();
     }
-
-    // Query failed notifications
-    const failedSnapshot = await db.collection('notification_history')
-      .where('status', '==', 'failed')
-      .get();
-    
-    let retriedCount = 0;
-    const promises = failedSnapshot.docs.map(async (doc) => {
-      const data = doc.data();
-      const payload = {
-        notification: { title: data.title, body: data.body },
-        data: { source: 'retry' }
-      };
-      retriedCount++;
-      // Clean up old log and send new one
-      await doc.ref.delete();
-      return notificationScheduler.sendToUser(data.userId, payload, data.category);
-    });
-
-    Promise.allSettled(promises).catch(console.error);
-    res.json({ success: true, message: `Retrying ${retriedCount} notifications.` });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
 });
 
-/**
- * Owner: Delete Notification Log
- */
-router.delete('/log/:id', verifyToken, async (req: Request, res: Response): Promise<void> => {
+// =============================================================================
+// GET /notifications/preferences
+// =============================================================================
+router.get('/preferences', verifyToken, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).user.uid;
-    const ownerDoc = await db.collection('users').doc(userId).get();
-    if (ownerDoc.data()?.role !== 'owner') {
-      res.status(403).json({ error: 'Unauthorized' });
-      return;
+    const userId = req.user!.uid;
+    const pgUserId = await getPostgresUserId(userId);
+    if (!pgUserId) { res.json({ preferences: null }); return; }
+
+    const client = await pgPool.connect();
+    try {
+      const result = await client.query('SELECT * FROM notification_preferences WHERE user_id = $1', [pgUserId]);
+      res.json({ preferences: result.rows[0] || null });
+    } finally {
+      client.release();
     }
-    
-    await db.collection('notification_history').doc(req.params.id).delete();
-    res.json({ success: true });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
 });
 
-/**
- * Owner: Delete History (Today or Yesterday)
- */
-router.post('/clear-history', verifyToken, async (req: Request, res: Response): Promise<void> => {
+// =============================================================================
+// POST /notifications/cleanup (Owner)
+// =============================================================================
+router.post('/cleanup', verifyToken, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).user.uid;
-    const { timeRange } = req.body; // 'today' or 'yesterday'
-    
+    const userId = req.user!.uid;
     const ownerDoc = await db.collection('users').doc(userId).get();
-    if (ownerDoc.data()?.role !== 'owner') {
-      res.status(403).json({ error: 'Unauthorized' });
+    if (!ownerDoc.exists || ownerDoc.data()?.role !== 'owner') {
+      res.status(403).json({ error: 'Owner access required' });
       return;
     }
-
-    const now = new Date();
-    let startTime, endTime;
-    
-    if (timeRange === 'today') {
-      startTime = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
-      endTime = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toISOString();
-    } else if (timeRange === 'yesterday') {
-      startTime = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1).toISOString();
-      endTime = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
-    } else {
-      res.status(400).json({ error: 'Invalid timeRange' });
-      return;
-    }
-
-    const snapshot = await db.collection('notification_history')
-      .where('timestamp', '>=', startTime)
-      .where('timestamp', '<', endTime)
-      .get();
-      
-    const batch = db.batch();
-    snapshot.docs.forEach(doc => batch.delete(doc.ref));
-    await batch.commit();
-
-    res.json({ success: true, deleted: snapshot.size });
+    await notificationQueue.runCleanup();
+    res.json({ success: true, message: 'Cleanup complete' });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }

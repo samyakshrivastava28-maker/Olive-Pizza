@@ -1,7 +1,10 @@
 import { Router, Request, Response } from 'express';
 import { query } from '../lib/db.js';
 import { verifyToken, AuthRequest } from '../middleware/auth.middleware.js';
-import { sendOrderReceipt } from '../lib/email.js';
+import { adminDb } from '../config/firebase.js';
+import { OwnerTemplates } from '../services/notification/NotificationTemplates.js';
+import { notificationQueue } from '../services/notification/NotificationQueueService.js';
+
 
 const router = Router();
 
@@ -126,11 +129,30 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
       updatedAt: newOrder.updated_at
     };
 
-    // Get user email
-    const userEmail = req.user?.email;
-    if (userEmail) {
-      // Send receipt asynchronously (don't block response)
-      sendOrderReceipt(userEmail, orderData);
+    // Push notification to all owners — no email
+    try {
+      const shortId = newOrder.id.slice(-6).toUpperCase();
+      const ownersSnap = await adminDb.collection('users').where('role', '==', 'owner').get();
+      const pushPayload = OwnerTemplates.newOrder(newOrder.id, {
+        customerName: userData.name || 'Customer',
+        orderNumber: shortId,
+        totalAmount: serverCalculatedTotal,
+        itemsCount: validatedItems.length,
+        paymentMethod: 'COD',
+        deliveryAddress: userData.full_address,
+        phone: userData.phone,
+        version: 1,
+      });
+      for (const ownerDoc of ownersSnap.docs) {
+        notificationQueue.enqueue(
+          ownerDoc.id,
+          pushPayload,
+          'high',
+          { tag: `order_owner_${newOrder.id}`, orderId: newOrder.id, category: 'order', priority: 'critical', version: 1 }
+        ).catch(console.error);
+      }
+    } catch (pushErr) {
+      console.error('[Orders] Push notification failed (non-blocking):', pushErr);
     }
 
     res.status(201).json({ message: 'Order placed successfully', orderId: newOrder.id });

@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 
 // App Store (For PWA and Global UI states)
 interface AppState {
@@ -112,14 +113,21 @@ interface OwnerSettingsState {
   updateSettings: (settings: Partial<OwnerSettingsState>) => void;
 }
 
-export const useOwnerSettingsStore = create<OwnerSettingsState>((set) => ({
-  enableNewOrderSound: true,
-  enableReminderSound: true,
-  enableUrgentSound: true,
-  enableBrowserNotifications: true,
-  enableVibrations: true,
-  repeatInterval: 60,
-  volumeLevel: 0.5,
-  muteMode: false,
-  updateSettings: (settings) => set((state) => ({ ...state, ...settings })),
-}));
+export const useOwnerSettingsStore = create<OwnerSettingsState>()(
+  persist(
+    (set) => ({
+      enableNewOrderSound: true,
+      enableReminderSound: true,
+      enableUrgentSound: true,
+      enableBrowserNotifications: true,
+      enableVibrations: true,
+      repeatInterval: 60,
+      volumeLevel: 1.0,
+      muteMode: false,
+      updateSettings: (settings) => set((state) => ({ ...state, ...settings })),
+    }),
+    {
+      name: 'olive-owner-settings',
+    }
+  )
+);
