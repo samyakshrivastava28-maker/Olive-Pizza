@@ -33,8 +33,8 @@ export default function MainLayout() {
     if (user?.email === 'olivepizzarjn@gmail.com' && role !== 'owner') {
       updateDoc(doc(db, 'users', user.uid), { role: 'owner' })
         .then(() => {
-          console.log('Successfully upgraded olivepizzarjn to owner! Please refresh the page.');
-          window.location.reload();
+          console.log('Successfully upgraded olivepizzarjn to owner!');
+          useAuthStore.getState().setUser(user, 'owner');
         })
         .catch(err => console.error('Failed to make owner:', err));
     }

@@ -10,17 +10,15 @@ const lazyWithRetry = <T extends ComponentType<any>>(
   componentImport: () => Promise<{ default: T }>
 ) =>
   lazy(async () => {
-    const pageHasAlreadyBeenForceRefreshed = JSON.parse(
-      window.sessionStorage.getItem('page-has-been-force-refreshed') || 'false'
-    );
-
     try {
-      const component = await componentImport();
-      window.sessionStorage.setItem('page-has-been-force-refreshed', 'false');
-      return component;
+      return await componentImport();
     } catch (error) {
-      if (!pageHasAlreadyBeenForceRefreshed) {
-        window.sessionStorage.setItem('page-has-been-force-refreshed', 'true');
+      const lastRefresh = parseInt(window.sessionStorage.getItem('force-refreshed-time') || '0', 10);
+      const now = Date.now();
+      
+      // If we haven't force refreshed in the last 30 seconds, try it once
+      if (now - lastRefresh > 30000) {
+        window.sessionStorage.setItem('force-refreshed-time', now.toString());
         
         // Break infinite loop: clear PWA caches and unregister service workers before reloading
         if ('serviceWorker' in navigator) {
@@ -33,11 +31,13 @@ const lazyWithRetry = <T extends ComponentType<any>>(
             console.error('Failed to unregister SW', e);
           }
         }
-
+        
         if ('caches' in window) {
           try {
-            const keys = await caches.keys();
-            await Promise.all(keys.map(key => caches.delete(key)));
+            const cacheKeys = await caches.keys();
+            for (let key of cacheKeys) {
+              await caches.delete(key);
+            }
           } catch (e) {
             console.error('Failed to clear caches', e);
           }
@@ -47,6 +47,9 @@ const lazyWithRetry = <T extends ComponentType<any>>(
         window.location.href = window.location.pathname + '?v=' + new Date().getTime();
         return new Promise<{ default: T }>(() => {});
       }
+      
+      // If we already refreshed recently, throw the error to be caught by ErrorBoundary
+      console.error('Component load failed after forced refresh. Throwing to ErrorBoundary.', error);
       throw error;
     }
   });

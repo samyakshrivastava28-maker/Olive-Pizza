@@ -103,22 +103,23 @@ export default function Home() {
 
     const hasPlayed = sessionStorage.getItem("olive_intro_seen");
     
+    let fallbackTimer: NodeJS.Timeout;
     if (!hasPlayed && !isSlowNetwork) {
       setShowIntro(true);
       document.body.style.overflow = "hidden";
       
       // FOOLPROOF FALLBACK: Force end the intro after 8 seconds no matter what.
-      // This prevents the "infinite loading glitch" if the video fails to load or autoplay.
-      const fallbackTimer = setTimeout(() => {
+      fallbackTimer = setTimeout(() => {
         handleIntroEnd();
       }, 8000);
-      
-      return () => clearTimeout(fallbackTimer);
     }
+
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
     checkMobile();
     window.addEventListener("resize", checkMobile);
+    
     return () => {
+      if (fallbackTimer) clearTimeout(fallbackTimer);
       window.removeEventListener("resize", checkMobile);
       document.body.style.overflow = "";
     };
@@ -380,7 +381,8 @@ export default function Home() {
 
   const desktopIntroUrl = "https://res.cloudinary.com/dxmlvkff1/video/upload/f_auto,q_auto:eco,w_800/v1782199127/Olive_Pizza_logo_reveal_202606231247_rrtc3u.mp4";
   const mobileIntroUrl = "https://res.cloudinary.com/dxmlvkff1/video/upload/f_auto,q_auto:eco,w_480/v1782199117/Olive_Pizza_logo_reveal_202606231246_xeyk9t.mp4";
-  const desktopBgUrl = "https://res.cloudinary.com/dxmlvkff1/video/upload/f_auto,q_auto:eco,w_1080/v1782200264/Artisan_pizza_emerging_from_oven_202606231307_qmognm.mp4";
+  const desktopBgUrl = "https://res.cloudinary.com/dxmlvkff1/video/upload/f_auto,q_auto:best,vc_auto,w_1080/v1782200264/Artisan_pizza_emerging_from_oven_202606231307_qmognm.mp4";
+  const mobileBgUrl = "https://res.cloudinary.com/dxmlvkff1/video/upload/c_fill,g_auto,f_auto,q_auto:best,vc_auto,w_600,h_1067/v1782200264/Artisan_pizza_emerging_from_oven_202606231307_qmognm.mp4";
 
   return (
     <>
@@ -442,13 +444,13 @@ export default function Home() {
         {!heroVideoError && (
           <video
             ref={heroVideoRefMobile}
-            src={desktopBgUrl}
-            poster={desktopBgUrl.replace('.mp4', '.jpg')}
+            src={mobileBgUrl}
+            poster={mobileBgUrl.replace('.mp4', '.jpg')}
             muted loop playsInline
             preload="metadata"
             onError={() => setHeroVideoError(true)}
             className="absolute inset-0 w-full h-full object-cover z-0"
-            style={{ objectPosition: 'center center' }}
+            style={{ transform: 'translateZ(0)', willChange: 'transform' }}
           />
         )}
         {heroVideoError && (
@@ -503,6 +505,7 @@ export default function Home() {
             preload="metadata"
             onError={() => setHeroVideoError(true)}
             className="absolute inset-0 w-full h-full object-cover pointer-events-none z-0"
+            style={{ transform: 'translateZ(0)', willChange: 'transform' }}
           />
         )}
         {heroVideoError && (

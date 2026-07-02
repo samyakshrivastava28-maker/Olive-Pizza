@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { getMessagingInstance, db, auth } from '../lib/firebase';
 import { getToken, onMessage, Messaging } from 'firebase/messaging';
 import { doc, updateDoc, arrayUnion } from 'firebase/firestore';
-import { onAuthStateChanged } from 'firebase/auth';
+import { useAuthStore } from '../lib/store';
 import { Bell, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
@@ -11,20 +11,23 @@ export default function PushNotificationManager() {
   const [showPrompt, setShowPrompt] = useState(false);
   const [userUid, setUserUid] = useState<string | null>(null);
 
+  const user = useAuthStore(state => state.user);
+  
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        setUserUid(user.uid);
-        if (Notification.permission === 'default') {
-          const timer = setTimeout(() => setShowPrompt(true), 3000);
-          return () => clearTimeout(timer);
-        } else if (Notification.permission === 'granted') {
-          requestPermissionAndSaveToken(user.uid);
-        }
-      } else {
-        setUserUid(null);
+    if (user) {
+      setUserUid(user.uid);
+      if (Notification.permission === 'default') {
+        const timer = setTimeout(() => setShowPrompt(true), 3000);
+        return () => clearTimeout(timer);
+      } else if (Notification.permission === 'granted') {
+        requestPermissionAndSaveToken(user.uid);
       }
-    });
+    } else {
+      setUserUid(null);
+    }
+  }, [user]);
+
+  useEffect(() => {
 
     let messageUnsub: any = undefined;
     
@@ -98,7 +101,6 @@ export default function PushNotificationManager() {
     }
 
     return () => {
-      unsubscribe();
       clearInterval(heartbeatInterval);
       if (messageUnsub) messageUnsub();
     };
@@ -119,7 +121,7 @@ export default function PushNotificationManager() {
         }
 
         const swUrl = `/firebase-messaging-sw.js?apiKey=${import.meta.env.VITE_FIREBASE_API_KEY}&authDomain=${import.meta.env.VITE_FIREBASE_AUTH_DOMAIN}&projectId=${import.meta.env.VITE_FIREBASE_PROJECT_ID}&storageBucket=${import.meta.env.VITE_FIREBASE_STORAGE_BUCKET}&messagingSenderId=${import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID}&appId=${import.meta.env.VITE_FIREBASE_APP_ID}`;
-        const registration = await navigator.serviceWorker.register(swUrl);
+        const registration = await navigator.serviceWorker.register(swUrl, { scope: '/firebase-cloud-messaging-push-scope' });
         
         const token = await getToken(messaging, { vapidKey, serviceWorkerRegistration: registration });
         if (token) {
