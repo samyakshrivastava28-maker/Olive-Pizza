@@ -445,7 +445,7 @@ export default function Home() {
           <video
             ref={heroVideoRefMobile}
             src={mobileBgUrl}
-            poster={mobileBgUrl.replace('.mp4', '.jpg')}
+            poster={mobileBgUrl.replace('vc_auto,', '').replace('.mp4', '.jpg')}
             muted loop playsInline
             preload="metadata"
             onError={() => setHeroVideoError(true)}
@@ -455,7 +455,7 @@ export default function Home() {
         )}
         {heroVideoError && (
           <img
-            src={desktopBgUrl.replace('.mp4', '.jpg')}
+            src={desktopBgUrl.replace('vc_auto,', '').replace('.mp4', '.jpg')}
             alt="Hero Background"
             className="absolute inset-0 w-full h-full object-cover z-0"
             style={{ objectPosition: 'center center' }}
@@ -500,7 +500,7 @@ export default function Home() {
           <video
             ref={heroVideoRefDesktop}
             src={desktopBgUrl}
-            poster={desktopBgUrl.replace('.mp4', '.jpg')}
+            poster={desktopBgUrl.replace('vc_auto,', '').replace('.mp4', '.jpg')}
             muted loop playsInline
             preload="metadata"
             onError={() => setHeroVideoError(true)}
@@ -510,7 +510,7 @@ export default function Home() {
         )}
         {heroVideoError && (
           <img
-            src={desktopBgUrl.replace('.mp4', '.jpg')}
+            src={desktopBgUrl.replace('vc_auto,', '').replace('.mp4', '.jpg')}
             alt="Hero Background"
             className="absolute inset-0 w-full h-full object-cover pointer-events-none z-0"
           />
