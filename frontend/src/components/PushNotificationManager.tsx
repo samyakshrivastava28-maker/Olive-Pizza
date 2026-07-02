@@ -62,11 +62,12 @@ export default function PushNotificationManager() {
     initMessaging();
 
     // Heartbeat Interval (every 5 minutes)
-    const heartbeatInterval = setInterval(() => {
+    const heartbeatInterval = setInterval(async () => {
       if (userUid) {
+        const token = await auth.currentUser?.getIdToken();
         fetch('/api/heartbeat', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
           body: JSON.stringify({
             deviceName: navigator.userAgent,
             browser: navigator.userAgent,
@@ -80,10 +81,11 @@ export default function PushNotificationManager() {
 
     // Initial heartbeat
     if (userUid) {
-      setTimeout(() => {
+      setTimeout(async () => {
+        const token = await auth.currentUser?.getIdToken();
         fetch('/api/heartbeat', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
           body: JSON.stringify({
             deviceName: navigator.userAgent,
             browser: navigator.userAgent,

@@ -18,7 +18,9 @@ export class HeartbeatService {
       const deviceName = data.deviceName || 'Unknown Device';
       
       const existing = await client.query(
-        `SELECT id FROM device_heartbeats WHERE user_id = $1 AND device_name = $2`,
+        `SELECT dh.id FROM device_heartbeats dh 
+         JOIN users u ON dh.user_id = u.id 
+         WHERE u.firebase_uid = $1 AND dh.device_name = $2`,
         [userId, deviceName]
       );
       
@@ -34,7 +36,7 @@ export class HeartbeatService {
       } else {
         await client.query(
           `INSERT INTO device_heartbeats (user_id, device_name, browser, platform, app_version, is_online, notification_ready, battery_level, connection_quality)
-           VALUES ($1, $2, $3, $4, $5, true, $6, $7, $8)`,
+           VALUES ((SELECT id FROM users WHERE firebase_uid = $1), $2, $3, $4, $5, true, $6, $7, $8)`,
           [userId, deviceName, data.browser, data.platform, data.appVersion, data.notificationReady !== false, data.batteryLevel, data.connectionQuality]
         );
       }
@@ -52,7 +54,9 @@ export class HeartbeatService {
     const client = await pgPool.connect();
     try {
       const result = await client.query(
-        `SELECT * FROM device_heartbeats WHERE user_id = $1 ORDER BY last_seen DESC`,
+        `SELECT dh.* FROM device_heartbeats dh
+         JOIN users u ON dh.user_id = u.id
+         WHERE u.firebase_uid = $1 ORDER BY dh.last_seen DESC`,
         [userId]
       );
       return result.rows;

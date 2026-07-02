@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import PageTransition from "../components/PageTransition";
 import { useAuthStore, useCartStore } from "../lib/store";
 import { Link, useNavigate } from "react-router";
-import { ShoppingCart, Home, History, Heart, Award, Wallet as WalletIcon, Settings } from "lucide-react";
+import { ShoppingCart, Home, History, Heart, Award, Wallet as WalletIcon, Settings, LogOut } from "lucide-react";
 import DashboardHome from "../components/customer/dashboard/DashboardHome";
 import OrderHistory from "../components/customer/dashboard/OrderHistory";
 import Wishlist from "../components/customer/dashboard/Wishlist";
@@ -39,8 +39,18 @@ export default function CustomerDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("home");
   const navigate = useNavigate();
-  const { user } = useAuthStore();
+  const { user, logout } = useAuthStore();
   const { items } = useCartStore();
+
+  const handleLogout = async () => {
+    try {
+      await auth.signOut();
+      logout();
+      navigate("/");
+    } catch (e) {
+      console.error("Logout failed", e);
+    }
+  };
   const cartItemCount = items.reduce((sum, item) => sum + item.quantity, 0);
 
   useEffect(() => {
@@ -141,6 +151,12 @@ export default function CustomerDashboard() {
                 <tab.icon size={18} /> {tab.label}
               </button>
             ))}
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all whitespace-nowrap text-red-400 hover:bg-red-500/10 hover:text-red-300 md:mt-4"
+            >
+              <LogOut size={18} /> Logout
+            </button>
           </div>
         </div>
 

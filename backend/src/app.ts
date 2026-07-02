@@ -78,7 +78,7 @@ app.use('/email', emailRoutes);
 app.use('/slack', slackRoutes);
 app.use('/google-drive', googleDriveRoutes);
 app.use('/heartbeat', heartbeatRoutes);
-app.use('/health/metrics', healthRoutes);
+app.use('/health', healthRoutes);
 
 // SEO Routes (mounted at root via app in server.ts, but we map them here)
 app.use('/', seoRoutes);

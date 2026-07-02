@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Activity, Database, Users, HardDrive, Clock, Server } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { auth } from '../../lib/firebase';
 
 export const SystemHealthPanel = () => {
   const [metrics, setMetrics] = useState<any>(null);
@@ -8,15 +9,20 @@ export const SystemHealthPanel = () => {
 
   const fetchMetrics = async () => {
     try {
+      const token = await auth.currentUser?.getIdToken();
       const response = await fetch('/api/health/metrics', {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        headers: { 'Authorization': `Bearer ${token}` }
       });
-      const data = await response.json();
+      const text = await response.text();
+      console.log('Health metrics response status:', response.status);
+      console.log('Health metrics response body:', text);
+      
+      const data = JSON.parse(text);
       if (data.success) {
         setMetrics(data.metrics);
       }
     } catch (err) {
-      console.error('Failed to fetch health metrics', err);
+      console.error('Failed to fetch health metrics:', err);
       toast.error('Failed to connect to health monitor');
     } finally {
       setLoading(false);
