@@ -381,8 +381,8 @@ export default function Home() {
 
   const desktopIntroUrl = "https://res.cloudinary.com/dxmlvkff1/video/upload/f_auto,q_auto:eco,w_800/v1782199127/Olive_Pizza_logo_reveal_202606231247_rrtc3u.mp4";
   const mobileIntroUrl = "https://res.cloudinary.com/dxmlvkff1/video/upload/f_auto,q_auto:eco,w_480/v1782199117/Olive_Pizza_logo_reveal_202606231246_xeyk9t.mp4";
-  const desktopBgUrl = "https://res.cloudinary.com/dxmlvkff1/video/upload/f_auto,q_auto:best,vc_auto,w_1080/v1782200264/Artisan_pizza_emerging_from_oven_202606231307_qmognm.mp4";
-  const mobileBgUrl = "https://res.cloudinary.com/dxmlvkff1/video/upload/c_fill,g_auto,f_auto,q_auto:best,vc_auto,w_600,h_1067/v1782200264/Artisan_pizza_emerging_from_oven_202606231307_qmognm.mp4";
+  const desktopBgUrl = "https://res.cloudinary.com/dxmlvkff1/video/upload/f_auto,q_auto:best,vc_auto,w_1080/v1783002216/Pizza_creation_luxury_background__202607021941_ctqnaq.mp4";
+  const mobileBgUrl = "https://res.cloudinary.com/dxmlvkff1/video/upload/c_fill,g_auto,f_auto,q_auto:best,vc_auto,w_600,h_1067/v1783002216/Pizza_creation_luxury_background__202607021941_ctqnaq.mp4";
 
   return (
     <>
