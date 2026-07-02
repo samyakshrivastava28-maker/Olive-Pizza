@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useEffect, useState, Suspense } from 'react';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { Home, Menu as MenuIcon, ShoppingBag, User, Search, MapPin, ReceiptText, WifiOff, Download, ArrowDownToLine, RefreshCw } from 'lucide-react';
+import { Home, Menu as MenuIcon, ShoppingBag, User, Search, MapPin, ReceiptText, WifiOff, Download, RefreshCw } from 'lucide-react';
 
 import PWAPrompts from './ui/PWAPrompts';
 import { usePWA } from '../lib/usePWA';
@@ -40,30 +40,13 @@ export default function MainLayout() {
     }
   }, [user, role]);
 
-  const [showNav, setShowNav] = useState(true);
+  const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
-    const handleScroll = () => {
-      // Check if user is at the bottom of the page (within 50px)
-      const isAtBottom = window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 50;
-      if (isAtBottom) {
-        setShowNav(false);
-      } else {
-        setShowNav(true);
-      }
-    };
-
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
+    const onScroll = () => setScrolled(window.scrollY > 20);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
   }, []);
-
-  const navItems = [
-    { name: 'Home', path: '/', icon: <Home className="w-6 h-6" /> },
-    { name: 'Menu', path: '/menu', icon: <MenuIcon className="w-6 h-6" /> },
-    { name: 'Orders', path: '/dashboard', icon: <ReceiptText className="w-6 h-6" /> },
-    { name: 'Cart', path: '/cart', icon: <ShoppingBag className="w-6 h-6" />, badge: cartCount },
-    { name: 'Profile', path: isAuthenticated ? '/dashboard' : '/login', icon: <User className="w-6 h-6" /> }
-  ];
 
   return (
     <div className="min-h-screen flex flex-col bg-dark-950 pb-[72px] md:pb-0">
@@ -90,182 +73,266 @@ export default function MainLayout() {
         )}
       </AnimatePresence>
 
-      <header className="sticky top-0 z-50 bg-dark-900 border-b border-dark-800 shadow-sm">
-        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link to="/" className="flex items-center gap-2">
-              <img src="https://res.cloudinary.com/ditkqli2i/image/upload/v1782113833/olive-pizza-logo_nsoh49.webp" alt="Olive Pizza Logo" className="h-8 md:h-10 w-auto object-contain" />
-              <span className="text-xl md:text-2xl font-black text-primary-500 tracking-tight hidden sm:block">Olive Pizza</span>
+      {/* ─── Premium Floating Glass Navbar ───────────────────────────────────── */}
+      <motion.header
+        initial={{ y: -80, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+        className="fixed top-0 left-0 right-0 z-50 px-3 md:px-6 pt-3"
+      >
+        <div
+          className="mx-auto max-w-7xl rounded-2xl transition-all duration-500"
+          style={{
+            background: scrolled
+              ? "rgba(10,10,10,0.85)"
+              : "rgba(10,10,10,0.45)",
+            backdropFilter: "blur(24px)",
+            WebkitBackdropFilter: "blur(24px)",
+            border: scrolled
+              ? "1px solid rgba(255,255,255,0.08)"
+              : "1px solid rgba(255,255,255,0.06)",
+            boxShadow: scrolled
+              ? "0 8px 40px rgba(0,0,0,0.5), 0 1px 0 rgba(255,255,255,0.05)"
+              : "0 4px 20px rgba(0,0,0,0.2)",
+          }}
+        >
+          <div className="h-14 md:h-16 flex items-center justify-between px-4 md:px-6">
+            {/* Logo */}
+            <Link to="/" className="flex items-center gap-2.5 group">
+              <img
+                src="https://res.cloudinary.com/ditkqli2i/image/upload/v1782113833/olive-pizza-logo_nsoh49.webp"
+                alt="Olive Pizza Logo"
+                className="h-7 md:h-9 w-auto object-contain"
+              />
+              <span className="text-lg md:text-xl font-black tracking-tight hidden sm:block text-white group-hover:text-orange-400 transition-colors duration-200">
+                Olive Pizza
+              </span>
             </Link>
-          </div>
 
-          {/* Desktop Navigation */}
-          <nav className="hidden md:flex gap-8 items-center">
-            {isAuthenticated && user?.fullAddress && (
-              <div className="flex items-center gap-2 text-sm text-slate-300 max-w-[200px] bg-dark-800 px-3 py-1.5 rounded-full">
-                <MapPin className="w-4 h-4 text-primary-500 shrink-0" />
-                <span className="truncate">{user.fullAddress}</span>
-              </div>
-            )}
-            
-            <Link to="/" onMouseEnter={() => prefetchRoute('/')} onTouchStart={() => prefetchRoute('/')} className="font-medium text-slate-200 hover:text-primary-500 transition-colors">Home</Link>
-            <Link to="/menu" onMouseEnter={() => prefetchRoute('/menu')} onTouchStart={() => prefetchRoute('/menu')} className="font-medium text-slate-200 hover:text-primary-500 transition-colors">Menu</Link>
-            <Link to="/contact" onMouseEnter={() => prefetchRoute('/contact')} onTouchStart={() => prefetchRoute('/contact')} className="font-medium text-slate-200 hover:text-primary-500 transition-colors">Contact</Link>
-            
-            {/* Role-based Dashboard Links */}
-            {isAuthenticated && role === 'owner' && (
-              <Link to="/owner/dashboard" onMouseEnter={() => prefetchRoute('/owner/dashboard')} onTouchStart={() => prefetchRoute('/owner/dashboard')} className="font-bold text-accent-500 hover:text-accent-400 transition-colors">Owner Panel</Link>
-            )}
-            {isAuthenticated && role === 'delivery_partner' && (
-              <Link to="/delivery/dashboard" onMouseEnter={() => prefetchRoute('/delivery/dashboard')} onTouchStart={() => prefetchRoute('/delivery/dashboard')} className="font-bold text-secondary-500 hover:text-secondary-400 transition-colors">Delivery Panel</Link>
-            )}
-            {isAuthenticated && (!role || role === 'customer') && (
-              <Link to="/dashboard" onMouseEnter={() => prefetchRoute('/dashboard')} onTouchStart={() => prefetchRoute('/dashboard')} className="font-bold text-primary-500 hover:text-primary-400 transition-colors">Dashboard</Link>
-            )}
+            {/* Desktop Navigation */}
+            <nav className="hidden md:flex gap-1 items-center">
+              {isAuthenticated && user?.fullAddress && (
+                <div className="flex items-center gap-2 text-xs text-slate-300 max-w-[180px] px-3 py-1.5 rounded-full mr-2"
+                  style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                  <MapPin className="w-3 h-3 text-orange-400 shrink-0" />
+                  <span className="truncate">{user.fullAddress}</span>
+                </div>
+              )}
 
-            <Link to="/cart" onMouseEnter={() => prefetchRoute('/cart')} onTouchStart={() => prefetchRoute('/cart')} className="font-medium text-slate-200 hover:text-primary-500 transition-colors flex items-center gap-2 relative">
-              <ShoppingBag className="w-5 h-5" />
-              <AnimatePresence>
-                {cartCount > 0 && (
-                  <motion.span 
-                    key={cartCount}
-                    initial={{ scale: 0.5, y: -10, opacity: 0 }}
-                    animate={{ scale: 1, y: 0, opacity: 1 }}
-                    exit={{ scale: 0.5, opacity: 0 }}
-                    className="absolute -top-1.5 -right-2 bg-primary-500 text-white text-[10px] font-black w-4 h-4 flex items-center justify-center rounded-full shadow-md"
+              {[
+                { label: "Home", path: "/" },
+                { label: "Menu", path: "/menu" },
+                { label: "Contact", path: "/contact" },
+              ].map(({ label, path }) => {
+                const isActive = location.pathname === path;
+                return (
+                  <Link
+                    key={path}
+                    to={path}
+                    onMouseEnter={() => prefetchRoute(path)}
+                    className="relative px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 group"
+                    style={{ color: isActive ? "#fb923c" : "rgba(226,232,240,0.85)" }}
                   >
-                    {cartCount}
-                  </motion.span>
-                )}
-              </AnimatePresence>
-            </Link>
-            
-            {/* Desktop PWA Install/Open Button */}
-            {updateAvailable && (
-              <button 
-                onClick={() => window.dispatchEvent(new Event('trigger-pwa-update'))}
-                className="font-bold text-white hover:bg-green-500 bg-green-600 transition-all flex items-center gap-2 px-4 py-2 rounded-full shadow-md animate-pulse"
-              >
-                <RefreshCw className="w-4 h-4" /> Update App
-              </button>
-            )}
-            {!isStandalone && canInstall && !updateAvailable && (
-              <button 
-                onClick={installApp}
-                className="font-bold text-primary-500 hover:text-white hover:bg-primary-600 transition-all flex items-center gap-2 bg-primary-500/10 px-4 py-2 rounded-full border border-primary-500/30"
-              >
-                <Download className="w-4 h-4" /> Download for your device
-              </button>
-            )}
-            {!isStandalone && !canInstall && hasInstalled && (
-              <button 
-                onClick={() => alert("The app is already installed! Please open it from your device's home screen or app drawer.")}
-                className="font-bold text-white hover:text-white hover:bg-primary-500 transition-all flex items-center gap-2 bg-primary-600 px-4 py-2 rounded-full shadow-md shadow-primary-500/20"
-              >
-                <ArrowDownToLine className="w-4 h-4" /> Open App
-              </button>
-            )}
+                    {isActive && (
+                      <motion.span
+                        layoutId="nav-pill"
+                        className="absolute inset-0 rounded-xl"
+                        style={{ background: "rgba(249,115,22,0.12)", border: "1px solid rgba(249,115,22,0.2)" }}
+                        transition={{ type: "spring", stiffness: 400, damping: 35 }}
+                      />
+                    )}
+                    <span className="relative group-hover:text-white transition-colors duration-200">{label}</span>
+                  </Link>
+                );
+              })}
 
-            {isAuthenticated ? (
-              <div className="flex items-center gap-4">
-                <span className="font-bold text-white hidden lg:block">Hello, {user?.name?.split(' ')[0] || 'User'}</span>
-                <button 
-                  onClick={handleLogout}
-                  className="bg-dark-800 hover:bg-dark-700 text-slate-200 px-4 py-2 rounded-full font-medium transition-colors border border-dark-700"
-                >
-                  Sign Out
-                </button>
-              </div>
-            ) : (
-              <Link to="/login" className="bg-primary-600 hover:bg-primary-500 text-white px-5 py-2 rounded-full font-medium transition-colors shadow-md">Sign In</Link>
-            )}
-          </nav>
-
-          {/* Mobile Header Actions */}
-          <div className="flex md:hidden items-center gap-2">
-             {updateAvailable && (
-               <button 
-                 onClick={() => window.dispatchEvent(new Event('trigger-pwa-update'))}
-                 className="bg-green-600 text-white hover:bg-green-500 transition-all px-3 py-1.5 rounded-full shadow-md flex items-center gap-1 font-bold text-[10px] whitespace-nowrap animate-pulse"
-                 aria-label="Update App"
-               >
-                 <RefreshCw className="w-3 h-3" /> Update App
-               </button>
-             )}
-             {!isStandalone && canInstall && !updateAvailable && (
-               <button 
-                 onClick={installApp}
-                 className="bg-primary-500/10 text-primary-500 hover:bg-primary-600 hover:text-white transition-all px-3 py-1.5 rounded-full border border-primary-500/30 flex items-center gap-1 font-bold text-[10px] whitespace-nowrap"
-                 aria-label="Download for mobile"
-               >
-                 <Download className="w-3 h-3" /> Download for mobile
-               </button>
-             )}
-             {!isStandalone && !canInstall && hasInstalled && (
-               <button 
-                 onClick={() => alert("The app is already installed! Please open it from your home screen or app drawer.")}
-                 className="bg-primary-600 text-white hover:bg-primary-500 transition-all px-3 py-1.5 rounded-full shadow-md shadow-primary-500/20 flex items-center gap-1 font-bold text-[10px] whitespace-nowrap"
-                 aria-label="Open App"
-               >
-                 <ArrowDownToLine className="w-3 h-3" /> Open App
-               </button>
-             )}
-             <Link to="/menu?search=1" className="text-slate-300 p-2 ml-1"><Search className="w-5 h-5" /></Link>
-             {isAuthenticated ? (
-                <Link to="/dashboard" className="w-8 h-8 rounded-full bg-dark-800 flex items-center justify-center text-primary-500 overflow-hidden border border-dark-700">
-                  {user?.photoURL ? <img src={user.photoURL} alt="Profile" className="w-full h-full object-cover" /> : <User className="w-4 h-4" />}
+              {isAuthenticated && role === 'owner' && (
+                <Link to="/owner/dashboard" onMouseEnter={() => prefetchRoute('/owner/dashboard')}
+                  className="px-4 py-2 rounded-xl text-sm font-bold text-yellow-400 hover:text-yellow-300 hover:bg-yellow-400/10 transition-all duration-200">
+                  Owner Panel
                 </Link>
-             ) : (
-                <Link to="/login" className="text-xs font-bold bg-primary-600 text-white px-4 py-1.5 rounded-full">Sign In</Link>
-             )}
+              )}
+              {isAuthenticated && role === 'delivery_partner' && (
+                <Link to="/delivery/dashboard" onMouseEnter={() => prefetchRoute('/delivery/dashboard')}
+                  className="px-4 py-2 rounded-xl text-sm font-bold text-orange-400 hover:text-orange-300 hover:bg-orange-400/10 transition-all duration-200">
+                  Delivery Panel
+                </Link>
+              )}
+              {isAuthenticated && (!role || role === 'customer') && (
+                <Link to="/dashboard" onMouseEnter={() => prefetchRoute('/dashboard')}
+                  className="px-4 py-2 rounded-xl text-sm font-bold text-emerald-400 hover:text-emerald-300 hover:bg-emerald-400/10 transition-all duration-200">
+                  Dashboard
+                </Link>
+              )}
+
+              {/* Cart */}
+              <Link
+                to="/cart"
+                onMouseEnter={() => prefetchRoute('/cart')}
+                className="relative p-2.5 rounded-xl hover:bg-white/8 transition-all duration-200 ml-1"
+                style={{ color: "rgba(226,232,240,0.85)" }}
+              >
+                <ShoppingBag className="w-5 h-5" />
+                <AnimatePresence>
+                  {cartCount > 0 && (
+                    <motion.span
+                      key={cartCount}
+                      initial={{ scale: 0.5, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      exit={{ scale: 0.5, opacity: 0 }}
+                      className="absolute -top-0.5 -right-0.5 text-white text-[10px] font-black w-4 h-4 flex items-center justify-center rounded-full"
+                      style={{ background: "linear-gradient(135deg, #ea580c, #f97316)" }}
+                    >
+                      {cartCount}
+                    </motion.span>
+                  )}
+                </AnimatePresence>
+              </Link>
+
+              {/* Update/Install buttons */}
+              {updateAvailable && (
+                <button onClick={() => window.dispatchEvent(new Event('trigger-pwa-update'))}
+                  className="ml-2 px-4 py-2 rounded-xl text-sm font-bold text-white bg-green-600 hover:bg-green-500 transition-all flex items-center gap-2 animate-pulse">
+                  <RefreshCw className="w-3.5 h-3.5" /> Update
+                </button>
+              )}
+              {!isStandalone && canInstall && !updateAvailable && (
+                <button onClick={installApp}
+                  className="ml-2 px-4 py-2 rounded-xl text-sm font-bold text-orange-400 border border-orange-400/30 hover:bg-orange-400/10 transition-all flex items-center gap-2">
+                  <Download className="w-3.5 h-3.5" /> Install App
+                </button>
+              )}
+
+              {/* Auth */}
+              {isAuthenticated ? (
+                <div className="flex items-center gap-3 ml-2">
+                  <span className="text-sm font-bold text-white hidden lg:block">
+                    {user?.name?.split(' ')[0] || 'User'}
+                  </span>
+                  <button
+                    onClick={handleLogout}
+                    className="px-4 py-2 rounded-xl text-sm font-medium text-slate-300 hover:text-white hover:bg-white/8 transition-all border border-white/8"
+                  >
+                    Sign Out
+                  </button>
+                </div>
+              ) : (
+                <Link
+                  to="/login"
+                  className="ml-2 px-5 py-2 rounded-xl text-sm font-bold text-white transition-all duration-200 hover:-translate-y-0.5"
+                  style={{
+                    background: "linear-gradient(135deg, #ea580c 0%, #f97316 100%)",
+                    boxShadow: "0 4px 16px rgba(249,115,22,0.35)",
+                  }}
+                >
+                  Sign In
+                </Link>
+              )}
+            </nav>
+
+            {/* Mobile Header Actions */}
+            <div className="flex md:hidden items-center gap-2">
+              {updateAvailable && (
+                <button onClick={() => window.dispatchEvent(new Event('trigger-pwa-update'))}
+                  className="bg-green-600 text-white px-3 py-1.5 rounded-full text-[10px] font-bold flex items-center gap-1 animate-pulse">
+                  <RefreshCw className="w-3 h-3" /> Update
+                </button>
+              )}
+              {!isStandalone && canInstall && !updateAvailable && (
+                <button onClick={installApp}
+                  className="text-orange-400 border border-orange-400/30 px-3 py-1.5 rounded-full text-[10px] font-bold flex items-center gap-1">
+                  <Download className="w-3 h-3" /> Install
+                </button>
+              )}
+              <Link to="/menu?search=1" className="p-2 text-slate-300 hover:text-white transition-colors">
+                <Search className="w-5 h-5" />
+              </Link>
+              {isAuthenticated ? (
+                <Link to="/dashboard"
+                  className="w-8 h-8 rounded-full overflow-hidden border border-white/15 flex items-center justify-center"
+                  style={{ background: "rgba(255,255,255,0.08)" }}>
+                  {user?.photoURL
+                    ? <img src={user.photoURL} alt="Profile" className="w-full h-full object-cover" />
+                    : <User className="w-4 h-4 text-slate-300" />}
+                </Link>
+              ) : (
+                <Link to="/login"
+                  className="px-4 py-1.5 rounded-full text-xs font-bold text-white"
+                  style={{ background: "linear-gradient(135deg, #ea580c, #f97316)" }}>
+                  Sign In
+                </Link>
+              )}
+            </div>
           </div>
         </div>
-      </header>
+      </motion.header>
+
       
-      <main className={`flex-1 w-full ${location.pathname === '/' ? '' : 'max-w-7xl mx-auto py-2 md:py-8'}`}>
+      <main className={`flex-1 w-full ${location.pathname === '/' ? '' : 'max-w-7xl mx-auto pt-24 md:pt-24 py-2 md:py-8'}`}>
         <Suspense fallback={
           <div className="w-full h-[60vh] flex flex-col items-center justify-center">
-            <div className="w-10 h-10 border-4 border-dark-800 border-t-primary-500 rounded-full animate-spin" />
+            <div className="w-10 h-10 border-4 border-dark-800 border-t-orange-500 rounded-full animate-spin" />
           </div>
         }>
           <Outlet />
         </Suspense>
       </main>
 
-      {/* Mobile Bottom Navigation */}
-      <nav 
-        className={`md:hidden fixed bottom-0 left-0 right-0 bg-dark-900/90 backdrop-blur-xl border-t border-dark-800/60 flex items-center justify-between px-2 z-[70] transition-transform duration-300 ease-in-out shadow-[0_-4px_24px_rgba(0,0,0,0.4)] ${
-          showNav ? 'translate-y-0' : 'translate-y-full'
-        }`}
-        style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 4px)', paddingTop: '4px' }}
+      {/* ─── Premium Floating Glass Bottom Nav (Mobile) ──────────────────────── */}
+      <nav
+        className="md:hidden fixed bottom-3 left-3 right-3 z-[70] rounded-2xl flex items-center justify-between px-2"
+        style={{
+          background: "rgba(10,10,10,0.88)",
+          backdropFilter: "blur(24px)",
+          WebkitBackdropFilter: "blur(24px)",
+          border: "1px solid rgba(255,255,255,0.08)",
+          boxShadow: "0 -4px 24px rgba(0,0,0,0.5), 0 8px 32px rgba(0,0,0,0.4)",
+          paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 4px)',
+          paddingTop: '4px',
+        }}
       >
-        {navItems.map((item) => {
+        {[
+          { name: 'Home', path: '/', icon: <Home className="w-5 h-5" /> },
+          { name: 'Menu', path: '/menu', icon: <MenuIcon className="w-5 h-5" /> },
+          { name: 'Orders', path: '/dashboard', icon: <ReceiptText className="w-5 h-5" /> },
+          { name: 'Cart', path: '/cart', icon: <ShoppingBag className="w-5 h-5" />, badge: cartCount },
+          { name: 'Profile', path: isAuthenticated ? '/dashboard' : '/login', icon: <User className="w-5 h-5" /> },
+        ].map((item) => {
           const isActive = location.pathname === item.path || (item.path === '/dashboard' && location.pathname.startsWith('/dashboard'));
           return (
-            <Link 
-              key={item.name} 
-              to={item.path} 
-              onMouseEnter={() => prefetchRoute(item.path)}
+            <Link
+              key={item.name}
+              to={item.path}
               onTouchStart={() => prefetchRoute(item.path)}
               id={item.name === 'Cart' ? 'mobile-cart-nav-target' : undefined}
               className="flex flex-col items-center justify-center w-full min-h-[56px] relative group touch-manipulation"
             >
               {isActive && (
                 <motion.div
-                  layoutId="mobile-nav-pill"
-                  className="absolute inset-0 bg-primary-500/10 rounded-xl"
+                  layoutId="premium-mobile-nav-pill"
+                  className="absolute inset-0 rounded-xl"
+                  style={{ background: "rgba(249,115,22,0.12)", border: "1px solid rgba(249,115,22,0.18)" }}
                   transition={{ type: 'spring', stiffness: 400, damping: 30 }}
                 />
               )}
-              <div className={`relative transition-all duration-200 ${isActive ? 'text-primary-500 -translate-y-0.5' : 'text-slate-400 group-hover:text-slate-200 group-active:scale-95'}`}>
+              <div
+                className="relative transition-all duration-200"
+                style={{ color: isActive ? '#fb923c' : 'rgba(148,163,184,0.8)' }}
+              >
                 {item.icon}
                 {item.badge ? (
-                  <span className="absolute -top-1.5 -right-2 bg-secondary-500 text-white text-[10px] font-black min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full shadow-md border border-dark-900">
+                  <span
+                    className="absolute -top-1.5 -right-2 text-white text-[10px] font-black min-w-[17px] h-[17px] px-1 flex items-center justify-center rounded-full"
+                    style={{ background: "linear-gradient(135deg, #ea580c, #f97316)" }}
+                  >
                     {item.badge}
                   </span>
                 ) : null}
               </div>
-              <span className={`text-[10px] font-bold mt-1 tracking-wide transition-all duration-200 ${isActive ? 'text-primary-500 opacity-100' : 'text-slate-400 opacity-80'}`}>
+              <span
+                className="text-[10px] font-bold mt-0.5 tracking-wide transition-all duration-200"
+                style={{ color: isActive ? '#fb923c' : 'rgba(100,116,139,0.8)' }}
+              >
                 {item.name}
               </span>
             </Link>

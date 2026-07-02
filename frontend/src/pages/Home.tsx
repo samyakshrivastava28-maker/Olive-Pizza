@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { motion, AnimatePresence, useInView } from "framer-motion";
 import { Link, useNavigate } from "react-router";
 import { db } from "../lib/firebase";
@@ -13,7 +13,7 @@ import {
 import PageTransition from "../components/PageTransition";
 import { useDataStore } from "../lib/dataStore";
 import { useStoreStatus } from "../lib/useStoreStatus";
-import { ChevronRight, ShoppingBag, RefreshCw, Heart } from "lucide-react";
+import { ChevronRight, RefreshCw, Zap, Bot } from "lucide-react";
 import { lazy, Suspense } from "react";
 const Ferrofluid = lazy(() => import("../components/ui/Ferrofluid"));
 const LocationMap = lazy(() => import("../components/ui/LocationMap"));
@@ -22,7 +22,8 @@ import BannerCarousel from "../components/ui/BannerCarousel";
 import CouponCard from "../components/ui/CouponCard";
 import ComboCard from "../components/ui/ComboCard";
 import SpecialCategorySection from "../components/ui/SpecialCategorySection";
-import WishlistButton from "../components/ui/WishlistButton";
+import LuxuryHero from "../components/ui/LuxuryHero";
+import LuxuryProductCard from "../components/ui/LuxuryProductCard";
 import { useAuthStore, useCartStore } from "../lib/store";
 import { useHomeLayoutStore } from "../lib/homeLayout";
 import { filterActive } from "../lib/scheduling";
@@ -32,27 +33,96 @@ import toast from "react-hot-toast";
 import SEO from "../components/SEO";
 import { generateRestaurantSchema } from "../lib/schema";
 
-// Skeleton loader
+// ─── Premium Skeleton ─────────────────────────────────────────────────────────
 function SectionSkeleton({ rows = 3 }: { rows?: number }) {
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 animate-pulse">
       {[...Array(rows * 2)].map((_, i) => (
-        <div key={i} className="bg-dark-800 rounded-2xl aspect-square" />
+        <div key={i} className="luxury-shimmer rounded-2xl aspect-square" />
       ))}
     </div>
   );
 }
 
+// ─── Premium Section Header ───────────────────────────────────────────────────
+function PremiumSectionHeader({
+  title,
+  subtitle,
+  accent,
+  noMargin,
+}: {
+  title: string;
+  subtitle?: string;
+  accent?: string;
+  noMargin?: boolean;
+}) {
+  return (
+    <div className={noMargin ? "" : "mb-6 md:mb-8"}>
+      <h2 className="luxury-section-title">
+        {accent && (
+          <span
+            className="mr-2"
+            style={{
+              background: "linear-gradient(135deg, #fb923c, #fbbf24)",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+              backgroundClip: "text",
+            }}
+          >
+            {accent}
+          </span>
+        )}
+        {title}
+      </h2>
+      {subtitle && <p className="luxury-section-subtitle">{subtitle}</p>}
+    </div>
+  );
+}
+
+// ─── Premium Section Wrapper with scroll reveal ───────────────────────────────
+function PremiumSectionWrapper({
+  id,
+  children,
+  onView,
+}: {
+  id: string;
+  children: React.ReactNode;
+  onView?: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!ref.current || !onView) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          onView();
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.08 }
+    );
+    observer.observe(ref.current);
+    return () => observer.disconnect();
+  }, [onView]);
+
+  return (
+    <motion.div
+      ref={ref}
+      id={`section-${id}`}
+      initial={{ opacity: 0, y: 28 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: "-60px" }}
+      transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 export default function Home() {
   const [showIntro, setShowIntro] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
-  const [heroVideoError, setHeroVideoError] = useState(false);
-
-  // Hero Video Optimization
-  const heroRef = useRef<HTMLHeadingElement>(null);
-  const isHeroInView = useInView(heroRef, { margin: "200px 0px" });
-  const heroVideoRefMobile = useRef<HTMLVideoElement>(null);
-  const heroVideoRefDesktop = useRef<HTMLVideoElement>(null);
 
   const storeStatus = useStoreStatus();
   const { user, isAuthenticated } = useAuthStore();
@@ -61,7 +131,9 @@ export default function Home() {
 
   // ─── Home Layout ─────────────────────────────────────────────────────────
   const { sections, subscribePublished } = useHomeLayoutStore();
-  const activeSections = [...sections].sort((a, b) => a.order - b.order).filter((s) => s.isEnabled);
+  const activeSections = [...sections]
+    .sort((a, b) => a.order - b.order)
+    .filter((s) => s.isEnabled);
 
   useEffect(() => {
     const unsub = subscribePublished();
@@ -83,9 +155,11 @@ export default function Home() {
     initialize();
   }, [initialize]);
 
-  const allProducts = useMemo(() => [...products.filter(p => !p.isComboOnly), ...combos], [products, combos]);
-  
-  // Auto top selling: weighted score
+  const allProducts = useMemo(
+    () => [...products.filter((p) => !p.isComboOnly), ...combos],
+    [products, combos]
+  );
+
   const topSelling = useMemo(() => {
     return [...allProducts]
       .sort((a, b) => computeRankingScore(b as any) - computeRankingScore(a as any))
@@ -96,66 +170,60 @@ export default function Home() {
   const [previousOrders, setPreviousOrders] = useState<any[]>([]);
   const [savedProducts, setSavedProducts] = useState<any[]>([]);
 
-  // ─── Intro Video ──────────────────────────────────────────────────────────
+  // ─── Intro gate ───────────────────────────────────────────────────────────
   useEffect(() => {
     const connection = (navigator as any).connection;
-    const isSlowNetwork = connection && (connection.effectiveType === 'slow-2g' || connection.effectiveType === '2g');
+    const isSlowNetwork =
+      connection &&
+      (connection.effectiveType === "slow-2g" || connection.effectiveType === "2g");
 
     const hasPlayed = sessionStorage.getItem("olive_intro_seen");
-    
-    let fallbackTimer: NodeJS.Timeout;
+    let fallbackTimer: ReturnType<typeof setTimeout>;
+
     if (!hasPlayed && !isSlowNetwork) {
       setShowIntro(true);
       document.body.style.overflow = "hidden";
-      
-      // FOOLPROOF FALLBACK: Force end the intro after 8 seconds no matter what.
-      fallbackTimer = setTimeout(() => {
-        handleIntroEnd();
-      }, 8000);
+      fallbackTimer = setTimeout(() => handleIntroEnd(), 8000);
     }
 
-    const checkMobile = () => setIsMobile(window.innerWidth < 768);
-    checkMobile();
-    window.addEventListener("resize", checkMobile);
-    
     return () => {
       if (fallbackTimer) clearTimeout(fallbackTimer);
-      window.removeEventListener("resize", checkMobile);
       document.body.style.overflow = "";
     };
   }, []);
 
-  const handleIntroEnd = () => {
+  const handleIntroEnd = useCallback(() => {
     sessionStorage.setItem("olive_intro_seen", "true");
     setShowIntro(false);
     document.body.style.overflow = "";
-  };
+  }, []);
 
+  // ─── Intro video ──────────────────────────────────────────────────────────
+  const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
-    if (!showIntro) {
-      if (isHeroInView) {
-        heroVideoRefMobile.current?.play().catch(() => setHeroVideoError(true));
-        heroVideoRefDesktop.current?.play().catch(() => setHeroVideoError(true));
-      } else {
-        heroVideoRefMobile.current?.pause();
-        heroVideoRefDesktop.current?.pause();
-      }
-    }
-  }, [isHeroInView, showIntro]);
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener("resize", check, { passive: true });
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
+  const desktopIntroUrl =
+    "https://res.cloudinary.com/dxmlvkff1/video/upload/f_auto,q_auto:eco,w_800/v1782199127/Olive_Pizza_logo_reveal_202606231247_rrtc3u.mp4";
+  const mobileIntroUrl =
+    "https://res.cloudinary.com/dxmlvkff1/video/upload/f_auto,q_auto:eco,w_480/v1782199117/Olive_Pizza_logo_reveal_202606231246_xeyk9t.mp4";
 
   // ─── Wishlist ─────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!isAuthenticated || !user) return;
     const unsub = subscribeToWishlist(user.uid, (ids) => {
       setWishlistIds(ids);
-      // Resolve saved products
       const saved = allProducts.filter((p) => ids.includes(p.id));
       setSavedProducts(saved);
     });
     return unsub;
   }, [isAuthenticated, user, allProducts]);
 
-  // ─── Previous Orders (Order Again) ───────────────────────────────────────
+  // ─── Previous Orders ──────────────────────────────────────────────────────
   useEffect(() => {
     if (!isAuthenticated || !user) return;
     const fetchOrders = async () => {
@@ -168,83 +236,93 @@ export default function Home() {
             limit(10)
           )
         );
-        const orders = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        setPreviousOrders(orders);
+        setPreviousOrders(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
       } catch (e) {
-        // Orders may be in Postgres; silently ignore
+        // silently ignore — orders may be in Postgres
       }
     };
     fetchOrders();
   }, [isAuthenticated, user]);
 
-  // ─── Order Again handler ──────────────────────────────────────────────────
-  const handleReorderAll = (order: any) => {
-    if (!order.items) return;
-    order.items.forEach((item: any) => {
-      addItem({
-        id: item.productId || item.id,
-        productId: item.productId || item.id,
-        productName: item.productName || item.name,
-        price: item.price,
-        quantity: item.quantity || 1,
-        imageUrl: item.imageUrl || "",
-      } as any);
-    });
-    toast.success(`${order.items.length} items added to cart!`);
-    navigate("/cart");
-  };
+  const handleReorderAll = useCallback(
+    (order: any) => {
+      if (!order.items) return;
+      order.items.forEach((item: any) => {
+        addItem({
+          id: item.productId || item.id,
+          productId: item.productId || item.id,
+          productName: item.productName || item.name,
+          price: item.price,
+          quantity: item.quantity || 1,
+          imageUrl: item.imageUrl || "",
+        } as any);
+      });
+      toast.success(`${order.items.length} items added to cart!`);
+      navigate("/cart");
+    },
+    [addItem, navigate]
+  );
+
+  const isStoreOpen =
+    storeStatus.isRestaurantOpen && storeStatus.isWithinBusinessHours;
 
   // ─── Render a section by type ─────────────────────────────────────────────
-  const renderSection = (section: typeof activeSections[0]) => {
+  const renderSection = (section: (typeof activeSections)[0]) => {
     switch (section.type) {
       case "hero":
-        return null; // Hero is always rendered at the top
+        return null;
 
       case "ads":
         if (!isInitialized) return <SectionSkeleton rows={1} />;
         if (ads.length === 0) return null;
         return (
-          <SectionWrapper
+          <PremiumSectionWrapper
             id="ads"
             key="ads"
             onView={() => trackEvent({ type: "section_view", sectionId: "ads" })}
           >
-            <BannerCarousel banners={ads.map((a) => ({
-              id: a.id,
-              title: a.title,
-              description: a.description,
-              mediaUrl: a.mediaUrl,
-              mediaType: a.mediaType,
-              ctaText: a.ctaText,
-              ctaLink: a.ctaLink,
-              ctaType: a.ctaType,
-            }))} />
-          </SectionWrapper>
+            <BannerCarousel
+              banners={ads.map((a) => ({
+                id: a.id,
+                title: a.title,
+                description: a.description,
+                mediaUrl: a.mediaUrl,
+                mediaType: a.mediaType,
+                ctaText: a.ctaText,
+                ctaLink: a.ctaLink,
+                ctaType: a.ctaType,
+              }))}
+            />
+          </PremiumSectionWrapper>
         );
 
       case "coupons":
         if (!isInitialized) return <SectionSkeleton rows={1} />;
         if (coupons.length === 0) return null;
         return (
-          <SectionWrapper
+          <PremiumSectionWrapper
             id="coupons"
             key="coupons"
             onView={() => trackEvent({ type: "section_view", sectionId: "coupons" })}
           >
-            <SectionHeader title="🎟️ Active Offers" subtitle="Grab these deals before they expire!" />
+            <PremiumSectionHeader
+              title="Active Offers"
+              subtitle="Grab these deals before they expire!"
+              accent="🎟️"
+            />
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {coupons.map((coupon, i) => (
                 <CouponCard key={coupon.id} coupon={coupon} index={i} />
               ))}
             </div>
-          </SectionWrapper>
+          </PremiumSectionWrapper>
         );
 
       case "special_categories":
         if (!isInitialized) return <SectionSkeleton rows={2} />;
         if (specialCategories.length === 0) return null;
         return (
-          <div key="special_categories" className="space-y-8">
+          <div key="special_categories" className="space-y-12">
             {specialCategories.map((cat, i) => (
               <SpecialCategorySection
                 key={cat.id}
@@ -261,66 +339,89 @@ export default function Home() {
         if (!isInitialized) return <SectionSkeleton rows={2} />;
         if (topSelling.length === 0) return null;
         return (
-          <SectionWrapper
+          <PremiumSectionWrapper
             id="top_selling"
             key="top_selling"
             onView={() => trackEvent({ type: "section_view", sectionId: "top_selling" })}
           >
-            <SectionHeader title="🔥 Top Selling" subtitle="Our customers' favourites" />
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            <PremiumSectionHeader
+              title="Top Selling"
+              subtitle="Our customers' absolute favourites"
+              accent="🔥"
+            />
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-5">
               {topSelling.map((p, i) => (
-                <ProductCardWrapper key={p.id} product={p} wishlistIds={wishlistIds} index={i} />
+                <LuxuryProductCard
+                  key={p.id}
+                  product={p}
+                  wishlistIds={wishlistIds}
+                  index={i}
+                />
               ))}
             </div>
-          </SectionWrapper>
+          </PremiumSectionWrapper>
         );
 
       case "menu":
         return (
-          <SectionWrapper id="menu" key="menu" onView={() => {}}>
-            <SectionHeader title="🍕 Our Menu" subtitle="Everything from our kitchen" />
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          <PremiumSectionWrapper id="menu" key="menu" onView={() => {}}>
+            <PremiumSectionHeader
+              title="Our Menu"
+              subtitle="Everything crafted fresh from our kitchen"
+              accent="🍕"
+            />
+            <div className="grid grid-cols-3 gap-3 md:gap-5">
               {[
                 { label: "Pizzas", category: "pizza", emoji: "🍕", color: "#f97316" },
                 { label: "Sides", category: "sides", emoji: "🥗", color: "#10b981" },
                 { label: "Beverages", category: "beverage", emoji: "🥤", color: "#3b82f6" },
               ].map((cat) => (
-                <motion.div key={cat.category} whileHover={{ y: -4 }} className="group">
+                <motion.div key={cat.category} whileHover={{ y: -4, scale: 1.02 }} whileTap={{ scale: 0.97 }}>
                   <Link
                     to={`/menu?category=${cat.category}`}
-                    className="flex flex-col items-center gap-3 p-6 rounded-2xl border border-white/10 bg-dark-900/60 hover:border-white/20 transition-all"
-                    style={{ boxShadow: `0 0 0 0 ${cat.color}` }}
+                    className="flex flex-col items-center gap-3 p-5 md:p-7 rounded-2xl transition-all"
+                    style={{
+                      background: "linear-gradient(145deg, rgba(30,30,30,0.9), rgba(18,18,18,0.97))",
+                      border: "1px solid rgba(255,255,255,0.07)",
+                      boxShadow: "0 12px 40px rgba(0,0,0,0.5)",
+                    }}
                   >
-                    <span className="text-4xl">{cat.emoji}</span>
-                    <span className="font-black text-white text-lg">{cat.label}</span>
-                    <span className="flex items-center gap-1 text-xs font-bold text-slate-400">
+                    <span className="text-3xl md:text-4xl">{cat.emoji}</span>
+                    <span className="font-black text-white text-sm md:text-base">{cat.label}</span>
+                    <span
+                      className="flex items-center gap-1 text-[11px] font-bold"
+                      style={{ color: cat.color }}
+                    >
                       View All <ChevronRight className="w-3 h-3" />
                     </span>
                   </Link>
                 </motion.div>
               ))}
             </div>
-          </SectionWrapper>
+          </PremiumSectionWrapper>
         );
 
       case "personalization":
         if (!isAuthenticated) return null;
         if (!isInitialized || allProducts.length === 0) return null;
-        // Simple personalization: show recently viewed or a shuffled featured set
         const recommended = [...allProducts].sort(() => Math.random() - 0.5).slice(0, 4);
         return (
-          <SectionWrapper
+          <PremiumSectionWrapper
             id="personalization"
             key="personalization"
             onView={() => trackEvent({ type: "section_view", sectionId: "personalization" })}
           >
-            <SectionHeader title="✨ Recommended For You" subtitle="Picks tailored to your taste" />
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <PremiumSectionHeader
+              title="Recommended For You"
+              subtitle="Picks tailored to your taste"
+              accent="✨"
+            />
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-5">
               {recommended.map((p, i) => (
-                <ProductCardWrapper key={p.id} product={p} wishlistIds={wishlistIds} index={i} />
+                <LuxuryProductCard key={p.id} product={p} wishlistIds={wishlistIds} index={i} />
               ))}
             </div>
-          </SectionWrapper>
+          </PremiumSectionWrapper>
         );
 
       case "order_again":
@@ -331,47 +432,57 @@ export default function Home() {
         );
         if (recentProducts.length === 0) return null;
         return (
-          <SectionWrapper
+          <PremiumSectionWrapper
             id="order_again"
             key="order_again"
             onView={() => trackEvent({ type: "section_view", sectionId: "order_again" })}
           >
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
-              <SectionHeader
-                title="🔄 Order Again"
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+              <PremiumSectionHeader
+                title="Order Again"
                 subtitle={`From your last order • ${new Date(recentOrder.createdAt).toLocaleDateString()}`}
+                accent="🔄"
                 noMargin
               />
-              <button
+              <motion.button
                 onClick={() => handleReorderAll(recentOrder)}
-                className="flex items-center gap-2 bg-primary-600 hover:bg-primary-500 text-white px-4 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95"
+                whileTap={{ scale: 0.95 }}
+                className="flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-sm text-white transition-all"
+                style={{
+                  background: "linear-gradient(135deg, #ea580c, #f97316)",
+                  boxShadow: "0 4px 16px rgba(249,115,22,0.3)",
+                }}
               >
                 <RefreshCw className="w-4 h-4" /> Re-order All
-              </button>
+              </motion.button>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-5">
               {recentProducts.slice(0, 4).map((p, i) => (
-                <ProductCardWrapper key={p.id} product={p} wishlistIds={wishlistIds} index={i} />
+                <LuxuryProductCard key={p.id} product={p} wishlistIds={wishlistIds} index={i} />
               ))}
             </div>
-          </SectionWrapper>
+          </PremiumSectionWrapper>
         );
 
       case "wishlist":
         if (!isAuthenticated || savedProducts.length === 0) return null;
         return (
-          <SectionWrapper
+          <PremiumSectionWrapper
             id="wishlist"
             key="wishlist"
             onView={() => trackEvent({ type: "section_view", sectionId: "wishlist" })}
           >
-            <SectionHeader title="❤️ Saved Products" subtitle="Items you've hearted" />
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <PremiumSectionHeader
+              title="Saved Products"
+              subtitle="Items you've hearted"
+              accent="❤️"
+            />
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-5">
               {savedProducts.map((p, i) => (
-                <ProductCardWrapper key={p.id} product={p} wishlistIds={wishlistIds} index={i} />
+                <LuxuryProductCard key={p.id} product={p} wishlistIds={wishlistIds} index={i} />
               ))}
             </div>
-          </SectionWrapper>
+          </PremiumSectionWrapper>
         );
 
       default:
@@ -379,333 +490,229 @@ export default function Home() {
     }
   };
 
-  const desktopIntroUrl = "https://res.cloudinary.com/dxmlvkff1/video/upload/f_auto,q_auto:eco,w_800/v1782199127/Olive_Pizza_logo_reveal_202606231247_rrtc3u.mp4";
-  const mobileIntroUrl = "https://res.cloudinary.com/dxmlvkff1/video/upload/f_auto,q_auto:eco,w_480/v1782199117/Olive_Pizza_logo_reveal_202606231246_xeyk9t.mp4";
-  const desktopBgUrl = "https://res.cloudinary.com/dxmlvkff1/video/upload/f_auto,q_auto:best,vc_auto,w_1080/v1783002216/Pizza_creation_luxury_background__202607021941_ctqnaq.mp4";
-  const mobileBgUrl = "https://res.cloudinary.com/dxmlvkff1/video/upload/c_fill,g_auto,f_auto,q_auto:best,vc_auto,w_600,h_1067/v1783002216/Pizza_creation_luxury_background__202607021941_ctqnaq.mp4";
-
   return (
     <>
-      <SEO 
-        title="Home"
-        schemaMarkup={generateRestaurantSchema()}
-      />
+      <SEO title="Home" schemaMarkup={generateRestaurantSchema()} />
       <PageTransition className="relative w-full">
+
+        {/* ─── Intro Video ─────────────────────────────────────────────────── */}
         <AnimatePresence>
-        {showIntro && (
-          <motion.div
-            key="intro"
-            initial={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.8 }}
-            className="fixed inset-0 z-[9999] bg-dark-950 flex items-center justify-center"
-            style={{ willChange: 'opacity' }}
-          >
-            <video
-              ref={(el) => {
-                if (el) {
-                  // Catch autoplay failures on mobile and skip immediately
-                  const playPromise = el.play();
-                  if (playPromise !== undefined) {
-                    playPromise.catch(() => {
-                      handleIntroEnd();
-                    });
-                  }
-                }
-              }}
-              src={isMobile ? mobileIntroUrl : desktopIntroUrl}
-              poster={(isMobile ? mobileIntroUrl : desktopIntroUrl).replace('.mp4', '.jpg')}
-              autoPlay muted playsInline
-              preload="metadata"
-              onEnded={handleIntroEnd}
-              onError={() => setTimeout(handleIntroEnd, 1000)}
-              className="w-full h-full object-cover"
-              style={{ transform: 'translateZ(0)', willChange: 'transform' }}
-            />
-            <button
-              onClick={handleIntroEnd}
-              className="absolute top-safe-6 right-6 mt-6 px-4 py-2 bg-white/10 backdrop-blur-md border border-white/20 rounded-full text-white text-xs tracking-widest uppercase font-bold z-10 shadow-xl hover:bg-white/20 transition-colors"
+          {showIntro && (
+            <motion.div
+              key="intro"
+              initial={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.8 }}
+              className="fixed inset-0 z-[9999] bg-dark-950 flex items-center justify-center"
+              style={{ willChange: "opacity" }}
             >
-              Skip Intro ➔
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Store closed banner */}
-      {!storeStatus.isLoading && (!storeStatus.isRestaurantOpen || !storeStatus.isWithinBusinessHours) && (
-        <div className="bg-red-500 text-white font-bold text-center py-2 px-4 shadow-md sticky top-0 z-50">
-          🚧 The restaurant is currently closed. You can browse the menu but cannot place an order.
-        </div>
-      )}
-
-      {/* ─── Mobile Hero Section (<= 768px) ─────────────────────────────── */}
-      <header ref={heroRef} className="md:hidden relative w-full h-[100svh] min-h-[600px] overflow-hidden bg-dark-950">
-        {!heroVideoError && (
-          <video
-            ref={heroVideoRefMobile}
-            src={mobileBgUrl}
-            poster={mobileBgUrl.replace('vc_auto,', '').replace('.mp4', '.jpg')}
-            muted loop playsInline
-            preload="metadata"
-            onError={() => setHeroVideoError(true)}
-            className="absolute inset-0 w-full h-full object-cover z-0"
-            style={{ transform: 'translateZ(0)', willChange: 'transform' }}
-          />
-        )}
-        {heroVideoError && (
-          <img
-            src={desktopBgUrl.replace('vc_auto,', '').replace('.mp4', '.jpg')}
-            alt="Hero Background"
-            className="absolute inset-0 w-full h-full object-cover z-0"
-            style={{ objectPosition: 'center center' }}
-          />
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-dark-950 via-dark-950/70 to-transparent z-10" />
-        <div className="relative z-20 w-full h-full flex flex-col justify-end pb-[120px] px-6 text-center">
-          <motion.div
-            initial={{ y: 30, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ duration: 0.8, delay: showIntro ? 1 : 0 }}
-            className="flex flex-col items-center w-full max-w-full"
-          >
-            <h1 className="text-[2.5rem] font-black text-white mb-4 tracking-tight leading-[1.1] w-full break-words">
-              Fresh Pizza Delivered Hot To Your Door
-            </h1>
-            <p className="text-base text-slate-200 mb-8 font-medium leading-relaxed max-w-[90%] mx-auto">
-              Premium ingredients. Fast delivery. Unforgettable taste.
-            </p>
-            <div className="flex flex-col gap-4 w-full">
-              <Link
-                to="/menu"
-                className="bg-primary-600/90 backdrop-blur-md border border-primary-500/50 text-white w-full h-[56px] rounded-full font-bold text-lg flex items-center justify-center gap-2 hover:bg-primary-500 transition-all shadow-[0_8px_30px_rgb(0,0,0,0.12)] active:scale-95"
-              >
-                {storeStatus.isRestaurantOpen && storeStatus.isWithinBusinessHours ? "Order Now" : "Store Closed"}
-                <ChevronRight className="w-5 h-5" />
-              </Link>
-              <Link
-                to="/menu"
-                className="bg-dark-800/80 backdrop-blur-md border border-dark-700 text-white w-full h-[56px] rounded-full font-bold text-lg flex items-center justify-center hover:bg-dark-700 transition-all shadow-[0_8px_30px_rgb(0,0,0,0.12)] active:scale-95"
-              >
-                Explore Menu
-              </Link>
-            </div>
-          </motion.div>
-        </div>
-      </header>
-
-      {/* ─── Desktop Hero Section (> 768px) ─────────────────────────────── */}
-      <header className="hidden md:flex relative w-full h-[90dvh] min-h-[700px] overflow-hidden rounded-b-[3rem] shadow-2xl flex-col justify-end">
-        {!heroVideoError && (
-          <video
-            ref={heroVideoRefDesktop}
-            src={desktopBgUrl}
-            poster={desktopBgUrl.replace('vc_auto,', '').replace('.mp4', '.jpg')}
-            muted loop playsInline
-            preload="metadata"
-            onError={() => setHeroVideoError(true)}
-            className="absolute inset-0 w-full h-full object-cover pointer-events-none z-0"
-            style={{ transform: 'translateZ(0)', willChange: 'transform' }}
-          />
-        )}
-        {heroVideoError && (
-          <img
-            src={desktopBgUrl.replace('vc_auto,', '').replace('.mp4', '.jpg')}
-            alt="Hero Background"
-            className="absolute inset-0 w-full h-full object-cover pointer-events-none z-0"
-          />
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-dark-950 via-dark-950/60 to-dark-950/30 z-10" />
-        <div className="relative z-20 h-full flex flex-col justify-end pb-24 px-8 max-w-7xl mx-auto w-full">
-          <motion.div
-            initial={{ y: 30, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ duration: 0.8, delay: showIntro ? 1 : 0 }}
-            className="max-w-2xl"
-          >
-            <h1 className="text-5xl md:text-7xl font-black text-white mb-4 tracking-tight leading-[1.1]">
-              Fresh Pizza Delivered Hot To Your Door
-            </h1>
-            <p className="text-2xl text-slate-300 mb-8 font-medium leading-relaxed max-w-lg">
-              Premium ingredients. Fast delivery. Unforgettable taste.
-            </p>
-            <div className="flex flex-row gap-4">
-              <Link
-                to="/menu"
-                className="bg-primary-600 text-white px-8 py-4 rounded-full font-bold text-lg text-center flex items-center justify-center gap-2 hover:bg-primary-500 transition-colors shadow-lg active:scale-95"
-              >
-                {storeStatus.isRestaurantOpen && storeStatus.isWithinBusinessHours ? "Order Now" : "Store Closed"}
-                <ChevronRight className="w-5 h-5" />
-              </Link>
-              <Link
-                to="/menu"
-                className="bg-dark-800 text-white border border-dark-700 px-8 py-4 rounded-full font-bold text-lg text-center flex items-center justify-center hover:bg-dark-700 transition-colors active:scale-95"
-              >
-                Explore Menu
-              </Link>
-            </div>
-          </motion.div>
-        </div>
-      </header>
-
-      {/* Main Content Area */}
-      <main className="w-full pt-16 pb-24 md:pb-32 bg-dark-950 overflow-hidden relative">
-        {/* Ferrofluid background — same as Visit Olive Pizza section */}
-        <div className="absolute inset-0 pointer-events-none opacity-20 z-0">
-          <Suspense fallback={null}>
-            <Ferrofluid />
-          </Suspense>
-        </div>
-
-        {/* Dynamic Sections */}
-        <div className="max-w-7xl mx-auto px-4 py-12 space-y-12 relative z-10">
-          {activeSections
-            .filter((s) => s.type !== "hero")
-            .map((section) => renderSection(section))}
-        </div>
-
-        {/* ─── Location Section (always last) ──────────────────────────────── */}
-        <div className="py-16 md:py-24 border-t border-dark-800/60 relative z-10">
-          <div className="max-w-7xl mx-auto px-4">
-            <div className="text-center mb-12">
-              <h2 className="text-3xl md:text-5xl font-black text-white mb-4">Visit Olive Pizza</h2>
-              <p className="text-slate-400 max-w-2xl mx-auto mb-8">
-                We deliver fresh to your door, or you can drop by and grab a hot slice right out of the oven.
-              </p>
-              <OpenInMapsButton />
-            </div>
-            <Suspense fallback={<div className="w-full h-80 md:h-[500px] rounded-3xl bg-dark-800 animate-pulse border-4 border-dark-800" />}>
-              <LocationMap
-                className="w-full h-80 md:h-[500px] rounded-3xl shadow-2xl border-4 border-dark-800 z-0"
-                showRadius
+              <video
+                ref={(el) => {
+                  if (el) {
+                    const p = el.play();
+                    if (p !== undefined) p.catch(() => handleIntroEnd());
+                  }
+                }}
+                src={isMobile ? mobileIntroUrl : desktopIntroUrl}
+                autoPlay
+                muted
+                playsInline
+                preload="metadata"
+                onEnded={handleIntroEnd}
+                onError={() => setTimeout(handleIntroEnd, 1000)}
+                className="w-full h-full object-cover"
+                style={{ transform: "translateZ(0)", willChange: "transform" }}
               />
-            </Suspense>
-          </div>
-        </div>
-      </main>
-    </PageTransition>
-  </>
-);
-}
-
-// ─── Helper Components ─────────────────────────────────────────────────────────
-
-function SectionWrapper({
-  id,
-  children,
-  onView,
-}: {
-  id: string;
-  children: React.ReactNode;
-  onView?: () => void;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!ref.current || !onView) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          onView();
-          observer.disconnect();
-        }
-      },
-      { threshold: 0.1 }
-    );
-    observer.observe(ref.current);
-    return () => observer.disconnect();
-  }, [onView]);
-
-  return (
-    <motion.div
-      ref={ref}
-      id={`section-${id}`}
-      initial={{ opacity: 0, y: 24 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true }}
-      transition={{ duration: 0.5 }}
-    >
-      {children}
-    </motion.div>
-  );
-}
-
-function SectionHeader({
-  title,
-  subtitle,
-  noMargin,
-}: {
-  title: string;
-  subtitle?: string;
-  noMargin?: boolean;
-}) {
-  return (
-    <div className={noMargin ? "" : "mb-5"}>
-      <h2 className="text-2xl md:text-3xl font-black text-white">{title}</h2>
-      {subtitle && <p className="text-slate-400 text-sm mt-1">{subtitle}</p>}
-    </div>
-  );
-}
-
-function ProductCardWrapper({
-  product,
-  wishlistIds,
-  index,
-}: {
-  product: any;
-  wishlistIds: string[];
-  index: number;
-}) {
-  const addItem = useCartStore((s) => s.addItem);
-
-  return (
-    <motion.div
-      key={product.id}
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.06, duration: 0.4 }}
-      whileHover={{ y: -4 }}
-      className="relative group bg-dark-900/60 border border-white/5 rounded-2xl overflow-hidden hover:border-white/20 transition-all"
-    >
-      <Link to={`/product/${product.id}`}>
-        <div className="relative aspect-square overflow-hidden">
-          {product.imageUrl ? (
-            <img
-              src={product.imageUrl.replace("/upload/", "/upload/f_auto,q_auto,w_300/")}
-              alt={product.productName}
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-              loading="lazy"
-              onClick={() => trackEvent({ type: "product_view", productId: product.id })}
-            />
-          ) : (
-            <div className="w-full h-full bg-dark-800 flex items-center justify-center text-4xl">🍕</div>
+              <button
+                onClick={handleIntroEnd}
+                className="absolute top-safe-6 right-6 mt-6 px-4 py-2 rounded-full text-white text-xs tracking-widest uppercase font-bold z-10"
+                style={{
+                  background: "rgba(255,255,255,0.1)",
+                  backdropFilter: "blur(12px)",
+                  border: "1px solid rgba(255,255,255,0.2)",
+                }}
+              >
+                Skip Intro ➔
+              </button>
+            </motion.div>
           )}
-          <div className="absolute top-2 right-2">
-            <WishlistButton productId={product.id} wishlistIds={wishlistIds} size="sm" />
+        </AnimatePresence>
+
+        {/* Store closed banner */}
+        {!storeStatus.isLoading && !isStoreOpen && (
+          <div className="text-white font-bold text-center py-2.5 px-4 shadow-md sticky top-[72px] z-40 text-sm"
+            style={{ background: "rgba(239,68,68,0.9)", backdropFilter: "blur(8px)" }}>
+            🚧 Restaurant currently closed — browse menu, order when we open!
           </div>
-          {product.isVegetarian && (
-            <span className="absolute top-2 left-2 bg-green-500 w-5 h-5 rounded border-2 border-white flex items-center justify-center">
-              <span className="w-2 h-2 rounded-full bg-white block" />
-            </span>
-          )}
-        </div>
-      </Link>
-      <div className="p-3">
-        <p className="font-bold text-white text-sm line-clamp-1">{product.productName}</p>
-        <div className="flex items-center justify-between mt-2">
-          <span className="font-black text-white">₹{product.basePrice}</span>
-          <button
-            onClick={() => {
-              addItem({ id: product.id, productId: product.id, productName: product.productName, price: product.basePrice, quantity: 1, imageUrl: product.imageUrl || "" } as any);
-              trackEvent({ type: "product_view", productId: product.id });
-              toast.success(`${product.productName} added!`);
+        )}
+
+        {/* ─── LUXURY HERO ─────────────────────────────────────────────────── */}
+        <LuxuryHero isStoreOpen={isStoreOpen} showIntro={showIntro} />
+
+        {/* ─── Main Content ─────────────────────────────────────────────────── */}
+        <main
+          className="w-full pb-32 md:pb-24 relative overflow-hidden"
+          style={{ background: "#0a0a0a" }}
+        >
+          {/* Subtle ambient background texture */}
+          <div
+            className="absolute inset-0 pointer-events-none opacity-10 z-0"
+            style={{
+              background:
+                "radial-gradient(ellipse at 20% 50%, rgba(249,115,22,0.08) 0%, transparent 60%), radial-gradient(ellipse at 80% 20%, rgba(85,119,90,0.08) 0%, transparent 60%)",
             }}
-            className="p-1.5 bg-primary-600 hover:bg-primary-500 text-white rounded-lg transition-all active:scale-90"
+          />
+
+          {/* AI Futuristic Section */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.8 }}
+            className="relative z-10 pt-14 md:pt-20 pb-8 md:pb-12 px-4"
+            style={{
+              borderBottom: "1px solid rgba(255,255,255,0.05)",
+            }}
           >
-            <ShoppingBag className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      </div>
-    </motion.div>
+            <div className="max-w-7xl mx-auto">
+              <div
+                className="relative overflow-hidden rounded-3xl p-6 md:p-10"
+                style={{
+                  background:
+                    "linear-gradient(135deg, rgba(14,14,24,0.98) 0%, rgba(20,14,30,0.98) 100%)",
+                  border: "1px solid rgba(139,92,246,0.2)",
+                  boxShadow: "0 0 80px rgba(139,92,246,0.08), 0 20px 60px rgba(0,0,0,0.5)",
+                }}
+              >
+                {/* Glowing orb */}
+                <div
+                  className="absolute top-0 right-0 w-64 h-64 rounded-full pointer-events-none"
+                  style={{
+                    background:
+                      "radial-gradient(circle, rgba(139,92,246,0.15) 0%, transparent 70%)",
+                    transform: "translate(30%, -30%)",
+                  }}
+                />
+
+                <div className="relative flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <div
+                        className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black tracking-widest uppercase"
+                        style={{
+                          background: "rgba(139,92,246,0.15)",
+                          border: "1px solid rgba(139,92,246,0.3)",
+                          color: "#a78bfa",
+                        }}
+                      >
+                        <Zap className="w-3 h-3" />
+                        AI-Powered
+                      </div>
+                    </div>
+                    <h2
+                      className="text-2xl md:text-4xl font-black text-white leading-tight mb-2"
+                      style={{ letterSpacing: "-0.02em" }}
+                    >
+                      Meet Your
+                      <span
+                        style={{
+                          background: "linear-gradient(135deg, #a78bfa, #c4b5fd)",
+                          WebkitBackgroundClip: "text",
+                          WebkitTextFillColor: "transparent",
+                          backgroundClip: "text",
+                          marginLeft: "0.35rem",
+                        }}
+                      >
+                        Pizza Assistant
+                      </span>
+                    </h2>
+                    <p className="text-slate-400 text-sm md:text-base max-w-lg">
+                      Personalized recommendations, smart reorders, and AI-crafted combos. Your perfect pizza is one message away.
+                    </p>
+                  </div>
+                  <motion.div
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    <Link
+                      to="/assistant"
+                      className="inline-flex items-center gap-2.5 px-7 py-3.5 rounded-2xl font-bold text-white text-sm whitespace-nowrap transition-all"
+                      style={{
+                        background: "linear-gradient(135deg, #7c3aed, #a855f7)",
+                        boxShadow: "0 8px 32px rgba(139,92,246,0.4)",
+                      }}
+                    >
+                      <Bot className="w-4 h-4" />
+                      Ask AI Assistant
+                    </Link>
+                  </motion.div>
+                </div>
+
+                {/* Feature pills */}
+                <div className="flex flex-wrap gap-2 mt-5">
+                  {["Smart Recommendations", "Voice Ordering", "Dietary Preferences", "Order History"].map(
+                    (feat) => (
+                      <span
+                        key={feat}
+                        className="px-3 py-1 rounded-full text-xs font-semibold"
+                        style={{
+                          background: "rgba(139,92,246,0.1)",
+                          border: "1px solid rgba(139,92,246,0.15)",
+                          color: "rgba(196,181,253,0.9)",
+                        }}
+                      >
+                        {feat}
+                      </span>
+                    )
+                  )}
+                </div>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Dynamic Sections */}
+          <div className="max-w-7xl mx-auto px-4 pt-12 space-y-14 relative z-10">
+            {activeSections
+              .filter((s) => s.type !== "hero")
+              .map((section) => renderSection(section))}
+          </div>
+
+          {/* ─── Visit Olive Pizza ─────────────────────────────────────────── */}
+          <motion.div
+            initial={{ opacity: 0, y: 32 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+            className="py-16 md:py-24 relative z-10 mt-8"
+            style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}
+          >
+            <div className="max-w-7xl mx-auto px-4">
+              <div className="text-center mb-10 md:mb-14">
+                <h2
+                  className="text-3xl md:text-5xl font-black text-white mb-3"
+                  style={{ letterSpacing: "-0.02em" }}
+                >
+                  Visit Olive Pizza
+                </h2>
+                <p className="text-slate-400 max-w-xl mx-auto mb-7 text-sm md:text-base">
+                  We deliver fresh to your door, or drop by and grab a hot slice right out of the oven.
+                </p>
+                <OpenInMapsButton />
+              </div>
+              <Suspense
+                fallback={
+                  <div className="w-full h-80 md:h-[500px] rounded-3xl luxury-shimmer border border-white/5" />
+                }
+              >
+                <LocationMap
+                  className="w-full h-80 md:h-[500px] rounded-3xl shadow-2xl border border-white/5 z-0"
+                  showRadius
+                />
+              </Suspense>
+            </div>
+          </motion.div>
+        </main>
+      </PageTransition>
+    </>
   );
 }
