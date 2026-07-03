@@ -148,7 +148,8 @@ export default function OwnerOrderHistory() {
         ? fetchedOrders.filter(
             (o) =>
               o.id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-              o.customerName
+              o.dailyOrderNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+              o.customerInfo?.name
                 ?.toLowerCase()
                 .includes(searchTerm.toLowerCase()) ||
               o.contactPhone?.includes(searchTerm) ||
@@ -424,7 +425,12 @@ export default function OwnerOrderHistory() {
                     className="border-b border-slate-100 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
                   >
                     <td className="p-4 font-bold text-sm">
-                      #{order.id?.slice(-6).toUpperCase()}
+                    <div className="font-bold text-slate-800 dark:text-slate-200">
+                      {order.dailyOrderNumber || `#${order.id?.slice(-6).toUpperCase()}`}
+                    </div>
+                    <div className="text-[10px] text-slate-500 font-mono mt-0.5">
+                      {order.id}
+                    </div>
                     </td>
                     <td className="p-4 text-sm text-slate-300">
                       {new Date(order.createdAt).toLocaleString(undefined, {
@@ -501,7 +507,10 @@ export default function OwnerOrderHistory() {
           <div className="bg-[#1E293B] dark:bg-slate-800 rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 md:p-8">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-2xl font-bold">
-                Order #{selectedOrder.id?.slice(-6).toUpperCase()}
+                <div className="flex flex-col">
+                  <span className="text-xl">{selectedOrder.dailyOrderNumber || `Order #${selectedOrder.id?.slice(-6).toUpperCase()}`}</span>
+                  <span className="text-xs font-mono text-slate-500">ID: {selectedOrder.id}</span>
+                </div>
               </h2>
               <button
                 onClick={() => setSelectedOrder(null)}

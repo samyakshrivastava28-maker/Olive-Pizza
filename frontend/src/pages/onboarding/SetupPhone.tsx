@@ -35,18 +35,32 @@ export default function SetupPhone() {
 
       // Check customer_identities collection for uniqueness
       const identityRef = doc(db, "customer_identities", formattedPhone);
-      const identityDoc = await getDoc(identityRef);
+      let identityDocExists = false;
+      let isFirstOrderCouponUsed = false;
 
-      if (identityDoc.exists()) {
-        const identityData = identityDoc.data();
-        if (identityData.primaryUid !== auth.currentUser.uid) {
-          setError(
-            "Phone number already in use. Please login using your existing account.",
-          );
-          setLoading(false);
-          return;
+      try {
+        const identityDoc = await getDoc(identityRef);
+        identityDocExists = identityDoc.exists();
+        if (identityDoc.exists()) {
+          const identityData = identityDoc.data();
+          isFirstOrderCouponUsed = !!identityData?.firstOrderCouponUsed;
+          if (identityData.primaryUid !== auth.currentUser.uid) {
+            setError(
+              "Phone number already in use. Please login using your existing account.",
+            );
+            setLoading(false);
+            return;
+          }
         }
-      } else {
+      } catch (err: any) {
+        if (err.code === 'unavailable' || err.message?.includes('offline')) {
+          console.warn('Network offline during uniqueness check. Bypassing check.');
+        } else {
+          throw err;
+        }
+      }
+
+      if (!identityDocExists) {
         // Register this phone number identity permanently
         let deviceId = localStorage.getItem('device_fingerprint');
         if (!deviceId) {
@@ -71,8 +85,7 @@ export default function SetupPhone() {
       await updateDoc(doc(db, "users", auth.currentUser.uid), {
         phone: formattedPhone,
         phoneSetupCompleted: true,
-        firstOrderEligible:
-          !identityDoc.exists() || !identityDoc.data()?.firstOrderCouponUsed,
+        firstOrderEligible: !identityDocExists || !isFirstOrderCouponUsed,
       });
 
       const currentUser = useAuthStore.getState().user;
@@ -81,8 +94,7 @@ export default function SetupPhone() {
         ...currentUser,
         phone: formattedPhone,
         phoneSetupCompleted: true,
-        firstOrderEligible:
-          !identityDoc.exists() || !identityDoc.data()?.firstOrderCouponUsed,
+        firstOrderEligible: !identityDocExists || !isFirstOrderCouponUsed,
       }, currentRole || 'customer');
 
       navigate("/onboarding/location");

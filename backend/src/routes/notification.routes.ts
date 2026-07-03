@@ -116,7 +116,9 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
 
     const order = orderResult.rows[0];
     const customerFirebaseUid = await getCustomerFirebaseUid(pgClient, order.user_id);
-    const shortId = orderId.slice(-6).toUpperCase();
+    const orderDoc = await db.collection('orders').doc(orderId).get();
+    const orderData = orderDoc.data() || {};
+    const shortId = orderData.dailyOrderNumber || `#${orderId.slice(-6).toUpperCase()}`;
     let newStatus = order.status;
     let responseData: any = {};
 
@@ -242,6 +244,16 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
       );
 
       if (customerFirebaseUid) {
+        let title = `Update for ${shortId}`;
+        let body = `Order status updated to ${newStatus}`;
+        
+        switch (newStatus) {
+          case 'accepted': title = `Order Accepted — ${shortId}`; body = 'The restaurant is now preparing your pizza!'; break;
+          case 'ready': title = `Order Ready — ${shortId}`; body = 'Your order is packed and waiting for delivery.'; break;
+          case 'out_for_delivery': title = `Out for Delivery — ${shortId}`; body = 'Your pizza is on the way! Track live.'; break;
+          case 'delivered': title = `Delivered — ${shortId}`; body = 'Enjoy your meal! Thanks for choosing Olive Pizza.'; break;
+        }
+        
         const cPayload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'delivered', totalAmount: Number(order.total_amount), version: 7 });
         await notificationQueue.enqueue(customerFirebaseUid, cPayload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 7 });
       }

@@ -6,13 +6,15 @@ import { motion, AnimatePresence } from "framer-motion";
 import PageTransition from "../components/PageTransition";
 import { useAuthStore, useCartStore } from "../lib/store";
 import { Link, useNavigate } from "react-router";
-import { ShoppingCart, Home, History, Heart, Award, Wallet as WalletIcon, Settings, LogOut } from "lucide-react";
+import { ShoppingCart, Home, History, Heart, Award, Wallet as WalletIcon, Settings, LogOut, MapPin } from "lucide-react";
 import DashboardHome from "../components/customer/dashboard/DashboardHome";
 import OrderHistory from "../components/customer/dashboard/OrderHistory";
 import Wishlist from "../components/customer/dashboard/Wishlist";
 import LoyaltyRewards from "../components/customer/dashboard/LoyaltyRewards";
 import Wallet from "../components/customer/dashboard/Wallet";
 import AccountSettings from "../components/customer/dashboard/AccountSettings";
+import AddressBook from "../components/customer/AddressBook";
+import FloatingLines from "../components/ui/FloatingLines";
 
 function DashboardSkeleton() {
   return (
@@ -123,13 +125,15 @@ export default function CustomerDashboard() {
     { id: "home", label: "Dashboard", icon: Home },
     { id: "history", label: "Orders", icon: History },
     { id: "wishlist", label: "Wishlist", icon: Heart },
+    { id: "locations", label: "My Locations", icon: MapPin },
     { id: "rewards", label: "Rewards", icon: Award },
     { id: "wallet", label: "Wallet", icon: WalletIcon },
     { id: "settings", label: "Settings", icon: Settings },
   ];
 
   return (
-    <PageTransition className="w-full relative min-h-[100dvh] text-slate-200 bg-dark-950">
+    <PageTransition className="w-full relative min-h-[100dvh] text-slate-200 bg-dark-950 overflow-hidden">
+      <FloatingLines />
       <div className="relative z-10 max-w-7xl mx-auto p-4 md:p-8 pt-8 flex flex-col md:flex-row gap-8">
         
         {/* Sidebar / Top Nav */}
@@ -174,6 +178,7 @@ export default function CustomerDashboard() {
               {activeTab === "home" && <DashboardHome orders={orders} stats={stats} setActiveTab={setActiveTab} />}
               {activeTab === "history" && <OrderHistory orders={orders} />}
               {activeTab === "wishlist" && <Wishlist />}
+              {activeTab === "locations" && <AddressBook />}
               {activeTab === "rewards" && <LoyaltyRewards stats={stats} />}
               {activeTab === "wallet" && <Wallet />}
               {activeTab === "settings" && <AccountSettings />}

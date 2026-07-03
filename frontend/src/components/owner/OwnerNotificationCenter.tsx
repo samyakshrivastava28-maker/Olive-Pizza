@@ -310,7 +310,9 @@ export default function OwnerNotificationCenter() {
                               {cfg.icon}
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className="text-slate-200 font-bold text-xs truncate">#{order.id.slice(-6).toUpperCase()} — {cfg.label}</p>
+                              <p className="text-slate-200 font-bold text-xs truncate">
+                                {order.dailyOrderNumber || `#${order.id.slice(-6).toUpperCase()}`} — {cfg.label}
+                              </p>
                               <p className="text-slate-500 text-[10px]">₹{order.totalAmount || order.total_amount || '?'}</p>
                             </div>
                             <span className="text-[10px] text-slate-600">

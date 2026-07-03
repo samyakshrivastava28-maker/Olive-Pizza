@@ -112,6 +112,12 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg,webp,jpg,jpeg}'],
         runtimeCaching: [
           {
+            // API requests must NEVER be cached — always go to network
+            urlPattern: /^\/api\/.*/i,
+            handler: 'NetworkOnly',
+            options: { cacheName: 'api-never-cache' }
+          },
+          {
             urlPattern: /^https:\/\/res\.cloudinary\.com\/.*\/image\/.*/i,
             handler: 'StaleWhileRevalidate',
             options: {

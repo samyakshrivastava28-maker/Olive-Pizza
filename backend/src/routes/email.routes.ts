@@ -88,14 +88,12 @@ const router = express.Router();
 
 // 1. Transactional Triggers
 router.post('/transactional', async (req, res) => {
+  const startTime = Date.now();
   try {
     const { event, data } = req.body;
-    
-    // Default Owner Email for notifications
     const ownerEmail = process.env.OWNER_EMAIL || 'webhub2811@gmail.com';
     
     if (event === 'REGISTER') {
-      // Welcome Email to Customer (kept — only automatic email for customers)
       await queueEmail(
         data.email,
         'Welcome to Olive Pizza! 🍕',
@@ -109,36 +107,74 @@ router.post('/transactional', async (req, res) => {
         `),
         'transactional'
       );
+      console.log(`[Email] Transactional | Recipient: ${data.email} | Template: REGISTER | Success: true | Duration: ${Date.now() - startTime}ms`);
     }
 
-    // ORDER_PLACED and ORDER_STATUS_CHANGED emails have been removed.
-    // All order event communications are now handled by FCM Push Notifications.
-    // See: backend/src/routes/notification.routes.ts
-
-    res.json({ success: true });
-
-  } catch (error) {
-    console.error('Trigger Email Error:', error);
-    res.status(500).json({ error: 'Failed to process trigger' });
+    res.json({ success: true, message: "Transactional trigger processed" });
+  } catch (error: any) {
+    console.error(`[Email] Transactional | Template: ${req.body?.event} | Success: false | Duration: ${Date.now() - startTime}ms | Error: ${error.message}\n${error.stack}`);
+    res.status(500).json({ success: false, error: 'Failed to process trigger' });
   }
 });
 
 // ─── Owner Tools ──────────────────────────────────────────────────────────────
 
+router.get('/debug', async (req, res) => {
+  try {
+    const isReady = transporter ? true : false;
+    let smtpConnected = false;
+    let lastError = null;
+    
+    if (isReady) {
+      try {
+        await transporter.verify();
+        smtpConnected = true;
+      } catch (err: any) {
+        lastError = err.message;
+      }
+    }
+
+    const { getFirestore } = await import('firebase-admin/firestore');
+    let templatesCount = 0;
+    try {
+      const templateResult = await pgPool.query('SELECT count(*) FROM email_templates');
+      templatesCount = parseInt(templateResult.rows[0].count, 10) || 0;
+    } catch(e) {}
+
+    res.json({
+      success: true,
+      diagnostics: {
+        smtpConnected,
+        smtpProvider: process.env.SMTP_HOST || 'Unknown',
+        authenticationStatus: smtpConnected ? 'Verified' : 'Failed',
+        senderEmail: process.env.SMTP_USER || 'Not Configured',
+        lastError,
+        environmentLoaded: !!process.env.SMTP_PASS,
+        templatesLoaded: templatesCount,
+        nodemailerReady: isReady
+      }
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: 'Failed to generate debug info', details: error.message });
+  }
+});
+
 router.post('/preview', (req, res) => {
   try {
     const { htmlContent } = req.body;
-    res.send(wrapper(htmlContent || '<p>No content provided</p>'));
-  } catch (error) {
-    res.status(500).send('Preview generation failed');
+    res.json({ success: true, html: wrapper(htmlContent || '<p>No content provided</p>') });
+  } catch (error: any) {
+    console.error('[Email] Preview Error:', error.message);
+    res.status(500).json({ success: false, error: 'Preview generation failed' });
   }
 });
 
 router.post('/test', async (req, res) => {
+  const startTime = Date.now();
+  const { htmlContent, subject, recipient } = req.body;
+  const testRecipient = recipient || 'olivepizzarjn@gmail.com';
+  
   try {
-    const { htmlContent, subject, recipient } = req.body;
-    const testRecipient = recipient || 'olivepizzarjn@gmail.com';
-    
     await transporter.sendMail({
       from: `"Olive Pizza" <${process.env.SMTP_USER}>`,
       to: testRecipient,
@@ -146,55 +182,65 @@ router.post('/test', async (req, res) => {
       html: wrapper(htmlContent || '<p>Test Email Content</p>'),
     });
     
+    console.log(`[Email] Test | Recipient: ${testRecipient} | Subject: ${subject} | Success: true | Duration: ${Date.now() - startTime}ms`);
     res.json({ success: true, message: `Test email sent to ${testRecipient}` });
   } catch (error: any) {
-    console.error('Test email failed:', error);
-    res.status(500).json({ error: error.message || 'Failed to send test email' });
+    console.error(`[Email] Test | Recipient: ${testRecipient} | Success: false | Duration: ${Date.now() - startTime}ms | Error: ${error.message}\n${error.stack}`);
+    res.status(500).json({ success: false, error: error.message || 'Failed to send test email' });
   }
 });
 
-// ─── Direct Send ──────────────────────────────────────────────────────────────Auth Emails
+// ─── Direct Send ──────────────────────────────────────────────────────────────
 router.post('/auth/welcome', async (req, res) => {
+  const startTime = Date.now();
+  const { email, name, isReturning } = req.body;
   try {
-    const { email, name, isReturning } = req.body;
     if (isReturning) {
       await queueEmail(email, 'Welcome back to Olive Pizza!', wrapper(`<h2>Welcome Back, ${name || 'Pizza Lover'}!</h2><p>Ready for another delicious pizza?</p>`), 'transactional');
     } else {
       await queueEmail(email, 'Welcome to Olive Pizza! 🍕', wrapper(`<h2>Welcome, ${name || 'Pizza Lover'}!</h2><p>Thank you for joining Olive Pizza.</p>`), 'transactional');
     }
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to send welcome email' });
+    console.log(`[Email] Auth Welcome | Recipient: ${email} | Success: true | Duration: ${Date.now() - startTime}ms`);
+    res.json({ success: true, message: 'Welcome email queued' });
+  } catch (err: any) {
+    console.error(`[Email] Auth Welcome | Recipient: ${email} | Success: false | Duration: ${Date.now() - startTime}ms | Error: ${err.message}\n${err.stack}`);
+    res.status(500).json({ success: false, error: 'Failed to send welcome email' });
   }
 });
 
 router.post('/auth/reset', async (req, res) => {
+  const startTime = Date.now();
+  const { email } = req.body;
   try {
-    const { email } = req.body;
     const link = await adminAuth.generatePasswordResetLink(email);
     await queueEmail(email, 'Password Reset Request', wrapper(`
       <h2>Reset Your Password</h2>
       <p>Click the link below to reset your Olive Pizza account password:</p>
       <a href="${link}" style="background-color: #f97316; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; display: inline-block;">Reset Password</a>
     `), 'transactional');
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to send reset email' });
+    console.log(`[Email] Auth Reset | Recipient: ${email} | Success: true | Duration: ${Date.now() - startTime}ms`);
+    res.json({ success: true, message: 'Reset email queued' });
+  } catch (err: any) {
+    console.error(`[Email] Auth Reset | Recipient: ${email} | Success: false | Duration: ${Date.now() - startTime}ms | Error: ${err.message}\n${err.stack}`);
+    res.status(500).json({ success: false, error: 'Failed to send reset email' });
   }
 });
 
 router.post('/auth/verify', async (req, res) => {
+  const startTime = Date.now();
+  const { email } = req.body;
   try {
-    const { email } = req.body;
     const link = await adminAuth.generateEmailVerificationLink(email);
     await queueEmail(email, 'Verify your email address', wrapper(`
       <h2>Verify Email</h2>
       <p>Click the link below to verify your Olive Pizza account:</p>
       <a href="${link}" style="background-color: #f97316; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; display: inline-block;">Verify Email</a>
     `), 'transactional');
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to send verification email' });
+    console.log(`[Email] Auth Verify | Recipient: ${email} | Success: true | Duration: ${Date.now() - startTime}ms`);
+    res.json({ success: true, message: 'Verification email queued' });
+  } catch (err: any) {
+    console.error(`[Email] Auth Verify | Recipient: ${email} | Success: false | Duration: ${Date.now() - startTime}ms | Error: ${err.message}\n${err.stack}`);
+    res.status(500).json({ success: false, error: 'Failed to send verification email' });
   }
 });
 
@@ -202,16 +248,27 @@ router.post('/auth/verify', async (req, res) => {
 router.get('/templates', async (req, res) => {
   try {
     const result = await pgPool.query('SELECT * FROM email_templates ORDER BY created_at DESC');
-    res.json(result.rows);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch templates' });
+    res.json({ success: true, templates: result.rows });
+  } catch (error: any) {
+    console.error('[Email] Fetch Templates Error:', error.message);
+    res.status(500).json({ success: false, error: 'Failed to fetch templates' });
   }
 });
 
 // 3. Create Campaign
-router.post('/campaigns', async (req, res) => {
+router.post('/send-campaign', async (req, res) => {
+  const startTime = Date.now();
+  let campaignName, targetAudience, subject;
+  
   try {
-    const { name, targetAudience, subject, htmlContent, isFestival } = req.body;
+    campaignName = req.body.campaignName || req.body.name;
+    targetAudience = req.body.targetAudience;
+    subject = req.body.subject;
+    const { htmlContent, isFestival } = req.body;
+    
+    if (!campaignName || !subject || !htmlContent) {
+      return res.status(400).json({ success: false, error: 'Missing required campaign fields' });
+    }
     
     // First save the template
     const templateQuery = `
@@ -219,7 +276,7 @@ router.post('/campaigns', async (req, res) => {
       VALUES ($1, $2, $3, $4, $5)
       RETURNING id
     `;
-    const templateResult = await pgPool.query(templateQuery, [name, 'marketing', subject, htmlContent, isFestival || false]);
+    const templateResult = await pgPool.query(templateQuery, [campaignName, 'marketing', subject, htmlContent, isFestival || false]);
     const templateId = templateResult.rows[0].id;
 
     // Create Campaign
@@ -228,7 +285,7 @@ router.post('/campaigns', async (req, res) => {
       VALUES ($1, $2, $3, 'processing')
       RETURNING id
     `;
-    const campaignResult = await pgPool.query(campaignQuery, [name, targetAudience, templateId]);
+    const campaignResult = await pgPool.query(campaignQuery, [campaignName, targetAudience, templateId]);
     const campaignId = campaignResult.rows[0].id;
 
     // Process Audience & Dispatch (Background)
@@ -274,16 +331,18 @@ router.post('/campaigns', async (req, res) => {
           'UPDATE email_campaigns SET status = $1, sent_count = $2, fail_count = $3 WHERE id = $4',
           ['completed', sentCount, failCount, campaignId]
         );
-      } catch (err) {
-        console.error('Campaign Dispatch Error:', err);
+        console.log(`[Email] Campaign Background Dispatch | Name: ${campaignName} | Sent: ${sentCount} | Failed: ${failCount}`);
+      } catch (err: any) {
+        console.error(`[Email] Campaign Dispatch Error: ${err.message}\n${err.stack}`);
         await pgPool.query('UPDATE email_campaigns SET status = $1 WHERE id = $2', ['failed', campaignId]);
       }
     })();
 
-    res.json({ success: true, campaignId });
-  } catch (error) {
-    console.error('Campaign Creation Error:', error);
-    res.status(500).json({ error: 'Failed to create campaign' });
+    console.log(`[Email] Send Campaign | Name: ${campaignName} | Audience: ${targetAudience} | Success: true | Duration: ${Date.now() - startTime}ms`);
+    res.json({ success: true, campaignId, message: "Campaign successfully queued" });
+  } catch (error: any) {
+    console.error(`[Email] Send Campaign | Name: ${campaignName} | Success: false | Duration: ${Date.now() - startTime}ms | Error: ${error.message}\n${error.stack}`);
+    res.status(500).json({ success: false, error: 'Failed to create campaign' });
   }
 });
 
@@ -302,14 +361,16 @@ router.get('/analytics', async (req, res) => {
     `);
 
     res.json({
+      success: true,
       metrics: {
         totalSent: parseInt(metricsResult.rows[0].total_sent) || 0,
         totalFailed: parseInt(metricsResult.rows[0].total_failed) || 0,
       },
       campaigns: campaignsResult.rows
     });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch email analytics' });
+  } catch (error: any) {
+    console.error('[Email] Analytics Error:', error.message);
+    res.status(500).json({ success: false, error: 'Failed to fetch email analytics' });
   }
 });
 

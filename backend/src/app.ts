@@ -16,8 +16,9 @@ import slackRoutes from './routes/slack.routes.js';
 import notificationRoutes from './routes/notification.routes.js';
 import authRoutes from './routes/auth.routes.js';
 import heartbeatRoutes from './routes/heartbeat.routes.js';
-import healthRoutes from './routes/health.routes.js';
 import seoRoutes from './routes/seo.routes.js';
+import versionRoutes from './routes/version.routes.js';
+import { versionCheck } from './middleware/versionCheck.js';
 
 const app = express();
 
@@ -39,6 +40,16 @@ app.use(cors({
   credentials: true
 }));
 app.use(express.json());
+app.use(versionCheck);
+
+import debugRoutes from './routes/debug.routes.js';
+import healthRoutes from './routes/health.routes.js';
+import healthStreamRoutes from './routes/health.stream.routes.js';
+
+// Exclude health streams from global rate limit
+app.use('/health', healthStreamRoutes); // Must go before healthRoutes to catch /health/stream
+app.use('/health', healthRoutes);
+app.use('/system/debug', debugRoutes);
 
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -78,10 +89,15 @@ app.use('/email', emailRoutes);
 app.use('/slack', slackRoutes);
 app.use('/google-drive', googleDriveRoutes);
 app.use('/heartbeat', heartbeatRoutes);
-app.use('/health', healthRoutes);
+app.use('/version', versionRoutes);
 
 // SEO Routes (mounted at root via app in server.ts, but we map them here)
 app.use('/', seoRoutes);
+
+// 404 Handler - MUST return JSON to prevent HTML fallback for API routes
+app.use((req: express.Request, res: express.Response) => {
+  res.status(404).json({ success: false, error: 'Route not found' });
+});
 
 // Global Error Handler
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -89,7 +105,9 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
   // Do not expose stack traces in production
   const isProd = process.env.NODE_ENV === 'production';
   res.status(err.status || 500).json({
-    error: isProd ? 'Internal Server Error' : err.message
+    success: false,
+    error: isProd ? 'Internal Server Error' : err.message,
+    details: isProd ? undefined : err.stack
   });
 });
 

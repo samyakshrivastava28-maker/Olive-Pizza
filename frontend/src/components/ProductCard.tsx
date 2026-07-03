@@ -3,13 +3,15 @@ import { useNavigate } from 'react-router';
 import { motion } from 'framer-motion';
 import { MenuItem } from '../types/models';
 import { Plus } from 'lucide-react';
+import WishlistButton from './ui/WishlistButton';
 
 interface ProductCardProps {
   item: MenuItem;
   discount?: number;
+  wishlistIds?: string[];
 }
 
-export default memo(function ProductCard({ item, discount = 0 }: ProductCardProps) {
+export default memo(function ProductCard({ item, discount = 0, wishlistIds = [] }: ProductCardProps) {
   const navigate = useNavigate();
   const appliedDiscount = item.discountPercentage || discount;
   const finalPrice = item.pricingMode === 'offer' && item.offerPrice ? item.offerPrice : 
@@ -47,6 +49,9 @@ export default memo(function ProductCard({ item, discount = 0 }: ProductCardProp
             <span className="bg-dark-900 border border-dark-700 text-slate-300 text-xs font-bold px-3 py-1.5 rounded-md uppercase tracking-wider">Out of Stock</span>
           </div>
         )}
+        <div className="absolute top-3 right-3 z-10" onClick={(e) => e.stopPropagation()}>
+          <WishlistButton productId={item.id} wishlistIds={wishlistIds} size="sm" />
+        </div>
       </div>
 
       <div className="p-4 md:p-5 flex flex-col flex-1">

@@ -46,6 +46,7 @@ import "leaflet/dist/leaflet.css";
 import { GlassCard, GlassButton } from "../components/ui/glass/GlassSystem";
 import { toast } from "react-hot-toast";
 import { playNotificationSound, statusToSoundType } from "../hooks/useNotificationSound";
+import OrderTimeline from "../components/ui/OrderTimeline";
 import SideRays from "../components/ui/SideRays";
 
 
@@ -553,7 +554,7 @@ export default function OrderTracking() {
           <X className="w-12 h-12 text-red-500" />
         </motion.div>
         <h1 className="text-3xl font-black text-white mb-3 relative z-10">Order Cancelled</h1>
-        <p className="text-slate-400 mb-10 max-w-sm relative z-10">Your order #{orderId?.slice(-6).toUpperCase()} has been successfully cancelled.</p>
+        <p className="text-slate-400 mb-10 max-w-sm relative z-10">Your order {order.dailyOrderNumber || `#${orderId?.slice(-6).toUpperCase()}`} has been successfully cancelled.</p>
         <GlassButton variant="primary" onClick={() => navigate("/menu")} className="px-10 py-4 relative z-10">Order Again</GlassButton>
       </div>
     );
@@ -632,7 +633,7 @@ export default function OrderTracking() {
               <span className="text-[11px] font-black tracking-widest text-emerald-400 uppercase">Live</span>
             </div>
             <div className="w-px h-4 bg-white/10" />
-            <span className="text-sm font-bold text-white">#{orderId?.slice(-6).toUpperCase()}</span>
+            <span className="text-sm font-bold text-white">{order?.dailyOrderNumber || `#${orderId?.slice(-6).toUpperCase()}`}</span>
           </div>
 
           <button onClick={() => {
@@ -704,34 +705,7 @@ export default function OrderTracking() {
 
           {/* Premium Timeline */}
           <div className="relative mb-10 mt-2 px-2">
-             <div className="absolute top-6 left-6 right-6 h-1 bg-dark-800 rounded-full z-0 overflow-hidden">
-                <motion.div 
-                  className="absolute top-0 left-0 h-full bg-gradient-to-r from-emerald-500 via-emerald-400 to-primary-500"
-                  initial={{ width: 0 }}
-                  animate={{ width: `${Math.max(0, stageIndex / (TIMELINE_STAGES.length - 1)) * 100}%` }}
-                  transition={{ duration: 1, ease: "easeInOut" }}
-                />
-             </div>
-             <div className="flex justify-between relative z-10">
-                {TIMELINE_STAGES.map((stage, idx) => {
-                   const isCompleted = stageIndex >= idx;
-                   const isCurrent = stageIndex === idx;
-                   return (
-                     <div key={stage.key} className="flex flex-col items-center">
-                        <motion.div 
-                          animate={isCurrent ? { scale: [1, 1.1, 1], boxShadow: "0 0 20px rgba(249,115,22,0.4)" } : {}}
-                          transition={{ duration: 2, repeat: Infinity }}
-                          className={`w-12 h-12 rounded-full flex items-center justify-center border-[3px] transition-all duration-500 ${isCompleted ? `bg-dark-900 border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.3)]` : "bg-dark-900 border-dark-700"}`}
-                        >
-                          <stage.icon size={20} className={isCompleted ? stage.color : "text-dark-600"} />
-                        </motion.div>
-                        <span className={`text-[10px] font-bold uppercase tracking-wider mt-3 text-center ${isCompleted ? "text-white" : "text-dark-600"}`}>
-                          {stage.label}
-                        </span>
-                     </div>
-                   );
-                })}
-             </div>
+             <OrderTimeline status={order.status} />
           </div>
 
           {/* Delivery Partner Card */}

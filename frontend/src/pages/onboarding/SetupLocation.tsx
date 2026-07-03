@@ -3,6 +3,7 @@ import { auth, db } from "../../lib/firebase";
 import { doc, updateDoc } from "firebase/firestore";
 import { useNavigate } from "react-router";
 import { useAuthStore } from "../../lib/store";
+import { LocationManager } from "../../lib/permissions";
 import {
   MapContainer,
   TileLayer,
@@ -84,27 +85,25 @@ export default function SetupLocation() {
     );
   };
 
-  const getGPSLocation = () => {
+  const getGPSLocation = async () => {
     setGettingGps(true);
     setError("");
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const lat = position.coords.latitude;
-          const lng = position.coords.longitude;
-          setMarkerPos({ lat, lng });
-          reverseGeocode(lat, lng);
-          setGettingGps(false);
-        },
-        (err) => {
-          setError(
-            "Failed to get GPS location. Please ensure location permissions are granted.",
-          );
-          setGettingGps(false);
-        },
-      );
-    } else {
-      setError("Geolocation is not supported by your browser.");
+    
+    try {
+      const location = await LocationManager.getCurrentLocation({ forcePrompt: true, fallbackToCache: false });
+      setMarkerPos({ lat: location.lat, lng: location.lng });
+      
+      // SetupLocation expects reverse geocode to fill the fields because LocationManager 
+      // already does some reverse geocoding, but we might want the exact format SetupLocation uses.
+      // So we call the local reverseGeocode to populate city, state, etc.
+      await reverseGeocode(location.lat, location.lng);
+    } catch (err: any) {
+      if (err.message?.includes('denied')) {
+        setError("Location permission denied. Please grant permission in your browser or enter manually.");
+      } else {
+        setError("Failed to get GPS location. Please ensure location permissions are granted.");
+      }
+    } finally {
       setGettingGps(false);
     }
   };

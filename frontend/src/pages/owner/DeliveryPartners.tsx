@@ -492,9 +492,12 @@ export default function DeliveryPartners() {
                           className="flex justify-between items-center p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-100 dark:border-slate-700"
                         >
                           <div>
-                            <span className="font-bold">
-                              Order #{order.id?.slice(-6).toUpperCase()}
-                            </span>
+                            <div className="flex flex-col">
+                              <span className="font-bold text-slate-800 dark:text-slate-100">
+                                {order.dailyOrderNumber || `Order #${order.id?.slice(-6).toUpperCase()}`}
+                              </span>
+                              <span className="text-[10px] text-slate-500 font-mono mt-0.5">ID: {order.id}</span>
+                            </div>
                             <span className="text-xs text-slate-400 block">
                               {new Date(order.createdAt).toLocaleString()}
                             </span>

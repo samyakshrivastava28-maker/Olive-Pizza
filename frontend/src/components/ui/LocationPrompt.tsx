@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuthStore } from '../../lib/store';
+import { LocationManager } from '../../lib/permissions';
 import { db } from '../../lib/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -14,64 +15,52 @@ export default function LocationPrompt() {
 
   useEffect(() => {
     if (isAuthenticated && user && !user.lat && !user.fullAddress && !dismissed) {
-      // Small delay to not overwhelm immediately on login
-      const timer = setTimeout(() => setShowPrompt(true), 1500);
-      return () => clearTimeout(timer);
+      let timer: NodeJS.Timeout;
+      LocationManager.shouldPrompt().then(should => {
+        if (should && !dismissed) {
+          timer = setTimeout(() => setShowPrompt(true), 1500);
+        }
+      });
+      return () => { if (timer) clearTimeout(timer); };
     }
   }, [isAuthenticated, user, dismissed]);
 
-  const requestLocation = () => {
+  const requestLocation = async () => {
     setLoading(true);
-    if (!navigator.geolocation) {
-      toast.error('Geolocation is not supported by your browser');
-      setLoading(false);
-      return;
-    }
+    try {
+      const location = await LocationManager.getCurrentLocation({ forcePrompt: true });
+      
+      // Update Firestore
+      if (user?.uid) {
+        await updateDoc(doc(db, 'users', user.uid), {
+          lat: location.lat,
+          lng: location.lng,
+          fullAddress: location.fullAddress
+        });
 
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude } = position.coords;
-        try {
-          // Reverse geocoding (basic implementation, ideally use Google Maps API)
-          const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
-          const data = await response.json();
-          const address = data.display_name;
+        // Update Zustand Store
+        setUser({
+          ...user,
+          lat: location.lat,
+          lng: location.lng,
+          fullAddress: location.fullAddress
+        }, user.role);
 
-          // Update Firestore
-          if (user?.uid) {
-            await updateDoc(doc(db, 'users', user.uid), {
-              lat: latitude,
-              lng: longitude,
-              fullAddress: address || 'Current Location'
-            });
-
-            // Update Zustand Store
-            setUser({
-              ...user,
-              lat: latitude,
-              lng: longitude,
-              fullAddress: address || 'Current Location'
-            }, user.role);
-
-            toast.success('Location updated successfully!');
-            setShowPrompt(false);
-          }
-        } catch (error) {
-          console.error('Error fetching address:', error);
-          toast.error('Failed to get address. Please set manually.');
-        } finally {
-          setLoading(false);
-        }
-      },
-      (error) => {
-        console.error('Geolocation error:', error);
+        toast.success('Location updated successfully!');
+        setShowPrompt(false);
+      }
+    } catch (error: any) {
+      console.error('Location error:', error);
+      if (error.message?.includes('denied')) {
         toast.error('Location permission denied. You can set it manually later.');
         setShowPrompt(false);
-        setLoading(false);
         setDismissed(true);
-      },
-      { enableHighAccuracy: true }
-    );
+      } else {
+        toast.error('Failed to get address. Please set manually.');
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

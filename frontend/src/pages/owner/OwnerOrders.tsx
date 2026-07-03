@@ -151,8 +151,9 @@ export default function OwnerOrders() {
               <div className="flex-1">
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="font-bold text-lg">
-                    Order #{order.id?.slice(-6)?.toUpperCase() || 'NEW'}
+                    {order.dailyOrderNumber || `Order #${order.id?.slice(-6)?.toUpperCase() || 'NEW'}`}
                   </h3>
+                  <span className="text-xs font-mono text-slate-500 mt-1 block">ID: {order.id}</span>
                   <span className="bg-primary-100 text-primary-700 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
                     {order.status?.replace("_", " ") || "UNKNOWN"}
                   </span>
@@ -298,9 +299,12 @@ export default function OwnerOrders() {
               >
                 <div className="flex-1">
                   <div className="flex justify-between items-center mb-4">
-                    <h3 className="font-bold text-lg text-blue-400">
-                      Order #{order.id?.slice(-6)?.toUpperCase() || 'NEW'}
-                    </h3>
+                    <div>
+                      <h3 className="font-bold text-lg text-blue-400">
+                        {order.dailyOrderNumber || `Order #${order.id?.slice(-6)?.toUpperCase() || 'NEW'}`}
+                      </h3>
+                      <span className="text-xs font-mono text-slate-500 mt-1 block">ID: {order.id}</span>
+                    </div>
                     <div className="flex items-center gap-3">
                       <span className="bg-blue-500/20 text-blue-400 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border border-blue-500/50">
                         {order.scheduledDate === 'today' ? 'Today' : 'Tomorrow'} at {order.scheduledTime}

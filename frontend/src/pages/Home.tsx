@@ -10,6 +10,7 @@ import {
   where,
   limit,
 } from "firebase/firestore";
+import { APP_VERSION } from "../lib/versionManager";
 import PageTransition from "../components/PageTransition";
 import { useDataStore } from "../lib/dataStore";
 import { useStoreStatus } from "../lib/useStoreStatus";
@@ -177,12 +178,13 @@ export default function Home() {
       connection &&
       (connection.effectiveType === "slow-2g" || connection.effectiveType === "2g");
 
-    const hasPlayed = sessionStorage.getItem("olive_intro_seen");
+    const playedVersion = localStorage.getItem("olive_intro_version");
     let fallbackTimer: ReturnType<typeof setTimeout>;
 
-    if (!hasPlayed && !isSlowNetwork) {
+    if (playedVersion !== APP_VERSION && !isSlowNetwork) {
       setShowIntro(true);
       document.body.style.overflow = "hidden";
+      // Maximum 8 seconds total for intro to either play or fail
       fallbackTimer = setTimeout(() => handleIntroEnd(), 8000);
     }
 
@@ -193,24 +195,45 @@ export default function Home() {
   }, []);
 
   const handleIntroEnd = useCallback(() => {
-    sessionStorage.setItem("olive_intro_seen", "true");
+    localStorage.setItem("olive_intro_version", APP_VERSION);
     setShowIntro(false);
     document.body.style.overflow = "";
   }, []);
 
   // ─── Intro video ──────────────────────────────────────────────────────────
-  const [isMobile, setIsMobile] = useState(false);
+  const [deviceType, setDeviceType] = useState<'mobile' | 'tablet' | 'desktop'>('desktop');
+  
   useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 768);
-    check();
-    window.addEventListener("resize", check, { passive: true });
-    return () => window.removeEventListener("resize", check);
+    const w = window.innerWidth;
+    if (w < 768) setDeviceType('mobile');
+    else if (w < 1024) setDeviceType('tablet');
+    else setDeviceType('desktop');
   }, []);
 
-  const desktopIntroUrl =
-    "https://res.cloudinary.com/dxmlvkff1/video/upload/f_auto,q_auto:eco,w_800/v1782199127/Olive_Pizza_logo_reveal_202606231247_rrtc3u.mp4";
-  const mobileIntroUrl =
-    "https://res.cloudinary.com/dxmlvkff1/video/upload/f_auto,q_auto:eco,w_480/v1782199117/Olive_Pizza_logo_reveal_202606231246_xeyk9t.mp4";
+  const getOptimizedIntroUrls = () => {
+    const base = "https://res.cloudinary.com/dxmlvkff1/video/upload";
+    // Hardware acceleration / fast start / codec negotiation (f_auto will select webm/mp4 based on browser)
+    const transformations = ["f_auto", "vc_auto", "fl_fast_start"];
+    
+    if (deviceType === 'mobile') {
+      transformations.push("q_auto:eco", "h_540", "c_scale");
+    } else if (deviceType === 'tablet') {
+      transformations.push("q_auto:good", "h_720", "c_scale");
+    } else {
+      transformations.push("q_auto:best", "h_1080", "c_scale");
+    }
+    
+    const paramsStr = transformations.join(",");
+    const videoId = "v1782199127/Olive_Pizza_logo_reveal_202606231247_rrtc3u";
+    
+    return {
+      videoUrl: `${base}/${paramsStr}/${videoId}.mp4`,
+      posterUrl: `${base}/${paramsStr}/${videoId}.jpg`
+    };
+  };
+
+  const { videoUrl, posterUrl } = getOptimizedIntroUrls();
+  const [videoReady, setVideoReady] = useState(false);
 
   // ─── Wishlist ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -503,9 +526,17 @@ export default function Home() {
               initial={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.8 }}
-              className="fixed inset-0 z-[9999] bg-dark-950 flex items-center justify-center"
+              className="fixed inset-0 z-[9999] bg-dark-950 flex items-center justify-center overflow-hidden"
               style={{ willChange: "opacity" }}
             >
+              {/* Fallback Image */}
+              <img
+                src={posterUrl}
+                alt="Intro Poster"
+                className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-[400ms] ${videoReady ? 'opacity-0' : 'opacity-100'} z-10`}
+                style={{ transform: "translateZ(0)", willChange: "opacity, transform" }}
+              />
+              
               <video
                 ref={(el) => {
                   if (el) {
@@ -513,23 +544,35 @@ export default function Home() {
                     if (p !== undefined) p.catch(() => handleIntroEnd());
                   }
                 }}
-                src={isMobile ? mobileIntroUrl : desktopIntroUrl}
+                src={videoUrl}
+                poster={posterUrl}
                 autoPlay
                 muted
                 playsInline
-                preload="metadata"
+                preload="auto"
+                onCanPlay={() => setVideoReady(true)}
+                onPlaying={() => setVideoReady(true)}
                 onEnded={handleIntroEnd}
-                onError={() => setTimeout(handleIntroEnd, 1000)}
-                className="w-full h-full object-cover"
-                style={{ transform: "translateZ(0)", willChange: "transform" }}
+                onError={() => setTimeout(handleIntroEnd, 500)}
+                onStalled={() => setTimeout(handleIntroEnd, 1000)}
+                onWaiting={() => setTimeout(handleIntroEnd, 3000)}
+                className={`absolute inset-0 w-full h-full object-cover z-20 transition-opacity duration-500 ${videoReady ? 'opacity-100' : 'opacity-0'}`}
+                style={{ 
+                  transform: "translateZ(0)", 
+                  willChange: "transform, opacity", 
+                  backfaceVisibility: "hidden", 
+                  contain: "strict" 
+                }}
               />
               <button
                 onClick={handleIntroEnd}
-                className="absolute top-safe-6 right-6 mt-6 px-4 py-2 rounded-full text-white text-xs tracking-widest uppercase font-bold z-10"
+                className="absolute top-safe-6 right-6 mt-6 px-4 py-2 rounded-full text-white text-xs tracking-widest uppercase font-bold z-30"
                 style={{
                   background: "rgba(255,255,255,0.1)",
                   backdropFilter: "blur(12px)",
+                  WebkitBackdropFilter: "blur(12px)",
                   border: "1px solid rgba(255,255,255,0.2)",
+                  transform: "translateZ(0)",
                 }}
               >
                 Skip Intro ➔

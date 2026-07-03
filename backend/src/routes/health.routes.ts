@@ -5,12 +5,14 @@ import { requireAuth, requireRole } from '../middleware/auth.middleware.js';
 const router = Router();
 
 router.get('/metrics', requireAuth, requireRole(['owner', 'admin']), async (req, res) => {
-  const client = await pgPool.connect();
+  let client = null;
+  const metrics: any = {
+    uptime: process.uptime(),
+    memory: process.memoryUsage(),
+  };
+
   try {
-    const metrics: any = {
-      uptime: process.uptime(),
-      memory: process.memoryUsage(),
-    };
+    client = await pgPool.connect();
 
     // DB Size Estimate
     const dbSizeRes = await client.query(`SELECT pg_size_pretty(pg_database_size(current_database())) as size;`);
@@ -28,12 +30,19 @@ router.get('/metrics', requireAuth, requireRole(['owner', 'admin']), async (req,
     const deliveriesRes = await client.query(`SELECT COUNT(*) as count FROM active_deliveries;`);
     metrics.activeDeliveries = parseInt(deliveriesRes.rows[0]?.count || '0', 10);
 
-    res.json({ success: true, metrics });
-  } catch (error) {
-    console.error('Health metrics error:', error);
-    res.status(500).json({ success: false, error: 'Failed to fetch metrics' });
+    res.json({ success: true, limited: false, metrics });
+  } catch (error: any) {
+    console.error(JSON.stringify({ 
+      event: 'HEALTH_MONITOR_DB_ERROR', 
+      message: 'Failed to fetch database metrics', 
+      error: error.message 
+    }));
+    // Return graceful limited metrics instead of 500 error
+    res.status(200).json({ success: true, limited: true, metrics });
   } finally {
-    client.release();
+    if (client) {
+      client.release();
+    }
   }
 });
 

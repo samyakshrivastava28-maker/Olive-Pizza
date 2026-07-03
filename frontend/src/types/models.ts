@@ -107,6 +107,8 @@ export interface NotificationState {
 
 export interface Order {
   id?: string;
+  dailyOrderNumber?: string;
+  permanentOrderId?: string;
   userId: string;
   customerName?: string;
   customerInfo?: {

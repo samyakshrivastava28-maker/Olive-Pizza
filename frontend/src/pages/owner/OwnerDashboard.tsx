@@ -15,7 +15,10 @@ import { DashboardCardSkeleton } from "../../components/ui/SkeletonLoader";
 import StatCard from "../../components/owner/StatCard";
 
 import { useHeartbeat } from '../../hooks/useHeartbeat';
+import { useLiveMetrics } from '../../hooks/useLiveMetrics';
 import { SystemHealthPanel } from '../../components/owner/SystemHealthPanel';
+import { SystemDebugPanel } from '../../components/owner/SystemDebugPanel';
+import SystemDiagnostics from '../../components/owner/SystemDiagnostics';
 import LiveOrdersTable from "../../components/owner/LiveOrdersTable";
 import ActivityFeed from "../../components/owner/ActivityFeed";
 import SystemStatusPanel from "../../components/owner/SystemStatusPanel";
@@ -49,9 +52,10 @@ export default function OwnerDashboard() {
     totalProducts: 0,
     activeCoupons: 0,
     activeAds: 0,
-    partnersOnline: 0,
     customerGrowth: 0,
   });
+
+  const liveMetrics = useLiveMetrics();
 
   const [chartOrders, setChartOrders] = useState<any[]>([]);
   const [deliveryPartners, setDeliveryPartners] = useState<any[]>([]);
@@ -172,17 +176,11 @@ export default function OwnerDashboard() {
           prevMonthRevenue: pRev,
           revDiff,
           ordDiff,
-          pending: aggPending.data().count || 0,
-          preparing: aggPreparing.data().count || 0,
-          outForDelivery: aggOut.data().count || 0,
-          completed: aggCompleted.data().count || 0,
-          cancelled: aggCancelled.data().count || 0,
           totalProducts: aggProducts.data().count || 0,
           activeCoupons: aggCoupons.data().count || 0,
-          activeAds: aggAds.data().count || 0,
           activeCustomers: aggCustomers.data().count || 0,
+          activeAds: aggAds.data().count || 0,
           customerGrowth: 5.2, // Stub for customer growth % as per spec
-          partnersOnline: 0,
         });
 
         // Fetch recent orders for charts
@@ -245,35 +243,35 @@ export default function OwnerDashboard() {
       {/* 1. Top Section - 6 Premium KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 md:gap-6">
         <StatCard
-          title="Total Revenue"
-          value={`₹${metrics.monthRevenue.toFixed(2)}`}
+          title="Live Revenue (Today)"
+          value={`₹${liveMetrics.todayRevenue.toFixed(2)}`}
           icon="💰"
           isPositive={metrics.revDiff >= 0}
-          trend={`${metrics.revDiff > 0 ? "+" : ""}${metrics.revDiff.toFixed(1)}%`}
+          trend={`${metrics.revDiff > 0 ? "+" : ""}${metrics.revDiff.toFixed(1)}% vs month`}
           delay={0.1}
           colorTheme="orange"
         />
         <StatCard
-          title="Total Orders"
-          value={metrics.monthOrders}
+          title="Live Orders (Today)"
+          value={liveMetrics.todayOrders}
           icon="🛍️"
           isPositive={metrics.ordDiff >= 0}
-          trend={`${metrics.ordDiff > 0 ? "+" : ""}${metrics.ordDiff.toFixed(1)}%`}
+          trend={`${metrics.ordDiff > 0 ? "+" : ""}${metrics.ordDiff.toFixed(1)}% vs month`}
           delay={0.15}
           colorTheme="blue"
         />
         <StatCard
-          title="Customers"
-          value={metrics.activeCustomers}
+          title="Online Users"
+          value={liveMetrics.partnersOnline + liveMetrics.ownersOnline}
           icon="👥"
           isPositive={true}
-          trend={`+${metrics.customerGrowth}%`}
+          trend="Live Now"
           delay={0.2}
           colorTheme="purple"
         />
         <StatCard
           title="Active Deliveries"
-          value={metrics.outForDelivery}
+          value={liveMetrics.outForDelivery}
           icon="🛵"
           delay={0.25}
           colorTheme="green"
@@ -295,9 +293,22 @@ export default function OwnerDashboard() {
         />
       </div>
 
-      {/* System Health Panel */}
-      <div className="w-full">
-        <SystemHealthPanel />
+      {/* System Health & Status Panels */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 w-full">
+        <div className="xl:col-span-2">
+          <SystemHealthPanel />
+        </div>
+        <div className="xl:col-span-1">
+          <SystemStatusPanel />
+        </div>
+      </div>
+      
+      <div className="mt-8">
+        <SystemDebugPanel />
+      </div>
+
+      <div className="mt-6">
+        <SystemDiagnostics />
       </div>
 
       {/* 5. Charts */}

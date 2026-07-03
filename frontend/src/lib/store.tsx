@@ -25,18 +25,35 @@ interface AuthState {
   setLoading: (loading: boolean) => void;
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
-  user: null,
-  role: null,
-  isAuthenticated: false,
-  isLoading: true,
-  setUser: (user, role) => set({ user, role, isAuthenticated: !!user, isLoading: false }),
-  logout: () => {
-    useDataStore.getState().cleanup();
-    set({ user: null, role: null, isAuthenticated: false, isLoading: false });
-  },
-  setLoading: (isLoading) => set({ isLoading }),
-}));
+export const useAuthStore = create<AuthState>()(
+  persist(
+    (set) => ({
+      user: null,
+      role: null,
+      isAuthenticated: false,
+      isLoading: true,
+      setUser: (user, role) => set({ user, role, isAuthenticated: !!user, isLoading: false }),
+      logout: () => {
+        useDataStore.getState().cleanup();
+        set({ user: null, role: null, isAuthenticated: false, isLoading: false });
+      },
+      setLoading: (isLoading) => set({ isLoading }),
+    }),
+    {
+      name: 'olive-auth-store',
+      partialize: (state) => ({
+        user: state.user,
+        role: state.role,
+        isAuthenticated: state.isAuthenticated
+      }),
+      onRehydrateStorage: () => (state) => {
+        if (state && state.isAuthenticated) {
+          state.setLoading(false);
+        }
+      }
+    }
+  )
+);
 
 // Shopping Cart Store
 import { CartItem } from '../types/models';

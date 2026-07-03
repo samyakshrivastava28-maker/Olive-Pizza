@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useCartStore } from "../lib/store";
+import { LocationManager } from "../lib/permissions";
 import { useNavigate } from "react-router";
 import { motion, AnimatePresence } from "framer-motion";
 import PageTransition from "../components/PageTransition";
@@ -20,23 +21,20 @@ export default function Cart() {
   const [recommendations, setRecommendations] = useState<MenuItem[]>([]);
 
   useEffect(() => {
-    if (navigator.geolocation && !storeStatus.isLoading) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const { latitude, longitude } = position.coords;
+    if (!storeStatus.isLoading) {
+      LocationManager.getCurrentLocation({ forcePrompt: false })
+        .then((location) => {
           const distance = calculateDistance(
             RESTAURANT_LOCATION.lat,
             RESTAURANT_LOCATION.lng,
-            latitude,
-            longitude,
+            location.lat,
+            location.lng,
           );
           if (distance > storeStatus.deliveryRadiusKm) {
             setIsOutsideDeliveryZone(true);
           }
-        },
-        (error) => console.log("Geolocation error", error),
-        { timeout: 10000, maximumAge: 60000 },
-      );
+        })
+        .catch((error) => console.log("Geolocation error", error));
     }
 
     // Fetch recommendations based on current cart

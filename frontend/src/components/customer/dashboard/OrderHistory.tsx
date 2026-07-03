@@ -1,10 +1,11 @@
+import { useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import { Order, CartItem } from "../../../types/models";
 import { useNavigate } from "react-router";
 import { useCartStore } from "../../../lib/store";
 import { toast } from "react-hot-toast";
 import { GlassButton } from "../../ui/glass/GlassSystem";
-import { MapPin, RotateCcw } from "lucide-react";
+import { MapPin, RotateCcw, Search } from "lucide-react";
 
 interface Props {
   orders: Order[];
@@ -12,6 +13,16 @@ interface Props {
 
 export default function OrderHistory({ orders }: Props) {
   const navigate = useNavigate();
+  const [searchTerm, setSearchTerm] = useState("");
+
+  const filteredOrders = useMemo(() => {
+    if (!searchTerm.trim()) return orders;
+    const lower = searchTerm.toLowerCase();
+    return orders.filter(o => 
+      o.dailyOrderNumber?.toLowerCase().includes(lower) || 
+      o.id?.toLowerCase().includes(lower)
+    );
+  }, [orders, searchTerm]);
 
   const handleReorder = (order: Order, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -32,20 +43,30 @@ export default function OrderHistory({ orders }: Props) {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex justify-between items-center mb-2">
+      <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 mb-2">
         <h2 className="text-2xl text-white font-black flex items-center gap-2">
           <RotateCcw className="text-primary-500" /> Order History
         </h2>
+        <div className="relative w-full md:w-64">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <input 
+            type="text" 
+            placeholder="Search Order Number..." 
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full bg-dark-900/50 border border-white/10 rounded-xl py-2 pl-9 pr-4 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-primary-500 transition-colors"
+          />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {orders.length === 0 && (
+        {filteredOrders.length === 0 && (
           <div className="col-span-full text-center text-slate-500 bg-dark-900/50 p-12 rounded-2xl border border-dark-800">
-            No orders yet. Start your pizza journey!
+            {searchTerm ? "No orders found matching your search." : "No orders yet. Start your pizza journey!"}
           </div>
         )}
         
-        {orders.map((order, idx) => {
+        {filteredOrders.map((order, idx) => {
           const isActive = !["delivered", "cancelled"].includes(order.status);
           
           return (
@@ -75,7 +96,7 @@ export default function OrderHistory({ orders }: Props) {
               <div className="flex justify-between items-start mb-4">
                 <div>
                   <span className="font-bold text-white text-lg">
-                    Order #{order.id?.slice(-6).toUpperCase()}
+                    {order.dailyOrderNumber || `Order #${order.id?.slice(-6).toUpperCase()}`}
                   </span>
                   <p className="text-xs text-slate-400 mt-1">
                     {new Date(order.createdAt).toLocaleString(undefined, {

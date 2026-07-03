@@ -19,6 +19,8 @@ import { useShallow } from 'zustand/react/shallow';
 import DeliveryMap from "../../components/delivery/DeliveryMap";
 
 
+import { Search } from "lucide-react";
+
 export default function DeliveryDashboard() {
   const { user: authUser } = useAuthStore();
   const [liveUser, setLiveUser] = useState<any>(authUser);
@@ -270,7 +272,16 @@ export default function DeliveryDashboard() {
     } catch (error) { toast.error("Failed to complete delivery"); } finally { setIsUploading(false); }
   };
 
-  const activeTask = tasks[0];
+  const [searchTerm, setSearchTerm] = useState("");
+  
+  const filteredTasks = tasks.filter(t => {
+    if (!searchTerm.trim()) return true;
+    const lower = searchTerm.toLowerCase();
+    return t.dailyOrderNumber?.toLowerCase().includes(lower) || 
+           t.id?.toLowerCase().includes(lower);
+  });
+
+  const activeTask = filteredTasks[0];
 
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-dark-950 text-primary-500 font-bold animate-pulse">Initializing Dashboard...</div>;
 
@@ -309,6 +320,18 @@ export default function DeliveryDashboard() {
 
       <div className="max-w-md mx-auto p-4 space-y-6">
         
+        {/* ── Search Bar ── */}
+        <div className="relative">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+          <input 
+            type="text" 
+            placeholder="Search Assigned Orders..." 
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full bg-dark-900 border border-dark-800 rounded-full py-3 pl-12 pr-4 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-primary-500 transition-colors shadow-lg"
+          />
+        </div>
+        
         {/* ── Warning Alerts ── */}
         {user?.status === "online" && gpsPermission !== "granted" && (
           <div className="bg-red-500/10 border border-red-500/30 p-3 rounded-2xl flex items-center gap-3 text-red-400 text-sm font-bold">
@@ -343,7 +366,7 @@ export default function DeliveryDashboard() {
               <div className="flex items-start justify-between mb-6 pb-6 border-b border-dark-800">
                 <div>
                   <h3 className="text-xl font-black text-white mb-1 flex items-center gap-2">{activeTask.customerInfo?.name || "Customer"} {(activeTask.customerInfo as any)?.isVIP && <Star size={16} className="text-primary-500 fill-current" />}</h3>
-                  <p className="text-sm text-slate-400 font-medium">Order #{activeTask.id?.slice(-6).toUpperCase()}</p>
+                  <p className="text-sm text-slate-400 font-medium">{activeTask.dailyOrderNumber || `Order #${activeTask.id?.slice(-6).toUpperCase()}`}</p>
                 </div>
                 <a href={`tel:${activeTask.contactPhone}`} className="w-12 h-12 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 hover:bg-blue-500 hover:text-white transition-all">
                   <PhoneCall size={20} />
@@ -427,6 +450,22 @@ export default function DeliveryDashboard() {
         )}
 
       </div>
+      
+      {/* ── Other Assigned Orders ── */}
+      {filteredTasks.length > 1 && (
+        <div className="max-w-md mx-auto p-4 pt-0 space-y-4">
+          <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest">Other Assigned Orders</h3>
+          {filteredTasks.slice(1).map(task => (
+            <div key={task.id} className="bg-dark-900 border border-dark-800 rounded-2xl p-4 flex justify-between items-center">
+              <div>
+                <p className="font-bold text-white">{task.dailyOrderNumber || `Order #${task.id?.slice(-6).toUpperCase()}`}</p>
+                <p className="text-xs text-slate-400">{task.deliveryAddress?.addressLine || task.address}</p>
+              </div>
+              <span className="text-xs font-bold text-primary-500 uppercase px-2 py-1 bg-primary-500/10 rounded-lg">{task.status.replace(/_/g, " ")}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Proof Modal */}
       <AnimatePresence>

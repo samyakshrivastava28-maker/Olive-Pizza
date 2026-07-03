@@ -64,8 +64,13 @@ export default function LiveOrdersTable() {
             ) : (
               orders.map(order => (
                 <tr key={order.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                  <td className="p-4 font-mono text-sm font-bold text-slate-700 dark:text-slate-300">
-                    #{order.id.slice(-6).toUpperCase()}
+                  <td className="p-4 whitespace-nowrap">
+                    <div className="font-bold text-slate-800 dark:text-slate-200">
+                      {order.dailyOrderNumber || `#${order.id.slice(-6).toUpperCase()}`}
+                    </div>
+                    <div className="text-[10px] text-slate-500 font-mono mt-0.5">
+                      {order.id}
+                    </div>
                   </td>
                   <td className="p-4 text-slate-800 dark:text-slate-200 font-medium">
                     {order.customerInfo?.name || 'Guest'}

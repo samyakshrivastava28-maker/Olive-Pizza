@@ -257,11 +257,19 @@ export default function OwnerEmailCenter() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ htmlContent }),
       });
-      const html = await res.text();
-      setPreviewHtml(html);
+      
+      const contentType = res.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        throw new Error("Server returned an invalid response format.");
+      }
+      
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || "Failed to generate preview");
+      
+      setPreviewHtml(data.html);
       setShowPreview(true);
-    } catch {
-      toast.error("Could not generate preview");
+    } catch (e: any) {
+      toast.error(e.message || "Could not generate preview");
     }
   };
 
@@ -278,11 +286,18 @@ export default function OwnerEmailCenter() {
           recipient: "olivepizzarjn@gmail.com",
         }),
       });
+      
+      const contentType = res.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        throw new Error("Server returned an invalid response format.");
+      }
+      
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed");
+      
       toast.success(data.message || "Test email sent!", { id: "test-email" });
     } catch (e: any) {
-      toast.error(e.message, { id: "test-email" });
+      toast.error(e.message || "Failed to send test email", { id: "test-email" });
     } finally {
       setIsSendingTest(false);
     }
@@ -292,11 +307,19 @@ export default function OwnerEmailCenter() {
     setIsLoading(true);
     try {
       const res = await fetch("/api/email/analytics");
-      if (!res.ok) throw new Error();
+      
+      const contentType = res.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        throw new Error("Server returned an invalid response format.");
+      }
+      
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to fetch analytics");
+      
       setMetrics(data.metrics || { totalSent: 0, totalFailed: 0 });
       setCampaigns(data.campaigns || []);
-    } catch {
+    } catch (e: any) {
+      console.error(e);
       setMetrics({ totalSent: 0, totalFailed: 0 });
       setCampaigns([]);
     } finally {
@@ -323,11 +346,17 @@ export default function OwnerEmailCenter() {
           isFestival,
         }),
       });
+      
+      const contentType = res.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        throw new Error("Server returned an invalid response format.");
+      }
+      
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to send");
       toast.success(data.message || "Campaign queued!", { id: "campaign" });
     } catch (e: any) {
-      toast.error(e.message, { id: "campaign" });
+      toast.error(e.message || "Failed to send campaign", { id: "campaign" });
     } finally {
       setIsSending(false);
     }

@@ -11,6 +11,8 @@ import { useDataStore } from "../lib/dataStore";
 import { useShallow } from "zustand/react/shallow";
 import { useLoadingStore } from "../lib/loadingStore";
 import { useDebounce } from "../hooks/useDebounce";
+import { useAuthStore } from "../lib/store";
+import { subscribeToWishlist } from "../lib/wishlist";
 import { motion, Variants } from "framer-motion";
 import PageTransition from "../components/PageTransition";
 import ProductCard from "../components/ProductCard";
@@ -57,9 +59,23 @@ export default function Menu() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const debouncedSearch = useDebounce(searchQuery, 300);
-  const [category, setCategory] = useState<"all" | "pizza" | "sides" | "beverage" | "combo">("all");
+  const [category, setCategory] = useState<"all" | "pizza" | "sides" | "beverage" | "combo" | "favourite">("all");
   const searchInputRef = useRef<HTMLInputElement>(null);
   const location = useLocation();
+  const { user } = useAuthStore();
+  const [wishlistIds, setWishlistIds] = useState<string[]>([]);
+
+  // Subscribe to wishlist
+  useEffect(() => {
+    if (!user?.uid) {
+      setWishlistIds([]);
+      return;
+    }
+    const unsub = subscribeToWishlist(user.uid, (ids) => {
+      setWishlistIds(ids);
+    });
+    return () => unsub();
+  }, [user?.uid]);
 
   useEffect(() => {
     if (location.search.includes("search=1") && searchInputRef.current) {
@@ -111,7 +127,7 @@ export default function Menu() {
 
   const filteredItems = useMemo(() => {
     return allItems.filter((item) => {
-      const matchesCategory = category === "all" || item.category === category;
+      const matchesCategory = category === "all" || item.category === category || (category === "favourite" && wishlistIds.includes(item.id));
       
       const q = debouncedSearch.toLowerCase();
       
@@ -259,7 +275,9 @@ export default function Menu() {
 
                 {/* Horizontal Categories */}
                 <div className="flex gap-2 overflow-x-auto hide-scrollbar pb-1">
-                  {["all", "pizza", "sides", "beverage", "combo"].map((cat) => {
+                  {(["all", "pizza", "sides", "beverage", "combo"] as const)
+                    .concat(wishlistIds.length > 0 ? ["favourite"] : [])
+                    .map((cat) => {
                     const isActive = category === cat;
                     return (
                       <button
@@ -271,7 +289,7 @@ export default function Menu() {
                             : "bg-dark-800 text-slate-400 hover:text-slate-200 border border-dark-700"
                         } capitalize`}
                       >
-                        {cat === "combo" ? "Combos 🚀" : cat}
+                        {cat === "combo" ? "Combos 🚀" : cat === "favourite" ? "Favourites ❤️" : cat}
                       </button>
                     );
                   })}
@@ -303,7 +321,7 @@ export default function Menu() {
                       variants={itemVariants}
                       className="h-full"
                     >
-                      <ProductCard item={item} discount={discount} />
+                      <ProductCard item={item} discount={discount} wishlistIds={wishlistIds} />
                     </motion.div>
                   );
                 })}

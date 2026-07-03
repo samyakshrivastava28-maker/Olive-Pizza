@@ -37,12 +37,12 @@ export class FirestoreListener {
             this.orderStatusCache.set(orderData.id, orderData.status);
 
             if (orderData.orderTiming === 'scheduled') {
-              console.log(`📅 Scheduled order: #${orderData.id.slice(-6).toUpperCase()} — sending Slack alert only`);
+              console.log(`📅 Scheduled order: ${orderData.dailyOrderNumber || `#${orderData.id.slice(-6).toUpperCase()}`} — sending Slack alert only`);
               const blocks = SlackProvider.generateOrderBlock(orderData);
               const ts = await notificationService.dispatchImmediate({
                 type: 'scheduled_order_received',
                 category: 'orders',
-                title: `📅 New Scheduled Order — #${orderData.id.slice(-6).toUpperCase()}`,
+                title: `📅 New Scheduled Order — ${orderData.dailyOrderNumber || `#${orderData.id.slice(-6).toUpperCase()}`}`,
                 blocks
               });
               if (ts) {
@@ -51,14 +51,14 @@ export class FirestoreListener {
               return; // Skip the kitchen alarm
             }
 
-            console.log(`🍕 New order: #${orderData.id.slice(-6).toUpperCase()} — sending Slack alert`);
+            console.log(`🍕 New order: ${orderData.dailyOrderNumber || `#${orderData.id.slice(-6).toUpperCase()}`} — sending Slack alert`);
 
             const blocks = SlackProvider.generateOrderBlock(orderData);
 
             const ts = await notificationService.dispatchImmediate({
               type: 'new_order',
               category: 'orders',
-              title: `🍕 New Order — #${orderData.id.slice(-6).toUpperCase()}`,
+              title: `🍕 New Order — ${orderData.dailyOrderNumber || `#${orderData.id.slice(-6).toUpperCase()}`}`,
               blocks,
             });
 
@@ -96,7 +96,7 @@ export class FirestoreListener {
             const cfg = statusConfig[currentStatus];
             if (!cfg) continue;
 
-            console.log(`🔄 Order #${orderData.id.slice(-6).toUpperCase()}: ${prevStatus} → ${currentStatus}`);
+            console.log(`🔄 Order ${orderData.dailyOrderNumber || `#${orderData.id.slice(-6).toUpperCase()}`}: ${prevStatus} → ${currentStatus}`);
 
             // Delivery partner assigned or picked up — send action buttons block
             if (currentStatus === 'partner_assigned' || currentStatus === 'out_for_delivery') {

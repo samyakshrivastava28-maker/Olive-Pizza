@@ -4,17 +4,22 @@ import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { updatePassword, sendPasswordResetEmail, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
 import toast from 'react-hot-toast';
 import FloatingLines from '../../components/ui/FloatingLines';
+import PhoneUpdateModal from './dashboard/PhoneUpdateModal';
+import { Camera, Mail, MapPin, BellRing, Phone } from 'lucide-react';
 
 export default function CustomerProfile() {
   const [profile, setProfile] = useState({
     name: '',
     phone: '',
-    addressLine: '',
-    landmark: '',
-    pincode: ''
+    photoURL: '',
+    notifications: {
+      orderUpdates: true,
+      promotions: false,
+    }
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [isPhoneModalOpen, setIsPhoneModalOpen] = useState(false);
   
   // Password State
   const [showPasswordChange, setShowPasswordChange] = useState(false);
@@ -33,9 +38,8 @@ export default function CustomerProfile() {
           setProfile({
             name: data.name || '',
             phone: data.phone || '',
-            addressLine: data.defaultAddress?.addressLine || '',
-            landmark: data.defaultAddress?.landmark || '',
-            pincode: data.defaultAddress?.pincode || ''
+            photoURL: data.photoURL || '',
+            notifications: data.notifications || { orderUpdates: true, promotions: false }
           });
         }
       } catch (err) {
@@ -53,56 +57,12 @@ export default function CustomerProfile() {
     if (!auth.currentUser) return;
     setSaving(true);
     try {
-      // 1. Phone Uniqueness Check
-      if (profile.phone) {
-        try {
-          const { parsePhoneNumber } = await import('libphonenumber-js');
-          const phoneNumber = parsePhoneNumber(profile.phone, 'IN');
-          if (!phoneNumber || !phoneNumber.isValid()) {
-            toast.error('Please enter a valid Indian mobile number');
-            setSaving(false);
-            return;
-          }
-          const formattedPhone = phoneNumber.format('E.164');
-          
-          const { getDoc, setDoc } = await import('firebase/firestore');
-          const identityRef = doc(db, 'customer_identities', formattedPhone);
-          const identityDoc = await getDoc(identityRef);
-          
-          if (identityDoc.exists()) {
-            const identityData = identityDoc.data();
-            if (identityData.primaryUid !== auth.currentUser.uid) {
-              toast.error('This phone number is already registered to another account.');
-              setSaving(false);
-              return;
-            }
-          } else {
-            // Claim this phone number
-            await setDoc(identityRef, {
-              primaryUid: auth.currentUser.uid,
-              primaryEmail: auth.currentUser.email || '',
-              firstOrderCouponUsed: false,
-              firstOrderDate: null,
-              firstOrderCouponCode: null,
-              totalOrders: 0,
-              totalSpent: 0,
-              createdAt: new Date().toISOString()
-            });
-          }
-        } catch (phoneErr: any) {
-          console.error("Phone validation error", phoneErr);
-        }
-      }
-
       const docRef = doc(db, 'users', auth.currentUser.uid);
       await updateDoc(docRef, {
         name: profile.name,
-        phone: profile.phone,
-        defaultAddress: {
-          addressLine: profile.addressLine,
-          landmark: profile.landmark,
-          pincode: profile.pincode
-        }
+        notifications: profile.notifications
+        // phone is updated securely via PhoneUpdateModal
+        // photoURL is updated separately
       });
       toast.success("Profile updated successfully!");
     } catch (err) {
@@ -170,6 +130,30 @@ export default function CustomerProfile() {
         <h2 className="text-2xl font-black mb-6 flex items-center gap-2 text-slate-800 dark:text-white">
           <span>📝</span> Personal Details
         </h2>
+        
+        {/* Profile Photo Upload */}
+        <div className="flex justify-center mb-8">
+          <div className="relative group">
+            <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-slate-100 dark:border-slate-700 bg-slate-200 dark:bg-slate-800 flex items-center justify-center">
+              {profile.photoURL ? (
+                <img src={profile.photoURL} alt="Profile" className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-4xl font-black text-slate-400">{profile.name.charAt(0).toUpperCase() || '?'}</span>
+              )}
+            </div>
+            <label className="absolute bottom-0 right-0 bg-primary-500 text-white p-2 rounded-full cursor-pointer shadow-lg hover:scale-110 transition-transform">
+              <Camera className="w-4 h-4" />
+              <input type="file" className="hidden" accept="image/*" onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  toast.error("Cloud storage setup required to upload images.");
+                  // Future: upload to Firebase storage or Cloudinary and set profile.photoURL
+                }
+              }}/>
+            </label>
+          </div>
+        </div>
+
         <form onSubmit={handleUpdateProfile} className="space-y-4">
           <div>
             <label className="block text-sm font-bold text-slate-500 dark:text-slate-400 mb-1">Email</label>
@@ -194,46 +178,65 @@ export default function CustomerProfile() {
             </div>
             <div>
               <label className="block text-sm font-bold text-slate-500 dark:text-slate-400 mb-1">Phone Number</label>
-              <input 
-                type="tel" 
-                required
-                value={profile.phone}
-                onChange={e => setProfile({...profile, phone: e.target.value})}
-                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-3 rounded-xl text-slate-800 dark:text-white focus:border-primary-500 outline-none transition-colors"
-              />
+              <div className="flex bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden focus-within:border-primary-500 transition-colors">
+                <input 
+                  type="text" 
+                  value={profile.phone}
+                  disabled
+                  className="w-full bg-transparent p-3 text-slate-800 dark:text-white outline-none cursor-not-allowed opacity-80"
+                />
+                <button
+                  type="button"
+                  onClick={() => setIsPhoneModalOpen(true)}
+                  className="bg-primary-500 hover:bg-primary-600 text-white px-4 font-bold transition-colors"
+                >
+                  Change
+                </button>
+              </div>
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-bold text-slate-500 dark:text-slate-400 mb-1">Default Address</label>
-            <textarea 
-              rows={2}
-              value={profile.addressLine}
-              onChange={e => setProfile({...profile, addressLine: e.target.value})}
-              className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-3 rounded-xl text-slate-800 dark:text-white focus:border-primary-500 outline-none transition-colors"
-              placeholder="123 Main St, Apt 4B"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-bold text-slate-500 dark:text-slate-400 mb-1">Landmark</label>
-              <input 
-                type="text" 
-                value={profile.landmark}
-                onChange={e => setProfile({...profile, landmark: e.target.value})}
-                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-3 rounded-xl text-slate-800 dark:text-white focus:border-primary-500 outline-none transition-colors"
-                placeholder="Near the park"
-              />
+          <div className="pt-4 border-t border-slate-200 dark:border-slate-700 mt-6">
+            <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2">
+              <BellRing className="w-5 h-5 text-primary-500" /> Notification Preferences
+            </h3>
+            
+            <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 mb-3">
+              <div>
+                <p className="font-bold text-slate-800 dark:text-white text-sm">Order Updates (Important)</p>
+                <p className="text-xs text-slate-500">Live tracking and status alerts.</p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  checked={profile.notifications.orderUpdates}
+                  onChange={(e) => setProfile({
+                    ...profile,
+                    notifications: { ...profile.notifications, orderUpdates: e.target.checked }
+                  })}
+                  className="sr-only peer" 
+                />
+                <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-primary-500"></div>
+              </label>
             </div>
-            <div>
-              <label className="block text-sm font-bold text-slate-500 dark:text-slate-400 mb-1">Pincode</label>
-              <input 
-                type="text" 
-                value={profile.pincode}
-                onChange={e => setProfile({...profile, pincode: e.target.value})}
-                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-3 rounded-xl text-slate-800 dark:text-white focus:border-primary-500 outline-none transition-colors"
-              />
+
+            <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700">
+              <div>
+                <p className="font-bold text-slate-800 dark:text-white text-sm">Offers & Promotions</p>
+                <p className="text-xs text-slate-500">Coupons and festival offers.</p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  checked={profile.notifications.promotions}
+                  onChange={(e) => setProfile({
+                    ...profile,
+                    notifications: { ...profile.notifications, promotions: e.target.checked }
+                  })}
+                  className="sr-only peer" 
+                />
+                <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-primary-500"></div>
+              </label>
             </div>
           </div>
 
@@ -329,6 +332,12 @@ export default function CustomerProfile() {
           )}
         </div>
       </div>
+      <PhoneUpdateModal 
+        isOpen={isPhoneModalOpen}
+        onClose={() => setIsPhoneModalOpen(false)}
+        currentPhone={profile.phone}
+        onSuccess={(newPhone) => setProfile(prev => ({ ...prev, phone: newPhone }))}
+      />
     </div>
     </>
   );

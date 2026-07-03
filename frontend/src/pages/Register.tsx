@@ -116,37 +116,56 @@ export default function Register() {
 
       // 1. Phone validation
       let formattedPhone = "";
-      try {
-        const phoneNumber = parsePhoneNumber(phone, "IN");
-        if (!phoneNumber || !phoneNumber.isValid() || phoneNumber.country !== "IN") {
-          throw new Error("Invalid phone");
-        }
-        formattedPhone = phoneNumber.format("E.164");
-      } catch (err) {
-        setError("Please enter a valid Indian mobile number");
-        setLoading(false);
-        return;
-      }
+      const userEmail = email.toLowerCase();
+      const initialRole = userEmail === "olivepizzarjn@gmail.com" ? "owner" : "customer";
+      let identityDocExists = false;
 
-      // 2. Check for uniqueness
-      const identityRef = doc(db, "customer_identities", formattedPhone);
-      const identityDoc = await getDoc(identityRef);
-      if (identityDoc.exists()) {
+      if (phone.trim() !== "") {
         try {
-          const { addDoc, collection } = await import("firebase/firestore");
-          await addDoc(collection(db, "security_logs"), {
-            action: "duplicate_phone_attempt",
-            email: email,
-            uid: "N/A",
-            role: "customer",
-            path: "/register",
-            timestamp: new Date().toISOString(),
-            details: `Attempted to register with already used phone ${formattedPhone}`
-          });
-        } catch (e) {
-          console.error("Failed to log security event");
+          const phoneNumber = parsePhoneNumber(phone, "IN");
+          if (!phoneNumber || !phoneNumber.isValid() || phoneNumber.country !== "IN") {
+            throw new Error("Invalid phone");
+          }
+          formattedPhone = phoneNumber.format("E.164");
+        } catch (err) {
+          setError("Please enter a valid Indian mobile number");
+          setLoading(false);
+          return;
         }
-        setError("Phone number already in use. One phone number can only be linked to one account.");
+
+        // 2. Check for uniqueness
+        try {
+          const identityRef = doc(db, "customer_identities", formattedPhone);
+          const identityDoc = await getDoc(identityRef);
+          identityDocExists = identityDoc.exists();
+          if (identityDoc.exists()) {
+            try {
+              const { addDoc, collection } = await import("firebase/firestore");
+              await addDoc(collection(db, "security_logs"), {
+                action: "duplicate_phone_attempt",
+                email: email,
+                uid: "N/A",
+                role: "customer",
+                path: "/register",
+                timestamp: new Date().toISOString(),
+                details: `Attempted to register with already used phone ${formattedPhone}`
+              });
+            } catch (e) {
+              console.error("Failed to log security event");
+            }
+            setError("Phone number already in use. One phone number can only be linked to one account.");
+            setLoading(false);
+            return;
+          }
+        } catch (err: any) {
+          if (err.code === 'unavailable' || err.message?.includes('offline')) {
+            console.warn('Network offline during uniqueness check. Bypassing check.');
+          } else {
+            throw err;
+          }
+        }
+      } else if (initialRole !== 'owner') {
+        setError("Phone number is required");
         setLoading(false);
         return;
       }
@@ -160,18 +179,22 @@ export default function Register() {
         const userEmail = email.toLowerCase();
         const initialRole = userEmail === "olivepizzarjn@gmail.com" ? "owner" : "customer";
         
-        await setDoc(identityRef, {
-          primaryUid: userCredential.user.uid,
-          primaryEmail: userEmail,
-          deviceId: deviceId,
-          userAgent: navigator.userAgent,
-          firstOrderCouponUsed: false,
-          firstOrderDate: null,
-          firstOrderCouponCode: null,
-          totalOrders: 0,
-          totalSpent: 0,
-          createdAt: new Date().toISOString(),
-        });
+        const identityRef = doc(db, "customer_identities", formattedPhone || 'unknown');
+
+        if (formattedPhone && !identityDocExists) {
+          await setDoc(identityRef, {
+            primaryUid: userCredential.user.uid,
+            primaryEmail: userEmail,
+            deviceId: deviceId,
+            userAgent: navigator.userAgent,
+            firstOrderCouponUsed: false,
+            firstOrderDate: null,
+            firstOrderCouponCode: null,
+            totalOrders: 0,
+            totalSpent: 0,
+            createdAt: new Date().toISOString(),
+          });
+        }
 
         await setDoc(
           doc(db, "users", userCredential.user.uid),
@@ -323,7 +346,7 @@ export default function Register() {
               setPhone(val);
             }}
             className="flex-1 p-3 border border-slate-200 dark:border-slate-700 rounded-r-lg bg-white/50 dark:bg-slate-900/50 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all"
-            required
+            required={email.toLowerCase() !== "olivepizzarjn@gmail.com"}
             maxLength={12}
           />
         </div>

@@ -5,6 +5,9 @@ import './index.css';
 import App from './App.tsx';
 
 import { GlobalErrorBoundary } from './components/GlobalErrorBoundary';
+import { initVersionManager } from './lib/versionManager';
+
+initVersionManager();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

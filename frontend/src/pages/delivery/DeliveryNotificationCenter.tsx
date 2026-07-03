@@ -44,7 +44,7 @@ export default function DeliveryNotificationCenter() {
 
   const notifications: NotificationItem[] = orders.map(order => {
     let title = 'Order Update';
-    let details = `Order #${order.id?.slice(0, 5)}`;
+    let details = `${order.dailyOrderNumber || `Order #${order.id?.slice(0, 5)}`}`;
     let status: 'pending' | 'accepted' | 'completed' = 'pending';
 
     if (order.status === 'partner_assigned' || order.status === 'ready') {
@@ -57,7 +57,7 @@ export default function DeliveryNotificationCenter() {
       status = 'accepted';
     } else if (order.status === 'delivered') {
       title = 'Delivery Completed';
-      details = `Order #${order.id?.slice(0, 5)} delivered successfully. Earnings added to your wallet.`;
+      details = `${order.dailyOrderNumber || `Order #${order.id?.slice(0, 5)}`} delivered successfully. Earnings added to your wallet.`;
       status = 'completed';
     }
 

@@ -50,6 +50,7 @@ export default function OwnerLayout() {
     { name: 'Slack Center', path: '/owner/slack', icon: '💬' },
     { name: 'Special Categories', path: '/owner/special-categories', icon: '🎪' },
     { name: 'Homepage Manager', path: '/owner/homepage', icon: '🏗️' },
+    { name: 'Versions', path: '/owner/versions', icon: '🚀' },
     { name: 'Settings', path: '/owner/settings', icon: '⚙️' },
   ];
 

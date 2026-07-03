@@ -22,7 +22,7 @@ export const sendOrderReceipt = async (toEmail: string, orderData: any) => {
     const html = `
       <div style="font-family: sans-serif; max-w-lg mx-auto p-4">
         <h1 style="color: #658c3a;">Olive Pizza</h1>
-        <h2>Order Received! (#${orderData.id.slice(-6).toUpperCase()})</h2>
+        <h2>Order Received! (${orderData.dailyOrderNumber || `#${orderData.id.slice(-6).toUpperCase()}`})</h2>
         <p>Thank you for ordering with Olive Pizza. We're preparing your order now.</p>
         
         <h3>Order Summary:</h3>
@@ -41,7 +41,7 @@ export const sendOrderReceipt = async (toEmail: string, orderData: any) => {
     await transporter.sendMail({
       from: process.env.SMTP_FROM || 'Olive Pizza <noreply@olivepizza.app>',
       to: toEmail,
-      subject: `Your Olive Pizza Order #${orderData.id.slice(-6).toUpperCase()}`,
+      subject: `Your Olive Pizza Order ${orderData.dailyOrderNumber || `#${orderData.id.slice(-6).toUpperCase()}`}`,
       html,
     });
 
@@ -50,7 +50,7 @@ export const sendOrderReceipt = async (toEmail: string, orderData: any) => {
       await transporter.sendMail({
         from: process.env.SMTP_FROM || 'Olive Pizza <noreply@olivepizza.app>',
         to: process.env.OWNER_EMAIL,
-        subject: `NEW ORDER ALERT: #${orderData.id.slice(-6).toUpperCase()}`,
+        subject: `NEW ORDER ALERT: ${orderData.dailyOrderNumber || `#${orderData.id.slice(-6).toUpperCase()}`}`,
         html: `A new order has been placed. <br><br> ${html}`,
       });
     }

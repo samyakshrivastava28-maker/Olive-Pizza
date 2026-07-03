@@ -16,6 +16,7 @@ import { useEffect, useRef, useCallback } from 'react';
 import { getMessagingInstance, db, auth } from '../lib/firebase';
 import { getToken, onMessage, Messaging } from 'firebase/messaging';
 import { doc, updateDoc, arrayUnion } from 'firebase/firestore';
+import { LocationManager } from '../lib/permissions';
 import { useAuthStore } from '../lib/store';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Bell, X, ShieldCheck } from 'lucide-react';
@@ -389,11 +390,14 @@ export default function PushNotificationManager() {
         // Delivery partners include GPS in heartbeat
         if (includeGPS && userRole === 'delivery_partner' && navigator.geolocation) {
           try {
-            const pos = await getCurrentPosition();
-            body.lat = pos.coords.latitude;
-            body.lng = pos.coords.longitude;
-            body.speed = pos.coords.speed;
-            body.accuracy = pos.coords.accuracy;
+            const permState = await LocationManager.checkPermissionState();
+            if (permState === 'granted') {
+              const pos = await getCurrentPosition();
+              body.lat = pos.coords.latitude;
+              body.lng = pos.coords.longitude;
+              body.speed = pos.coords.speed;
+              body.accuracy = pos.coords.accuracy;
+            }
           } catch {} // GPS failure is non-fatal
         }
 

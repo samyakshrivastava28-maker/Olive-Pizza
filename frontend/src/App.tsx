@@ -4,6 +4,7 @@ import { AnimatePresence, MotionConfig } from 'framer-motion';
 import { Toaster } from 'react-hot-toast';
 import { lazy, Suspense, ComponentType, useEffect, useRef } from 'react';
 import { useAuthStore } from './lib/store';
+import { UpdateBanner, ForceUpdateScreen } from './components/VersionUpdateScreens';
 
 // Custom lazy loading with retry for chunk errors (prevents black screen on PWA update)
 const lazyWithRetry = <T extends ComponentType<any>>(
@@ -122,6 +123,7 @@ const OwnerSecurity = lazyWithRetry(() => import('./pages/owner/OwnerSecurity'))
 const OwnerEmailCenter = lazyWithRetry(() => import('./pages/owner/OwnerEmailCenter'));
 const OwnerSpecialCategories = lazyWithRetry(() => import('./pages/owner/OwnerSpecialCategories'));
 const OwnerHomepageManager = lazyWithRetry(() => import('./pages/owner/OwnerHomepageManager'));
+const OwnerVersionManagement = lazyWithRetry(() => import('./pages/owner/OwnerVersionManagement'));
 const OwnerSlackCenter = lazyWithRetry(() => import('./pages/owner/OwnerSlackCenter'));
 const OwnerNotificationCenter = lazyWithRetry(() => import('./pages/owner/OwnerNotificationCenter'));
 
@@ -137,9 +139,31 @@ function AppContent() {
   const location = useLocation();
   const navigate = useNavigate();
   const isAuthenticated = useAuthStore(state => state.isAuthenticated);
+  const isLoading = useAuthStore(state => state.isLoading);
   const user = useAuthStore(state => state.user);
   const role = useAuthStore(state => state.role);
   const hasRedirectedToDashboard = useRef(false);
+
+  // Global Session Initializer Blocker
+  // This completely stops the app from rendering while we restore the persisted session.
+  // This eliminates the "login flash" the user sees on startup.
+  if (isLoading && !isAuthenticated) {
+    return <PizzaLoader />;
+  }
+
+  // Prevent authenticated users from visiting login/register/forgot-password
+  useEffect(() => {
+    if (
+      isAuthenticated &&
+      (location.pathname === '/login' ||
+        location.pathname === '/register' ||
+        location.pathname === '/forgot-password')
+    ) {
+      if (role === 'owner' || role === 'admin') navigate('/owner/dashboard', { replace: true });
+      else if (role === 'delivery_partner') navigate('/delivery/dashboard', { replace: true });
+      else navigate('/', { replace: true });
+    }
+  }, [isAuthenticated, role, location.pathname, navigate]);
 
   // Global Onboarding Enforcer: Make phone and location setup strictly compulsory for customers
   useEffect(() => {
@@ -242,6 +266,7 @@ function AppContent() {
                   <Route path="special-categories" element={<OwnerSpecialCategories />} />
                   <Route path="homepage" element={<OwnerHomepageManager />} />
                   <Route path="notifications" element={<OwnerNotificationCenter />} />
+                  <Route path="versions" element={<OwnerVersionManagement />} />
                 </Route>
               </Route>
     
@@ -266,6 +291,8 @@ function AppContent() {
 function App() {
   return (
     <HelmetProvider>
+      <ForceUpdateScreen />
+      <UpdateBanner />
       <MotionConfig reducedMotion="user">
       <AuthProvider>
         <ClickSpark

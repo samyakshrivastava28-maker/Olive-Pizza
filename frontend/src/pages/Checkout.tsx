@@ -9,9 +9,12 @@ import {
   query,
   where,
   getDoc,
-  doc,
   updateDoc,
   increment,
+  runTransaction,
+  setDoc,
+  doc,
+  serverTimestamp,
 } from "firebase/firestore";
 import { motion, AnimatePresence } from "framer-motion";
 import PageTransition from "../components/PageTransition";
@@ -201,7 +204,7 @@ export default function Checkout() {
         try {
           const identityRef = doc(db, "customer_identities", user.phone);
           const identityDoc = await getDoc(identityRef);
-          if (identityDoc.exists() && identityDoc.data().firstOrderCouponUsed) {
+          if (identityDoc.exists() && (identityDoc.data() as any)?.firstOrderCouponUsed) {
             toast.error(
               "This phone number has already used the First Order offer.",
             );
@@ -260,7 +263,52 @@ export default function Checkout() {
     setLoading(true);
     setError("");
     try {
-      const docRef = await addDoc(collection(db, "orders"), {
+      // 1. Fetch Global Settings for Timezone (Fallback to Asia/Kolkata)
+      let timezone = "Asia/Kolkata";
+      await runTransaction(db, async (transaction) => {
+        const settingsSnap = await transaction.get(doc(db, "settings", "global"));
+        const settings = settingsSnap.exists() ? (settingsSnap.data() as any) : {};
+        timezone = settings.restaurantTimezone || "Asia/Kolkata";
+      });
+
+      // 2. Generate Time-Based Keys
+      const dateObj = new Date();
+      const options: Intl.DateTimeFormatOptions = { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' };
+      const dateParts = new Intl.DateTimeFormat('en-CA', options).formatToParts(dateObj); // YYYY-MM-DD
+      const year = dateParts.find(p => p.type === 'year')?.value;
+      const month = dateParts.find(p => p.type === 'month')?.value;
+      const day = dateParts.find(p => p.type === 'day')?.value;
+      const dateKey = `${year}${month}${day}`;
+
+      const displayOptions: Intl.DateTimeFormatOptions = { timeZone: timezone, day: '2-digit', month: 'long', year: 'numeric' };
+      const displayDateStr = new Intl.DateTimeFormat('en-GB', displayOptions).format(dateObj); // 02 July 2026
+
+      const counterRef = doc(db, 'daily_counters', dateKey);
+      let currentOrderNumber = 1;
+
+      // 3. Atomic Transaction for Daily Counter
+      await runTransaction(db, async (transaction) => {
+        const counterDoc = await transaction.get(counterRef);
+        if (!counterDoc.exists()) {
+          transaction.set(counterRef, { count: 1 });
+          currentOrderNumber = 1;
+        } else {
+          currentOrderNumber = counterDoc.data().count + 1;
+          transaction.update(counterRef, { count: currentOrderNumber });
+        }
+      });
+
+      // 4. Generate Identifiers
+      const paddedNumber = `#${String(currentOrderNumber).padStart(3, '0')}`;
+      const dailyOrderNumber = `${displayDateStr} ${paddedNumber}`;
+      const randomStr = Math.random().toString(36).substring(2, 10).toUpperCase();
+      const permanentOrderId = `OP-${dateKey}-${randomStr}`;
+      
+      const orderRef = doc(db, "orders", permanentOrderId);
+      await setDoc(orderRef, {
+        dailyOrderNumber,
+        dateKey,
+        dailySequence: currentOrderNumber,
         userId: auth.currentUser?.uid || null,
         customerName: user?.name || "Guest",
         contactPhone: user?.phone || "",
@@ -328,7 +376,8 @@ export default function Checkout() {
         body: JSON.stringify({
           event: "ORDER_PLACED",
           data: {
-            orderId: docRef.id,
+            orderId: permanentOrderId,
+            dailyOrderNumber,
             customerName: user?.name || "Guest",
             customerEmail: user?.email || "",
             totalAmount: finalTotal,
