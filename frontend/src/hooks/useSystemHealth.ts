@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 
 export type SystemStatus = 'healthy' | 'warning' | 'critical' | 'initializing' | 'unavailable' | 'connecting' | 'retrying';
 
@@ -6,7 +6,7 @@ export interface HealthData {
   timestamp: string;
   system: { uptime: number; memory: any; cpuLoad: number[]; platform: string; nodeVersion: string };
   services: {
-    backend?: { status: string };
+    backend?: { status: string; version?: string };
     database: { status: string; latency: number; activeConnections: number };
     cloudinary: { status: string; latency: number };
     firebase: { status: string; latency: number };

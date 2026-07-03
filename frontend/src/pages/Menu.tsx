@@ -127,7 +127,7 @@ export default function Menu() {
 
   const filteredItems = useMemo(() => {
     return allItems.filter((item) => {
-      const matchesCategory = category === "all" || item.category === category || (category === "favourite" && wishlistIds.includes(item.id));
+      const matchesCategory = category === "all" || item.category === category || (category === "favourite" && wishlistIds.includes(item.id || ''));
       
       const q = debouncedSearch.toLowerCase();
       
@@ -275,7 +275,7 @@ export default function Menu() {
 
                 {/* Horizontal Categories */}
                 <div className="flex gap-2 overflow-x-auto hide-scrollbar pb-1">
-                  {(["all", "pizza", "sides", "beverage", "combo"] as const)
+                  {(["all", "pizza", "sides", "beverage", "combo"] as string[])
                     .concat(wishlistIds.length > 0 ? ["favourite"] : [])
                     .map((cat) => {
                     const isActive = category === cat;

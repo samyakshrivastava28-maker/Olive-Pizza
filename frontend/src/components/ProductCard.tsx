@@ -50,7 +50,7 @@ export default memo(function ProductCard({ item, discount = 0, wishlistIds = [] 
           </div>
         )}
         <div className="absolute top-3 right-3 z-10" onClick={(e) => e.stopPropagation()}>
-          <WishlistButton productId={item.id} wishlistIds={wishlistIds} size="sm" />
+          <WishlistButton productId={item.id || ''} wishlistIds={wishlistIds} size="sm" />
         </div>
       </div>
 

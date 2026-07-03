@@ -258,7 +258,7 @@ router.get('/templates', async (req, res) => {
 // 3. Create Campaign
 router.post('/send-campaign', async (req, res) => {
   const startTime = Date.now();
-  let campaignName, targetAudience, subject;
+  let campaignName: string, targetAudience: string, subject: string;
   
   try {
     campaignName = req.body.campaignName || req.body.name;
