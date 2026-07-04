@@ -99,24 +99,27 @@ export default function OwnerVersionManagement() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* Status Panel */}
+        {/* Deployment Center */}
         <div className="lg:col-span-1 space-y-6">
-          <div className="bg-slate-800 rounded-3xl p-6 border border-slate-700/50 shadow-xl">
-            <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
-              <Settings className="w-5 h-5 text-orange-500" /> Current Status
+          <div className="bg-slate-800 rounded-3xl p-6 border border-slate-700/50 shadow-xl relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
+               <Rocket className="w-32 h-32 text-orange-500" />
+            </div>
+            <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2 relative z-10">
+              <Settings className="w-5 h-5 text-orange-500" /> Deployment Center
             </h2>
             
-            <div className="space-y-4">
+            <div className="space-y-4 relative z-10">
               <div className="flex justify-between items-center pb-4 border-b border-slate-700/50">
-                <span className="text-slate-400">Latest Version</span>
+                <span className="text-slate-400">Live Version</span>
                 <span className="text-white font-mono font-bold bg-slate-900 px-3 py-1 rounded-lg">
                   v{settings?.latest_version}
                 </span>
               </div>
               <div className="flex justify-between items-center pb-4 border-b border-slate-700/50">
-                <span className="text-slate-400">Minimum Supported</span>
-                <span className="text-red-400 font-mono font-bold bg-red-400/10 px-3 py-1 rounded-lg">
-                  v{settings?.minimum_version}
+                <span className="text-slate-400">Last Deployment</span>
+                <span className="text-white font-mono font-bold">
+                  {settings?.last_deployment_time ? new Date(settings.last_deployment_time).toLocaleString() : 'N/A'}
                 </span>
               </div>
               <div className="pt-2">
@@ -138,6 +141,32 @@ export default function OwnerVersionManagement() {
                     className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${settings?.maintenance_mode ? 'bg-red-500' : 'bg-slate-600'}`}
                  >
                     <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${settings?.maintenance_mode ? 'translate-x-6' : 'translate-x-1'}`} />
+                 </button>
+              </div>
+
+              <div className="pt-4 border-t border-slate-700/50">
+                 <button 
+                   onClick={async () => {
+                     const toastId = toast.loading('Broadcasting critical update...');
+                     try {
+                        const res = await fetch('/api/admin/deploy', {
+                           method: 'POST',
+                           headers: { 'Content-Type': 'application/json' },
+                           body: JSON.stringify({
+                              version: settings?.latest_version,
+                              mode: 'required'
+                           })
+                        });
+                        if (res.ok) toast.success('Broadcast successful!', { id: toastId });
+                        else toast.error('Broadcast failed', { id: toastId });
+                     } catch (e) {
+                        toast.error('Network error', { id: toastId });
+                     }
+                   }}
+                   className="w-full py-3 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/30 font-bold rounded-xl transition-colors flex items-center justify-center gap-2"
+                 >
+                   <AlertTriangle className="w-4 h-4" />
+                   Force Critical Update Now
                  </button>
               </div>
             </div>

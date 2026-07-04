@@ -5,6 +5,7 @@ import { Toaster } from 'react-hot-toast';
 import { lazy, Suspense, ComponentType, useEffect, useRef } from 'react';
 import { useAuthStore } from './lib/store';
 import { UpdateBanner, ForceUpdateScreen } from './components/VersionUpdateScreens';
+import { useDeviceSession } from './hooks/useDeviceSession';
 
 // Custom lazy loading with retry for chunk errors (prevents black screen on PWA update)
 const lazyWithRetry = <T extends ComponentType<any>>(
@@ -145,6 +146,9 @@ function AppContent() {
   const user = useAuthStore(state => state.user);
   const role = useAuthStore(state => state.role);
   const hasRedirectedToDashboard = useRef(false);
+
+  // Track active device session
+  useDeviceSession();
 
   // Global Session Initializer Blocker
   // This completely stops the app from rendering while we restore the persisted session.

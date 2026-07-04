@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export const APP_VERSION = '1.0.0'; // Hardcoded for now, could come from package.json or vite env
+export const APP_VERSION = __APP_VERSION__;
 
 interface VersionState {
   isUpdateAvailable: boolean;
@@ -63,12 +63,26 @@ export function initVersionManager() {
     }
   });
 
+  // Check every 5 minutes in the background
+  setInterval(() => {
+    checkVersion();
+  }, 5 * 60 * 1000);
+
   // Check immediately
   checkVersion();
 }
 
 export async function checkVersion() {
   try {
+    const laterTimestamp = sessionStorage.getItem('update_later_timestamp');
+    if (laterTimestamp) {
+      const timePassed = Date.now() - parseInt(laterTimestamp, 10);
+      if (timePassed < 30 * 60 * 1000) {
+        // Less than 30 minutes since user clicked 'Later', ignore non-critical updates
+        // However, we should still fetch to see if a CRITICAL update was pushed.
+      }
+    }
+
     const res = await fetch('/api/version/settings');
     if (res.ok) {
       const data = await res.json();
@@ -79,7 +93,10 @@ export async function checkVersion() {
       if (current < min) {
         useVersionStore.getState().setUpdateAvailable(true, 'required', data.latest_version);
       } else if (current < latest) {
-        useVersionStore.getState().setUpdateAvailable(true, data.update_mode || 'optional', data.latest_version);
+        // Only show optional update if cooldown expired
+        if (!laterTimestamp || (Date.now() - parseInt(laterTimestamp, 10)) >= 30 * 60 * 1000) {
+          useVersionStore.getState().setUpdateAvailable(true, data.update_mode || 'optional', data.latest_version);
+        }
       }
     }
   } catch (error) {
@@ -100,8 +117,6 @@ export async function performUpdate() {
         if (registration.waiting) {
             registration.waiting.postMessage({ type: 'SKIP_WAITING' });
         }
-        
-        await registration.unregister();
       }
     }
 

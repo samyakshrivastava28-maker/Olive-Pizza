@@ -5,6 +5,9 @@ import { VitePWA } from 'vite-plugin-pwa';
 import path from 'path';
 
 export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify(process.env.npm_package_version || '1.0.0'),
+  },
   build: {
     outDir: 'dist/client',
     rollupOptions: {
@@ -28,7 +31,7 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
-      registerType: 'autoUpdate', // Automatically update in background without prompting the user
+      registerType: 'prompt', // Requires user interaction to update PWA
       includeAssets: [
         'favicon.ico', 
         'apple-touch-icon.png', 

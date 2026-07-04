@@ -10,6 +10,7 @@ import { auth, db } from "../lib/firebase";
 import { doc, setDoc } from "firebase/firestore";
 import { useNavigate, Link } from "react-router";
 import toast from 'react-hot-toast';
+import { useAuthStore } from "../lib/store";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -40,7 +41,25 @@ export default function Login() {
               createdAt: new Date().toISOString(),
             });
           } else {
-            finalRole = userDoc.data()?.role || "customer";
+            const data = userDoc.data();
+            finalRole = data?.role || "customer";
+            
+            // Immediately populate auth store for returning users
+            useAuthStore.getState().setUser({
+              uid: result.user.uid,
+              email: result.user.email,
+              name: data?.name,
+              phone: data?.phone,
+              photoURL: result.user.photoURL || data?.photoUrl,
+              onboardingComplete: data?.locationSetupCompleted,
+              phoneSetupCompleted: data?.phoneSetupCompleted,
+              locationSetupCompleted: data?.locationSetupCompleted,
+              lat: data?.lat,
+              lng: data?.lng,
+              fullAddress: data?.fullAddress,
+              emailVerified: result.user.emailVerified,
+              status: data?.status,
+            }, finalRole as "customer" | "owner" | "delivery_partner" | "admin");
           }
 
           if (finalRole === "owner" || finalRole === "admin") navigate("/owner/dashboard");
@@ -88,7 +107,28 @@ export default function Login() {
       );
       const { getDoc } = await import("firebase/firestore");
       const userDoc = await getDoc(doc(db, "users", userCredential.user.uid));
-      const userRole = userDoc.data()?.role || "customer";
+      const data = userDoc.data();
+      const userRole = data?.role || "customer";
+
+      if (userDoc.exists()) {
+        useAuthStore.getState().setUser({
+          uid: userCredential.user.uid,
+          email: userCredential.user.email,
+          name: data?.name,
+          phone: data?.phone,
+          photoURL: userCredential.user.photoURL || data?.photoUrl,
+          onboardingComplete: data?.locationSetupCompleted,
+          phoneSetupCompleted: data?.phoneSetupCompleted,
+          locationSetupCompleted: data?.locationSetupCompleted,
+          lat: data?.lat,
+          lng: data?.lng,
+          fullAddress: data?.fullAddress,
+          emailVerified: userCredential.user.emailVerified,
+          approvalStatus: data?.approvalStatus,
+          status: data?.status,
+          photoUrl: data?.photoUrl,
+        }, userRole as "customer" | "owner" | "delivery_partner" | "admin");
+      }
 
       toast.success("Welcome back!");
 
@@ -137,7 +177,24 @@ export default function Login() {
             createdAt: new Date().toISOString(),
           });
         } else {
-          finalRole = userDoc.data()?.role || "customer";
+          const data = userDoc.data();
+          finalRole = data?.role || "customer";
+          
+          useAuthStore.getState().setUser({
+            uid: result.user.uid,
+            email: result.user.email,
+            name: data?.name,
+            phone: data?.phone,
+            photoURL: result.user.photoURL || data?.photoUrl,
+            onboardingComplete: data?.locationSetupCompleted,
+            phoneSetupCompleted: data?.phoneSetupCompleted,
+            locationSetupCompleted: data?.locationSetupCompleted,
+            lat: data?.lat,
+            lng: data?.lng,
+            fullAddress: data?.fullAddress,
+            emailVerified: result.user.emailVerified,
+            status: data?.status,
+          }, finalRole as "customer" | "owner" | "delivery_partner" | "admin");
         }
 
         if (finalRole === "owner" || finalRole === "admin")

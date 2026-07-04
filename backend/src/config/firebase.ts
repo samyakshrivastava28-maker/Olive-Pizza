@@ -1,6 +1,7 @@
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
+import { getMessaging } from 'firebase-admin/messaging';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -12,6 +13,7 @@ const FIREBASE_PRIVATE_KEY = (process.env.FIREBASE_PRIVATE_KEY || '').replace(/\
 
 let adminDbInstance: ReturnType<typeof getFirestore> | null = null;
 let adminAuthInstance: ReturnType<typeof getAuth> | null = null;
+let adminMessagingInstance: ReturnType<typeof getMessaging> | null = null;
 
 if (getApps().length === 0) {
   try {
@@ -48,10 +50,12 @@ if (getApps().length === 0) {
 try {
   adminDbInstance = getFirestore();
   adminAuthInstance = getAuth();
+  adminMessagingInstance = getMessaging();
 } catch (e) {
-  console.error('[Firebase Admin] Could not get Firestore/Auth instance:', e);
+  console.error('[Firebase Admin] Could not get Firestore/Auth/Messaging instance:', e);
 }
 
 // Export with fallback to avoid null crashes downstream
 export const adminDb = adminDbInstance!;
 export const adminAuth = adminAuthInstance!;
+export const adminMessaging = adminMessagingInstance!;

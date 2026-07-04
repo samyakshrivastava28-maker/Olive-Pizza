@@ -159,10 +159,19 @@ service cloud.firestore {
     }
 
     match /customer_identities/{identityId} {
-      allow read, write: if isSignedIn() && (
+      allow get: if true;
+      allow list: if hasFullAccess();
+      allow write: if isSignedIn() && (
         hasFullAccess() || 
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.phone == identityId)
+      );
+    }
+
+    match /user_sessions/{sessionId} {
+      allow read, write: if isSignedIn() && (
+         hasFullAccess() || 
+         sessionId.split('_')[0] == request.auth.uid
       );
     }
 

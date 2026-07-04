@@ -79,9 +79,38 @@ router.post('/publish', async (req, res) => {
 
     if (updateError) throw updateError;
 
-    // Clear cache if possible or just rely on TTL in middleware
+    // Trigger FCM Broadcast
+    let successCount = 0;
+    let failureCount = 0;
+    try {
+      const { adminDb, adminMessaging } = await import('../config/firebase.js');
+      const usersSnapshot = await adminDb.collection('users').where('notificationEnabled', '==', true).get();
+      let tokens: string[] = [];
+      usersSnapshot.forEach(doc => {
+        const data = doc.data();
+        if (data.fcmTokens && Array.isArray(data.fcmTokens)) tokens.push(...data.fcmTokens);
+      });
+      if (tokens.length > 0) {
+        tokens = [...new Set(tokens)];
+        const payload = {
+          data: {
+            type: 'APP_UPDATE',
+            version: version_string,
+            mode: update_mode || currentSettings.update_mode || 'optional',
+            releaseNotes: release_notes || ''
+          }
+        };
+        for (let i = 0; i < tokens.length; i += 500) {
+          const response = await adminMessaging.sendEachForMulticast({ tokens: tokens.slice(i, i + 500), ...payload });
+          successCount += response.successCount;
+          failureCount += response.failureCount;
+        }
+      }
+    } catch (fcmError) {
+      console.error("FCM Broadcast failed:", fcmError);
+    }
 
-    res.json({ success: true, version: newVersion });
+    res.json({ success: true, version: newVersion, stats: { successCount, failureCount } });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

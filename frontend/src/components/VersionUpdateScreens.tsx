@@ -31,7 +31,10 @@ export function UpdateBanner() {
           <div className="flex items-center gap-2 w-full sm:w-auto">
             {updateMode === 'optional' && !isUpdating && (
               <button 
-                onClick={() => useVersionStore.getState().setUpdateAvailable(false, '', '')}
+                onClick={() => {
+                  sessionStorage.setItem('update_later_timestamp', Date.now().toString());
+                  useVersionStore.getState().setUpdateAvailable(false, '', '');
+                }}
                 className="px-4 py-2 text-sm font-medium text-white hover:bg-white/10 rounded-lg transition-colors flex-1 sm:flex-none"
               >
                 Later

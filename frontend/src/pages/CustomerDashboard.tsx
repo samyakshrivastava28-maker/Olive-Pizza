@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import PageTransition from "../components/PageTransition";
 import { useAuthStore, useCartStore } from "../lib/store";
 import { Link, useNavigate } from "react-router";
-import { ShoppingCart, Home, History, Heart, Award, Wallet as WalletIcon, Settings, LogOut, MapPin } from "lucide-react";
+import { ShoppingCart, Home, History, Heart, Award, Wallet as WalletIcon, Settings, LogOut, MapPin, Laptop } from "lucide-react";
 import DashboardHome from "../components/customer/dashboard/DashboardHome";
 import OrderHistory from "../components/customer/dashboard/OrderHistory";
 import Wishlist from "../components/customer/dashboard/Wishlist";
@@ -14,6 +14,7 @@ import LoyaltyRewards from "../components/customer/dashboard/LoyaltyRewards";
 import Wallet from "../components/customer/dashboard/Wallet";
 import AccountSettings from "../components/customer/dashboard/AccountSettings";
 import AddressBook from "../components/customer/AddressBook";
+import MyDevices from "../components/customer/dashboard/MyDevices";
 import FloatingLines from "../components/ui/FloatingLines";
 
 function DashboardSkeleton() {
@@ -129,6 +130,7 @@ export default function CustomerDashboard() {
     { id: "rewards", label: "Rewards", icon: Award },
     { id: "wallet", label: "Wallet", icon: WalletIcon },
     { id: "settings", label: "Settings", icon: Settings },
+    { id: "devices", label: "My Devices", icon: Laptop },
   ];
 
   return (
@@ -182,6 +184,7 @@ export default function CustomerDashboard() {
               {activeTab === "rewards" && <LoyaltyRewards stats={stats} />}
               {activeTab === "wallet" && <Wallet />}
               {activeTab === "settings" && <AccountSettings />}
+              {activeTab === "devices" && <MyDevices />}
             </motion.div>
           </AnimatePresence>
         </div>

@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { query } from '../lib/db.js';
 import { emailService } from '../lib/email.service.js';
 import { verifyToken, AuthRequest } from '../middleware/auth.middleware.js';
+import { adminAuth, adminDb } from '../config/firebase.js';
 
 const router = Router();
 
@@ -133,6 +134,40 @@ router.get('/profile', async (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error("Profile fetch error", error);
     res.status(500).json({ error: 'Failed to fetch profile' });
+  }
+});
+
+// Revoke all sessions
+router.post('/revoke-all-sessions', async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user?.uid;
+    if (!userId) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    // 1. Revoke Firebase Auth tokens (forces all devices to re-authenticate when current token expires)
+    await adminAuth.revokeRefreshTokens(userId);
+
+    // 2. Mark all Firestore user_sessions as inactive (forces realtime listeners to sign out instantly)
+    const sessionsSnapshot = await adminDb.collection('user_sessions')
+      .where('uid', '==', userId)
+      .where('isActive', '==', true)
+      .get();
+
+    const batch = adminDb.batch();
+    sessionsSnapshot.docs.forEach((doc) => {
+      batch.update(doc.ref, { isActive: false });
+    });
+    
+    if (!sessionsSnapshot.empty) {
+      await batch.commit();
+    }
+
+    res.json({ success: true, message: 'All sessions revoked' });
+  } catch (error) {
+    console.error("Revoke sessions error", error);
+    res.status(500).json({ error: 'Failed to revoke sessions' });
   }
 });
 

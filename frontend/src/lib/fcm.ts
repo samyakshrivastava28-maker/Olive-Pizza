@@ -26,7 +26,17 @@ export async function requestNotificationPermission(userId: string) {
         // Listen for foreground messages
         onMessage(messaging, (payload) => {
           console.log('Foreground message received: ', payload);
-          // We can show a toast or a custom UI notification here for foreground.
+          
+          if (payload.data && payload.data.type === 'APP_UPDATE') {
+             import('./versionManager').then(({ useVersionStore }) => {
+                useVersionStore.getState().setUpdateAvailable(
+                  true,
+                  payload.data!.mode || 'optional',
+                  payload.data!.version || 'latest',
+                  payload.data!.releaseNotes
+                );
+             });
+          }
         });
         
         return token;
