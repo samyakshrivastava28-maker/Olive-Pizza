@@ -51,6 +51,7 @@ export default function OwnerLayout() {
     { name: 'Special Categories', path: '/owner/special-categories', icon: '🎪' },
     { name: 'Homepage Manager', path: '/owner/homepage', icon: '🏗️' },
     { name: 'Versions', path: '/owner/versions', icon: '🚀' },
+    { name: 'AI Monitor', path: '/owner/ai-monitor', icon: '🤖' },
     { name: 'Settings', path: '/owner/settings', icon: '⚙️' },
   ];
 

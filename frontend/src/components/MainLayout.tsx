@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useEffect, useState, Suspense } from 'react';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { Home, Menu as MenuIcon, ShoppingBag, User, Search, MapPin, ReceiptText, WifiOff, Download, RefreshCw } from 'lucide-react';
+import { Home, Menu as MenuIcon, ShoppingBag, User, Search, MapPin, ReceiptText, WifiOff, Download, RefreshCw, Bot } from 'lucide-react';
 
 import PWAPrompts from './ui/PWAPrompts';
 import { usePWA } from '../lib/usePWA';
@@ -294,11 +294,11 @@ export default function MainLayout() {
         {[
           { name: 'Home', path: '/', icon: <Home className="w-5 h-5" /> },
           { name: 'Menu', path: '/menu', icon: <MenuIcon className="w-5 h-5" /> },
-          { name: 'Orders', path: '/dashboard', icon: <ReceiptText className="w-5 h-5" /> },
+          { name: 'AI', path: '/assistant', icon: <Bot className="w-5 h-5" /> },
           { name: 'Cart', path: '/cart', icon: <ShoppingBag className="w-5 h-5" />, badge: cartCount },
           { name: 'Profile', path: isAuthenticated ? '/dashboard' : '/login', icon: <User className="w-5 h-5" /> },
         ].map((item) => {
-          const isActive = location.pathname === item.path || (item.path === '/dashboard' && location.pathname.startsWith('/dashboard'));
+          const isActive = location.pathname === item.path || (item.path === '/assistant' && location.pathname.startsWith('/assistant')) || (item.path === '/dashboard' && location.pathname.startsWith('/dashboard'));
           return (
             <Link
               key={item.name}

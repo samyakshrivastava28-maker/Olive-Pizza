@@ -8,6 +8,7 @@ import { DataRetentionJob } from './src/jobs/DataRetentionJob.js';
 import './src/services/DataLifecycleService.js';
 import './src/services/notification/NotificationQueueService.js';
 import './src/jobs/MonthlyReportJob.js';
+import { kb } from './src/services/KnowledgeBaseService.js';
 
 dotenv.config();
 
@@ -64,6 +65,9 @@ async function setupVite() {
   await initPostgres();
   initScheduler();
   DataRetentionJob.schedule();
+  
+  // Initialize AI Knowledge Base (auto-syncs with Firestore in real-time)
+  kb.initialize().catch(err => console.warn('[KB] Non-fatal init error:', err.message));
 
   // Initialize Slack Notification Listeners
   FirestoreListener.init();

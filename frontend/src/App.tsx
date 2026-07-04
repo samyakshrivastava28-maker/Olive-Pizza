@@ -69,6 +69,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 
 // Lazy loaded heavy components
 const AIAssistant = lazyWithRetry(() => import('./components/AIAssistant'));
+const UniversalAssistant = lazyWithRetry(() => import('./pages/UniversalAssistant'));
 const FloatingTracker = lazyWithRetry(() => import('./components/ui/FloatingTracker'));
 
 // Lazy loaded layouts & guards
@@ -126,6 +127,7 @@ const OwnerHomepageManager = lazyWithRetry(() => import('./pages/owner/OwnerHome
 const OwnerVersionManagement = lazyWithRetry(() => import('./pages/owner/OwnerVersionManagement'));
 const OwnerSlackCenter = lazyWithRetry(() => import('./pages/owner/OwnerSlackCenter'));
 const OwnerNotificationCenter = lazyWithRetry(() => import('./pages/owner/OwnerNotificationCenter'));
+const AIHealthMonitor = lazyWithRetry(() => import('./pages/owner/AIHealthMonitor'));
 
 // Lazy loaded delivery pages
 const CustomerDashboard = lazyWithRetry(() => import('./pages/CustomerDashboard'));
@@ -210,6 +212,7 @@ function AppContent() {
                 <Route path="/product/:productId" element={<ProductDetail />} />
                 <Route path="/cart" element={<Cart />} />
                 <Route path="/contact" element={<Contact />} />
+                <Route path="/assistant" element={<Suspense fallback={<PizzaLoader />}><UniversalAssistant /></Suspense>} />
                 <Route path="/login" element={<Suspense fallback={<PizzaLoader />}><Login /></Suspense>} />
                 <Route path="/register" element={<Suspense fallback={<PizzaLoader />}><Register /></Suspense>} />
                 <Route path="/forgot-password" element={<Suspense fallback={<PizzaLoader />}><ForgotPassword /></Suspense>} />
@@ -267,6 +270,7 @@ function AppContent() {
                   <Route path="homepage" element={<OwnerHomepageManager />} />
                   <Route path="notifications" element={<OwnerNotificationCenter />} />
                   <Route path="versions" element={<OwnerVersionManagement />} />
+                  <Route path="ai-monitor" element={<AIHealthMonitor />} />
                 </Route>
               </Route>
     

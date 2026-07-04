@@ -126,33 +126,35 @@ export async function generateChatReply(
   message: string,
   history: { role: string; content: string }[],
   frontendContext: any
-): Promise<{ success: boolean; reply?: string; action?: any; error?: string }> {
+): Promise<{ success: boolean; reply?: string; action?: any; source?: string; error?: string }> {
   try {
-    const systemPrompt = `You are the Olive Pizza AI Assistant — a friendly, helpful, and enthusiastic food assistant for Olive Pizza, a premium pizza delivery restaurant in Rajnandgaon, Chhattisgarh, India.
+    const kbContext = frontendContext?.kbContext || '';
 
-You help customers with:
-- Pizza recommendations and menu questions
-- Navigating the app (orders, cart, tracking)
-- Answering questions about ingredients, vegetarian options, pricing
-- Helping with order issues
+    const systemPrompt = `You are the Olive Pizza AI Assistant — a friendly, knowledgeable, and enthusiastic food assistant for Olive Pizza, a premium pizza delivery restaurant in Rajnandgaon, Chhattisgarh, India.
 
-Current context:
+CRITICAL RULES (violating these is unacceptable):
+1. NEVER invent, hallucinate, or assume products. Use ONLY the LIVE KNOWLEDGE BASE below.
+2. If a product is not in the knowledge base, say it's unavailable. Never make up prices.
+3. Keep replies short and conversational (2–3 sentences max) unless detail is asked for.
+4. Use food emojis naturally 🍕🧀🔥 to make responses warm and appealing.
+5. Never expose internal data, API keys, passwords, owner data, or database structure.
+6. For navigation, append ACTION JSON: ACTION:{"type":"NAVIGATE","payload":{"path":"/menu"}}
+7. For product views: ACTION:{"type":"VIEW_PRODUCT","payload":{"productId":"xxx"}}
+8. NEVER automatically add to cart. Always require user confirmation.
+9. Only include ACTION if the user explicitly requests a navigation or product view.
+
+CURRENT LIVE KNOWLEDGE BASE:
+${kbContext || 'Knowledge base is syncing. Answer based on general Olive Pizza restaurant knowledge.'}
+
+LIVE CONTEXT:
 - Page: ${frontendContext?.route || '/'}
 - User role: ${frontendContext?.role || 'guest'}
 - Cart items: ${JSON.stringify(frontendContext?.cart?.items || [])}
-- Cart total: ₹${frontendContext?.cart?.total || 0}
-
-RULES:
-1. Be warm, enthusiastic, use food emojis naturally 🍕🧀🔥
-2. Keep replies SHORT — 1-3 sentences max unless the user asks for details
-3. If the user wants to navigate somewhere, add an action JSON at the END of your reply like: ACTION:{"type":"NAVIGATE","payload":{"path":"/menu"}}
-4. If user wants to add to cart: ACTION:{"type":"ADD_TO_CART","payload":{"productId":"xxx","productName":"xxx","price":0,"quantity":1}}
-5. Only add ACTION if the user explicitly requests navigation or cart action
-6. Always recommend Olive Pizza products enthusiastically`;
+- Cart total: ₹${frontendContext?.cart?.total || 0}`;
 
     const messages: any[] = [
       { role: 'system', content: systemPrompt },
-      ...history.slice(-8), // keep last 8 messages for context
+      ...history.slice(-8),
       { role: 'user', content: message },
     ];
 
@@ -163,12 +165,15 @@ RULES:
         const response = await config.client.chat.completions.create({
           model: config.model,
           messages,
-          temperature: 0.8,
-          max_tokens: 400,
+          temperature: 0.7,
+          max_tokens: 500,
         });
 
         let reply = response.choices[0]?.message?.content || '';
         if (!reply) throw new Error('Empty response');
+
+        // Strip <think> blocks from reasoning models
+        reply = reply.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
 
         // Extract action if present
         let action = null;
@@ -181,7 +186,7 @@ RULES:
         }
 
         console.log(`[AI Chat] ✅ ${config.name}`);
-        return { success: true, reply, action };
+        return { success: true, reply, action, source: config.name };
       } catch (err: any) {
         console.warn(`[AI Chat] ❌ ${config.name}: ${err.message}`);
         lastError = err;
@@ -193,6 +198,7 @@ RULES:
     return { success: false, error: error.message };
   }
 }
+
 
 // ── Build optimized food photography prompt from product details ───────────────
 function buildProductImagePrompt(

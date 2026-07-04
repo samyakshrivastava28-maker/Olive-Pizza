@@ -26,6 +26,7 @@ export const useSystemHealth = () => {
   const [status, setStatus] = useState<SystemStatus>('initializing');
   const eventSourceRef = useRef<EventSource | null>(null);
   const pollerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const retryTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isMounted = useRef(true);
   const retryCount = useRef(0);
   const sseFailCount = useRef(0);
@@ -143,11 +144,11 @@ export const useSystemHealth = () => {
         if (isMounted.current) {
           setStatus('unavailable');
           // Keep retrying every 10s
-          const retryTimer = setInterval(async () => {
+          retryTimerRef.current = setInterval(async () => {
             try {
               const r = await fetch(STATUS_ENDPOINT, { signal: AbortSignal.timeout(5000) });
               if (r.ok && isMounted.current) {
-                clearInterval(retryTimer);
+                if (retryTimerRef.current) clearInterval(retryTimerRef.current);
                 setStatus('connecting');
                 startSSE();
                 pollDiagnostics();
@@ -165,6 +166,7 @@ export const useSystemHealth = () => {
       isMounted.current = false;
       if (eventSourceRef.current) { eventSourceRef.current.close(); eventSourceRef.current = null; }
       if (pollerRef.current) { clearInterval(pollerRef.current); pollerRef.current = null; }
+      if (retryTimerRef.current) { clearInterval(retryTimerRef.current); retryTimerRef.current = null; }
     };
   }, []);
 
