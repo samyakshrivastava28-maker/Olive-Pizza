@@ -1,5 +1,5 @@
 import express from 'express';
-import { generateEmailTemplate, generateImage, generateProductDescription, generateProductImage, generateChatReply, enhancePrompt } from '../services/ai.service.js';
+import { generateEmailTemplate, generateImage, generateProductDescription, generateProductImage, generateChatReply, enhancePrompt, aiProviderStats } from '../services/ai.service.js';
 import kb from '../services/KnowledgeBaseService.js';
 import { requireAuth, requireRole } from '../middleware/auth.middleware.js';
 
@@ -15,6 +15,15 @@ router.get('/kb-status', async (_req, res) => {
       stats,
       categories: kb.getAllCategories().map(c => c.name),
       activeCoupons: kb.getAllCoupons().length,
+      providers: {
+        nvidia: aiProviderStats.nvidia,
+        openrouter: aiProviderStats.openrouter,
+        gemini: aiProviderStats.gemini,
+        activeProvider: aiProviderStats.activeProvider,
+        totalRequests: aiProviderStats.totalRequests,
+        totalFailovers: aiProviderStats.totalFailovers,
+        avgResponseMs: aiProviderStats.avgResponseMs,
+      },
     });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });

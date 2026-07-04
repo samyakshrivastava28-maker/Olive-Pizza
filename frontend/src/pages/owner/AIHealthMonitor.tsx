@@ -187,6 +187,57 @@ export default function AIHealthMonitor() {
             <MetricCard icon={Database} label="Index Size" value={formatBytes(status.stats.indexSizeBytes)} color="text-slate-300" />
           </div>
 
+          {/* AI Provider Status */}
+          {status.providers && (
+            <div className="bg-dark-800/30 border border-white/5 rounded-2xl p-5">
+              <h3 className="font-bold text-white mb-4 flex items-center gap-2">
+                <Bot className="w-4 h-4 text-primary-400" /> AI Provider Status
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+                {[
+                  { name: 'NVIDIA', key: 'nvidia', color: 'text-green-400', bg: 'bg-green-400/10', border: 'border-green-400/20' },
+                  { name: 'OpenRouter', key: 'openrouter', color: 'text-blue-400', bg: 'bg-blue-400/10', border: 'border-blue-400/20' },
+                  { name: 'Gemini 2.5 Flash', key: 'gemini', color: 'text-amber-400', bg: 'bg-amber-400/10', border: 'border-amber-400/20' },
+                ].map(p => {
+                  const data = status.providers[p.key] || {};
+                  const isActive = status.providers.activeProvider?.includes(p.name) || status.providers.activeProvider?.includes(p.key);
+                  const successRate = data.attempts > 0 ? Math.round((data.successes / data.attempts) * 100) : null;
+                  return (
+                    <div key={p.key} className={`p-4 rounded-xl border ${isActive ? `${p.bg} ${p.border}` : 'bg-dark-900/50 border-white/5'}`}>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className={`font-bold text-sm ${isActive ? p.color : 'text-slate-400'}`}>{p.name}</span>
+                        <div className={`flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full ${data.ok ? 'bg-green-500/15 text-green-400' : data.attempts > 0 ? 'bg-red-500/15 text-red-400' : 'bg-slate-500/15 text-slate-500'}`}>
+                          {data.ok ? <CheckCircle className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
+                          {data.ok ? 'OK' : data.attempts > 0 ? 'Failing' : 'Idle'}
+                        </div>
+                      </div>
+                      <div className="text-xs text-slate-500 space-y-0.5">
+                        <div>Attempts: <span className="text-slate-300">{data.attempts || 0}</span></div>
+                        {successRate !== null && <div>Success: <span className={`font-bold ${successRate > 70 ? 'text-green-400' : 'text-amber-400'}`}>{successRate}%</span></div>}
+                        {data.lastError && <div className="text-red-400 text-[10px] truncate" title={data.lastError}>↳ {data.lastError.slice(0, 40)}</div>}
+                        {isActive && <div className={`font-bold ${p.color}`}>← Active</div>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-dark-900/50 p-3 rounded-xl text-center">
+                  <p className="text-lg font-black text-white">{status.providers.totalRequests || 0}</p>
+                  <p className="text-[11px] text-slate-400">Total Requests</p>
+                </div>
+                <div className="bg-dark-900/50 p-3 rounded-xl text-center">
+                  <p className="text-lg font-black text-amber-400">{status.providers.totalFailovers || 0}</p>
+                  <p className="text-[11px] text-slate-400">Auto Failovers</p>
+                </div>
+                <div className="bg-dark-900/50 p-3 rounded-xl text-center">
+                  <p className="text-lg font-black text-blue-400">{status.providers.avgResponseMs || 0}ms</p>
+                  <p className="text-[11px] text-slate-400">Avg Response</p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Sync Times */}
           <div className="bg-dark-800/30 border border-white/5 rounded-2xl p-5">
             <h3 className="font-bold text-white mb-4 flex items-center gap-2">

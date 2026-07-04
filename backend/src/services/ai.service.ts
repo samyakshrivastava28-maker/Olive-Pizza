@@ -4,38 +4,106 @@ import cloudinary from '../config/cloudinary.js';
 
 dotenv.config();
 
-const nvidiaApiKey = process.env.NVIDIA_API_KEY || '';
-const openRouterApiKey = process.env.OPENROUTER_API_KEY || '';
-const geminiApiKey = process.env.GEMINI_API_KEY || '';
+// ── API key helpers ───────────────────────────────────────────────────────────
+function getKey(name: string): string { return process.env[name] || ''; }
+function isValidKey(key: string): boolean { return typeof key === 'string' && key.trim().length > 10; }
 
-const nvidiaClient = new OpenAI({
-  apiKey: nvidiaApiKey,
-  baseURL: 'https://integrate.api.nvidia.com/v1',
-});
+// ── AI Provider Health Stats (exported for /api/ai/kb-status) ────────────────
+export const aiProviderStats = {
+  nvidia:     { ok: false, lastUsed: 0, lastError: '', attempts: 0, successes: 0 },
+  openrouter: { ok: false, lastUsed: 0, lastError: '', attempts: 0, successes: 0 },
+  gemini:     { ok: false, lastUsed: 0, lastError: '', attempts: 0, successes: 0 },
+  activeProvider: 'none' as string,
+  totalRequests: 0,
+  totalFailovers: 0,
+  avgResponseMs: 0,
+};
 
-const openRouterClient = new OpenAI({
-  apiKey: openRouterApiKey,
-  baseURL: 'https://openrouter.ai/api/v1',
-  defaultHeaders: {
-    'HTTP-Referer': 'https://olivepizza.app',
-    'X-Title': 'Olive Pizza Marketing Center',
-  },
-});
+// ── Lazy client getters — never crash on invalid keys ─────────────────────────
+let _nvidiaClient: OpenAI | null = null;
+let _openRouterClient: OpenAI | null = null;
+let _geminiClient: OpenAI | null = null;
 
-const geminiClient = new OpenAI({
-  apiKey: geminiApiKey,
-  baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai/',
-});
+function getNvidiaClient(): OpenAI | null {
+  const key = getKey('NVIDIA_API_KEY');
+  if (!isValidKey(key)) return null;
+  if (!_nvidiaClient) {
+    _nvidiaClient = new OpenAI({ apiKey: key, baseURL: 'https://integrate.api.nvidia.com/v1', timeout: 12000, maxRetries: 0 });
+    console.log('[AI] NVIDIA client initialized');
+  }
+  return _nvidiaClient;
+}
 
-// ── Model fallback chain ───────────────────────────────────────────────────────
-const MODEL_CHAIN = [
-  { client: geminiClient, model: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash' },
-  { client: geminiClient, model: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro' },
-  { client: nvidiaClient, model: 'deepseek-ai/deepseek-r1', name: 'DeepSeek R1 (NVIDIA)' },
-  { client: nvidiaClient, model: 'meta/llama-3.1-70b-instruct', name: 'Llama 3.1 70B (NVIDIA)' },
-  { client: nvidiaClient, model: 'meta/llama-3.1-8b-instruct', name: 'Llama 3.1 8B (NVIDIA)' },
-  { client: openRouterClient, model: 'google/gemma-2-27b-it', name: 'Gemma 2 (OpenRouter)' },
-];
+function getOpenRouterClient(): OpenAI | null {
+  const key = getKey('OPENROUTER_API_KEY');
+  if (!isValidKey(key)) return null;
+  if (!_openRouterClient) {
+    _openRouterClient = new OpenAI({
+      apiKey: key,
+      baseURL: 'https://openrouter.ai/api/v1',
+      timeout: 12000,
+      maxRetries: 0,
+      defaultHeaders: { 'HTTP-Referer': 'https://olivepizza.app', 'X-Title': 'Olive Pizza AI Assistant' },
+    });
+    console.log('[AI] OpenRouter client initialized');
+  }
+  return _openRouterClient;
+}
+
+function getGeminiClient(): OpenAI | null {
+  const key = getKey('GEMINI_API_KEY');
+  if (!isValidKey(key)) return null;
+  if (!_geminiClient) {
+    _geminiClient = new OpenAI({
+      apiKey: key,
+      baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai/',
+      timeout: 15000,
+      maxRetries: 0,
+    });
+    console.log('[AI] Gemini client initialized');
+  }
+  return _geminiClient;
+}
+
+// Log provider status at startup
+setTimeout(() => {
+  const nv = isValidKey(getKey('NVIDIA_API_KEY'));
+  const or = isValidKey(getKey('OPENROUTER_API_KEY'));
+  const gm = isValidKey(getKey('GEMINI_API_KEY'));
+  console.log(`[AI] Provider keys configured: NVIDIA=${nv ? '✅' : '❌'}  OpenRouter=${or ? '✅' : '❌'}  Gemini=${gm ? '✅' : '❌'}`);
+  if (!nv && !or && !gm) console.warn('[AI] ⚠️  No AI provider keys configured. All chat will use Local KB + Offline templates.');
+}, 1000);
+
+// ── Model chain (priority order for general tasks) ────────────────────────────
+// Resolved lazily so missing keys are skipped without crashing
+function getModelChain() {
+  const chain: { client: OpenAI; model: string; name: string; providerKey: string }[] = [];
+  const nvidia = getNvidiaClient();
+  const or = getOpenRouterClient();
+  const gemini = getGeminiClient();
+  if (nvidia) {
+    chain.push({ client: nvidia, model: 'deepseek-ai/deepseek-r1', name: 'DeepSeek R1 (NVIDIA)', providerKey: 'nvidia' });
+    chain.push({ client: nvidia, model: 'meta/llama-3.1-70b-instruct', name: 'Llama 3.1 70B (NVIDIA)', providerKey: 'nvidia' });
+  }
+  if (or) {
+    chain.push({ client: or, model: 'google/gemma-2-27b-it', name: 'Gemma 2 (OpenRouter)', providerKey: 'openrouter' });
+  }
+  if (gemini) {
+    // Gemini 2.5 Flash as final fallback
+    chain.push({ client: gemini, model: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', providerKey: 'gemini' });
+    chain.push({ client: gemini, model: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash', providerKey: 'gemini' });
+  }
+  return chain;
+}
+
+// Legacy MODEL_CHAIN for email/image/description — built once, lazily
+let _MODEL_CHAIN: { client: OpenAI; model: string; name: string; providerKey: string }[] | null = null;
+const MODEL_CHAIN_GETTER = () => {
+  if (!_MODEL_CHAIN) _MODEL_CHAIN = getModelChain();
+  return _MODEL_CHAIN;
+};
+// Allow non-lazy usage for existing functions (safe — clients are lazily initialized internally)
+const MODEL_CHAIN = MODEL_CHAIN_GETTER();
 
 // ── Fetch product details safely ────────────────────────────────────────────────
 async function fetchProductContext(selectedProducts: string[]): Promise<string> {
@@ -127,74 +195,120 @@ export async function generateChatReply(
   history: { role: string; content: string }[],
   frontendContext: any
 ): Promise<{ success: boolean; reply?: string; action?: any; source?: string; error?: string }> {
+  aiProviderStats.totalRequests++;
+  const requestStart = Date.now();
+
   try {
     const kbContext = frontendContext?.kbContext || '';
+    const cartSummary = (frontendContext?.cart?.items || []).length > 0
+      ? `Cart: ${(frontendContext.cart.items as string[]).join(', ')} | Total: ₹${frontendContext.cart.total}`
+      : 'Cart is empty';
 
-    const systemPrompt = `You are the Olive Pizza AI Assistant — a friendly, knowledgeable, and enthusiastic food assistant for Olive Pizza, a premium pizza delivery restaurant in Rajnandgaon, Chhattisgarh, India.
+    const systemPrompt = `You are the Olive Pizza AI Assistant — a friendly, accurate, and enthusiastic food assistant for Olive Pizza restaurant in Rajnandgaon, Chhattisgarh, India.
 
-CRITICAL RULES (violating these is unacceptable):
-1. NEVER invent, hallucinate, or assume products. Use ONLY the LIVE KNOWLEDGE BASE below.
-2. If a product is not in the knowledge base, say it's unavailable. Never make up prices.
-3. Keep replies short and conversational (2–3 sentences max) unless detail is asked for.
-4. Use food emojis naturally 🍕🧀🔥 to make responses warm and appealing.
-5. Never expose internal data, API keys, passwords, owner data, or database structure.
-6. For navigation, append ACTION JSON: ACTION:{"type":"NAVIGATE","payload":{"path":"/menu"}}
-7. For product views: ACTION:{"type":"VIEW_PRODUCT","payload":{"productId":"xxx"}}
-8. NEVER automatically add to cart. Always require user confirmation.
-9. Only include ACTION if the user explicitly requests a navigation or product view.
+== ABSOLUTE RULES ==
+1. NEVER hallucinate products, prices, or availability. Use ONLY the LIVE KNOWLEDGE BASE.
+2. If a product is not listed in the KB, say it is currently unavailable.
+3. Keep replies concise (2–4 sentences) unless the user asks for detail.
+4. Use food emojis warmly 🍕🔥🧀 — be friendly and enthusiastic.
+5. NEVER expose passwords, API keys, owner finances, or internal database structure.
+6. NEVER auto-execute any action — always present action JSON and wait for user approval.
 
-CURRENT LIVE KNOWLEDGE BASE:
-${kbContext || 'Knowledge base is syncing. Answer based on general Olive Pizza restaurant knowledge.'}
+== ACTION GRAMMAR (emit ONE action per message maximum) ==
+For navigation:     ACTION:{"type":"NAVIGATE","payload":{"path":"/menu"}}
+For product page:   ACTION:{"type":"NAVIGATE","payload":{"path":"/product/PRODUCT_ID"}}
+For cart page:      ACTION:{"type":"NAVIGATE","payload":{"path":"/cart"}}
+For checkout:       ACTION:{"type":"NAVIGATE","payload":{"path":"/checkout"}}
+For orders:         ACTION:{"type":"NAVIGATE","payload":{"path":"/dashboard"}}
+For search:         ACTION:{"type":"NAVIGATE","payload":{"path":"/menu?search=QUERY"}}
+For add to cart:    ACTION:{"type":"ADD_TO_CART","payload":{"productId":"ID","productName":"NAME","price":PRICE,"quantity":1,"variant":"VARIANT_OR_EMPTY","imageUrl":"URL_OR_EMPTY"}}
+For apply coupon:   ACTION:{"type":"APPLY_COUPON","payload":{"code":"CODE"}}
 
-LIVE CONTEXT:
+RULES FOR ACTIONS:
+- Only include ACTION if the user clearly and explicitly requests it ("add to cart", "go to menu", "apply coupon XYZ").
+- For ADD_TO_CART: use exact productId, name, and price FROM THE KNOWLEDGE BASE — never invent.
+- For ADD_TO_CART: if the product has size variants, first ask which size the user wants, then emit the action.
+- Never add to cart without explicit user request AND correct product data from KB.
+
+== LIVE KNOWLEDGE BASE ==
+${kbContext || 'Knowledge base syncing. Answer from general restaurant knowledge only.'}
+
+== LIVE CONTEXT ==
 - Page: ${frontendContext?.route || '/'}
-- User role: ${frontendContext?.role || 'guest'}
-- Cart items: ${JSON.stringify(frontendContext?.cart?.items || [])}
-- Cart total: ₹${frontendContext?.cart?.total || 0}`;
+- User: ${frontendContext?.role || 'guest'}${frontendContext?.isAuthenticated ? ' (logged in)' : ' (not logged in)'}
+- ${cartSummary}`;
 
     const messages: any[] = [
       { role: 'system', content: systemPrompt },
-      ...history.slice(-8),
+      ...history.slice(-10),
       { role: 'user', content: message },
     ];
 
+    const chatChain = getModelChain();
+
+    if (chatChain.length === 0) {
+      // No providers configured — return graceful offline reply
+      return { success: false, error: 'No AI providers configured' };
+    }
+
     let lastError: Error | null = null;
-    for (const config of MODEL_CHAIN) {
+    for (const config of chatChain) {
+      const stat = aiProviderStats[config.providerKey as keyof typeof aiProviderStats] as any;
+      if (stat) stat.attempts++;
+
       try {
         console.log(`[AI Chat] Trying ${config.name}...`);
-        const response = await config.client.chat.completions.create({
-          model: config.model,
-          messages,
-          temperature: 0.7,
-          max_tokens: 500,
-        });
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10000);
 
-        let reply = response.choices[0]?.message?.content || '';
-        if (!reply) throw new Error('Empty response');
+        let response: any;
+        try {
+          response = await config.client.chat.completions.create({
+            model: config.model,
+            messages,
+            temperature: 0.65,
+            max_tokens: 500,
+          }, { signal: controller.signal as any });
+        } finally {
+          clearTimeout(timeout);
+        }
 
-        // Strip <think> blocks from reasoning models
+        let reply = response?.choices?.[0]?.message?.content || '';
+        if (!reply) throw new Error('Empty response from model');
+
+        // Strip <think> blocks (reasoning models like DeepSeek R1)
         reply = reply.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+        if (!reply) throw new Error('Reply was only <think> content');
 
-        // Extract action if present
-        let action = null;
-        const actionMatch = reply.match(/ACTION:(\{.*?\})/s);
+        // Extract ACTION JSON if present
+        let action: any = null;
+        const actionMatch = reply.match(/ACTION:(\{[^\n]+\})/);
         if (actionMatch) {
           try {
             action = JSON.parse(actionMatch[1]);
-            reply = reply.replace(/ACTION:\{.*?\}/s, '').trim();
-          } catch {}
+            reply = reply.replace(/ACTION:\{[^\n]+\}/, '').trim();
+          } catch { /* malformed action — skip it */ }
         }
 
-        console.log(`[AI Chat] ✅ ${config.name}`);
+        // Update stats
+        if (stat) { stat.ok = true; stat.lastUsed = Date.now(); stat.successes++; }
+        aiProviderStats.activeProvider = config.name;
+        const elapsed = Date.now() - requestStart;
+        aiProviderStats.avgResponseMs = Math.round((aiProviderStats.avgResponseMs * (aiProviderStats.totalRequests - 1) + elapsed) / aiProviderStats.totalRequests);
+
+        console.log(`[AI Chat] ✅ ${config.name} (${elapsed}ms)`);
         return { success: true, reply, action, source: config.name };
       } catch (err: any) {
-        console.warn(`[AI Chat] ❌ ${config.name}: ${err.message}`);
+        const errMsg = err?.message || 'Unknown error';
+        console.warn(`[AI Chat] ❌ ${config.name}: ${errMsg}`);
+        if (stat) { stat.ok = false; stat.lastError = errMsg; }
+        aiProviderStats.totalFailovers++;
         lastError = err;
       }
     }
-    throw new Error(`All models failed: ${lastError?.message}`);
+    throw new Error(`All AI providers failed. Last: ${lastError?.message}`);
   } catch (error: any) {
-    console.error('[AI Chat] Fatal:', error);
+    console.error('[AI Chat] Fatal error (returning to offline mode):', error.message);
     return { success: false, error: error.message };
   }
 }

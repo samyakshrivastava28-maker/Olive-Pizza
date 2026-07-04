@@ -21,12 +21,26 @@ const REQUIRED_ENV = [
   ['SMTP', process.env.SMTP_HOST || process.env.EMAIL_HOST],
   ['CLOUDINARY', process.env.CLOUDINARY_URL || process.env.CLOUDINARY_CLOUD_NAME],
 ];
+const OPTIONAL_ENV = [
+  ['NVIDIA_API_KEY', process.env.NVIDIA_API_KEY],
+  ['OPENROUTER_API_KEY', process.env.OPENROUTER_API_KEY],
+  ['GEMINI_API_KEY', process.env.GEMINI_API_KEY],
+];
+
 const missingEnv = REQUIRED_ENV.filter(([, v]) => !v).map(([k]) => k);
+const missingOptional = OPTIONAL_ENV.filter(([, v]) => !v || String(v).trim().length < 10).map(([k]) => k);
+
 if (missingEnv.length > 0) {
-  console.warn(`⚠️  [ENV] Missing environment variables: ${missingEnv.join(', ')}`);
+  console.warn(`⚠️  [ENV] Missing required variables: ${missingEnv.join(', ')}`);
   console.warn('   → Some features may not work. Check backend/.env or your deployment config.');
 } else {
   console.log('✅ [ENV] All required environment variables are configured.');
+}
+if (missingOptional.length > 0) {
+  console.warn(`💡 [ENV] Optional AI providers not configured: ${missingOptional.join(', ')}`);
+  console.warn('   → AI chat will use Local Knowledge Base + Offline templates as fallback.');
+} else {
+  console.log('✅ [ENV] All AI provider keys configured.');
 }
 
 const __filename = fileURLToPath(import.meta.url);
