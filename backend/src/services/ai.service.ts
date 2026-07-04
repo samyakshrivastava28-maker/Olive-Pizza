@@ -397,7 +397,7 @@ export async function generateProductImage(params: {
     const qwenRes = await fetch('https://integrate.api.nvidia.com/v1/images/generations', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${nvidiaApiKey}`,
+        'Authorization': `Bearer ${getKey('NVIDIA_API_KEY')}`,
         'Content-Type': 'application/json',
         'Accept': 'application/json',
       },
@@ -484,7 +484,7 @@ export async function generateProductImage(params: {
       const response = await fetch(endpoint.url, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${nvidiaApiKey}`,
+          'Authorization': `Bearer ${getKey('NVIDIA_API_KEY')}`,
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
@@ -630,7 +630,7 @@ export async function generateImage(
     try {
       const response = await fetch(endpoint.url, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${nvidiaApiKey}`, 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        headers: { 'Authorization': `Bearer ${getKey('NVIDIA_API_KEY')}`, 'Content-Type': 'application/json', 'Accept': 'application/json' },
         body: JSON.stringify(endpoint.body),
       });
       if (!response.ok) { errors.push(`${endpoint.name}: HTTP ${response.status}`); continue; }
@@ -691,12 +691,7 @@ Always include cinematic lighting, photorealism, and appetizing food photography
 Type context: ${type === 'banner' ? 'Wide promotional marketing banner, dynamic composition' : 'Close-up product photography, mouth-watering details'}.
 CRITICAL INSTRUCTION: You must provide the final prompt immediately. Keep your <think> reasoning extremely brief (under 3 sentences) to ensure a fast response under 20 seconds.`;
 
-  // Explicit chain for this task: DeepSeek R1 -> Gemini
-  const chain = [
-    { client: openRouterClient, model: 'deepseek/deepseek-r1', name: 'DeepSeek R1' },
-    { client: nvidiaClient, model: 'deepseek-ai/deepseek-r1', name: 'DeepSeek R1 (Nvidia)' },
-    { client: geminiClient, model: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash' },
-  ];
+  const chain = getModelChain();
 
   let lastError: Error | null = null;
   for (const config of chain) {

@@ -26,6 +26,15 @@ interface KBStatus {
   stats: KBStats;
   categories: string[];
   activeCoupons: number;
+  providers?: {
+    nvidia: { ok: boolean; attempts: number; successes: number; lastError?: string };
+    openrouter: { ok: boolean; attempts: number; successes: number; lastError?: string };
+    gemini: { ok: boolean; attempts: number; successes: number; lastError?: string };
+    activeProvider?: string;
+    totalRequests: number;
+    totalFailovers: number;
+    avgResponseMs: number;
+  };
 }
 
 function MetricCard({ icon: Icon, label, value, sub, color = 'text-primary-400' }: {
@@ -188,19 +197,21 @@ export default function AIHealthMonitor() {
           </div>
 
           {/* AI Provider Status */}
-          {status.providers && (
+          {status.providers && (() => {
+            const providers = status.providers;
+            return (
             <div className="bg-dark-800/30 border border-white/5 rounded-2xl p-5">
               <h3 className="font-bold text-white mb-4 flex items-center gap-2">
                 <Bot className="w-4 h-4 text-primary-400" /> AI Provider Status
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
                 {[
-                  { name: 'NVIDIA', key: 'nvidia', color: 'text-green-400', bg: 'bg-green-400/10', border: 'border-green-400/20' },
-                  { name: 'OpenRouter', key: 'openrouter', color: 'text-blue-400', bg: 'bg-blue-400/10', border: 'border-blue-400/20' },
-                  { name: 'Gemini 2.5 Flash', key: 'gemini', color: 'text-amber-400', bg: 'bg-amber-400/10', border: 'border-amber-400/20' },
+                  { name: 'NVIDIA', key: 'nvidia' as const, color: 'text-green-400', bg: 'bg-green-400/10', border: 'border-green-400/20' },
+                  { name: 'OpenRouter', key: 'openrouter' as const, color: 'text-blue-400', bg: 'bg-blue-400/10', border: 'border-blue-400/20' },
+                  { name: 'Gemini 2.5 Flash', key: 'gemini' as const, color: 'text-amber-400', bg: 'bg-amber-400/10', border: 'border-amber-400/20' },
                 ].map(p => {
-                  const data = status.providers[p.key] || {};
-                  const isActive = status.providers.activeProvider?.includes(p.name) || status.providers.activeProvider?.includes(p.key);
+                  const data = providers[p.key] || { ok: false, attempts: 0, successes: 0, lastError: undefined };
+                  const isActive = providers.activeProvider?.includes(p.name) || providers.activeProvider?.includes(p.key);
                   const successRate = data.attempts > 0 ? Math.round((data.successes / data.attempts) * 100) : null;
                   return (
                     <div key={p.key} className={`p-4 rounded-xl border ${isActive ? `${p.bg} ${p.border}` : 'bg-dark-900/50 border-white/5'}`}>
@@ -223,20 +234,21 @@ export default function AIHealthMonitor() {
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div className="bg-dark-900/50 p-3 rounded-xl text-center">
-                  <p className="text-lg font-black text-white">{status.providers.totalRequests || 0}</p>
+                  <p className="text-lg font-black text-white">{providers.totalRequests || 0}</p>
                   <p className="text-[11px] text-slate-400">Total Requests</p>
                 </div>
                 <div className="bg-dark-900/50 p-3 rounded-xl text-center">
-                  <p className="text-lg font-black text-amber-400">{status.providers.totalFailovers || 0}</p>
+                  <p className="text-lg font-black text-amber-400">{providers.totalFailovers || 0}</p>
                   <p className="text-[11px] text-slate-400">Auto Failovers</p>
                 </div>
                 <div className="bg-dark-900/50 p-3 rounded-xl text-center">
-                  <p className="text-lg font-black text-blue-400">{status.providers.avgResponseMs || 0}ms</p>
+                  <p className="text-lg font-black text-blue-400">{providers.avgResponseMs || 0}ms</p>
                   <p className="text-[11px] text-slate-400">Avg Response</p>
                 </div>
               </div>
             </div>
-          )}
+            );
+          })()}
 
           {/* Sync Times */}
           <div className="bg-dark-800/30 border border-white/5 rounded-2xl p-5">
