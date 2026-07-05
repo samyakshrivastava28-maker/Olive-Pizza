@@ -83,7 +83,7 @@ export const useHomeLayoutStore = create<HomeLayoutState>((set, get) => ({
     const configRef = doc(db, 'home_layout', 'published');
     const topRef = doc(db, 'home_layout', 'top_selling');
 
-    let unsubConfig: () => void;
+    let unsubConfig: () => void = () => {};
     let retryTimer: ReturnType<typeof setTimeout>;
     let currentBackoff = 1000;
 
@@ -127,7 +127,10 @@ export const useHomeLayoutStore = create<HomeLayoutState>((set, get) => ({
       }
     });
 
-    return unsubConfig;
+    return () => {
+      if (unsubConfig) unsubConfig();
+      if (retryTimer) clearTimeout(retryTimer);
+    };
   },
 
   saveDraft: async (sections) => {

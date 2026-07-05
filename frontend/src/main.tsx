@@ -5,13 +5,19 @@ import './index.css';
 import App from './App.tsx';
 
 import { GlobalErrorBoundary } from './components/GlobalErrorBoundary';
-import { initVersionManager } from './lib/versionManager';
 import { validateEnvironment } from './lib/envValidator';
 import { initCrashLogger } from './lib/crashLogger';
 
-validateEnvironment();
+// 1. Init crash logger FIRST — must suppress non-fatal rejections before anything else runs
 initCrashLogger();
-initVersionManager();
+
+// 2. Validate env vars (logs warnings only, never throws)
+validateEnvironment();
+
+// 3. Lazy-start version manager to not block initial render
+import('./lib/versionManager').then(({ initVersionManager }) => {
+  try { initVersionManager(); } catch { /* non-fatal */ }
+}).catch(() => { /* non-fatal if versionManager fails to load */ });
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

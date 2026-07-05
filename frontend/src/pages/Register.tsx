@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import {
   createUserWithEmailAndPassword,
-  signInWithPopup,
   signInWithRedirect,
   getRedirectResult,
   GoogleAuthProvider,
@@ -251,75 +250,15 @@ export default function Register() {
     setLoading(true);
     try {
       const provider = new GoogleAuthProvider();
-      
-      // Directly use redirect on mobile to prevent popup blocking
-      const isMobile = window.innerWidth <= 768 || 'ontouchstart' in window;
-      if (isMobile) {
-        await withAuthRetry(() => signInWithRedirect(auth, provider), "Google Redirect");
-        return; // Exit here, the page will redirect
-      }
-
-      const result = await withAuthRetry(() => signInWithPopup(auth, provider), "Google Popup");
-
-      try {
-        const userRef = doc(db, "users", result.user.uid);
-        const userDoc = await withAuthRetry(() => getDoc(userRef), "Fetch User Doc");
-
-        const userEmail = result.user.email?.toLowerCase() || "";
-        const initialRole = userEmail === "olivepizzarjn@gmail.com" ? "owner" : "customer";
-        let finalRole = initialRole;
-
-        if (!userDoc.exists()) {
-          await withAuthRetry(() => setDoc(userRef, {
-            email: userEmail,
-            name: result.user.displayName || "",
-            role: initialRole,
-            createdAt: new Date().toISOString(),
-          }), "Create Google User");
-
-          fetch("/api/email/transactional", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              event: "REGISTER",
-              data: { name: result.user.displayName || "", email: userEmail },
-            }),
-          }).catch((e) => console.error("Email trigger failed:", e));
-        } else {
-          finalRole = userDoc.data()?.role || "customer";
-        }
-
-        if (finalRole === "owner" || finalRole === "admin")
-          navigate("/owner/dashboard");
-        else if (finalRole === "delivery_partner")
-          navigate("/delivery/dashboard");
-        else {
-          if (userDoc.exists() && userDoc.data()?.phoneSetupCompleted) {
-             navigate("/");
-          } else {
-             navigate("/onboarding/phone");
-          }
-        }
-      } catch (syncErr) {
-        logDetailedError(syncErr, { context: "Google Sign-In Sync" });
-        console.warn("Firestore write failed.", syncErr);
-        navigate("/onboarding/phone");
-      }
+      // Always use redirect — more reliable in production (no popup blocking, no domain whitelist issues)
+      await withAuthRetry(() => signInWithRedirect(auth, provider), "Google Redirect");
+      // Page will redirect; code below won't execute
     } catch (err: any) {
-      if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
-        const provider = new GoogleAuthProvider();
-        signInWithRedirect(auth, provider).catch((redirectErr) => {
-           logDetailedError(redirectErr, { context: "Google Fallback Redirect" });
-           setError(translateError(redirectErr));
-           setLoading(false);
-        });
-        return;
-      }
       setError(translateError(err));
-    } finally {
       setLoading(false);
     }
   };
+
 
   return (
     <div className="relative max-w-md mx-auto mt-16 p-8 glass-card overflow-hidden">

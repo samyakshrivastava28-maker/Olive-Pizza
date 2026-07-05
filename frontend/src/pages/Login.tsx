@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import {
   signInWithEmailAndPassword,
-  signInWithPopup,
   signInWithRedirect,
   getRedirectResult,
   GoogleAuthProvider,
@@ -158,78 +157,11 @@ export default function Login() {
     setLoading(true);
     try {
       const provider = new GoogleAuthProvider();
-      
-      // Directly use redirect on mobile to prevent popup blocking
-      const isMobile = window.innerWidth <= 768 || 'ontouchstart' in window;
-      if (isMobile) {
-        await withAuthRetry(() => signInWithRedirect(auth, provider), "Google Redirect");
-        return; // Exit here, the page will redirect
-      }
-
-      const result = await withAuthRetry(() => signInWithPopup(auth, provider), "Google Popup");
-
-      try {
-        const userRef = doc(db, "users", result.user.uid);
-        const { getDoc } = await import("firebase/firestore");
-        const userDoc = await withAuthRetry(() => getDoc(userRef), "Fetch User Doc");
-
-        const userEmail = result.user.email?.toLowerCase() || "";
-        const initialRole =
-          userEmail === "olivepizzarjn@gmail.com" ? "owner" : "customer";
-
-        let finalRole = initialRole;
-
-        if (!userDoc.exists()) {
-          await withAuthRetry(() => setDoc(userRef, {
-            email: userEmail,
-            name: result.user.displayName || "",
-            role: initialRole,
-            createdAt: new Date().toISOString(),
-          }), "Create Google User");
-        } else {
-          const data = userDoc.data();
-          finalRole = data?.role || "customer";
-          
-          useAuthStore.getState().setUser({
-            uid: result.user.uid,
-            email: result.user.email,
-            name: data?.name,
-            phone: data?.phone,
-            photoURL: result.user.photoURL || data?.photoUrl,
-            onboardingComplete: data?.locationSetupCompleted,
-            phoneSetupCompleted: data?.phoneSetupCompleted,
-            locationSetupCompleted: data?.locationSetupCompleted,
-            lat: data?.lat,
-            lng: data?.lng,
-            fullAddress: data?.fullAddress,
-            emailVerified: result.user.emailVerified,
-            status: data?.status,
-          }, finalRole as "customer" | "owner" | "delivery_partner" | "admin");
-        }
-
-        if (finalRole === "owner" || finalRole === "admin")
-          navigate("/owner/dashboard");
-        else if (finalRole === "delivery_partner")
-          navigate("/delivery/dashboard");
-        else navigate("/");
-      } catch (syncErr) {
-        logDetailedError(syncErr, { context: "Google Firestore Write" });
-        console.warn("Firestore write failed.", syncErr);
-        navigate("/");
-      }
+      // Always use redirect — more reliable in production (no popup blocking, no domain whitelist issues)
+      await withAuthRetry(() => signInWithRedirect(auth, provider), "Google Redirect");
+      // Page will redirect; code below won't execute
     } catch (err: any) {
-      if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
-        console.warn("Popup blocked or closed, falling back to redirect...");
-        const provider = new GoogleAuthProvider();
-        signInWithRedirect(auth, provider).catch((redirectErr) => {
-          logDetailedError(redirectErr, { context: "Google Fallback Redirect" });
-          setError(translateError(redirectErr));
-          setLoading(false);
-        });
-        return; // Return early, let the redirect happen
-      }
       setError(translateError(err));
-    } finally {
       setLoading(false);
     }
   };

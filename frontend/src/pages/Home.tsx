@@ -191,8 +191,8 @@ export default function Home() {
     if (playedVersion !== APP_VERSION && !isSlowNetwork) {
       setShowIntro(true);
       document.body.style.overflow = "hidden";
-      // Maximum 7 seconds total for intro to either play or fail
-      fallbackTimer = setTimeout(() => handleIntroEnd(), 7000);
+      // Maximum 3 seconds total for intro to either play or fail — never block the app
+      fallbackTimer = setTimeout(() => handleIntroEnd(), 3000);
     }
 
     return () => {
