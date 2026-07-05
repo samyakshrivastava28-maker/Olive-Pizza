@@ -11,6 +11,10 @@ import { doc, setDoc } from "firebase/firestore";
 import { useNavigate, Link } from "react-router";
 import toast from 'react-hot-toast';
 import { useAuthStore } from "../lib/store";
+import { withAuthRetry } from "../lib/authRetry";
+import { translateError, logDetailedError } from "../lib/errorTranslator";
+import { Loader2 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -66,10 +70,12 @@ export default function Login() {
           else if (finalRole === "delivery_partner") navigate("/delivery/dashboard");
           else navigate("/");
         } catch (err) {
+          logDetailedError(err, { context: "Redirect Result Sync" });
           console.error("Firestore sync failed on redirect result", err);
         }
       }
     }).catch((err) => {
+      logDetailedError(err, { context: "Redirect Sign-In Error" });
       console.error("Redirect sign-in error", err);
     });
   }, [navigate]);
@@ -86,27 +92,31 @@ export default function Login() {
           await new Promise<void>((resolve) => grecaptcha.enterprise.ready(resolve));
           const token = await grecaptcha.enterprise.execute('6LdqyDctAAAAABn8isXOdDe-0roVqILKuAdIl_x-', {action: 'LOGIN'});
           
-          const response = await fetch('/api/auth/verify-recaptcha', {
+          await withAuthRetry(() => fetch('/api/auth/verify-recaptcha', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ token, action: 'LOGIN' })
-          });
-          const data = await response.json();
-          if (data.success === false) {
-             console.warn("Recaptcha assessment failed or flagged:", data.reason);
-          }
+          }).then(async res => {
+             const data = await res.json();
+             if (data.success === false) {
+                console.warn("Recaptcha assessment failed or flagged:", data.reason);
+             }
+             return data;
+          }), "Recaptcha Login", 1);
         }
       } catch (recaptchaError) {
+        logDetailedError(recaptchaError, { context: "Recaptcha" });
         console.warn("Recaptcha execution failed, proceeding to login to not block workflow:", recaptchaError);
       }
 
-      const userCredential = await signInWithEmailAndPassword(
+      const userCredential = await withAuthRetry(() => signInWithEmailAndPassword(
         auth,
         email,
         password,
-      );
+      ), "Email Login");
+      
       const { getDoc } = await import("firebase/firestore");
-      const userDoc = await getDoc(doc(db, "users", userCredential.user.uid));
+      const userDoc = await withAuthRetry(() => getDoc(doc(db, "users", userCredential.user.uid)), "Fetch User Doc");
       const data = userDoc.data();
       const userRole = data?.role || "customer";
 
@@ -137,7 +147,7 @@ export default function Login() {
       else if (userRole === "delivery_partner") navigate("/delivery/dashboard");
       else navigate("/");
     } catch (err: any) {
-      setError(err.message || "Failed to sign in");
+      setError(err.message || translateError(err));
     } finally {
       setLoading(false);
     }
@@ -152,16 +162,16 @@ export default function Login() {
       // Directly use redirect on mobile to prevent popup blocking
       const isMobile = window.innerWidth <= 768 || 'ontouchstart' in window;
       if (isMobile) {
-        await signInWithRedirect(auth, provider);
+        await withAuthRetry(() => signInWithRedirect(auth, provider), "Google Redirect");
         return; // Exit here, the page will redirect
       }
 
-      const result = await signInWithPopup(auth, provider);
+      const result = await withAuthRetry(() => signInWithPopup(auth, provider), "Google Popup");
 
       try {
         const userRef = doc(db, "users", result.user.uid);
         const { getDoc } = await import("firebase/firestore");
-        const userDoc = await getDoc(userRef);
+        const userDoc = await withAuthRetry(() => getDoc(userRef), "Fetch User Doc");
 
         const userEmail = result.user.email?.toLowerCase() || "";
         const initialRole =
@@ -170,12 +180,12 @@ export default function Login() {
         let finalRole = initialRole;
 
         if (!userDoc.exists()) {
-          await setDoc(userRef, {
+          await withAuthRetry(() => setDoc(userRef, {
             email: userEmail,
             name: result.user.displayName || "",
             role: initialRole,
             createdAt: new Date().toISOString(),
-          });
+          }), "Create Google User");
         } else {
           const data = userDoc.data();
           finalRole = data?.role || "customer";
@@ -203,6 +213,7 @@ export default function Login() {
           navigate("/delivery/dashboard");
         else navigate("/");
       } catch (syncErr) {
+        logDetailedError(syncErr, { context: "Google Firestore Write" });
         console.warn("Firestore write failed.", syncErr);
         navigate("/");
       }
@@ -211,28 +222,55 @@ export default function Login() {
         console.warn("Popup blocked or closed, falling back to redirect...");
         const provider = new GoogleAuthProvider();
         signInWithRedirect(auth, provider).catch((redirectErr) => {
-          setError(redirectErr.message || "Failed to sign in with redirect");
+          logDetailedError(redirectErr, { context: "Google Fallback Redirect" });
+          setError(translateError(redirectErr));
           setLoading(false);
         });
         return; // Return early, let the redirect happen
       }
-      setError(err.message || "Failed to sign in with Google");
+      setError(translateError(err));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="max-w-md mx-auto mt-16 p-8 glass-card">
-      <h1 className="text-3xl font-bold mb-6 text-center text-primary-600">
+    <div className="relative max-w-md mx-auto mt-16 p-8 glass-card overflow-hidden">
+      <AnimatePresence>
+        {loading && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 z-50 bg-[#020617]/90 backdrop-blur-sm flex flex-col items-center justify-center rounded-2xl"
+          >
+            <motion.div
+              animate={{ rotate: 360 }}
+              transition={{ repeat: Infinity, duration: 1.5, ease: "linear" }}
+            >
+              <Loader2 className="w-12 h-12 text-primary-500 mb-4" />
+            </motion.div>
+            <motion.p
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+              className="text-white font-bold tracking-wide"
+            >
+              Authenticating...
+            </motion.p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <h1 className="text-3xl font-bold mb-6 text-center text-primary-600 relative z-10">
         Welcome Back
       </h1>
       {error && (
-        <div className="bg-red-100 text-red-700 p-3 rounded-lg mb-4 text-sm font-medium">
+        <div className="bg-red-100 text-red-700 p-3 rounded-lg mb-4 text-sm font-medium relative z-10">
           {error}
         </div>
       )}
-      <form onSubmit={handleLogin} className="flex flex-col gap-4">
+      <form onSubmit={handleLogin} className="flex flex-col gap-4 relative z-10">
         <input
           type="email"
           placeholder="Email Address"
@@ -294,7 +332,7 @@ export default function Login() {
           Continue with Google
         </button>
       </form>
-      <div className="mt-6 text-center text-slate-500 dark:text-slate-400 text-sm">
+      <div className="mt-6 text-center text-slate-500 dark:text-slate-400 text-sm relative z-10">
         Don't have an account?{" "}
         <Link
           to="/register"
@@ -304,7 +342,7 @@ export default function Login() {
         </Link>
       </div>
 
-      <div className="mt-8 text-center text-[10px] font-medium text-slate-400 border-t border-slate-200 dark:border-slate-800 pt-4">
+      <div className="mt-8 text-center text-[10px] font-medium text-slate-400 border-t border-slate-200 dark:border-slate-800 pt-4 relative z-10">
         A Premium Website By{" "}
         <a
           href="https://28webhub.netlify.app"

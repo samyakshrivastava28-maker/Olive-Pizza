@@ -6,6 +6,7 @@ import { lazy, Suspense, ComponentType, useEffect, useRef } from 'react';
 import { useAuthStore } from './lib/store';
 import { UpdateBanner, ForceUpdateScreen } from './components/VersionUpdateScreens';
 import { useDeviceSession } from './hooks/useDeviceSession';
+import OfflineBanner from './components/ui/OfflineBanner';
 
 // Custom lazy loading with retry for chunk errors (prevents black screen on PWA update)
 const lazyWithRetry = <T extends ComponentType<any>>(
@@ -301,6 +302,7 @@ function App() {
     <HelmetProvider>
       <ForceUpdateScreen />
       <UpdateBanner />
+      <OfflineBanner />
       <MotionConfig reducedMotion="user">
       <AuthProvider>
         <ClickSpark

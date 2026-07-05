@@ -121,6 +121,17 @@ export default defineConfig({
             options: { cacheName: 'api-never-cache' }
           },
           {
+            // Firebase Auth and securetoken MUST go to network
+            urlPattern: /^https:\/\/.*\.googleapis\.com\/.*/i,
+            handler: 'NetworkOnly',
+            options: { cacheName: 'firebase-googleapis' }
+          },
+          {
+            urlPattern: /^https:\/\/securetoken\.googleapis\.com\/.*/i,
+            handler: 'NetworkOnly',
+            options: { cacheName: 'firebase-securetoken' }
+          },
+          {
             urlPattern: /^https:\/\/res\.cloudinary\.com\/.*\/image\/.*/i,
             handler: 'StaleWhileRevalidate',
             options: {

@@ -11,6 +11,10 @@ import { doc, setDoc, getDoc } from "firebase/firestore";
 import { useNavigate, Link } from "react-router";
 import { parsePhoneNumber } from "libphonenumber-js";
 import toast from "react-hot-toast";
+import { withAuthRetry } from "../lib/authRetry";
+import { translateError, logDetailedError } from "../lib/errorTranslator";
+import { Loader2 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 
 const getDeviceId = () => {
   let deviceId = localStorage.getItem('device_fingerprint');
@@ -78,11 +82,13 @@ export default function Register() {
             }
           }
         } catch (err) {
+          logDetailedError(err, { context: "Register Redirect Result Sync" });
           console.error("Firestore sync failed on redirect result", err);
           navigate("/onboarding/phone");
         }
       }
     }).catch((err) => {
+      logDetailedError(err, { context: "Register Redirect Sign-In Error" });
       console.error("Redirect sign-in error", err);
     });
   }, [navigate]);
@@ -100,17 +106,20 @@ export default function Register() {
           await new Promise<void>((resolve) => grecaptcha.enterprise.ready(resolve));
           const token = await grecaptcha.enterprise.execute('6LdqyDctAAAAABn8isXOdDe-0roVqILKuAdIl_x-', {action: 'REGISTER'});
           
-          const response = await fetch('/api/auth/verify-recaptcha', {
+          await withAuthRetry(() => fetch('/api/auth/verify-recaptcha', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ token, action: 'REGISTER' })
-          });
-          const data = await response.json();
-          if (data.success === false) {
-             console.warn("Recaptcha assessment failed or flagged:", data.reason);
-          }
+          }).then(async res => {
+             const data = await res.json();
+             if (data.success === false) {
+                console.warn("Recaptcha assessment failed or flagged:", data.reason);
+             }
+             return data;
+          }), "Recaptcha Register", 1);
         }
       } catch (recaptchaError) {
+        logDetailedError(recaptchaError, { context: "Recaptcha" });
         console.warn("Recaptcha execution failed, proceeding to register to not block workflow:", recaptchaError);
       }
 
@@ -136,7 +145,7 @@ export default function Register() {
         // 2. Check for uniqueness
         try {
           const identityRef = doc(db, "customer_identities", formattedPhone);
-          const identityDoc = await getDoc(identityRef);
+          const identityDoc = await withAuthRetry(() => getDoc(identityRef), "Check Phone Uniqueness");
           identityDocExists = identityDoc.exists();
           if (identityDoc.exists()) {
             try {
@@ -173,7 +182,7 @@ export default function Register() {
       const deviceId = getDeviceId();
 
       // 3. Create Auth
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const userCredential = await withAuthRetry(() => createUserWithEmailAndPassword(auth, email, password), "Email Register");
 
       try {
         const userEmail = email.toLowerCase();
@@ -182,7 +191,7 @@ export default function Register() {
         const identityRef = doc(db, "customer_identities", formattedPhone || 'unknown');
 
         if (formattedPhone && !identityDocExists) {
-          await setDoc(identityRef, {
+          await withAuthRetry(() => setDoc(identityRef, {
             primaryUid: userCredential.user.uid,
             primaryEmail: userEmail,
             deviceId: deviceId,
@@ -193,10 +202,10 @@ export default function Register() {
             totalOrders: 0,
             totalSpent: 0,
             createdAt: new Date().toISOString(),
-          });
+          }), "Create Identity Doc");
         }
 
-        await setDoc(
+        await withAuthRetry(() => setDoc(
           doc(db, "users", userCredential.user.uid),
           {
             email: userEmail,
@@ -208,7 +217,7 @@ export default function Register() {
             createdAt: new Date().toISOString(),
           },
           { merge: true }
-        );
+        ), "Create User Doc");
 
         // Trigger Welcome Email
         fetch("/api/email/transactional", {
@@ -225,12 +234,13 @@ export default function Register() {
         if (initialRole === "owner") navigate("/owner/dashboard");
         else navigate("/onboarding/location");
       } catch (syncErr) {
+        logDetailedError(syncErr, { context: "Register Firestore Sync" });
         console.warn("Firestore write failed. User created in Auth only.", syncErr);
         toast.success("Welcome to Olive Pizza!");
         navigate("/onboarding/location");
       }
     } catch (err: any) {
-      setError(err.message || "Failed to register");
+      setError(translateError(err));
     } finally {
       setLoading(false);
     }
@@ -245,27 +255,27 @@ export default function Register() {
       // Directly use redirect on mobile to prevent popup blocking
       const isMobile = window.innerWidth <= 768 || 'ontouchstart' in window;
       if (isMobile) {
-        await signInWithRedirect(auth, provider);
+        await withAuthRetry(() => signInWithRedirect(auth, provider), "Google Redirect");
         return; // Exit here, the page will redirect
       }
 
-      const result = await signInWithPopup(auth, provider);
+      const result = await withAuthRetry(() => signInWithPopup(auth, provider), "Google Popup");
 
       try {
         const userRef = doc(db, "users", result.user.uid);
-        const userDoc = await getDoc(userRef);
+        const userDoc = await withAuthRetry(() => getDoc(userRef), "Fetch User Doc");
 
         const userEmail = result.user.email?.toLowerCase() || "";
         const initialRole = userEmail === "olivepizzarjn@gmail.com" ? "owner" : "customer";
         let finalRole = initialRole;
 
         if (!userDoc.exists()) {
-          await setDoc(userRef, {
+          await withAuthRetry(() => setDoc(userRef, {
             email: userEmail,
             name: result.user.displayName || "",
             role: initialRole,
             createdAt: new Date().toISOString(),
-          });
+          }), "Create Google User");
 
           fetch("/api/email/transactional", {
             method: "POST",
@@ -291,32 +301,62 @@ export default function Register() {
           }
         }
       } catch (syncErr) {
+        logDetailedError(syncErr, { context: "Google Sign-In Sync" });
         console.warn("Firestore write failed.", syncErr);
         navigate("/onboarding/phone");
       }
     } catch (err: any) {
       if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
         const provider = new GoogleAuthProvider();
-        signInWithRedirect(auth, provider).catch(console.error);
+        signInWithRedirect(auth, provider).catch((redirectErr) => {
+           logDetailedError(redirectErr, { context: "Google Fallback Redirect" });
+           setError(translateError(redirectErr));
+           setLoading(false);
+        });
         return;
       }
-      setError(err.message || "Failed to sign in with Google");
+      setError(translateError(err));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="max-w-md mx-auto mt-16 p-8 glass-card">
-      <h1 className="text-3xl font-bold mb-6 text-center text-primary-600">
+    <div className="relative max-w-md mx-auto mt-16 p-8 glass-card overflow-hidden">
+      <AnimatePresence>
+        {loading && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 z-50 bg-[#020617]/90 backdrop-blur-sm flex flex-col items-center justify-center rounded-2xl"
+          >
+            <motion.div
+              animate={{ rotate: 360 }}
+              transition={{ repeat: Infinity, duration: 1.5, ease: "linear" }}
+            >
+              <Loader2 className="w-12 h-12 text-primary-500 mb-4" />
+            </motion.div>
+            <motion.p
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+              className="text-white font-bold tracking-wide"
+            >
+              Authenticating...
+            </motion.p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <h1 className="text-3xl font-bold mb-6 text-center text-primary-600 relative z-10">
         Create Account
       </h1>
       {error && (
-        <div className="bg-red-100 text-red-700 p-3 rounded-lg mb-4 text-sm font-medium">
+        <div className="bg-red-100 text-red-700 p-3 rounded-lg mb-4 text-sm font-medium relative z-10">
           {error}
         </div>
       )}
-      <form onSubmit={handleRegister} className="flex flex-col gap-4">
+      <form onSubmit={handleRegister} className="flex flex-col gap-4 relative z-10">
         <input
           type="text"
           placeholder="Full Name"
@@ -396,7 +436,7 @@ export default function Register() {
           Continue with Google
         </button>
       </form>
-      <div className="mt-6 text-center text-slate-500 dark:text-slate-400 text-sm">
+      <div className="mt-6 text-center text-slate-500 dark:text-slate-400 text-sm relative z-10">
         Already have an account?{" "}
         <Link
           to="/login"
@@ -405,7 +445,7 @@ export default function Register() {
           Sign In
         </Link>
       </div>
-      <div className="mt-8 text-center text-[10px] font-medium text-slate-400 border-t border-slate-200 dark:border-slate-800 pt-4">
+      <div className="mt-8 text-center text-[10px] font-medium text-slate-400 border-t border-slate-200 dark:border-slate-800 pt-4 relative z-10">
         A Premium Website By{" "}
         <a
           href="https://28webhub.netlify.app"
