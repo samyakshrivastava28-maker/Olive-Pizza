@@ -31,10 +31,10 @@ export class ErrorBoundary extends Component<Props, State> {
       return (
         <div className="min-h-screen bg-dark-950 flex flex-col items-center justify-center p-4 text-center z-50 relative">
           <div className="bg-dark-900 border border-dark-800 p-8 rounded-3xl max-w-lg w-full shadow-2xl relative overflow-hidden">
-            <div className="text-6xl mb-6">⚠️</div>
-            <h1 className="text-2xl font-black text-white mb-2">Oops! Something went wrong.</h1>
+            <div className="text-5xl mb-6 animate-pulse">⏳</div>
+            <h1 className="text-2xl font-black text-white mb-2">Just a moment...</h1>
             <p className="text-slate-400 mb-8">
-              We encountered an unexpected error. But don't worry, you can recover from here.
+              We're trying to restore your session. If this takes too long, you can manually reload the page.
             </p>
             
             <div className="flex flex-col gap-3">
@@ -54,7 +54,7 @@ export class ErrorBoundary extends Component<Props, State> {
                 }}
                 className="w-full bg-dark-800 text-white font-bold py-3 rounded-xl hover:bg-dark-700 transition-colors border border-dark-700"
               >
-                Go to Homepage
+                Return to Homepage
               </button>
             </div>
           </div>

@@ -172,6 +172,12 @@ export default function Home() {
   const [savedProducts, setSavedProducts] = useState<any[]>([]);
 
   // ─── Intro gate ───────────────────────────────────────────────────────────
+  const handleIntroEnd = useCallback(() => {
+    localStorage.setItem("olive_intro_version", APP_VERSION);
+    setShowIntro(false);
+    document.body.style.overflow = "";
+  }, []);
+
   useEffect(() => {
     const connection = (navigator as any).connection;
     const isSlowNetwork =
@@ -184,21 +190,15 @@ export default function Home() {
     if (playedVersion !== APP_VERSION && !isSlowNetwork) {
       setShowIntro(true);
       document.body.style.overflow = "hidden";
-      // Maximum 8 seconds total for intro to either play or fail
-      fallbackTimer = setTimeout(() => handleIntroEnd(), 8000);
+      // Maximum 7 seconds total for intro to either play or fail
+      fallbackTimer = setTimeout(() => handleIntroEnd(), 7000);
     }
 
     return () => {
       if (fallbackTimer) clearTimeout(fallbackTimer);
       document.body.style.overflow = "";
     };
-  }, []);
-
-  const handleIntroEnd = useCallback(() => {
-    localStorage.setItem("olive_intro_version", APP_VERSION);
-    setShowIntro(false);
-    document.body.style.overflow = "";
-  }, []);
+  }, [handleIntroEnd]);
 
   // ─── Intro video ──────────────────────────────────────────────────────────
   const [deviceType, setDeviceType] = useState<'mobile' | 'tablet' | 'desktop'>('desktop');
@@ -553,9 +553,6 @@ export default function Home() {
                 onCanPlay={() => setVideoReady(true)}
                 onPlaying={() => setVideoReady(true)}
                 onEnded={handleIntroEnd}
-                onError={() => setTimeout(handleIntroEnd, 500)}
-                onStalled={() => setTimeout(handleIntroEnd, 1000)}
-                onWaiting={() => setTimeout(handleIntroEnd, 3000)}
                 className={`absolute inset-0 w-full h-full object-cover z-20 transition-opacity duration-500 ${videoReady ? 'opacity-100' : 'opacity-0'}`}
                 style={{ 
                   transform: "translateZ(0)", 
