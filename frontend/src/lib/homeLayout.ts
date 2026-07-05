@@ -83,18 +83,33 @@ export const useHomeLayoutStore = create<HomeLayoutState>((set, get) => ({
     const configRef = doc(db, 'home_layout', 'published');
     const topRef = doc(db, 'home_layout', 'top_selling');
 
-    const unsubConfig = onSnapshot(configRef, (snap) => {
-      if (snap.exists()) {
-        set({
-          sections: snap.data().sections || DEFAULT_SECTIONS,
-          isLoading: false,
-        });
-      } else {
-        // Initialize defaults on first run
-        setDoc(configRef, { sections: DEFAULT_SECTIONS }).catch(() => {});
-        set({ sections: DEFAULT_SECTIONS, isLoading: false });
-      }
-    });
+    let unsubConfig: () => void;
+    let retryTimer: ReturnType<typeof setTimeout>;
+    let currentBackoff = 1000;
+
+    const setupListener = () => {
+      unsubConfig = onSnapshot(configRef, (snap) => {
+        if (snap.exists()) {
+          set({
+            sections: snap.data().sections || DEFAULT_SECTIONS,
+            isLoading: false,
+          });
+        } else {
+          // Initialize defaults on first run
+          setDoc(configRef, { sections: DEFAULT_SECTIONS }).catch(() => {});
+          set({ sections: DEFAULT_SECTIONS, isLoading: false });
+        }
+        currentBackoff = 1000; // reset on success
+      }, (error) => {
+        console.warn('[homeLayout] Firebase listener failed:', error);
+        currentBackoff = Math.min(currentBackoff * 2, 30000);
+        retryTimer = setTimeout(() => {
+          setupListener();
+        }, currentBackoff);
+      });
+    };
+
+    setupListener();
 
     // Load draft status
     getDoc(doc(db, 'home_layout', 'draft')).then((snap) => {

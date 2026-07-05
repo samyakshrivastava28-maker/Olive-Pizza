@@ -51,9 +51,22 @@ const lazyWithRetry = <T extends ComponentType<any>>(
         return new Promise<{ default: T }>(() => {});
       }
       
-      // If we already refreshed recently, throw the error to be caught by ErrorBoundary
-      console.error('Component load failed after forced refresh. Throwing to ErrorBoundary.', error);
-      throw error;
+      // If we already refreshed recently, fail gracefully instead of crashing the app
+      console.error('Component load failed after forced refresh. Returning fallback.', error);
+      return {
+        default: () => (
+          <div className="flex flex-col items-center justify-center p-8 bg-dark-900 border border-dark-800 rounded-2xl m-4 text-center">
+            <h2 className="text-xl font-bold text-white mb-2">Module Unavailable</h2>
+            <p className="text-slate-400 text-sm mb-4">A critical application module failed to load. Please check your connection.</p>
+            <button 
+              onClick={() => window.location.reload()}
+              className="bg-primary-600 hover:bg-primary-500 text-white font-bold py-2 px-4 rounded-xl transition-all"
+            >
+              Reload Page
+            </button>
+          </div>
+        )
+      } as unknown as { default: T };
     }
   });
 
@@ -67,7 +80,7 @@ import FloatingCart from './components/ui/FloatingCart';
 import LocationPrompt from './components/ui/LocationPrompt';
 import PushNotificationManager from './components/PushNotificationManager';
 import PizzaLoader from './components/ui/PizzaLoader';
-import { ErrorBoundary } from './components/ErrorBoundary';
+import { RouteErrorBoundary } from './components/RouteErrorBoundary';
 
 // Lazy loaded heavy components
 const AIAssistant = lazyWithRetry(() => import('./components/AIAssistant'));
@@ -207,7 +220,7 @@ function AppContent() {
     <>
       <PushNotificationManager />
       <AnimatePresence mode="wait">
-        <ErrorBoundary>
+        <RouteErrorBoundary>
           <Suspense fallback={<PizzaLoader />}>
             <Routes location={location} key={location.pathname}>
               {/* Public Routes */}
@@ -291,7 +304,7 @@ function AppContent() {
               </Route>
             </Routes>
           </Suspense>
-        </ErrorBoundary>
+        </RouteErrorBoundary>
       </AnimatePresence>
     </>
   );

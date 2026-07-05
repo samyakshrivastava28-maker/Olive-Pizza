@@ -65,3 +65,12 @@ self.addEventListener('notificationclick', function(event) {
     clients.openWindow(event.notification.data || '/')
   );
 });
+
+// Global SW Error Catcher to prevent infinite reload loops
+self.addEventListener('error', (event) => {
+  console.error('[SW Safe Mode] Caught unhandled worker error:', event.message);
+});
+
+self.addEventListener('unhandledrejection', (event) => {
+  console.error('[SW Safe Mode] Caught unhandled rejection:', event.reason);
+});

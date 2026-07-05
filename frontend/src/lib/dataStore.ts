@@ -71,81 +71,119 @@ export const useDataStore = create<DataState>()(
           set((state) => ({ storeStatus: { ...state.storeStatus, isWithinBusinessHours: isWithinHours } }));
         });
 
-        // Fetch Global Settings / Store Status
-        const unsubSettings = onSnapshot(doc(db, 'settings', 'global'), (snap) => {
-          import('./config').then(({ OPENING_HOUR, CLOSING_HOUR }) => {
-            const currentHour = new Date().getHours();
-            const isWithinHours = currentHour >= OPENING_HOUR && currentHour < CLOSING_HOUR;
-            
-            if (snap.exists()) {
-              const data = snap.data();
-              set({ storeStatus: {
-                isRestaurantOpen: data.isRestaurantOpen ?? true,
-                isDeliveryAvailable: data.isDeliveryAvailable ?? true,
-                isLoading: false,
-                isWithinBusinessHours: isWithinHours,
-                deliveryRadiusKm: data.deliveryRadiusKm ?? 5
-              }});
-            } else {
-              set((state) => ({ storeStatus: { ...state.storeStatus, isLoading: false, isWithinBusinessHours: isWithinHours }}));
-            }
-          });
-        });
-        unsubscribers.push(unsubSettings);
+        const retryTimers: Record<string, ReturnType<typeof setTimeout>> = {};
+        const backoffMap: Record<string, number> = {};
 
-        // Fetch Products (Active only)
-        const unsubProducts = onSnapshot(
-          query(collection(db, 'products'), where('isActive', '==', true)),
-          (snap) => {
-            const products = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-            products.sort((a: any, b: any) => (b.createdAt || 0) - (a.createdAt || 0));
-            set({ products });
-          }
-        );
-        unsubscribers.push(unsubProducts);
+        const handleError = (key: string, setupFn: () => void) => (error: any) => {
+          console.warn(`[dataStore] Firebase listener failed for ${key}:`, error);
+          const currentBackoff = backoffMap[key] || 1000;
+          backoffMap[key] = Math.min(currentBackoff * 2, 30000); // Max 30s
+          
+          if (retryTimers[key]) clearTimeout(retryTimers[key]);
+          retryTimers[key] = setTimeout(() => {
+            console.log(`[dataStore] Retrying ${key} after ${currentBackoff}ms`);
+            setupFn();
+          }, currentBackoff);
+        };
 
-        // Fetch Combos (Active only)
-        const unsubCombos = onSnapshot(
-          query(collection(db, 'combos'), where('isActive', '==', true)),
-          (snap) => {
-            const combos = snap.docs.map((doc) => ({ id: doc.id, ...doc.data(), isCombo: true }));
-            combos.sort((a: any, b: any) => (b.createdAt || 0) - (a.createdAt || 0));
-            set({ combos });
-          }
-        );
-        unsubscribers.push(unsubCombos);
+        const setupSettings = () => {
+          const unsubSettings = onSnapshot(doc(db, 'settings', 'global'), (snap) => {
+            import('./config').then(({ OPENING_HOUR, CLOSING_HOUR }) => {
+              const currentHour = new Date().getHours();
+              const isWithinHours = currentHour >= OPENING_HOUR && currentHour < CLOSING_HOUR;
+              
+              if (snap.exists()) {
+                const data = snap.data();
+                set({ storeStatus: {
+                  isRestaurantOpen: data.isRestaurantOpen ?? true,
+                  isDeliveryAvailable: data.isDeliveryAvailable ?? true,
+                  isLoading: false,
+                  isWithinBusinessHours: isWithinHours,
+                  deliveryRadiusKm: data.deliveryRadiusKm ?? 5
+                }});
+              } else {
+                set((state) => ({ storeStatus: { ...state.storeStatus, isLoading: false, isWithinBusinessHours: isWithinHours }}));
+              }
+            });
+            backoffMap['settings'] = 1000; // Reset on success
+          }, handleError('settings', setupSettings));
+          unsubscribers.push(unsubSettings);
+        };
+        setupSettings();
 
-        // Fetch Ads
-        const unsubAds = onSnapshot(
-          query(collection(db, 'ads'), where('isActive', '==', true)),
-          (snap) => {
-            const ads = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-            ads.sort((a: any, b: any) => (b.createdAt || 0) - (a.createdAt || 0));
-            set({ ads });
-          }
-        );
-        unsubscribers.push(unsubAds);
+        const setupProducts = () => {
+          const unsubProducts = onSnapshot(
+            query(collection(db, 'products'), where('isActive', '==', true)),
+            (snap) => {
+              const products = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+              products.sort((a: any, b: any) => (b.createdAt || 0) - (a.createdAt || 0));
+              set({ products });
+              backoffMap['products'] = 1000;
+            },
+            handleError('products', setupProducts)
+          );
+          unsubscribers.push(unsubProducts);
+        };
+        setupProducts();
+
+        const setupCombos = () => {
+          const unsubCombos = onSnapshot(
+            query(collection(db, 'combos'), where('isActive', '==', true)),
+            (snap) => {
+              const combos = snap.docs.map((doc) => ({ id: doc.id, ...doc.data(), isCombo: true }));
+              combos.sort((a: any, b: any) => (b.createdAt || 0) - (a.createdAt || 0));
+              set({ combos });
+              backoffMap['combos'] = 1000;
+            },
+            handleError('combos', setupCombos)
+          );
+          unsubscribers.push(unsubCombos);
+        };
+        setupCombos();
+
+        const setupAds = () => {
+          const unsubAds = onSnapshot(
+            query(collection(db, 'ads'), where('isActive', '==', true)),
+            (snap) => {
+              const ads = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+              ads.sort((a: any, b: any) => (b.createdAt || 0) - (a.createdAt || 0));
+              set({ ads });
+              backoffMap['ads'] = 1000;
+            },
+            handleError('ads', setupAds)
+          );
+          unsubscribers.push(unsubAds);
+        };
+        setupAds();
         
-        // Fetch Special Categories
-        const unsubSpecial = onSnapshot(
-          query(collection(db, 'special_categories'), where('isActive', '==', true)),
-          (snap) => {
-            const categories = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-            categories.sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
-            set({ specialCategories: categories });
-          }
-        );
-        unsubscribers.push(unsubSpecial);
+        const setupSpecial = () => {
+          const unsubSpecial = onSnapshot(
+            query(collection(db, 'special_categories'), where('isActive', '==', true)),
+            (snap) => {
+              const categories = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+              categories.sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
+              set({ specialCategories: categories });
+              backoffMap['special'] = 1000;
+            },
+            handleError('special', setupSpecial)
+          );
+          unsubscribers.push(unsubSpecial);
+        };
+        setupSpecial();
 
-        // Fetch Coupons
-        const unsubCoupons = onSnapshot(
-          query(collection(db, 'coupons'), where('isActive', '==', true)),
-          (snap) => {
-            const coupons = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-            set({ coupons });
-          }
-        );
-        unsubscribers.push(unsubCoupons);
+        const setupCoupons = () => {
+          const unsubCoupons = onSnapshot(
+            query(collection(db, 'coupons'), where('isActive', '==', true)),
+            (snap) => {
+              const coupons = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+              set({ coupons });
+              backoffMap['coupons'] = 1000;
+            },
+            handleError('coupons', setupCoupons)
+          );
+          unsubscribers.push(unsubCoupons);
+        };
+        setupCoupons();
 
         set({ isInitialized: true, isInitializing: false });
         isInitializingLock = false;

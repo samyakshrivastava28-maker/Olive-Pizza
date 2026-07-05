@@ -32,23 +32,43 @@ const OFFLINE_QUEUE_KEY = 'olive_offline_action_queue';
 const ICON = 'https://res.cloudinary.com/dxmlvkff1/image/upload/v1782376898/olive-pizza/brand/logo.png';
 const BADGE = 'https://res.cloudinary.com/dxmlvkff1/image/upload/v1782376898/olive-pizza/brand/badge_mono.png';
 
-// ─── IndexedDB helpers (offline queue) ────────────────────────────────────────
+// ─── IndexedDB helpers (offline queue) & Safe Mode ─────────────────────────────────
 function openDB() {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open('olive_sw', 2);
-    req.onupgradeneeded = e => {
-      const db = e.target.result;
-      if (!db.objectStoreNames.contains('offlineActions')) {
-        db.createObjectStore('offlineActions', { keyPath: 'id', autoIncrement: true });
-      }
-      if (!db.objectStoreNames.contains('authTokens')) {
-        db.createObjectStore('authTokens', { keyPath: 'uid' });
-      }
-    };
-    req.onsuccess = e => resolve(e.target.result);
-    req.onerror = e => reject(e.target.error);
+    try {
+      const req = indexedDB.open('olive_sw', 2);
+      req.onupgradeneeded = e => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains('offlineActions')) {
+          db.createObjectStore('offlineActions', { keyPath: 'id', autoIncrement: true });
+        }
+        if (!db.objectStoreNames.contains('authTokens')) {
+          db.createObjectStore('authTokens', { keyPath: 'uid' });
+        }
+      };
+      req.onsuccess = e => resolve(e.target.result);
+      req.onerror = e => {
+        console.error('[SW] IndexedDB corrupted, triggering Safe Mode rebuild.', e.target.error);
+        indexedDB.deleteDatabase('olive_sw'); // Safe Mode: clear corrupted DB
+        reject(e.target.error);
+      };
+    } catch (err) {
+      console.error('[SW] Critical IDB failure in Safe Mode:', err);
+      reject(err);
+    }
   });
 }
+
+// Global SW Error Catcher to prevent infinite reload loops
+self.addEventListener('error', (event) => {
+  console.error('[SW Safe Mode] Caught unhandled worker error:', event.message);
+  // We do NOT unregister the SW here automatically to prevent rapid reload loops.
+  // We just let it gracefully degrade.
+});
+
+self.addEventListener('unhandledrejection', (event) => {
+  console.error('[SW Safe Mode] Caught unhandled rejection:', event.reason);
+});
 
 async function saveOfflineAction(action) {
   const db = await openDB();

@@ -27,6 +27,7 @@ import LuxuryHero from "../components/ui/LuxuryHero";
 import LuxuryProductCard from "../components/ui/LuxuryProductCard";
 import { useAuthStore, useCartStore } from "../lib/store";
 import { useHomeLayoutStore } from "../lib/homeLayout";
+import { useNetworkStore } from "../lib/networkQuality";
 import { filterActive } from "../lib/scheduling";
 import { subscribeToWishlist } from "../lib/wishlist";
 import { trackEvent, computeRankingScore } from "../lib/analytics";
@@ -212,10 +213,14 @@ export default function Home() {
 
   const getOptimizedIntroUrls = () => {
     const base = "https://res.cloudinary.com/dxmlvkff1/video/upload";
-    // Hardware acceleration / fast start / codec negotiation (f_auto will select webm/mp4 based on browser)
     const transformations = ["f_auto", "vc_auto", "fl_fast_start"];
     
-    if (deviceType === 'mobile') {
+    const { speed } = useNetworkStore.getState();
+
+    // Degrade video quality if network is slow
+    if (speed === 'slow-2g' || speed === '2g' || speed === '3g') {
+      transformations.push("q_auto:eco", "h_360", "c_scale", "br_250k");
+    } else if (deviceType === 'mobile') {
       transformations.push("q_auto:eco", "h_540", "c_scale");
     } else if (deviceType === 'tablet') {
       transformations.push("q_auto:good", "h_720", "c_scale");

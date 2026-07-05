@@ -6,7 +6,11 @@ import App from './App.tsx';
 
 import { GlobalErrorBoundary } from './components/GlobalErrorBoundary';
 import { initVersionManager } from './lib/versionManager';
+import { validateEnvironment } from './lib/envValidator';
+import { initCrashLogger } from './lib/crashLogger';
 
+validateEnvironment();
+initCrashLogger();
 initVersionManager();
 
 createRoot(document.getElementById('root')!).render(
