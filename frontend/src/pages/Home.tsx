@@ -186,17 +186,14 @@ export default function Home() {
       (connection.effectiveType === "slow-2g" || connection.effectiveType === "2g");
 
     const playedVersion = localStorage.getItem("olive_intro_version");
-    let fallbackTimer: ReturnType<typeof setTimeout>;
 
     if (playedVersion !== APP_VERSION && !isSlowNetwork) {
       setShowIntro(true);
       document.body.style.overflow = "hidden";
-      // Maximum 3 seconds total for intro to either play or fail — never block the app
-      fallbackTimer = setTimeout(() => handleIntroEnd(), 3000);
+      // No fallback timer — video runs its full duration at 1.7x speed
     }
 
     return () => {
-      if (fallbackTimer) clearTimeout(fallbackTimer);
       document.body.style.overflow = "";
     };
   }, [handleIntroEnd]);
@@ -545,6 +542,7 @@ export default function Home() {
               <video
                 ref={(el) => {
                   if (el) {
+                    el.playbackRate = 1.7;
                     const p = el.play();
                     if (p !== undefined) p.catch(() => handleIntroEnd());
                   }
@@ -558,6 +556,7 @@ export default function Home() {
                 onCanPlay={() => setVideoReady(true)}
                 onPlaying={() => setVideoReady(true)}
                 onEnded={handleIntroEnd}
+                onError={handleIntroEnd}
                 className={`absolute inset-0 w-full h-full object-cover z-20 transition-opacity duration-500 ${videoReady ? 'opacity-100' : 'opacity-0'}`}
                 style={{ 
                   transform: "translateZ(0)", 

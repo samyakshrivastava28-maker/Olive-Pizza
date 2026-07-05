@@ -184,6 +184,23 @@ export default function PushNotificationManager() {
         }).catch(() => {});
       }
 
+      // If the tab is hidden (minimized/backgrounded), show a native OS notification
+      // This ensures users never miss alerts when the app is open but not visible
+      if (document.hidden && Notification.permission === 'granted') {
+        try {
+          const swReg = await navigator.serviceWorker.ready;
+          swReg.showNotification(title, {
+            body,
+            icon: 'https://res.cloudinary.com/dxmlvkff1/image/upload/v1782376898/olive-pizza/brand/logo.png',
+            badge: 'https://res.cloudinary.com/dxmlvkff1/image/upload/v1782376898/olive-pizza/brand/badge_mono.png',
+            tag: data?.tag || `fg_${Date.now()}`,
+            renotify: true,
+            vibrate: [200, 100, 200],
+            data: { url, orderId, queueId },
+          });
+        } catch { /* non-fatal */ }
+      }
+
       // Play sound for foreground messages
       if (data?.alert === 'continuous') {
         startContinuousAlert(sound || 'order_alert.mp3');
