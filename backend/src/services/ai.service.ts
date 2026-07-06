@@ -81,17 +81,20 @@ function getModelChain() {
   const nvidia = getNvidiaClient();
   const or = getOpenRouterClient();
   const gemini = getGeminiClient();
+  
   if (nvidia) {
-    chain.push({ client: nvidia, model: 'deepseek-ai/deepseek-r1', name: 'DeepSeek R1 (NVIDIA)', providerKey: 'nvidia' });
-    chain.push({ client: nvidia, model: 'meta/llama-3.1-70b-instruct', name: 'Llama 3.1 70B (NVIDIA)', providerKey: 'nvidia' });
+    chain.push({ client: nvidia, model: 'deepseek-ai/deepseek-v4-flash', name: 'DeepSeek V4 Flash (NVIDIA)', providerKey: 'nvidia' });
+    chain.push({ client: nvidia, model: 'qwen/qwen3.5-122b-a10b', name: 'Qwen 3 (NVIDIA)', providerKey: 'nvidia' });
+    chain.push({ client: nvidia, model: 'z-ai/glm-5.2', name: 'GLM 5.2 (NVIDIA)', providerKey: 'nvidia' });
   }
   if (or) {
-    chain.push({ client: or, model: 'google/gemma-2-27b-it', name: 'Gemma 2 (OpenRouter)', providerKey: 'openrouter' });
+    chain.push({ client: or, model: 'qwen/qwen3-next-80b-a3b-instruct', name: 'Qwen3-Next-80B (OpenRouter)', providerKey: 'openrouter' });
+    chain.push({ client: or, model: 'google/gemma-4-31b-it', name: 'Gemma 4 31B (OpenRouter)', providerKey: 'openrouter' });
+    chain.push({ client: or, model: 'google/gemma-4-27b-a3b-it', name: 'Gemma 4 27B (OpenRouter)', providerKey: 'openrouter' });
   }
   if (gemini) {
-    // Gemini 2.5 Flash as final fallback
-    chain.push({ client: gemini, model: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', providerKey: 'gemini' });
-    chain.push({ client: gemini, model: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash', providerKey: 'gemini' });
+    chain.push({ client: gemini, model: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash', providerKey: 'gemini' });
+    chain.push({ client: gemini, model: 'gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash Lite', providerKey: 'gemini' });
   }
   return chain;
 }
@@ -204,34 +207,38 @@ export async function generateChatReply(
       ? `Cart: ${(frontendContext.cart.items as string[]).join(', ')} | Total: ₹${frontendContext.cart.total}`
       : 'Cart is empty';
 
-    const systemPrompt = `You are the Olive Pizza AI Assistant — a friendly, accurate, and enthusiastic food assistant for Olive Pizza restaurant in Rajnandgaon, Chhattisgarh, India.
+    const systemPrompt = `You are a premium AI Assistant for Olive Pizza (Rajnandgaon, Chhattisgarh). Your primary goal is to provide fast, accurate, conversational, and highly personalized responses while guiding users through the website.
 
 == ABSOLUTE RULES ==
-1. NEVER hallucinate products, prices, or availability. Use ONLY the LIVE KNOWLEDGE BASE.
-2. If a product is not listed in the KB, say it is currently unavailable.
-3. Keep replies concise (2–4 sentences) unless the user asks for detail.
-4. Use food emojis warmly 🍕🔥🧀 — be friendly and enthusiastic.
-5. NEVER expose passwords, API keys, owner finances, or internal database structure.
-6. NEVER auto-execute any action — always present action JSON and wait for user approval.
+1. NEVER hallucinate products, prices, or availability. If a product is not in the KB, say it is currently unavailable.
+2. Provide ChatGPT-level quality: natural, friendly, professional, helpful, short when possible, detailed when required. Never be robotic.
+3. Understand context: remember budget, address, selected products, and previous questions. Don't repeatedly ask the same questions.
+4. Intelligent Search: If the user searches by taste, budget, or ingredient, use semantic reasoning to recommend exactly what they need from the KB.
+5. NEVER expose passwords, API keys, internal errors, stack traces, or AI provider names (NVIDIA, OpenRouter, Gemini, etc.).
 
-== ACTION GRAMMAR (emit ONE action per message maximum) ==
-For navigation:     ACTION:{"type":"NAVIGATE","payload":{"path":"/menu"}}
-For product page:   ACTION:{"type":"NAVIGATE","payload":{"path":"/product/PRODUCT_ID"}}
-For cart page:      ACTION:{"type":"NAVIGATE","payload":{"path":"/cart"}}
-For checkout:       ACTION:{"type":"NAVIGATE","payload":{"path":"/checkout"}}
-For orders:         ACTION:{"type":"NAVIGATE","payload":{"path":"/dashboard"}}
-For search:         ACTION:{"type":"NAVIGATE","payload":{"path":"/menu?search=QUERY"}}
-For add to cart:    ACTION:{"type":"ADD_TO_CART","payload":{"productId":"ID","productName":"NAME","price":PRICE,"quantity":1,"variant":"VARIANT_OR_EMPTY","imageUrl":"URL_OR_EMPTY"}}
-For apply coupon:   ACTION:{"type":"APPLY_COUPON","payload":{"code":"CODE"}}
+== WEBSITE CONTROLLER & ACTION GRAMMAR ==
+You can control the website by emitting ONE JSON action per message.
+However, YOU MUST ALWAYS ASK FOR EXPLICIT PERMISSION BEFORE EXECUTING ANY ACTION (unless the user explicitly commanded it in their previous message).
+When you want to execute an action:
+1. Recommend the action and ask "Would you like me to add this to your cart?" or "Should I open the menu for you?".
+2. Wait for the user to confirm.
+3. If they confirm, emit the ACTION block.
 
-RULES FOR ACTIONS:
-- Only include ACTION if the user clearly and explicitly requests it ("add to cart", "go to menu", "apply coupon XYZ").
-- For ADD_TO_CART: use exact productId, name, and price FROM THE KNOWLEDGE BASE — never invent.
-- For ADD_TO_CART: if the product has size variants, first ask which size the user wants, then emit the action.
-- Never add to cart without explicit user request AND correct product data from KB.
+ACTION FORMAT (Must be exactly in this format on its own line):
+ACTION:{"type":"NAVIGATE","payload":{"path":"/menu"}}
+ACTION:{"type":"NAVIGATE","payload":{"path":"/cart"}}
+ACTION:{"type":"NAVIGATE","payload":{"path":"/checkout"}}
+ACTION:{"type":"ADD_TO_CART","payload":{"productId":"ID","productName":"NAME","price":PRICE,"quantity":1,"variant":"VARIANT_OR_EMPTY","imageUrl":"URL_OR_EMPTY"}}
+ACTION:{"type":"APPLY_COUPON","payload":{"code":"CODE"}}
+
+== CART INTELLIGENCE ==
+Before emitting ADD_TO_CART:
+- Check if the product has size variants. If it does, YOU MUST ask the user which size they want BEFORE adding it.
+- Verify the product ID, name, and exact price from the KB.
+- Never add the wrong product.
 
 == LIVE KNOWLEDGE BASE ==
-${kbContext || 'Knowledge base syncing. Answer from general restaurant knowledge only.'}
+${kbContext || 'Knowledge base syncing. Answer gracefully from general knowledge.'}
 
 == LIVE CONTEXT ==
 - Page: ${frontendContext?.route || '/'}
@@ -247,65 +254,69 @@ ${kbContext || 'Knowledge base syncing. Answer from general restaurant knowledge
     const chatChain = getModelChain();
 
     if (chatChain.length === 0) {
-      // No providers configured — return graceful offline reply
       return { success: false, error: 'No AI providers configured' };
     }
 
     let lastError: Error | null = null;
+
     for (const config of chatChain) {
       const stat = aiProviderStats[config.providerKey as keyof typeof aiProviderStats] as any;
-      if (stat) stat.attempts++;
-
-      try {
-        console.log(`[AI Chat] Trying ${config.name}...`);
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 10000);
-
-        let response: any;
+      
+      // Try up to 2 times (initial + 1 retry) per model before falling back to the next model
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        if (stat) stat.attempts++;
         try {
-          response = await config.client.chat.completions.create({
-            model: config.model,
-            messages,
-            temperature: 0.65,
-            max_tokens: 500,
-          }, { signal: controller.signal as any });
-        } finally {
-          clearTimeout(timeout);
-        }
+          console.log(`[AI Chat] Trying ${config.name} (Attempt ${attempt})...`);
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 10000);
 
-        let reply = response?.choices?.[0]?.message?.content || '';
-        if (!reply) throw new Error('Empty response from model');
-
-        // Strip <think> blocks (reasoning models like DeepSeek R1)
-        reply = reply.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
-        if (!reply) throw new Error('Reply was only <think> content');
-
-        // Extract ACTION JSON if present
-        let action: any = null;
-        const actionMatch = reply.match(/ACTION:(\{[^\n]+\})/);
-        if (actionMatch) {
+          let response: any;
           try {
-            action = JSON.parse(actionMatch[1]);
-            reply = reply.replace(/ACTION:\{[^\n]+\}/, '').trim();
-          } catch { /* malformed action — skip it */ }
+            response = await config.client.chat.completions.create({
+              model: config.model,
+              messages,
+              temperature: 0.65,
+              max_tokens: 500,
+            }, { signal: controller.signal as any });
+          } finally {
+            clearTimeout(timeout);
+          }
+
+          let reply = response?.choices?.[0]?.message?.content || '';
+          if (!reply) throw new Error('Empty response from model');
+
+          reply = reply.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+          if (!reply) throw new Error('Reply was only <think> content');
+
+          let action: any = null;
+          const actionMatch = reply.match(/ACTION:(\{[^\n]+\})/);
+          if (actionMatch) {
+            try {
+              action = JSON.parse(actionMatch[1]);
+              reply = reply.replace(/ACTION:\{[^\n]+\}/, '').trim();
+            } catch { /* malformed action */ }
+          }
+
+          if (stat) { stat.ok = true; stat.lastUsed = Date.now(); stat.successes++; }
+          aiProviderStats.activeProvider = config.name;
+          const elapsed = Date.now() - requestStart;
+          aiProviderStats.avgResponseMs = Math.round((aiProviderStats.avgResponseMs * (aiProviderStats.totalRequests - 1) + elapsed) / aiProviderStats.totalRequests);
+
+          console.log(`[AI Chat] ✅ ${config.name} (${elapsed}ms)`);
+          return { success: true, reply, action, source: config.name };
+        } catch (err: any) {
+          const errMsg = err?.message || 'Unknown error';
+          console.warn(`[AI Chat] ❌ ${config.name} Attempt ${attempt}: ${errMsg}`);
+          lastError = err;
+          // If this is the last attempt for this model, we'll break and try the next model
         }
-
-        // Update stats
-        if (stat) { stat.ok = true; stat.lastUsed = Date.now(); stat.successes++; }
-        aiProviderStats.activeProvider = config.name;
-        const elapsed = Date.now() - requestStart;
-        aiProviderStats.avgResponseMs = Math.round((aiProviderStats.avgResponseMs * (aiProviderStats.totalRequests - 1) + elapsed) / aiProviderStats.totalRequests);
-
-        console.log(`[AI Chat] ✅ ${config.name} (${elapsed}ms)`);
-        return { success: true, reply, action, source: config.name };
-      } catch (err: any) {
-        const errMsg = err?.message || 'Unknown error';
-        console.warn(`[AI Chat] ❌ ${config.name}: ${errMsg}`);
-        if (stat) { stat.ok = false; stat.lastError = errMsg; }
-        aiProviderStats.totalFailovers++;
-        lastError = err;
       }
+      
+      if (stat) { stat.ok = false; stat.lastError = lastError?.message || 'Failed'; }
+      aiProviderStats.totalFailovers++;
     }
+    
+    // If we reach here, all AI providers failed
     throw new Error(`All AI providers failed. Last: ${lastError?.message}`);
   } catch (error: any) {
     console.error('[AI Chat] Fatal error (returning to offline mode):', error.message);

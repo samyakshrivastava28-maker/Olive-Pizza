@@ -83,10 +83,7 @@ export default function DashboardHome({ orders, stats, setActiveTab }: Props) {
           <h3 className="text-xl font-bold text-white mb-2">AI Assistant</h3>
           <p className="text-sm text-white/60 mb-6">Build the perfect pizza based on your past favorites.</p>
           <GlassButton
-            onClick={() => {
-              const { useAIStore } = require("../../../../lib/aiStore");
-              useAIStore.getState().setIsOpen(true);
-            }}
+            onClick={() => navigate('/assistant')}
             className="w-full flex items-center justify-center gap-2"
           >
             <MessageSquare size={18} /> Open Assistant
