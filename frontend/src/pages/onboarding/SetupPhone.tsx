@@ -82,11 +82,26 @@ export default function SetupPhone() {
         });
       }
 
-      await updateDoc(doc(db, "users", auth.currentUser.uid), {
-        phone: formattedPhone,
-        phoneSetupCompleted: true,
-        firstOrderEligible: !identityDocExists || !isFirstOrderCouponUsed,
-      });
+      const userDocRef = doc(db, "users", auth.currentUser.uid);
+      const userDocSnap = await getDoc(userDocRef);
+
+      if (!userDocSnap.exists()) {
+        await setDoc(userDocRef, {
+          email: auth.currentUser.email || "",
+          name: auth.currentUser.displayName || "",
+          role: auth.currentUser.email?.toLowerCase() === 'olivepizzarjn@gmail.com' ? 'owner' : 'customer',
+          phone: formattedPhone,
+          phoneSetupCompleted: true,
+          firstOrderEligible: !identityDocExists || !isFirstOrderCouponUsed,
+          createdAt: new Date().toISOString(),
+        });
+      } else {
+        await updateDoc(userDocRef, {
+          phone: formattedPhone,
+          phoneSetupCompleted: true,
+          firstOrderEligible: !identityDocExists || !isFirstOrderCouponUsed,
+        });
+      }
 
       const currentUser = useAuthStore.getState().user;
       const currentRole = useAuthStore.getState().role;
