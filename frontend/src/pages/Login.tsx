@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import {
   signInWithEmailAndPassword,
   signInWithRedirect,
+  signInWithPopup,
   getRedirectResult,
   GoogleAuthProvider,
 } from "firebase/auth";
@@ -160,9 +161,51 @@ export default function Login() {
     setLoading(true);
     try {
       const provider = new GoogleAuthProvider();
-      // Always use redirect — more reliable in production (no popup blocking, no domain whitelist issues)
-      await withAuthRetry(() => signInWithRedirect(auth, provider), "Google Redirect");
-      // Page will redirect; code below won't execute
+      // Use popup to prevent cross-origin redirect loops dropping the auth session in modern browsers
+      const result = await withAuthRetry(() => signInWithPopup(auth, provider), "Google Popup");
+      
+      if (result && result.user) {
+        const userRef = doc(db, "users", result.user.uid);
+        const { getDoc } = await import("firebase/firestore");
+        const userDoc = await getDoc(userRef);
+
+        const userEmail = result.user.email?.toLowerCase() || "";
+        const initialRole = userEmail === "olivepizzarjn@gmail.com" ? "owner" : "customer";
+        let finalRole = initialRole;
+
+        if (!userDoc.exists()) {
+          await setDoc(userRef, {
+            email: userEmail,
+            name: result.user.displayName || "",
+            role: initialRole,
+            createdAt: new Date().toISOString(),
+          });
+        } else {
+          const data = userDoc.data();
+          finalRole = data?.role || "customer";
+          
+          useAuthStore.getState().setUser({
+            uid: result.user.uid,
+            email: result.user.email,
+            name: data?.name,
+            phone: data?.phone,
+            photoURL: result.user.photoURL || data?.photoUrl,
+            onboardingComplete: data?.locationSetupCompleted,
+            phoneSetupCompleted: data?.phoneSetupCompleted,
+            locationSetupCompleted: data?.locationSetupCompleted,
+            lat: data?.lat,
+            lng: data?.lng,
+            fullAddress: data?.fullAddress,
+            emailVerified: result.user.emailVerified,
+            status: data?.status,
+          }, finalRole as "customer" | "owner" | "delivery_partner" | "admin");
+        }
+
+        toast.success("Welcome!");
+        if (finalRole === "owner" || finalRole === "admin") navigate("/owner/dashboard");
+        else if (finalRole === "delivery_partner") navigate("/delivery/dashboard");
+        else navigate("/");
+      }
     } catch (err: any) {
       setError(translateError(err));
       setLoading(false);
