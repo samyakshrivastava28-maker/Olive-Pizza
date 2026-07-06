@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { query } from '../lib/db.js';
 import { verifyToken, AuthRequest } from '../middleware/auth.middleware.js';
 import { adminDb } from '../config/firebase.js';
-import { OwnerTemplates } from '../services/notification/NotificationTemplates.js';
+import { OwnerTemplates, CustomerTemplates } from '../services/notification/NotificationTemplates.js';
 import { notificationQueue } from '../services/notification/NotificationQueueService.js';
 
 
@@ -149,6 +149,21 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
           pushPayload,
           'high',
           { tag: `order_owner_${newOrder.id}`, orderId: newOrder.id, category: 'order', priority: 'critical', version: 1 }
+        ).catch(console.error);
+      }
+      
+      // Notify customer
+      if (userData.firebase_uid) {
+        const customerPayload = CustomerTemplates.orderPlaced(newOrder.id, {
+          orderNumber: shortId,
+          totalAmount: serverCalculatedTotal,
+          version: 1
+        });
+        notificationQueue.enqueue(
+          userData.firebase_uid,
+          customerPayload,
+          'high',
+          { tag: `order_customer_${newOrder.id}`, orderId: newOrder.id, category: 'order', version: 1 }
         ).catch(console.error);
       }
     } catch (pushErr) {

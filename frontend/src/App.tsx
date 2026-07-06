@@ -143,6 +143,7 @@ const OwnerVersionManagement = lazyWithRetry(() => import('./pages/owner/OwnerVe
 const OwnerSlackCenter = lazyWithRetry(() => import('./pages/owner/OwnerSlackCenter'));
 const OwnerNotificationCenter = lazyWithRetry(() => import('./pages/owner/OwnerNotificationCenter'));
 const AIHealthMonitor = lazyWithRetry(() => import('./pages/owner/AIHealthMonitor'));
+const OwnerNotificationDiagnostics = lazyWithRetry(() => import('./pages/owner/OwnerNotificationDiagnostics'));
 
 // Lazy loaded delivery pages
 const CustomerDashboard = lazyWithRetry(() => import('./pages/CustomerDashboard'));
@@ -289,6 +290,7 @@ function AppContent() {
                   <Route path="notifications" element={<OwnerNotificationCenter />} />
                   <Route path="versions" element={<OwnerVersionManagement />} />
                   <Route path="ai-monitor" element={<AIHealthMonitor />} />
+                  <Route path="notification-diagnostics" element={<OwnerNotificationDiagnostics />} />
                 </Route>
               </Route>
     
@@ -310,6 +312,8 @@ function AppContent() {
   );
 }
 
+import { SafeErrorBoundary } from './components/ui/SafeErrorBoundary';
+
 function App() {
   return (
     <HelmetProvider>
@@ -325,7 +329,8 @@ function App() {
           sparkCount={8}
           duration={400}
         >
-          <CartAnimationProvider>
+          <SafeErrorBoundary>
+            <CartAnimationProvider>
             <AppContent />
             <Toaster 
               position="top-center" 
@@ -344,6 +349,7 @@ function App() {
             </Suspense>
             <PizzaLoader />
           </CartAnimationProvider>
+          </SafeErrorBoundary>
         </ClickSpark>
       </AuthProvider>
     </MotionConfig>

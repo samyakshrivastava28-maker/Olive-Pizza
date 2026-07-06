@@ -99,7 +99,7 @@ export default function PushNotificationManager() {
       const messaging = await getMessagingInstance();
       if (!messaging) return;
 
-      const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY;
+      const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY || "BIq5vy-awOEQYWgW9bRJrkMu2Bs0XKbI-DYkuh-IypgeKcJLSDDj1ZkS__EFJxiyrKKPlOp3Dm12kmGGXR6RtkI";
       if (!vapidKey) { console.error('[PushManager] Missing VITE_FIREBASE_VAPID_KEY'); return; }
 
       const swReg = await registerServiceWorker();

@@ -190,7 +190,16 @@ export default function Home() {
     if (playedVersion !== APP_VERSION && !isSlowNetwork) {
       setShowIntro(true);
       document.body.style.overflow = "hidden";
-      // No fallback timer — video runs its full duration at 1.7x speed
+      // Strict fallback timer — if video doesn't end in 4.5 seconds, force skip it to prevent black screens
+      const fallbackTimer = setTimeout(() => {
+        console.warn("Intro video timed out, forcing skip.");
+        handleIntroEnd();
+      }, 4500);
+      
+      return () => {
+        clearTimeout(fallbackTimer);
+        document.body.style.overflow = "";
+      };
     }
 
     return () => {
