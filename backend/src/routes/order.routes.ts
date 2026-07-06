@@ -154,9 +154,10 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
       
       // Notify customer
       if (userData.firebase_uid) {
-        const customerPayload = CustomerTemplates.orderPlaced(newOrder.id, {
+        const customerPayload = CustomerTemplates.orderUpdate(newOrder.id, {
           orderNumber: shortId,
           totalAmount: serverCalculatedTotal,
+          status: 'pending',
           version: 1
         });
         notificationQueue.enqueue(
