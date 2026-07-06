@@ -88,10 +88,12 @@ async function setupVite() {
 
   if (process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');
+    console.log('[Dev] Vite imported successfully.');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
     });
+    console.log('[Dev] Vite server created.');
     app.use(vite.middlewares);
   } else {
     const clientPath = path.resolve(__dirname, '../dist/client');

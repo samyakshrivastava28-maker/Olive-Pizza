@@ -164,13 +164,6 @@ function AppContent() {
   // Track active device session
   useDeviceSession();
 
-  // Global Session Initializer Blocker
-  // This completely stops the app from rendering while we restore the persisted session.
-  // This eliminates the "login flash" the user sees on startup.
-  if (isLoading && !isAuthenticated) {
-    return <PizzaLoader />;
-  }
-
   // Prevent authenticated users from visiting login/register/forgot-password
   useEffect(() => {
     if (
@@ -215,6 +208,13 @@ function AppContent() {
       navigate('/owner/dashboard', { replace: true });
     }
   }, [isAuthenticated, role, location.pathname, navigate]);
+
+  // Global Session Initializer Blocker
+  // This completely stops the app from rendering while we restore the persisted session.
+  // This eliminates the "login flash" the user sees on startup.
+  if (isLoading && !isAuthenticated) {
+    return <PizzaLoader />;
+  }
 
   return (
     <>

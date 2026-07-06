@@ -88,7 +88,10 @@ export default function Login() {
       try {
         if (typeof (window as any).grecaptcha !== 'undefined') {
           const grecaptcha = (window as any).grecaptcha;
-          await new Promise<void>((resolve) => grecaptcha.enterprise.ready(resolve));
+          await Promise.race([
+            new Promise<void>((resolve) => grecaptcha.enterprise.ready(resolve)),
+            new Promise<void>((_, reject) => setTimeout(() => reject(new Error("ReCaptcha timeout")), 3000))
+          ]);
           const token = await grecaptcha.enterprise.execute('6LdqyDctAAAAABn8isXOdDe-0roVqILKuAdIl_x-', {action: 'LOGIN'});
           
           await withAuthRetry(() => fetch('/api/auth/verify-recaptcha', {

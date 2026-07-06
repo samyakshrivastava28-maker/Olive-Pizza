@@ -31,15 +31,20 @@ export function initVersionManager() {
   window.fetch = async (...args) => {
     const [resource, config] = args;
     
-    // Add X-App-Version header
-    const headers = new Headers((config?.headers as any) || {});
-    headers.set('X-App-Version', APP_VERSION);
-    headers.set('X-Platform', 'web');
+    // Only add X-App-Version header to internal API requests to avoid CORS issues with third-party APIs
+    let newConfig = config;
+    const urlString = typeof resource === 'string' ? resource : (resource instanceof Request ? resource.url : '');
+    
+    if (urlString.startsWith('/') || urlString.startsWith(window.location.origin)) {
+      const headers = new Headers((config?.headers as any) || {});
+      headers.set('X-App-Version', APP_VERSION);
+      headers.set('X-Platform', 'web');
 
-    const newConfig = {
-      ...config,
-      headers
-    };
+      newConfig = {
+        ...config,
+        headers
+      };
+    }
 
     const response = await originalFetch(resource, newConfig);
 
