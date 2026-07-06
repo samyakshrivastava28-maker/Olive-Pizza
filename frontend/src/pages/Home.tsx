@@ -10,7 +10,6 @@ import {
   where,
   limit,
 } from "firebase/firestore";
-import { APP_VERSION } from "../lib/versionManager";
 import PageTransition from "../components/PageTransition";
 import { useDataStore } from "../lib/dataStore";
 import { useStoreStatus } from "../lib/useStoreStatus";
@@ -124,8 +123,6 @@ function PremiumSectionWrapper({
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function Home() {
-  const [showIntro, setShowIntro] = useState(false);
-
   const storeStatus = useStoreStatus();
   const { user, isAuthenticated } = useAuthStore();
   const addItem = useCartStore((s) => s.addItem);
@@ -171,80 +168,6 @@ export default function Home() {
   const [wishlistIds, setWishlistIds] = useState<string[]>([]);
   const [previousOrders, setPreviousOrders] = useState<any[]>([]);
   const [savedProducts, setSavedProducts] = useState<any[]>([]);
-
-  // ─── Intro gate ───────────────────────────────────────────────────────────
-  const handleIntroEnd = useCallback(() => {
-    localStorage.setItem("olive_intro_version", APP_VERSION);
-    setShowIntro(false);
-    document.body.style.overflow = "";
-  }, []);
-
-  useEffect(() => {
-    const connection = (navigator as any).connection;
-    const isSlowNetwork =
-      connection &&
-      (connection.effectiveType === "slow-2g" || connection.effectiveType === "2g");
-
-    const playedVersion = localStorage.getItem("olive_intro_version");
-
-    if (playedVersion !== APP_VERSION && !isSlowNetwork) {
-      setShowIntro(true);
-      document.body.style.overflow = "hidden";
-      // Strict fallback timer — if video doesn't end in 4.5 seconds, force skip it to prevent black screens
-      const fallbackTimer = setTimeout(() => {
-        console.warn("Intro video timed out, forcing skip.");
-        handleIntroEnd();
-      }, 4500);
-      
-      return () => {
-        clearTimeout(fallbackTimer);
-        document.body.style.overflow = "";
-      };
-    }
-
-    return () => {
-      document.body.style.overflow = "";
-    };
-  }, [handleIntroEnd]);
-
-  // ─── Intro video ──────────────────────────────────────────────────────────
-  const [deviceType, setDeviceType] = useState<'mobile' | 'tablet' | 'desktop'>('desktop');
-  
-  useEffect(() => {
-    const w = window.innerWidth;
-    if (w < 768) setDeviceType('mobile');
-    else if (w < 1024) setDeviceType('tablet');
-    else setDeviceType('desktop');
-  }, []);
-
-  const getOptimizedIntroUrls = () => {
-    const base = "https://res.cloudinary.com/dxmlvkff1/video/upload";
-    const transformations = ["f_auto", "vc_auto", "fl_fast_start"];
-    
-    const { speed } = useNetworkStore.getState();
-
-    // Degrade video quality if network is slow
-    if (speed === 'slow-2g' || speed === '2g' || speed === '3g') {
-      transformations.push("q_auto:eco", "h_360", "c_scale", "br_250k");
-    } else if (deviceType === 'mobile') {
-      transformations.push("q_auto:eco", "h_540", "c_scale");
-    } else if (deviceType === 'tablet') {
-      transformations.push("q_auto:good", "h_720", "c_scale");
-    } else {
-      transformations.push("q_auto:best", "h_1080", "c_scale");
-    }
-    
-    const paramsStr = transformations.join(",");
-    const videoId = "v1782199127/Olive_Pizza_logo_reveal_202606231247_rrtc3u";
-    
-    return {
-      videoUrl: `${base}/${paramsStr}/${videoId}.mp4`,
-      posterUrl: `${base}/${paramsStr}/${videoId}.jpg`
-    };
-  };
-
-  const { videoUrl, posterUrl } = getOptimizedIntroUrls();
-  const [videoReady, setVideoReady] = useState(false);
 
   // ─── Wishlist ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -529,68 +452,6 @@ export default function Home() {
       <SEO title="Home" schemaMarkup={generateRestaurantSchema()} />
       <PageTransition className="relative w-full">
 
-        {/* ─── Intro Video ─────────────────────────────────────────────────── */}
-        <AnimatePresence>
-          {showIntro && (
-            <motion.div
-              key="intro"
-              initial={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.8 }}
-              className="fixed inset-0 z-[9999] bg-dark-950 flex items-center justify-center overflow-hidden"
-              style={{ willChange: "opacity" }}
-            >
-              {/* Fallback Image */}
-              <img
-                src={posterUrl}
-                alt="Intro Poster"
-                className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-[400ms] ${videoReady ? 'opacity-0' : 'opacity-100'} z-10`}
-                style={{ transform: "translateZ(0)", willChange: "opacity, transform" }}
-              />
-              
-              <video
-                ref={(el) => {
-                  if (el) {
-                    el.playbackRate = 1.7;
-                    const p = el.play();
-                    if (p !== undefined) p.catch(() => handleIntroEnd());
-                  }
-                }}
-                src={videoUrl}
-                poster={posterUrl}
-                autoPlay
-                muted
-                playsInline
-                preload="auto"
-                onCanPlay={() => setVideoReady(true)}
-                onPlaying={() => setVideoReady(true)}
-                onEnded={handleIntroEnd}
-                onError={handleIntroEnd}
-                className={`absolute inset-0 w-full h-full object-cover z-20 transition-opacity duration-500 ${videoReady ? 'opacity-100' : 'opacity-0'}`}
-                style={{ 
-                  transform: "translateZ(0)", 
-                  willChange: "transform, opacity", 
-                  backfaceVisibility: "hidden", 
-                  contain: "strict" 
-                }}
-              />
-              <button
-                onClick={handleIntroEnd}
-                className="absolute top-safe-6 right-6 mt-6 px-4 py-2 rounded-full text-white text-xs tracking-widest uppercase font-bold z-30"
-                style={{
-                  background: "rgba(255,255,255,0.1)",
-                  backdropFilter: "blur(12px)",
-                  WebkitBackdropFilter: "blur(12px)",
-                  border: "1px solid rgba(255,255,255,0.2)",
-                  transform: "translateZ(0)",
-                }}
-              >
-                Skip Intro ➔
-              </button>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
         {/* Store closed banner */}
         {!storeStatus.isLoading && !isStoreOpen && (
           <div className="text-white font-bold text-center py-2.5 px-4 shadow-md sticky top-[72px] z-40 text-sm"
@@ -600,7 +461,7 @@ export default function Home() {
         )}
 
         {/* ─── LUXURY HERO ─────────────────────────────────────────────────── */}
-        <LuxuryHero isStoreOpen={isStoreOpen} showIntro={showIntro} />
+        <LuxuryHero isStoreOpen={isStoreOpen} showIntro={false} />
 
         {/* ─── Main Content ─────────────────────────────────────────────────── */}
         <main

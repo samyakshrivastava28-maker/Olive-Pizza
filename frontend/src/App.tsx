@@ -312,6 +312,7 @@ function AppContent() {
   );
 }
 
+import StartupGate from './components/ui/StartupGate';
 import { SafeErrorBoundary } from './components/ui/SafeErrorBoundary';
 
 function App() {
@@ -331,24 +332,26 @@ function App() {
         >
           <SafeErrorBoundary>
             <CartAnimationProvider>
-            <AppContent />
-            <Toaster 
-              position="top-center" 
-              toastOptions={{ 
-                className: 'dark:bg-slate-800 dark:text-white border border-slate-200 dark:border-slate-700 shadow-xl',
-                duration: 3000 
-              }} 
-            />
-            <Suspense fallback={null}>
-              <AIAssistant />
-            </Suspense>
-            <LocationPrompt />
-            <FloatingCart />
-            <Suspense fallback={null}>
-              <FloatingTracker />
-            </Suspense>
-            <PizzaLoader />
-          </CartAnimationProvider>
+              <StartupGate>
+                <AppContent />
+                <Toaster 
+                  position="top-center" 
+                  toastOptions={{ 
+                    className: 'dark:bg-slate-800 dark:text-white border border-slate-200 dark:border-slate-700 shadow-xl',
+                    duration: 3000 
+                  }} 
+                />
+                <Suspense fallback={null}>
+                  <AIAssistant />
+                </Suspense>
+                <LocationPrompt />
+                <FloatingCart />
+                <Suspense fallback={null}>
+                  <FloatingTracker />
+                </Suspense>
+                <PizzaLoader />
+              </StartupGate>
+            </CartAnimationProvider>
           </SafeErrorBoundary>
         </ClickSpark>
       </AuthProvider>
