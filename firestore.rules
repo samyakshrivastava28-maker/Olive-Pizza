@@ -38,11 +38,11 @@ service cloud.firestore {
       // PREVENT ROLE EDITS: Only allow updates if role/isAdmin/isOwner/isDeliveryPartner/permissions don't change, OR user is Admin/Owner.
       allow update: if hasFullAccess() || (
         isOwner(userId) && 
-        request.resource.data.role == resource.data.role &&
-        request.resource.data.isAdmin == resource.data.isAdmin &&
-        request.resource.data.isOwner == resource.data.isOwner &&
-        request.resource.data.isDeliveryPartner == resource.data.isDeliveryPartner &&
-        request.resource.data.approvalStatus == resource.data.approvalStatus
+        request.resource.data.get('role', '') == resource.data.get('role', '') &&
+        request.resource.data.get('isAdmin', false) == resource.data.get('isAdmin', false) &&
+        request.resource.data.get('isOwner', false) == resource.data.get('isOwner', false) &&
+        request.resource.data.get('isDeliveryPartner', false) == resource.data.get('isDeliveryPartner', false) &&
+        request.resource.data.get('approvalStatus', '') == resource.data.get('approvalStatus', '')
       );
       allow delete: if hasFullAccess();
     }
@@ -163,8 +163,7 @@ service cloud.firestore {
       allow list: if hasFullAccess();
       allow write: if isSignedIn() && (
         hasFullAccess() || 
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.phone == identityId)
+        request.resource.data.primaryUid == request.auth.uid
       );
     }
 

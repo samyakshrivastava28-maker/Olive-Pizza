@@ -126,7 +126,7 @@ export default function OwnerEmailCenter() {
     if (activeTab === "logs") fetchLogs();
   }, [activeTab]);
 
-  const fetchLogs = async () => {
+  async function fetchLogs() {
     setLogsLoading(true);
     try {
       const queryParams = new URLSearchParams();
@@ -143,9 +143,9 @@ export default function OwnerEmailCenter() {
     } finally {
       setLogsLoading(false);
     }
-  };
+  }
 
-  const fetchProducts = async () => {
+  async function fetchProducts() {
     try {
       const snap = await getDocs(collection(db, "products"));
       setProducts(
@@ -155,7 +155,7 @@ export default function OwnerEmailCenter() {
         })),
       );
     } catch {}
-  };
+  }
 
   const handleGenerateAI = async () => {
     if (!aiPrompt) {
