@@ -2,7 +2,13 @@ import express from 'express';
 import { queueEmail, transporter } from '../services/email.service.js';
 import { pgPool } from '../config/postgres.js';
 import dotenv from 'dotenv';
-import { adminAuth } from '../config/firebase.js';
+import { adminAuth, adminDb } from '../config/firebase.js';
+import {
+  buildOrderPlacedEmail,
+  buildOrderConfirmedEmail,
+  buildDeliveryPartnerAssignedEmail,
+  buildOrderDeliveredEmail
+} from '../services/emailTemplates.service.js';
 
 dotenv.config();
 
@@ -108,6 +114,50 @@ router.post('/transactional', async (req, res) => {
         'transactional'
       );
       console.log(`[Email] Transactional | Recipient: ${data.email} | Template: REGISTER | Success: true | Duration: ${Date.now() - startTime}ms`);
+    }
+
+    if (['ORDER_PLACED', 'ORDER_STATUS_CHANGED'].includes(event) && data.orderId) {
+      const orderSnap = await adminDb.collection('orders').doc(data.orderId).get();
+      if (orderSnap.exists) {
+        const order = { id: orderSnap.id, ...orderSnap.data() } as any;
+        const customerEmail = order.customerInfo?.email || data.customerEmail;
+        
+        if (customerEmail) {
+          if (event === 'ORDER_PLACED') {
+            await queueEmail(customerEmail, '🍕 Your Olive Pizza order has been placed successfully!', wrapper(buildOrderPlacedEmail(order)), 'transactional');
+          } else if (event === 'ORDER_STATUS_CHANGED') {
+            const status = data.status || order.status;
+            
+            if (status === 'preparing') {
+              await queueEmail(customerEmail, '✅ Your order has been confirmed!', wrapper(buildOrderConfirmedEmail(order)), 'transactional');
+            } else if (status === 'ready' && order.deliveryPartnerId) { // Delivery partner accepted
+              let partnerName = 'Delivery Partner';
+              let partnerPhoto = '';
+              let vehicleInfo = '';
+              try {
+                const partnerSnap = await adminDb.collection('users').doc(order.deliveryPartnerId).get();
+                if (partnerSnap.exists) {
+                  const partner = partnerSnap.data();
+                  partnerName = partner?.name || partnerName;
+                  partnerPhoto = partner?.photoUrl || partnerPhoto;
+                  vehicleInfo = partner?.vehicleType ? `${partner.vehicleType} (${partner.vehicleNumber || 'No number'})` : vehicleInfo;
+                }
+              } catch (e) {}
+              await queueEmail(customerEmail, '🚴 Your delivery partner is on the way!', wrapper(buildDeliveryPartnerAssignedEmail(order, partnerName, partnerPhoto, vehicleInfo)), 'transactional');
+            } else if (status === 'delivered') {
+              let recommendedProducts = [];
+              try {
+                const productsSnap = await adminDb.collection('products').where('isAvailable', '==', true).limit(3).get();
+                recommendedProducts = productsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+              } catch (e) {}
+              await queueEmail(customerEmail, '🎉 Enjoy your meal!', wrapper(buildOrderDeliveredEmail(order, recommendedProducts)), 'transactional');
+            }
+          }
+          console.log(`[Email] Transactional | Recipient: ${customerEmail} | Template: ${event} (${data.status}) | Success: true`);
+        } else {
+          console.log(`[Email] Transactional | No customer email found for order ${data.orderId}`);
+        }
+      }
     }
 
     res.json({ success: true, message: "Transactional trigger processed" });
@@ -371,6 +421,52 @@ router.get('/analytics', async (req, res) => {
   } catch (error: any) {
     console.error('[Email] Analytics Error:', error.message);
     res.status(500).json({ success: false, error: 'Failed to fetch email analytics' });
+  }
+});
+
+// 4.5 Logs (Transactional & Marketing)
+router.get('/logs', async (req, res) => {
+  try {
+    const { type, limit = 50, offset = 0, search = '' } = req.query;
+    
+    let query = `
+      SELECT id, recipient, subject, type, status, retry_count, last_error, created_at, sent_at 
+      FROM email_queue 
+      WHERE 1=1
+    `;
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    if (type) {
+      query += ` AND type = $${paramIndex}`;
+      params.push(type);
+      paramIndex++;
+    }
+
+    if (search) {
+      query += ` AND (recipient ILIKE $${paramIndex} OR subject ILIKE $${paramIndex})`;
+      params.push(`%${search}%`);
+      paramIndex++;
+    }
+
+    query += ` ORDER BY created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+    params.push(parseInt(limit as string, 10));
+    params.push(parseInt(offset as string, 10));
+
+    const result = await pgPool.query(query, params);
+    
+    // Get total count
+    const countQuery = `SELECT COUNT(*) FROM email_queue WHERE 1=1 ${type ? `AND type = '${type}'` : ''} ${search ? `AND (recipient ILIKE '%${search}%' OR subject ILIKE '%${search}%')` : ''}`;
+    const countResult = await pgPool.query(countQuery);
+    
+    res.json({
+      success: true,
+      logs: result.rows,
+      total: parseInt(countResult.rows[0].count, 10)
+    });
+  } catch (error: any) {
+    console.error('[Email] Logs Error:', error.message);
+    res.status(500).json({ success: false, error: 'Failed to fetch email logs' });
   }
 });
 

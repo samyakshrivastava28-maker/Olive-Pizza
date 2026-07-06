@@ -73,9 +73,15 @@ const BANNER_PRESETS = [
 ];
 
 export default function OwnerEmailCenter() {
-  const [activeTab, setActiveTab] = useState<"analytics" | "compose">(
+  const [activeTab, setActiveTab] = useState<"analytics" | "compose" | "logs">(
     "analytics",
   );
+
+  // Logs
+  const [logs, setLogs] = useState<any[]>([]);
+  const [logsLoading, setLogsLoading] = useState(false);
+  const [logSearch, setLogSearch] = useState("");
+  const [logType, setLogType] = useState("");
 
   // Analytics
   const [metrics, setMetrics] = useState({ totalSent: 0, totalFailed: 0 });
@@ -117,7 +123,27 @@ export default function OwnerEmailCenter() {
   useEffect(() => {
     fetchAnalytics();
     fetchProducts();
-  }, []);
+    if (activeTab === "logs") fetchLogs();
+  }, [activeTab]);
+
+  const fetchLogs = async () => {
+    setLogsLoading(true);
+    try {
+      const queryParams = new URLSearchParams();
+      if (logSearch) queryParams.append("search", logSearch);
+      if (logType) queryParams.append("type", logType);
+      
+      const res = await fetch(`/api/email/logs?${queryParams.toString()}`);
+      const data = await res.json();
+      if (data.success) {
+        setLogs(data.logs);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLogsLoading(false);
+    }
+  };
 
   const fetchProducts = async () => {
     try {
@@ -374,7 +400,7 @@ export default function OwnerEmailCenter() {
           </p>
         </div>
         <div className="flex gap-2 bg-dark-900 p-1 rounded-2xl border border-dark-800">
-          {(["analytics", "compose"] as const).map((tab) => (
+          {(["analytics", "compose", "logs"] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -384,6 +410,11 @@ export default function OwnerEmailCenter() {
                 <>
                   <BarChart3 className="w-4 h-4 inline mr-1.5" />
                   Analytics
+                </>
+              ) : tab === "logs" ? (
+                <>
+                  <Layers className="w-4 h-4 inline mr-1.5" />
+                  Logs
                 </>
               ) : (
                 <>
@@ -396,6 +427,7 @@ export default function OwnerEmailCenter() {
         </div>
       </div>
 
+      <AnimatePresence mode="wait">
       {activeTab === "analytics" && (
         <motion.div
           initial={{ opacity: 0, y: 10 }}
@@ -454,6 +486,103 @@ export default function OwnerEmailCenter() {
                 ))}
               </div>
             )}
+          </div>
+        </motion.div>
+      )}
+
+      {/* LOGS TAB */}
+      {activeTab === "logs" && (
+        <motion.div
+          key="logs"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -20 }}
+          className="space-y-6"
+        >
+          <div className="flex justify-between items-center bg-[#1E293B] p-4 rounded-2xl border border-white/10">
+            <div className="flex gap-4">
+              <input
+                type="text"
+                placeholder="Search email, subject..."
+                value={logSearch}
+                onChange={(e) => setLogSearch(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && fetchLogs()}
+                className="bg-dark-900 border border-dark-800 rounded-xl px-4 py-2 text-white text-sm w-64 focus:outline-none focus:border-primary-500"
+              />
+              <select
+                value={logType}
+                onChange={(e) => setLogType(e.target.value)}
+                className="bg-dark-900 border border-dark-800 rounded-xl px-4 py-2 text-white text-sm focus:outline-none focus:border-primary-500"
+              >
+                <option value="">All Types</option>
+                <option value="transactional">Transactional</option>
+                <option value="marketing">Marketing</option>
+              </select>
+              <button
+                onClick={fetchLogs}
+                className="bg-primary-600 text-white hover:bg-primary-500 px-4 py-2 rounded-xl text-sm font-bold transition-colors flex items-center gap-2"
+              >
+                <Search className="w-4 h-4" /> Search
+              </button>
+            </div>
+            <button
+              onClick={fetchLogs}
+              className="text-slate-400 hover:text-white p-2"
+            >
+              <RefreshCcw className={`w-5 h-5 ${logsLoading ? "animate-spin" : ""}`} />
+            </button>
+          </div>
+
+          <div className="bg-[#1E293B] rounded-2xl border border-white/10 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead className="bg-dark-900/50 text-slate-400 text-sm">
+                  <tr>
+                    <th className="px-6 py-4 font-medium">Recipient</th>
+                    <th className="px-6 py-4 font-medium">Subject</th>
+                    <th className="px-6 py-4 font-medium">Type</th>
+                    <th className="px-6 py-4 font-medium">Status</th>
+                    <th className="px-6 py-4 font-medium">Date</th>
+                    <th className="px-6 py-4 font-medium text-right">Details</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-dark-800 text-sm">
+                  {logs.map((log: any) => (
+                    <tr key={log.id} className="hover:bg-white/5 transition-colors">
+                      <td className="px-6 py-4 text-white font-medium">{log.recipient}</td>
+                      <td className="px-6 py-4 text-slate-300 max-w-[200px] truncate" title={log.subject}>{log.subject}</td>
+                      <td className="px-6 py-4">
+                        <span className={`px-2 py-1 rounded-md text-xs font-bold ${log.type === 'transactional' ? 'bg-blue-500/20 text-blue-400' : 'bg-purple-500/20 text-purple-400'}`}>
+                          {log.type}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`px-2 py-1 rounded-md text-xs font-bold ${log.status === 'sent' ? 'bg-green-500/20 text-green-400' : log.status === 'failed' ? 'bg-red-500/20 text-red-400' : 'bg-amber-500/20 text-amber-400'}`}>
+                          {log.status.toUpperCase()}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-slate-400">{new Date(log.created_at).toLocaleString()}</td>
+                      <td className="px-6 py-4 text-right">
+                        {log.last_error ? (
+                          <div className="text-xs text-red-400 truncate max-w-[150px] inline-block" title={log.last_error}>
+                            {log.last_error}
+                          </div>
+                        ) : (
+                          <span className="text-slate-500">-</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                  {logs.length === 0 && !logsLoading && (
+                    <tr>
+                      <td colSpan={6} className="px-6 py-12 text-center text-slate-500">
+                        No email logs found matching criteria
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </motion.div>
       )}
@@ -849,6 +978,7 @@ export default function OwnerEmailCenter() {
           </div>
         </motion.div>
       )}
+      </AnimatePresence>
 
       {showPreview && (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-sm">

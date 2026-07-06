@@ -228,6 +228,19 @@ export default function DeliveryDashboard() {
         } catch (e) {}
       }
       await updateDoc(doc(db, "orders", orderId), updates);
+      
+      // Trigger Email Notification
+      if (["ready", "delivered"].includes(newStatus)) {
+        fetch("/api/email/transactional", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            event: "ORDER_STATUS_CHANGED",
+            data: { orderId, status: newStatus },
+          }),
+        }).catch(() => {});
+      }
+
       toast.success(`Status updated: ${newStatus.replace(/_/g, " ").toUpperCase()}`);
     } catch (error) { toast.error("Update failed"); }
   };
@@ -242,6 +255,16 @@ export default function DeliveryDashboard() {
         photoUrl = res.secureUrl;
       }
       await updateDoc(doc(db, "orders", completingOrderId), { status: "delivered", deliveredAt: new Date().toISOString(), deliveryProof: { photoUrl, note: proofNote } });
+      
+      // Trigger Delivery Email
+      fetch("/api/email/transactional", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          event: "ORDER_STATUS_CHANGED",
+          data: { orderId: completingOrderId, status: "delivered" },
+        }),
+      }).catch(() => {});
       try {
         const token = await getCurrentAuthToken();
         await fetch("/api/tracking/navigation/stop", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ orderId: completingOrderId, partnerId: user?.uid }) });
