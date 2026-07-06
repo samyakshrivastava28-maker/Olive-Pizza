@@ -194,6 +194,7 @@ export default function PushNotificationManager() {
             icon: 'https://res.cloudinary.com/dxmlvkff1/image/upload/v1782376898/olive-pizza/brand/logo.png',
             badge: 'https://res.cloudinary.com/dxmlvkff1/image/upload/v1782376898/olive-pizza/brand/badge_mono.png',
             tag: data?.tag || `fg_${Date.now()}`,
+            // @ts-ignore
             renotify: true,
             vibrate: [200, 100, 200],
             data: { url, orderId, queueId },

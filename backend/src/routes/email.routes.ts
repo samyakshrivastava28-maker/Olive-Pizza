@@ -145,7 +145,7 @@ router.post('/transactional', async (req, res) => {
               } catch (e) {}
               await queueEmail(customerEmail, '🚴 Your delivery partner is on the way!', wrapper(buildDeliveryPartnerAssignedEmail(order, partnerName, partnerPhoto, vehicleInfo)), 'transactional');
             } else if (status === 'delivered') {
-              let recommendedProducts = [];
+              let recommendedProducts: any[] = [];
               try {
                 const productsSnap = await adminDb.collection('products').where('isAvailable', '==', true).limit(3).get();
                 recommendedProducts = productsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
