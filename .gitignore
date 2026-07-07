@@ -10,3 +10,4 @@ backend/credentials/
 !package-lock.json
 !tsconfig.json
 !firebase.json
+!vercel.json
