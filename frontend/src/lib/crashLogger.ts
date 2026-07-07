@@ -49,7 +49,7 @@ export function initCrashLogger() {
     logCrash({
       type: 'error',
       message: event.message,
-      stack: event.error?.stack,
+      stack: event.error?.stack || null,
       url: window.location.href,
     });
   });
@@ -65,15 +65,15 @@ export async function logCrash(errorDetails: any) {
       timestamp: new Date().toISOString(),
       userAgent: navigator.userAgent,
       memory: memory ? {
-        jsHeapSizeLimit: memory.jsHeapSizeLimit,
-        totalJSHeapSize: memory.totalJSHeapSize,
-        usedJSHeapSize: memory.usedJSHeapSize,
+        jsHeapSizeLimit: memory.jsHeapSizeLimit || null,
+        totalJSHeapSize: memory.totalJSHeapSize || null,
+        usedJSHeapSize: memory.usedJSHeapSize || null,
       } : null,
       network: connection ? {
-        effectiveType: connection.effectiveType,
-        downlink: connection.downlink,
-        rtt: connection.rtt,
-        saveData: connection.saveData,
+        effectiveType: connection.effectiveType || null,
+        downlink: connection.downlink || null,
+        rtt: connection.rtt || null,
+        saveData: connection.saveData ?? null,
       } : null,
     };
 

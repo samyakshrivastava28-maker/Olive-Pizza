@@ -12,7 +12,7 @@ const checkAIProviders = async () => {
     const start = Date.now();
     try {
       const res = await fetch(url, { method: 'HEAD', signal: AbortSignal.timeout(3000) });
-      return { name, status: (res.ok || [401,403,405].includes(res.status)) ? 'operational' : 'degraded', latency: Date.now() - start };
+      return { name, status: (res.ok || [401,403,404,405].includes(res.status)) ? 'operational' : 'degraded', latency: Date.now() - start };
     } catch { return { name, status: 'down', latency: Date.now() - start }; }
   };
   const [g, o] = await Promise.allSettled([

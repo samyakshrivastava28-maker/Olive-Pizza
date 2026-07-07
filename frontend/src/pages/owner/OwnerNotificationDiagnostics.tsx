@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Activity, Bell, RefreshCw, Smartphone, ShieldCheck, ShieldAlert, CheckCircle2 } from 'lucide-react';
-import { getMessagingInstance } from '../../lib/firebase';
+import { getMessagingInstance, auth } from '../../lib/firebase';
 import { useAuthStore } from '../../lib/store';
 import toast from 'react-hot-toast';
 
@@ -204,7 +204,7 @@ export default function OwnerNotificationDiagnostics() {
           </button>
           <button 
             onClick={async () => {
-              const token = await user?.getIdToken();
+              const token = await auth.currentUser?.getIdToken();
               if (!token) return;
               toast.success("Close the app now! Notification arriving in 5 seconds...");
               setTimeout(async () => {
