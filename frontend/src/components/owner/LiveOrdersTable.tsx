@@ -20,6 +20,14 @@ export default function LiveOrdersTable() {
     try {
       await updateDoc(doc(db, 'orders', orderId), { status: newStatus });
       await logActivity('Order Status Changed', `Order #${orderId.slice(-6).toUpperCase()} changed to ${newStatus}`, user?.email || undefined);
+      
+      auth.currentUser?.getIdToken().then(token => {
+        fetch("/api/notifications/trigger-event", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+          body: JSON.stringify({ orderId, action: newStatus })
+        }).catch(console.error);
+      });
     } catch (e) {
       console.error(e);
       alert('Failed to update status');

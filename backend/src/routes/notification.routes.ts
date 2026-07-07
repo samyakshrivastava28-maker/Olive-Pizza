@@ -606,4 +606,123 @@ router.post('/cleanup', verifyToken, async (req: AuthRequest, res: Response): Pr
   }
 });
 
+// =============================================================================
+// POST /notifications/trigger-event (Firebase-Native Notification Trigger)
+// =============================================================================
+router.post('/trigger-event', verifyToken, async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { orderId, action, partnerId } = req.body;
+    if (!orderId || !action) {
+      res.status(400).json({ error: 'Missing orderId or action' });
+      return;
+    }
+
+    const orderDoc = await db.collection('orders').doc(orderId).get();
+    if (!orderDoc.exists) {
+      res.status(404).json({ error: 'Order not found' });
+      return;
+    }
+
+    const order = orderDoc.data()!;
+    const shortId = order.dailyOrderNumber || `#${orderId.slice(-6).toUpperCase()}`;
+    const customerFirebaseUid = order.userId;
+    const totalAmount = order.totalAmount || 0;
+    const contactPhone = order.contactPhone || '';
+    const deliveryAddress = order.deliveryAddress?.addressLine || order.address || '';
+    const status = order.status;
+
+    if (action === 'new_order') {
+      const ownerIds = await getOwnerUserIds();
+      const payload = OwnerTemplates.newOrder(orderId, {
+        customerName: order.customerName || 'Customer',
+        orderNumber: shortId,
+        totalAmount,
+        itemsCount: order.items?.length || 0,
+        paymentMethod: order.paymentMethod || 'COD',
+        deliveryAddress,
+        phone: contactPhone,
+        version: 1
+      });
+      for (const ownerId of ownerIds) {
+        await notificationQueue.enqueue(ownerId, payload, 'high', { tag: `order_owner_${orderId}`, orderId, category: 'order', priority: 'critical', version: 1 });
+      }
+      
+      if (customerFirebaseUid) {
+        const cPayload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'pending', totalAmount, version: 1 });
+        await notificationQueue.enqueue(customerFirebaseUid, cPayload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 1 });
+      }
+    }
+    else if (action === 'accepted') {
+      if (customerFirebaseUid) {
+        const payload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'accepted', totalAmount, eta: '20-30 mins', version: 2 });
+        await notificationQueue.enqueue(customerFirebaseUid, payload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 2 });
+      }
+      // Also update owner live card
+      const ownerIds = await getOwnerUserIds();
+      const ownerPayload = OwnerTemplates.orderStatusUpdate(orderId, { orderNumber: shortId, customerName: contactPhone, status: 'accepted', totalAmount, version: 2 });
+      for (const ownerId of ownerIds) {
+        await notificationQueue.enqueue(ownerId, ownerPayload, 'normal', { tag: `order_owner_${orderId}`, orderId, category: 'order', version: 2 });
+      }
+    }
+    else if (action === 'cancelled') {
+      if (customerFirebaseUid) {
+        const payload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'cancelled', totalAmount, version: 2 });
+        await notificationQueue.enqueue(customerFirebaseUid, payload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 2 });
+      }
+    }
+    else if (action === 'preparing') {
+      if (customerFirebaseUid) {
+        const payload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'preparing', totalAmount, version: 3 });
+        await notificationQueue.enqueue(customerFirebaseUid, payload, 'normal', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 3 });
+      }
+    }
+    else if (action === 'ready') {
+      if (customerFirebaseUid) {
+        const payload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'ready', totalAmount, version: 4 });
+        await notificationQueue.enqueue(customerFirebaseUid, payload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 4 });
+      }
+    }
+    else if (action === 'partner_assigned') {
+      const realPartnerId = partnerId || order.deliveryPartnerId;
+      if (realPartnerId) {
+        const partnerDoc = await db.collection('users').doc(realPartnerId).get();
+        const partnerName = partnerDoc.data()?.name || 'Partner';
+        
+        const deliveryPayload = DeliveryTemplates.newAssignment(orderId, {
+          orderNumber: shortId, customerName: 'Customer', customerPhone: contactPhone,
+          deliveryAddress, distance: '?', eta: '15 mins', totalAmount, paymentMethod: order.paymentMethod || 'COD', version: 1
+        });
+        await notificationQueue.enqueue(realPartnerId, deliveryPayload, 'high', { tag: `order_delivery_${orderId}`, orderId, category: 'delivery', priority: 'critical', version: 1 });
+        
+        if (customerFirebaseUid) {
+          const cPayload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'partner_assigned', totalAmount, deliveryPartnerName: partnerName, version: 5 });
+          await notificationQueue.enqueue(customerFirebaseUid, cPayload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 5 });
+        }
+      }
+    }
+    else if (action === 'picked_up' || action === 'out_for_delivery') {
+      if (customerFirebaseUid) {
+        const cPayload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'out_for_delivery', totalAmount, version: 6 });
+        await notificationQueue.enqueue(customerFirebaseUid, cPayload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 6 });
+      }
+    }
+    else if (action === 'delivered') {
+      if (customerFirebaseUid) {
+        const cPayload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'delivered', totalAmount, version: 7 });
+        await notificationQueue.enqueue(customerFirebaseUid, cPayload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 7 });
+      }
+      const ownerIds = await getOwnerUserIds();
+      const oPayload = OwnerTemplates.orderStatusUpdate(orderId, { orderNumber: shortId, customerName: '', status: 'delivered', totalAmount, version: 99 });
+      for (const ownerId of ownerIds) {
+        await notificationQueue.enqueue(ownerId, oPayload, 'normal', { tag: `order_owner_${orderId}`, orderId, category: 'order', version: 99 });
+      }
+    }
+    
+    res.json({ success: true, action });
+  } catch (error: any) {
+    console.error('[NotificationRoutes] trigger-event error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;

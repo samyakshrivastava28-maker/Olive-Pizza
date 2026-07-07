@@ -240,6 +240,16 @@ export default function DeliveryDashboard() {
           }),
         }).catch(() => {});
       }
+      
+      // Trigger Push Notification
+      try {
+        const token = await getCurrentAuthToken();
+        fetch("/api/notifications/trigger-event", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+          body: JSON.stringify({ orderId, action: newStatus })
+        }).catch(console.error);
+      } catch (e) {}
 
       toast.success(`Status updated: ${newStatus.replace(/_/g, " ").toUpperCase()}`);
     } catch (error) { toast.error("Update failed"); }
@@ -265,6 +275,16 @@ export default function DeliveryDashboard() {
           data: { orderId: completingOrderId, status: "delivered" },
         }),
       }).catch(() => {});
+      
+      // Trigger Push Notification
+      try {
+        const token = await getCurrentAuthToken();
+        fetch("/api/notifications/trigger-event", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+          body: JSON.stringify({ orderId: completingOrderId, action: "delivered" })
+        }).catch(console.error);
+      } catch (e) {}
       try {
         const token = await getCurrentAuthToken();
         await fetch("/api/tracking/navigation/stop", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ orderId: completingOrderId, partnerId: user?.uid }) });

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { db } from "../../lib/firebase";
+import { db, auth } from "../../lib/firebase";
 import {
   collection,
   onSnapshot,
@@ -105,6 +105,15 @@ export default function OwnerOrders() {
           }),
         }).catch((e) => console.error("Email trigger failed:", e));
       }
+      
+      // Trigger Push Notification
+      auth.currentUser?.getIdToken().then(token => {
+        fetch("/api/notifications/trigger-event", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+          body: JSON.stringify({ orderId: order.id, action: newStatus, partnerId })
+        }).catch(console.error);
+      });
     } catch (error) {
       console.error("Failed to update status", error);
     }

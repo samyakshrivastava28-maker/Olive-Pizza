@@ -386,6 +386,15 @@ export default function Checkout() {
         }),
       }).catch((e) => console.error("Email trigger failed:", e));
 
+      // Trigger Push Notification for new order
+      auth.currentUser?.getIdToken().then(token => {
+        fetch("/api/notifications/trigger-event", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+          body: JSON.stringify({ orderId: permanentOrderId, action: "new_order" })
+        }).catch(console.error);
+      });
+
       clearCart();
       navigate("/dashboard");
     } catch (err: any) {
