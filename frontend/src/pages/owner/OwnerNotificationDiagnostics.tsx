@@ -156,7 +156,7 @@ export default function OwnerNotificationDiagnostics() {
         </div>
       </div>
 
-      <div className="bg-slate-900 rounded-2xl p-6 border border-white/5 flex items-center justify-between">
+      <div className="bg-slate-900 rounded-2xl p-6 border border-white/5 flex flex-col md:flex-row items-center justify-between gap-4">
         <div>
           <h3 className="text-white font-bold text-lg flex items-center gap-2">
             <Bell className="w-5 h-5 text-primary-500" />
@@ -166,13 +166,65 @@ export default function OwnerNotificationDiagnostics() {
             Broadcast a test notification to all connected devices. This verifies the Service Worker, FCM transport, and Postgres queue.
           </p>
         </div>
-        <button 
-          onClick={sendTestNotification}
-          disabled={!diagnostics.fcmToken}
-          className="px-6 py-3 bg-primary-600 hover:bg-primary-500 disabled:opacity-50 text-white rounded-xl font-bold transition-all"
-        >
-          Send Test Notification
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button 
+            onClick={sendTestNotification}
+            disabled={!diagnostics.fcmToken}
+            className="px-4 py-2 bg-primary-600 hover:bg-primary-500 disabled:opacity-50 text-white rounded-xl font-bold transition-all text-sm"
+          >
+            Foreground Test
+          </button>
+          
+          <button 
+            onClick={async () => {
+              const { verifyAndRefreshTokens } = await import('../../lib/fcm');
+              await verifyAndRefreshTokens(user?.uid);
+              checkStatus();
+              toast.success("Token refreshed");
+            }}
+            className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-bold transition-all text-sm"
+          >
+            Refresh Token
+          </button>
+          
+          <button 
+            onClick={async () => {
+              if ('serviceWorker' in navigator) {
+                const regs = await navigator.serviceWorker.getRegistrations();
+                for (let r of regs) await r.unregister();
+                const { verifyAndRefreshTokens } = await import('../../lib/fcm');
+                await verifyAndRefreshTokens(user?.uid);
+                checkStatus();
+                toast.success("SW Re-registered");
+              }
+            }}
+            className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-bold transition-all text-sm"
+          >
+            Re-register SW
+          </button>
+          <button 
+            onClick={async () => {
+              const token = await user?.getIdToken();
+              if (!token) return;
+              toast.success("Close the app now! Notification arriving in 5 seconds...");
+              setTimeout(async () => {
+                await fetch('/api/notifications/send-custom', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                  body: JSON.stringify({
+                    title: 'Background Test',
+                    body: 'This arrived while the app was closed!',
+                    audience: 'all',
+                    category: 'system'
+                  })
+                });
+              }, 5000);
+            }}
+            className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-bold transition-all text-sm"
+          >
+            Delayed Test (5s)
+          </button>
+        </div>
       </div>
     </div>
   );

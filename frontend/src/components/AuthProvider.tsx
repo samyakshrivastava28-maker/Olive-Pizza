@@ -3,7 +3,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { auth, db } from '../lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { useAuthStore } from '../lib/store';
-import { requestNotificationPermission } from '../lib/fcm';
+import { requestNotificationPermission, verifyAndRefreshTokens } from '../lib/fcm';
 
 export default function AuthProvider({ children }: { children: React.ReactNode }) {
   const { setUser, setLoading, logout } = useAuthStore();
@@ -50,9 +50,13 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
                   data.role || 'customer'
                 );
 
-                if (data.role === 'owner' || data.role === 'delivery_partner') {
-                  requestNotificationPermission(firebaseUser.uid);
-                }
+                  if (data.role === 'owner' || data.role === 'delivery_partner') {
+                    requestNotificationPermission(firebaseUser.uid);
+                  } else {
+                    if ('Notification' in window && Notification.permission === 'granted') {
+                      verifyAndRefreshTokens(firebaseUser.uid);
+                    }
+                  }
               } else {
                 const fallbackRole = firebaseUser.email?.toLowerCase() === 'olivepizzarjn@gmail.com' ? 'owner' : 'customer';
                 setUser({ uid: firebaseUser.uid, email: firebaseUser.email, onboardingComplete: false, emailVerified: firebaseUser.emailVerified }, fallbackRole);
