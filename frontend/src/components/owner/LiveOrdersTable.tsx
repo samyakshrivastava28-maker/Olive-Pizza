@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { db } from '../../lib/firebase';
+import { db, auth } from '../../lib/firebase';
 import { collection, query, orderBy, limit, onSnapshot, doc, updateDoc } from 'firebase/firestore';
 import { logActivity } from '../../lib/logger';
 import { useAuthStore } from '../../lib/store';
@@ -21,7 +21,7 @@ export default function LiveOrdersTable() {
       await updateDoc(doc(db, 'orders', orderId), { status: newStatus });
       await logActivity('Order Status Changed', `Order #${orderId.slice(-6).toUpperCase()} changed to ${newStatus}`, user?.email || undefined);
       
-      auth.currentUser?.getIdToken().then(token => {
+      auth.currentUser?.getIdToken().then((token: string) => {
         fetch("/api/notifications/trigger-event", {
           method: "POST",
           headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },

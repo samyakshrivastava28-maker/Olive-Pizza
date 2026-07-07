@@ -107,7 +107,7 @@ export default function OwnerOrders() {
       }
       
       // Trigger Push Notification
-      auth.currentUser?.getIdToken().then(token => {
+      auth.currentUser?.getIdToken().then((token: string) => {
         fetch("/api/notifications/trigger-event", {
           method: "POST",
           headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },

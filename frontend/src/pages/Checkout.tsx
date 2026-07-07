@@ -387,7 +387,7 @@ export default function Checkout() {
       }).catch((e) => console.error("Email trigger failed:", e));
 
       // Trigger Push Notification for new order
-      auth.currentUser?.getIdToken().then(token => {
+      auth.currentUser?.getIdToken().then((token: string) => {
         fetch("/api/notifications/trigger-event", {
           method: "POST",
           headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },

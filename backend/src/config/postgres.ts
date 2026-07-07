@@ -38,6 +38,24 @@ export const initPostgres = async () => {
       );
     `);
 
+    // Add delivery_locations to supabase_realtime publication safely
+    try {
+      await client.query(`
+        DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_publication_tables 
+            WHERE pubname = 'supabase_realtime' AND tablename = 'delivery_locations'
+          ) THEN
+            ALTER PUBLICATION supabase_realtime ADD TABLE delivery_locations;
+          END IF;
+        END $$;
+      `);
+      console.log('Successfully enabled Supabase Realtime for delivery_locations');
+    } catch (e: any) {
+      console.warn('Could not add to supabase_realtime publication (safe to ignore if not using Supabase):', e.message);
+    }
+
     // Create delivery_routes table
     await client.query(`
       CREATE TABLE IF NOT EXISTS delivery_routes (
