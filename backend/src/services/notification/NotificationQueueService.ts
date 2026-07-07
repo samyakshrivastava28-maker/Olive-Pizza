@@ -95,9 +95,9 @@ export class NotificationQueueService {
           const result = await client.query(
             `INSERT INTO notification_queue
                (target_user_id, payload, priority, status, tag, order_id, notification_id, version, category, expires_at)
-             VALUES ($1, $2, $3, 'queued', $4, NULL, $6, $7, $8, $9)
+             VALUES ($1, $2, $3, 'queued', $4, NULL, $5, $6, $7, $8)
              RETURNING id`,
-            [targetUserId, JSON.stringify(payload), priority, tag, null, options.notificationId, version, category, expiresAt]
+            [targetUserId, JSON.stringify(payload), priority, tag, options.notificationId, version, category, expiresAt]
           );
           queueId = result.rows[0].id;
         }
@@ -105,9 +105,9 @@ export class NotificationQueueService {
         const result = await client.query(
           `INSERT INTO notification_queue
              (target_user_id, payload, priority, status, order_id, notification_id, version, category, expires_at)
-           VALUES ($1, $2, $3, 'queued', NULL, $5, $6, $7, $8)
+           VALUES ($1, $2, $3, 'queued', NULL, $4, $5, $6, $7)
            RETURNING id`,
-          [targetUserId, JSON.stringify(payload), priority, null, options.notificationId, version, category, expiresAt]
+          [targetUserId, JSON.stringify(payload), priority, options.notificationId, version, category, expiresAt]
         );
         queueId = result.rows[0].id;
       }
@@ -354,25 +354,25 @@ export class NotificationQueueService {
         // Upsert: update existing inbox item with same tag (live card)
         await client.query(
           `INSERT INTO notification_inbox (user_id, tag, order_id, title, body, category, url, data, version, expires_at, is_read, updated_at)
-           VALUES ($1, $2, NULL, $4, $5, $6, $7, $8, $9, $10, FALSE, NOW())
+           VALUES ($1, $2, NULL, $3, $4, $5, $6, $7, $8, $9, FALSE, NOW())
            ON CONFLICT (user_id, tag) WHERE tag IS NOT NULL
            DO UPDATE SET title = EXCLUDED.title, body = EXCLUDED.body, version = EXCLUDED.version,
              data = EXCLUDED.data, expires_at = EXCLUDED.expires_at, is_read = FALSE, updated_at = NOW()`,
-          [userId, tag, null, title, body, category, p.data?.url || '/', JSON.stringify(p.data), options.version || 1, expiresAt]
+          [userId, tag, title, body, category, p.data?.url || '/', JSON.stringify(p.data), options.version || 1, expiresAt]
         ).catch(() => {
           // Fallback: plain insert if constraint doesn't exist yet
           client.query(
             `INSERT INTO notification_inbox (user_id, tag, order_id, title, body, category, url, data, version, expires_at)
-             VALUES ($1, $2, NULL, $4, $5, $6, $7, $8, $9, $10)
+             VALUES ($1, $2, NULL, $3, $4, $5, $6, $7, $8, $9)
              ON CONFLICT DO NOTHING`,
-            [userId, tag, null, title, body, category, p.data?.url || '/', JSON.stringify(p.data), options.version || 1, expiresAt]
+            [userId, tag, title, body, category, p.data?.url || '/', JSON.stringify(p.data), options.version || 1, expiresAt]
           ).catch(() => {});
         });
       } else {
         await client.query(
           `INSERT INTO notification_inbox (user_id, order_id, title, body, category, url, data, version, expires_at)
-           VALUES ($1, NULL, $3, $4, $5, $6, $7, $8, $9)`,
-          [userId, null, title, body, category, p.data?.url || '/', JSON.stringify(p.data), options.version || 1, expiresAt]
+           VALUES ($1, NULL, $2, $3, $4, $5, $6, $7, $8)`,
+          [userId, title, body, category, p.data?.url || '/', JSON.stringify(p.data), options.version || 1, expiresAt]
         ).catch(() => {});
       }
     } catch (err) {
