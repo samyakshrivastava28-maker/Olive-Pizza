@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { Activity, Bell, RefreshCw, Smartphone, ShieldCheck, ShieldAlert, CheckCircle2 } from 'lucide-react';
 import { getMessagingInstance, auth } from '../../lib/firebase';
 import { useAuthStore } from '../../lib/store';
+import { isIOS, isMacOS, isSafari, isStandalonePWA, getPushCompatibility } from '../../lib/platform';
 import toast from 'react-hot-toast';
 
 export default function OwnerNotificationDiagnostics() {
@@ -156,6 +157,34 @@ export default function OwnerNotificationDiagnostics() {
         </div>
       </div>
 
+      <div className="bg-slate-900 rounded-2xl p-6 border border-white/5 mb-8">
+        <h2 className="text-white font-bold text-xl mb-4 flex items-center gap-2">
+          <Smartphone className="w-5 h-5 text-primary-500" />
+          Apple & Platform Support
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="bg-slate-800 rounded-xl p-4">
+            <h3 className="text-slate-400 text-sm mb-1">Detected OS</h3>
+            <p className="text-white font-bold">{isIOS() ? 'iOS/iPadOS' : isMacOS() ? 'macOS' : 'Other'}</p>
+          </div>
+          <div className="bg-slate-800 rounded-xl p-4">
+            <h3 className="text-slate-400 text-sm mb-1">Browser</h3>
+            <p className="text-white font-bold">{isSafari() ? 'Safari' : 'Other'}</p>
+          </div>
+          <div className="bg-slate-800 rounded-xl p-4">
+            <h3 className="text-slate-400 text-sm mb-1">Standalone PWA</h3>
+            <p className="text-white font-bold">{isStandalonePWA() ? 'Yes' : 'No'}</p>
+          </div>
+          <div className="bg-slate-800 rounded-xl p-4">
+            <h3 className="text-slate-400 text-sm mb-1">Web Push Support</h3>
+            <p className="text-white font-bold">{getPushCompatibility().supported ? 'Supported' : 'Not Supported'}</p>
+            {!getPushCompatibility().supported && (
+              <p className="text-red-400 text-xs mt-1">{getPushCompatibility().reason}</p>
+            )}
+          </div>
+        </div>
+      </div>
+
       <div className="bg-slate-900 rounded-2xl p-6 border border-white/5 flex flex-col md:flex-row items-center justify-between gap-4">
         <div>
           <h3 className="text-white font-bold text-lg flex items-center gap-2">
@@ -204,25 +233,40 @@ export default function OwnerNotificationDiagnostics() {
           </button>
           <button 
             onClick={async () => {
+              if (!diagnostics.fcmToken) {
+                toast.error("FCM Token missing. Registration failed.");
+                return;
+              }
+              if (!diagnostics.swRegistered) {
+                toast.error("Service Worker missing.");
+                return;
+              }
               const token = await auth.currentUser?.getIdToken();
               if (!token) return;
-              toast.success("Close the app now! Notification arriving in 5 seconds...");
+              
+              toast.success("Close the app completely! Notification arriving in 5 seconds...");
+              
               setTimeout(async () => {
-                await fetch('/api/notifications/send-custom', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                  body: JSON.stringify({
-                    title: 'Background Test',
-                    body: 'This arrived while the app was closed!',
-                    audience: 'all',
-                    category: 'system'
-                  })
-                });
+                try {
+                  const res = await fetch('/api/notifications/send-custom', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                    body: JSON.stringify({
+                      title: 'Background Push Success! 🎉',
+                      body: 'This notification arrived while the application was closed.',
+                      audience: 'all',
+                      category: 'system'
+                    })
+                  });
+                  if (!res.ok) console.error("Backend dispatch failed");
+                } catch (e) {
+                  console.error(e);
+                }
               }, 5000);
             }}
-            className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-bold transition-all text-sm"
+            className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-xl font-bold transition-all text-sm shadow-[0_0_15px_rgba(34,197,94,0.3)]"
           >
-            Delayed Test (5s)
+            Run Full Push Notification Test (5s Delay)
           </button>
         </div>
       </div>

@@ -372,16 +372,31 @@ async function flushOfflineActions() {
   }
 }
 
-// ─── Push Event (for non-Firebase message handling fallback) ─────────────────
+// ─── Push Event (for Apple/Safari raw Web Push fallback) ───────────────────────
 self.addEventListener('push', event => {
-  // Firebase compat SDK handles this, but we catch any raw pushes as fallback
   if (!event.data) return;
+  
   try {
     const data = event.data.json();
-    if (data.notification) return; // Already handled by Firebase SDK
-    // Data-only message
-    BROADCAST.postMessage({ type: 'DATA_PUSH', data });
-  } catch {}
+    // If the firebase-messaging wrapper misses it (common on iOS PWA background), we catch it here.
+    if (data.notification) {
+      const title = data.notification.title || 'Olive Pizza';
+      const options = {
+        body: data.notification.body || '',
+        icon: data.notification.icon || ICON,
+        badge: data.notification.badge || BADGE,
+        data: data.data || {},
+        vibrate: [200, 100, 200]
+      };
+      
+      event.waitUntil(self.registration.showNotification(title, options));
+    } else {
+      // Data-only message
+      BROADCAST.postMessage({ type: 'DATA_PUSH', data });
+    }
+  } catch (err) {
+    console.error('[SW] Raw push fallback failed:', err);
+  }
 });
 
 // ─── Window Focus Helper ──────────────────────────────────────────────────────
