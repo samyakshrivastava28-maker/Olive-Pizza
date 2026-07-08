@@ -135,7 +135,8 @@ export class NotificationQueueService {
         category: category || 'marketing',
         title: typeof payload === 'string' ? JSON.parse(payload).notification?.title : payload.notification?.title,
         body: typeof payload === 'string' ? JSON.parse(payload).notification?.body : payload.notification?.body,
-        queueId: queueId
+        queueId: queueId,
+        tokensFound: 0
       }).then(debugId => {
         return notificationDebugger.updateStage(debugId, 'Queued', { queueId });
       }).catch(err => console.error('[NotifQueue] Failed to log creation to debugger', err));
