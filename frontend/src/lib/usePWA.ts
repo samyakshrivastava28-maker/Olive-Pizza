@@ -35,8 +35,8 @@ export function usePWA() {
       console.log('SW registration error', error);
     },
     onNeedRefresh() {
-      setNeedRefresh(true);
-      useAppStore.getState().setUpdateAvailable(true);
+      // Automatically apply the update and reload the page instead of showing a prompt
+      updateServiceWorker(true);
     },
     onOfflineReady() {
       setOfflineReady(true);

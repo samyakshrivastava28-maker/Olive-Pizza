@@ -31,7 +31,7 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
-      registerType: 'prompt', // Requires user interaction to update PWA
+      registerType: 'autoUpdate', // Automatically updates the PWA without requiring user interaction
       includeAssets: [
         'favicon.ico', 
         'apple-touch-icon.png', 

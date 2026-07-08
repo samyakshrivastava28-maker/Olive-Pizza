@@ -95,13 +95,9 @@ export async function checkVersion() {
       const min = parseFloat(data.minimum_version);
       const latest = parseFloat(data.latest_version);
 
-      if (current < min) {
-        useVersionStore.getState().setUpdateAvailable(true, 'required', data.latest_version);
-      } else if (current < latest) {
-        // Only show optional update if cooldown expired
-        if (!laterTimestamp || (Date.now() - parseInt(laterTimestamp, 10)) >= 30 * 60 * 1000) {
-          useVersionStore.getState().setUpdateAvailable(true, data.update_mode || 'optional', data.latest_version);
-        }
+      if (current < min || current < latest) {
+        // Automatically perform the update without prompting the user or showing an update button
+        performUpdate();
       }
     }
   } catch (error) {
@@ -110,22 +106,16 @@ export async function checkVersion() {
 }
 
 export async function performUpdate() {
-  const store = useVersionStore.getState();
-  store.setUpdating(true, 'Downloading latest assets...');
-
   try {
     if ('serviceWorker' in navigator) {
       const registrations = await navigator.serviceWorker.getRegistrations();
       for (let registration of registrations) {
-        store.setUpdating(true, 'Installing...');
-        
         if (registration.waiting) {
             registration.waiting.postMessage({ type: 'SKIP_WAITING' });
         }
       }
     }
 
-    store.setUpdating(true, 'Cleaning Cache...');
     if ('caches' in window) {
       const cacheKeys = await caches.keys();
       for (let key of cacheKeys) {
@@ -133,8 +123,6 @@ export async function performUpdate() {
       }
     }
 
-    store.setUpdating(true, 'Restarting...');
-    
     // Save current path to restore session
     sessionStorage.setItem('restore_path', window.location.pathname);
 
@@ -144,7 +132,5 @@ export async function performUpdate() {
 
   } catch (error) {
     console.error('Update failed:', error);
-    store.setUpdating(false, 'Update failed. Please check your internet connection and try again.');
-    alert('Update failed. Please try again.');
   }
 }
