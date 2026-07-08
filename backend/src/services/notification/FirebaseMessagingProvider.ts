@@ -1,4 +1,5 @@
 import * as admin from 'firebase-admin';
+import { adminMessaging } from '../../config/firebase.js';
 import { notificationDebugger } from './NotificationDebugger.js';
 
 export class FirebaseMessagingProvider {
@@ -27,7 +28,7 @@ export class FirebaseMessagingProvider {
         notification: payload.notification,
         data: payload.data
       };
-      const response = await admin.messaging().sendEachForMulticast(message);
+      const response = await adminMessaging.sendEachForMulticast(message);
       
       if (notificationId) {
         if (response.failureCount === tokens.length) {

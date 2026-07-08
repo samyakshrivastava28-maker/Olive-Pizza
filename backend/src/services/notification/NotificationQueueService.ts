@@ -15,7 +15,7 @@ import { adminDb as db, adminAuth } from '../../config/firebase.js';
 import * as admin from 'firebase-admin';
 import { notificationDebugger } from './NotificationDebugger.js';
 import { pgPool } from '../../config/postgres.js';
-import { adminDb } from '../../config/firebase.js';
+import { adminDb, adminMessaging } from '../../config/firebase.js';
 
 export interface EnqueueOptions {
   tag?: string;               // FCM tag for live card (maps to orderId for orders)
@@ -308,7 +308,7 @@ export class NotificationQueueService {
         webpush: parsedPayload.webpush,
       };
 
-      const response = await admin.messaging().sendEachForMulticast(message);
+      const response = await adminMessaging.sendEachForMulticast(message);
       const deliveryMs = Date.now() - startTime;
 
       // ── Handle invalid tokens ─────────────────────────────────────────────

@@ -107,9 +107,9 @@ router.post('/test-fcm', async (req: Request, res: Response) => {
   try {
     const { token } = req.body;
     if (!token) return res.status(400).json({ error: 'token required' });
-    const admin = require('firebase-admin');
+    const { adminMessaging } = require('../config/firebase.js');
     const message = { tokens: [token], notification: { title: 'Test', body: 'FCM Test' } };
-    const response = await admin.messaging().sendEachForMulticast(message);
+    const response = await adminMessaging.sendEachForMulticast(message);
     res.json(response);
   } catch (error: any) {
     res.status(500).json({ error: error.message, stack: error.stack });
