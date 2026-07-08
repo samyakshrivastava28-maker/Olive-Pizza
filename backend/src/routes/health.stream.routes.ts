@@ -63,8 +63,8 @@ const gatherMetrics = async () => {
     const ac = await c.query('SELECT count(*) FROM pg_stat_activity');
     m.services.database.activeConnections = parseInt(ac.rows[0].count, 10);
     m.services.database.status = 'operational';
-    try { const eq = await c.query("SELECT count(*) FROM email_queue WHERE status='pending'"); m.services.email.queueSize = parseInt(eq.rows[0].count,10)||0; m.services.email.status='operational'; } catch { m.services.email.status='degraded'; }
-    try { const tk = await c.query('SELECT count(*) FROM fcm_tokens'); const nq = await c.query("SELECT count(*) FROM notification_queue WHERE status='pending'"); m.services.notifications.activeTokens=parseInt(tk.rows[0].count,10)||0; m.services.notifications.queued=parseInt(nq.rows[0].count,10)||0; m.services.notifications.status='operational'; } catch { m.services.notifications.status='degraded'; }
+    try { const eq = await c.query("SELECT count(*) FROM email_queue WHERE status='pending'"); m.services.email.queueSize = parseInt(eq.rows[0].count,10)||0; m.services.email.status='operational'; } catch (e) { console.error('[Health] email_queue error:', e); m.services.email.status='degraded'; }
+    try { const tk = await c.query('SELECT count(*) FROM fcm_tokens'); const nq = await c.query("SELECT count(*) FROM notification_queue WHERE status='queued'"); m.services.notifications.activeTokens=parseInt(tk.rows[0].count,10)||0; m.services.notifications.queued=parseInt(nq.rows[0].count,10)||0; m.services.notifications.status='operational'; } catch (e) { console.error('[Health] notifications error:', e); m.services.notifications.status='degraded'; }
     c.release();
   } catch (e: any) { m.services.database.status='down'; m.services.database.error=e.message; m.services.email.status='down'; m.services.notifications.status='down'; }
 
