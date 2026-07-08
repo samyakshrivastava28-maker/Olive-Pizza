@@ -213,7 +213,7 @@ function buildPayload(
         aps: {
           sound: soundFile,
           badge: 1,
-          mutableContent: true,
+          'mutable-content': 1,
         },
       },
     },
@@ -236,7 +236,7 @@ function buildPayload(
           alert: options.alert,
         },
       },
-      fcmOptions: { link: options.url || '/' },
+      fcm_options: { link: options.url || '/' },
     },
   };
 }
