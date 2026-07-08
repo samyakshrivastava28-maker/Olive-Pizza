@@ -34,8 +34,8 @@ export class NotificationDebugger {
    * Initializes a new notification tracking session.
    * Returns the generated Notification ID.
    */
-  public async logCreation(data: Omit<NotificationLog, 'id' | 'status' | 'stage' | 'timestamp' | 'updatedAt'>): Promise<string> {
-    const docRef = db.collection('notification_history').doc();
+  public async logCreation(data: Omit<NotificationLog, 'id' | 'status' | 'stage' | 'timestamp' | 'updatedAt'>, customId?: string): Promise<string> {
+    const docRef = customId ? db.collection('notification_history').doc(customId) : db.collection('notification_history').doc();
     const log: NotificationLog = {
       ...data,
       id: docRef.id,

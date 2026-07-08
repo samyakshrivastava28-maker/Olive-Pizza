@@ -74,11 +74,23 @@ export class NotificationQueueService {
         ? new Date(Date.now() + options.expiresInSeconds * 1000)
         : null;
 
+      // ── Resolve PostgreSQL UUID from Firebase UID ───────────────────────
+      let pgUserId = targetUserId;
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetUserId)) {
+        const userRes = await client.query('SELECT id FROM users WHERE firebase_uid = $1', [targetUserId]);
+        if (userRes.rows.length > 0) {
+          pgUserId = userRes.rows[0].id;
+        } else {
+          console.warn(`[NotifQueue] User not found in postgres for firebase UID: ${targetUserId}`);
+          return 'user_not_found';
+        }
+      }
+
       // ── Check DND preferences first ─────────────────────────────────────
-      if (await this.shouldSuppressByDND(targetUserId, category, priority)) {
-        console.log(`[NotifQueue] Suppressed by DND for user ${targetUserId} category=${category}`);
+      if (await this.shouldSuppressByDND(pgUserId, category, priority)) {
+        console.log(`[NotifQueue] Suppressed by DND for user ${pgUserId} category=${category}`);
         // Still write to inbox so user can see it when they check
-        await this.writeToInbox(client, targetUserId, payload, tag, orderId, category, options, expiresAt);
+        await this.writeToInbox(client, pgUserId, payload, tag, orderId, category, options, expiresAt);
         return 'dnd_suppressed';
       }
 
@@ -91,7 +103,7 @@ export class NotificationQueueService {
            WHERE target_user_id = $1 AND tag = $2
              AND status IN ('queued', 'sending')
            LIMIT 1`,
-          [targetUserId, tag]
+          [pgUserId, tag]
         );
 
         if (existing.rows.length > 0) {
@@ -111,7 +123,7 @@ export class NotificationQueueService {
                (target_user_id, payload, priority, status, tag, order_id, notification_id, version, category, expires_at)
              VALUES ($1, $2, $3, 'queued', $4, NULL, $5, $6, $7, $8)
              RETURNING id`,
-            [targetUserId, JSON.stringify(payload), priority, tag, options.notificationId, version, category, expiresAt]
+            [pgUserId, JSON.stringify(payload), priority, tag, options.notificationId, version, category, expiresAt]
           );
           queueId = result.rows[0].id;
         }
@@ -121,23 +133,23 @@ export class NotificationQueueService {
              (target_user_id, payload, priority, status, order_id, notification_id, version, category, expires_at)
            VALUES ($1, $2, $3, 'queued', NULL, $4, $5, $6, $7)
            RETURNING id`,
-          [targetUserId, JSON.stringify(payload), priority, options.notificationId, version, category, expiresAt]
+          [pgUserId, JSON.stringify(payload), priority, options.notificationId, version, category, expiresAt]
         );
         queueId = result.rows[0].id;
       }
 
       // ── Write to notification_inbox (never lose a notification) ─────────
-      await this.writeToInbox(client, targetUserId, payload, tag, orderId, category, options, expiresAt);
+      await this.writeToInbox(client, pgUserId, payload, tag, orderId, category, options, expiresAt);
 
       await notificationDebugger.logCreation({
-        userId: targetUserId,
+        userId: pgUserId,
         type: 'push',
         category: category || 'marketing',
         title: typeof payload === 'string' ? JSON.parse(payload).notification?.title : payload.notification?.title,
         body: typeof payload === 'string' ? JSON.parse(payload).notification?.body : payload.notification?.body,
         queueId: queueId,
         tokensFound: 0
-      }).then(debugId => {
+      }, queueId).then(debugId => {
         return notificationDebugger.updateStage(debugId, 'Queued', { queueId });
       }).catch(err => console.error('[NotifQueue] Failed to log creation to debugger', err));
 
