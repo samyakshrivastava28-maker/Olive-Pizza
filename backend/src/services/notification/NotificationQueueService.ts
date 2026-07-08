@@ -333,14 +333,14 @@ export class NotificationQueueService {
 
       if (newRetryCount >= 3) {
         // Give up — mark failed in queue and inbox
-        await client.query(`DELETE FROM notification_queue WHERE id = $1`, [id]);
         await client.query(
           `INSERT INTO notification_history (target_user_id, title, body, category, status)
-           SELECT $1, notification->>'title', notification->>'body', $2, 'failed'
-           FROM notification_queue WHERE id = $3
+           SELECT target_user_id, payload->'notification'->>'title', payload->'notification'->>'body', category, 'failed'
+           FROM notification_queue WHERE id = $1
            ON CONFLICT DO NOTHING`,
-          [target_user_id, category || 'general', id]
+          [id]
         ).catch(() => {});
+        await client.query(`DELETE FROM notification_queue WHERE id = $1`, [id]);
         await this.recordAnalytic(client, category || 'general', 'failed', 1);
         console.error(`[NotifQueue] ❌ Permanently failed id=${id}: ${error.message}`);
       } else {
