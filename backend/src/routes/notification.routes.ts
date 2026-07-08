@@ -44,15 +44,18 @@ async function getPostgresUserId(firebaseUid: string): Promise<string | null> {
 }
 
 // ─── Helper: Acquire order lock (prevent race conditions) ─────────────────────
-async function acquireOrderLock(orderId: string, userId: string, action: string): Promise<boolean> {
+async function acquireOrderLock(orderId: string, firebaseUid: string, action: string): Promise<boolean> {
   const client = await pgPool.connect();
   try {
+    const pgUserId = await getPostgresUserId(firebaseUid);
+    if (!pgUserId) return false;
+
     const result = await client.query(
       `INSERT INTO order_locks (order_id, locked_by, action, locked_at)
        VALUES ($1, $2, $3, NOW())
        ON CONFLICT (order_id) DO NOTHING
        RETURNING order_id`,
-      [orderId, userId, action]
+      [orderId, pgUserId, action]
     );
     return result.rows.length > 0;
   } catch {

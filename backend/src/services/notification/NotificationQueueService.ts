@@ -44,13 +44,24 @@ export class NotificationQueueService {
    * If a tag already exists in the queue (same live card), updates it in-place.
    */
   public async enqueue(
-    targetUserId: string,
+    firebaseUserId: string,
     payload: any,
     priorityOverride?: 'normal' | 'high' | 'silent',
     options: EnqueueOptions = {}
   ): Promise<string> {
     const client = await pgPool.connect();
     try {
+      // Resolve PostgreSQL UUID from Firebase UID
+      let targetUserId = firebaseUserId;
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(firebaseUserId)) {
+        const userRes = await client.query('SELECT id FROM users WHERE firebase_uid = $1', [firebaseUserId]);
+        if (userRes.rows.length === 0) {
+          console.warn(`[NotifQueue] User not found in Postgres for firebase_uid ${firebaseUserId}`);
+          return 'user_not_found';
+        }
+        targetUserId = userRes.rows[0].id;
+      }
+
       const priority = priorityOverride || (options.priority === 'critical' ? 'high' : options.priority || 'normal');
       const tag = options.tag || payload.data?.tag || null;
       const orderId = options.orderId || payload.data?.orderId || null;
@@ -126,12 +137,24 @@ export class NotificationQueueService {
    * Prevents duplicates and keeps an audit trail.
    */
   public async registerToken(
-    userId: string,
+    firebaseUserId: string,
     token: string,
     deviceInfo: { deviceName?: string; platform?: string; browser?: string; appVersion?: string }
   ): Promise<void> {
     const client = await pgPool.connect();
     try {
+      // Resolve PostgreSQL UUID from Firebase UID
+      let pgUserId = firebaseUserId;
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(firebaseUserId)) {
+        const userRes = await client.query('SELECT id FROM users WHERE firebase_uid = $1', [firebaseUserId]);
+        if (userRes.rows.length > 0) {
+          pgUserId = userRes.rows[0].id;
+        } else {
+          console.warn(`[NotifQueue] Could not find Postgres user for firebase_uid ${firebaseUserId}`);
+          return;
+        }
+      }
+
       await client.query(
         `INSERT INTO fcm_tokens (user_id, token, device_name, platform, browser, app_version, is_active, last_used_at)
          VALUES ($1, $2, $3, $4, $5, $6, TRUE, NOW())
@@ -141,10 +164,10 @@ export class NotificationQueueService {
            platform = EXCLUDED.platform,
            browser = EXCLUDED.browser,
            app_version = EXCLUDED.app_version`,
-        [userId, token, deviceInfo.deviceName, deviceInfo.platform, deviceInfo.browser, deviceInfo.appVersion]
+        [pgUserId, token, deviceInfo.deviceName, deviceInfo.platform, deviceInfo.browser, deviceInfo.appVersion]
       );
       // Also keep Firestore in sync for legacy reads
-      await adminDb.collection('users').doc(userId).update({
+      await adminDb.collection('users').doc(firebaseUserId).update({
         fcmTokens: admin.firestore.FieldValue.arrayUnion(token),
         notificationReady: true,
         lastTokenRefresh: admin.firestore.FieldValue.serverTimestamp(),
@@ -178,14 +201,16 @@ export class NotificationQueueService {
     try {
       // Grab up to 20 high-priority items first, then normal
       const result = await client.query(
-        `SELECT * FROM notification_queue
-         WHERE status = 'queued'
-           AND (expires_at IS NULL OR expires_at > NOW())
+        `SELECT q.*, u.firebase_uid 
+         FROM notification_queue q
+         JOIN users u ON q.target_user_id = u.id
+         WHERE q.status = 'queued'
+           AND (q.expires_at IS NULL OR q.expires_at > NOW())
          ORDER BY
-           CASE priority WHEN 'high' THEN 1 ELSE 2 END,
-           created_at ASC
+           CASE q.priority WHEN 'high' THEN 1 ELSE 2 END,
+           q.created_at ASC
          LIMIT 20
-         FOR UPDATE SKIP LOCKED`
+         FOR UPDATE OF q SKIP LOCKED`
       );
 
       if (result.rows.length === 0) return;
@@ -215,7 +240,7 @@ export class NotificationQueueService {
       // Fallback to Firestore if Postgres tokens empty
       let tokens: string[] = tokenResult.rows.map((r: any) => r.token);
       if (tokens.length === 0) {
-        const userDoc = await adminDb.collection('users').doc(target_user_id).get();
+        const userDoc = await adminDb.collection('users').doc(item.firebase_uid).get();
         tokens = userDoc.data()?.fcmTokens || [];
         // Sync them into Postgres
         for (const t of tokens) {
@@ -280,7 +305,7 @@ export class NotificationQueueService {
           `UPDATE fcm_tokens SET is_active = FALSE WHERE user_id = $1 AND token = ANY($2)`,
           [target_user_id, failedTokens]
         );
-        await adminDb.collection('users').doc(target_user_id).update({
+        await adminDb.collection('users').doc(item.firebase_uid).update({
           fcmTokens: admin.firestore.FieldValue.arrayRemove(...failedTokens),
         });
         console.log(`[NotifQueue] Deactivated ${failedTokens.length} invalid tokens for ${target_user_id}`);
