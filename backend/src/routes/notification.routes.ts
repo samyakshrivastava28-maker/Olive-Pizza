@@ -454,17 +454,32 @@ router.post('/send-custom', verifyToken, async (req: AuthRequest, res: Response)
       return;
     }
 
-    // Fetch targets
-    let usersQuery: FirebaseFirestore.Query = db.collection('users');
-    if (audience === 'customers') usersQuery = usersQuery.where('role', '==', 'customer');
-    else if (audience === 'delivery') usersQuery = usersQuery.where('role', '==', 'delivery');
-    // audience === 'all' fetches everyone
+    // Fetch targets from PostgreSQL
+    let queryParams: any[] = [];
+    let queryText = 'SELECT firebase_uid FROM users';
+    
+    if (audience === 'customers') {
+      queryText += ' WHERE role = $1';
+      queryParams.push('customer');
+    } else if (audience === 'delivery') {
+      queryText += ' WHERE role = $1';
+      queryParams.push('delivery');
+    }
+    // audience === 'all' fetches everyone without a WHERE clause
 
-    const snapshot = await usersQuery.get();
+    const client = await pgPool.connect();
+    let pgUsers = [];
+    try {
+      const res = await client.query(queryText, queryParams);
+      pgUsers = res.rows;
+    } finally {
+      client.release();
+    }
+
     let queuedCount = 0;
 
-    for (const doc of snapshot.docs) {
-      const targetId = doc.id;
+    for (const row of pgUsers) {
+      const targetId = row.firebase_uid;
       let payload: any;
 
       if (category === 'coupon' && couponCode) {
