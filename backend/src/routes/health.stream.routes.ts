@@ -103,6 +103,19 @@ router.get('/diagnostics', async (_req: Request, res: Response) => {
   try { const m=await gatherMetrics(); res.json({success:true,...m}); } catch(e:any){res.status(500).json({success:false,error:e.message});}
 });
 
+router.post('/test-fcm', async (req: Request, res: Response) => {
+  try {
+    const { token } = req.body;
+    if (!token) return res.status(400).json({ error: 'token required' });
+    const admin = require('firebase-admin');
+    const message = { tokens: [token], notification: { title: 'Test', body: 'FCM Test' } };
+    const response = await admin.messaging().sendEachForMulticast(message);
+    res.json(response);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message, stack: error.stack });
+  }
+});
+
 router.get('/stream', (req: Request, res: Response) => {
   res.writeHead(200,{'Content-Type':'text/event-stream','Cache-Control':'no-cache, no-transform','Connection':'keep-alive','X-Accel-Buffering':'no'});
   res.write('event: connected\ndata: {"status":"connected"}\n\n');

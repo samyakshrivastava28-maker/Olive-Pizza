@@ -10,7 +10,10 @@
  * 6. Auto-cleanup expired and processed queue items
  */
 
+import { OwnerTemplates, CustomerTemplates, DeliveryTemplates, MarketingTemplates } from './NotificationTemplates.js';
+import { adminDb as db, adminAuth } from '../../config/firebase.js';
 import * as admin from 'firebase-admin';
+import { notificationDebugger } from './NotificationDebugger.js';
 import { pgPool } from '../../config/postgres.js';
 import { adminDb } from '../../config/firebase.js';
 
@@ -125,6 +128,17 @@ export class NotificationQueueService {
 
       // ── Write to notification_inbox (never lose a notification) ─────────
       await this.writeToInbox(client, targetUserId, payload, tag, orderId, category, options, expiresAt);
+
+      await notificationDebugger.logCreation({
+        userId: targetUserId,
+        type: 'push',
+        category: category || 'marketing',
+        title: typeof payload === 'string' ? JSON.parse(payload).notification?.title : payload.notification?.title,
+        body: typeof payload === 'string' ? JSON.parse(payload).notification?.body : payload.notification?.body,
+        queueId: queueId
+      }).then(debugId => {
+        return notificationDebugger.updateStage(debugId, 'Queued', { queueId });
+      }).catch(err => console.error('[NotifQueue] Failed to log creation to debugger', err));
 
       return queueId;
     } finally {
@@ -327,6 +341,12 @@ export class NotificationQueueService {
       await this.recordAnalytic(client, category || 'general', 'delivered', successCount);
       await this.recordDeliveryTime(client, category || 'general', deliveryMs);
 
+      // Update debugger
+      notificationDebugger.updateStage(id, 'Firebase Response', { 
+        tokensFound: tokens.length,
+        status: successCount > 0 ? 'sent' : 'failed' 
+      }).catch(() => {});
+
       console.log(`[NotifQueue] ✅ Sent id=${id} tag=${tag || 'none'} to ${successCount}/${tokens.length} devices in ${deliveryMs}ms`);
     } catch (error: any) {
       const newRetryCount = (retry_count || 0) + 1;
@@ -342,6 +362,12 @@ export class NotificationQueueService {
         ).catch(() => {});
         await client.query(`DELETE FROM notification_queue WHERE id = $1`, [id]);
         await this.recordAnalytic(client, category || 'general', 'failed', 1);
+        
+        notificationDebugger.updateStage(id, 'Failed', { 
+          error: error.message,
+          status: 'failed'
+        }).catch(() => {});
+        
         console.error(`[NotifQueue] ❌ Permanently failed id=${id}: ${error.message}`);
       } else {
         // Exponential backoff retry
