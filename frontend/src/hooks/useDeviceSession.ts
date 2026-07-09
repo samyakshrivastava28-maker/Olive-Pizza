@@ -64,6 +64,13 @@ export function useDeviceSession() {
           createdAt: Date.now(),
           isActive: true
         }, { merge: true });
+
+        // Automated Silent Token Validation / Refresh
+        if (Notification.permission === 'granted') {
+          import('../lib/fcm').then(({ verifyAndRefreshTokens }) => {
+            verifyAndRefreshTokens(uid).catch(console.error);
+          });
+        }
       } catch (err) {
         console.error("Failed to register device session:", err);
       }

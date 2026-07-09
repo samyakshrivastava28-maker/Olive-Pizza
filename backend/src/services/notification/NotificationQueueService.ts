@@ -167,7 +167,7 @@ export class NotificationQueueService {
   public async registerToken(
     firebaseUserId: string,
     token: string,
-    deviceInfo: { deviceName?: string; platform?: string; browser?: string; appVersion?: string }
+    deviceInfo: { oldToken?: string; deviceId?: string; deviceName?: string; platform?: string; browser?: string; appVersion?: string }
   ): Promise<void> {
     const client = await pgPool.connect();
     try {
@@ -181,6 +181,16 @@ export class NotificationQueueService {
           console.warn(`[NotifQueue] Could not find Postgres user for firebase_uid ${firebaseUserId}`);
           return;
         }
+      }
+
+      // If an old token is provided, mark it inactive in postgres and firestore
+      if (deviceInfo.oldToken && deviceInfo.oldToken !== token) {
+        await client.query('UPDATE fcm_tokens SET is_active = FALSE WHERE token = $1 AND user_id = $2', [deviceInfo.oldToken, pgUserId]);
+        try {
+          await adminDb.collection('users').doc(firebaseUserId).update({
+            fcmTokens: FieldValue.arrayRemove(deviceInfo.oldToken),
+          });
+        } catch (e) { /* ignore firestore error */ }
       }
 
       await client.query(

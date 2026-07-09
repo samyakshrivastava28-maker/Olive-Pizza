@@ -317,7 +317,7 @@ async function getCustomerFirebaseUid(client: any, pgUserId: string): Promise<st
 // =============================================================================
 router.post('/token', verifyToken, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { token, deviceName, platform, browser, appVersion } = req.body;
+    const { token, oldToken, deviceId, deviceName, platform, browser, appVersion } = req.body;
     const userId = req.user!.uid;
 
     if (!token) {
@@ -325,7 +325,7 @@ router.post('/token', verifyToken, async (req: AuthRequest, res: Response): Prom
       return;
     }
 
-    await notificationQueue.registerToken(userId, token, { deviceName, platform, browser, appVersion });
+    await notificationQueue.registerToken(userId, token, { oldToken, deviceId, deviceName, platform, browser, appVersion });
     res.json({ success: true });
   } catch (error: any) {
     console.error('[NotificationRoutes] Token registration error:', error);

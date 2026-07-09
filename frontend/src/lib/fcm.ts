@@ -40,10 +40,18 @@ export async function verifyAndRefreshTokens(userId?: string) {
     });
 
     if (token) {
-      console.log('FCM Token generated successfully.');
-      if (userId) {
+      console.log('FCM Token retrieved silently.');
+      
+      const oldToken = localStorage.getItem('fcm_token');
+      
+      // If token changed or wasn't saved, upload it
+      if (token !== oldToken && userId) {
         await saveTokenToFirestore(userId, token);
+        await saveTokenToBackend(token, oldToken);
+        localStorage.setItem('fcm_token', token);
+      } else if (!oldToken && userId) {
         await saveTokenToBackend(token);
+        localStorage.setItem('fcm_token', token);
       }
 
       onMessage(messaging, (payload) => {
@@ -81,7 +89,7 @@ async function saveTokenToFirestore(userId: string, token: string) {
   }
 }
 
-export async function saveTokenToBackend(token: string) {
+export async function saveTokenToBackend(token: string, oldToken?: string | null) {
   try {
     // Get Firebase Auth token
     const { getAuth } = await import('firebase/auth');
@@ -89,6 +97,13 @@ export async function saveTokenToBackend(token: string) {
     if (!auth.currentUser) return;
     const authToken = await auth.currentUser.getIdToken();
     
+    // Auto-generate a deviceId if missing
+    let deviceId = localStorage.getItem('device_id');
+    if (!deviceId) {
+      deviceId = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2);
+      localStorage.setItem('device_id', deviceId);
+    }
+
     // Post to backend
     await fetch('/api/notifications/token', {
       method: 'POST',
@@ -98,6 +113,8 @@ export async function saveTokenToBackend(token: string) {
       },
       body: JSON.stringify({
         token,
+        oldToken: oldToken || undefined,
+        deviceId,
         deviceName: navigator.userAgent.substring(0, 50),
         platform: navigator.platform,
         browser: 'Web'

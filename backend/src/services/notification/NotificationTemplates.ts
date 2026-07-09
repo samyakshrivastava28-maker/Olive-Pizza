@@ -225,7 +225,7 @@ function buildPayload(
         aps: {
           sound: soundFile,
           badge: 1,
-          'mutable-content': 1,
+          mutableContent: true,
         },
       },
     },
@@ -242,7 +242,7 @@ function buildPayload(
         actions: options.actions,
         data: webpushData,
       },
-      fcm_options: { link: options.url || '/' },
+      fcmOptions: { link: options.url || '/' },
     },
   };
 }
