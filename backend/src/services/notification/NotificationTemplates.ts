@@ -81,6 +81,7 @@ export interface NotificationPayload {
     headers?: { 'apns-priority'?: string; 'apns-collapse-id'?: string };
     payload?: {
       aps: {
+        alert?: { title?: string; body?: string };
         sound?: string;
         badge?: number;
         'mutable-content'?: number;
