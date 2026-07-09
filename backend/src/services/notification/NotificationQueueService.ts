@@ -315,6 +315,7 @@ export class NotificationQueueService {
       const failedTokens: string[] = [];
       response.responses.forEach((r, idx) => {
         if (r.error) {
+          console.error('[FCM Multicast Error]', r.error);
           const code = r.error.code;
           if (
             code === 'messaging/invalid-registration-token' ||
