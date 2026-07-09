@@ -174,6 +174,8 @@ function buildPayload(
 
   // 1. Build a strict string-only map for FCM top-level data
   const safeData: Record<string, string> = {
+    title: title,
+    body: body,
     url: options.url || '/',
     category: options.category || 'order',
     priority: options.priority || 'normal',
@@ -181,6 +183,9 @@ function buildPayload(
     version: String(options.version || 1),
   };
   if (options.tag) safeData.tag = options.tag;
+  if (options.actions) safeData.actions = JSON.stringify(options.actions);
+  if (options.requireInteraction) safeData.requireInteraction = 'true';
+  if (options.vibrate) safeData.vibrate = JSON.stringify(options.vibrate);
   if (options.orderId) safeData.orderId = options.orderId;
   if (options.role) safeData.role = options.role;
   if (options.alert) safeData.alert = options.alert;
@@ -197,7 +202,8 @@ function buildPayload(
   if (options.alert) webpushData.alert = options.alert;
 
   return {
-    notification: { title, body, image: ICON },
+    // Top-level notification is specifically removed to force Data-Only mode. 
+    // This allows firebase-messaging-sw.js to handle custom actions/buttons on Android Chrome.
     data: safeData,
     android: {
       priority: urgency === 'high' ? 'high' : 'normal',
@@ -223,6 +229,7 @@ function buildPayload(
       },
       payload: {
         aps: {
+          alert: { title, body },
           sound: soundFile,
           badge: 1,
           'mutable-content': 1,
@@ -231,17 +238,6 @@ function buildPayload(
     },
     webpush: {
       headers: { Urgency: urgency, TTL: '3600' },
-      notification: {
-        icon: ICON,
-        badge: BADGE,
-        tag: options.tag,
-        renotify: true,
-        requireInteraction: options.requireInteraction ?? false,
-        silent: false,
-        vibrate: options.vibrate || [200, 100, 200],
-        actions: options.actions,
-        data: webpushData,
-      },
       fcm_options: { link: options.url || '/' },
     },
   };
