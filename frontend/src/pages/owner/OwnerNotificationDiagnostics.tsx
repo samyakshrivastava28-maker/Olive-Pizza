@@ -15,7 +15,8 @@ export default function OwnerNotificationDiagnostics() {
     fcmToken: null as string | null,
     backendSync: false,
     vapidKey: !!import.meta.env.VITE_FIREBASE_VAPID_KEY,
-    lastTestStatus: null as 'success' | 'failed' | null
+    lastTestStatus: null as 'success' | 'failed' | null,
+    backend: null as any
   });
 
   const checkStatus = async () => {
@@ -44,13 +45,27 @@ export default function OwnerNotificationDiagnostics() {
       console.error(e);
     }
 
+    let backendData = null;
+    try {
+      const idToken = await user?.getIdToken();
+      if (idToken) {
+        const res = await fetch('/api/notifications/debug', {
+          headers: { Authorization: `Bearer ${idToken}` }
+        });
+        if (res.ok) {
+          backendData = await res.json();
+        }
+      }
+    } catch(e) {}
+
     setDiagnostics({
       swRegistered,
       permission,
       fcmToken: token,
       backendSync: !!token,
       vapidKey: true,
-      lastTestStatus: diagnostics.lastTestStatus
+      lastTestStatus: diagnostics.lastTestStatus,
+      backend: backendData
     });
     setLoading(false);
   };
@@ -106,6 +121,36 @@ export default function OwnerNotificationDiagnostics() {
           <RefreshCw className="w-5 h-5" />
         </button>
       </div>
+
+      {diagnostics.backend && (
+        <div className="bg-slate-900 rounded-2xl p-6 border border-white/5 mt-6">
+          <h3 className="text-white font-bold text-lg mb-4 flex items-center gap-2">
+            <Activity className="w-5 h-5 text-primary-500" /> Backend Queue Diagnostics
+          </h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div>
+              <p className="text-slate-400 text-xs uppercase tracking-wider">Queue Size</p>
+              <p className="text-white font-medium text-lg">{diagnostics.backend.queueSize}</p>
+            </div>
+            <div>
+              <p className="text-slate-400 text-xs uppercase tracking-wider">Avg Delivery Time</p>
+              <p className="text-white font-medium text-lg">{diagnostics.backend.averageDeliveryTimeSec}s</p>
+            </div>
+            <div>
+              <p className="text-slate-400 text-xs uppercase tracking-wider">Failed Notifications</p>
+              <p className="text-red-400 font-medium text-lg">{diagnostics.backend.failedNotifications}</p>
+            </div>
+            <div>
+              <p className="text-slate-400 text-xs uppercase tracking-wider">Environment</p>
+              <p className="text-primary-400 font-medium text-lg capitalize">{diagnostics.backend.environment}</p>
+            </div>
+            <div className="col-span-2 md:col-span-4 mt-2">
+              <p className="text-slate-400 text-xs uppercase tracking-wider">Current Frontend URL</p>
+              <p className="text-white font-medium text-sm font-mono truncate">{diagnostics.backend.currentFrontendUrl}</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Permission */}

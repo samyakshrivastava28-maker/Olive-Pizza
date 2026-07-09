@@ -120,6 +120,7 @@ const ForgotPassword = lazyWithRetry(() => import('./pages/ForgotPassword'));
 const VerifyEmail = lazyWithRetry(() => import('./pages/onboarding/VerifyEmail'));
 const SetupPhone = lazyWithRetry(() => import('./pages/onboarding/SetupPhone'));
 const SetupLocation = lazyWithRetry(() => import('./pages/onboarding/SetupLocation'));
+const OrderSuccessScreen = lazyWithRetry(() => import('./pages/OrderSuccessScreen'));
 
 // Lazy loaded owner pages
 const OwnerDashboard = lazyWithRetry(() => import('./pages/owner/OwnerDashboard'));
@@ -230,6 +231,9 @@ function AppContent() {
                 <Route path="/menu" element={<Menu />} />
                 <Route path="/product/:productId" element={<ProductDetail />} />
                 <Route path="/cart" element={<Cart />} />
+                <Route path="/checkout" element={<Checkout />} />
+                <Route path="/order-success/:orderId" element={<OrderSuccessScreen />} />
+                <Route path="/tracking/:orderId" element={<OrderTracking />} />
                 <Route path="/contact" element={<Contact />} />
                 <Route path="/assistant" element={<Suspense fallback={<PizzaLoader />}><UniversalAssistant /></Suspense>} />
                 <Route path="/login" element={<Suspense fallback={<PizzaLoader />}><Login /></Suspense>} />

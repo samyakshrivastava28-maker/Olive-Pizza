@@ -396,7 +396,7 @@ export default function Checkout() {
       });
 
       clearCart();
-      navigate("/dashboard");
+      navigate(`/order-success/${permanentOrderId}`);
     } catch (err: any) {
       setError(err.message);
     } finally {

@@ -35,10 +35,10 @@ export class NotificationQueueService {
   private processingTimer: NodeJS.Timeout | null = null;
 
   constructor() {
-    // Start the queue processor loop (every 2 seconds)
-    this.startProcessingLoop();
-    // Start periodic cleanup (every 15 minutes)
+    // Start periodic fallback cleanup (every 15 minutes)
     setInterval(() => this.runCleanup(), 15 * 60 * 1000);
+    // Start fallback queue processor loop (every 10 seconds)
+    setInterval(() => this.processQueue(), 10 * 1000);
   }
 
   // ─── Public API ─────────────────────────────────────────────────────────────
@@ -154,6 +154,9 @@ export class NotificationQueueService {
         return notificationDebugger.updateStage(debugId, 'Queued', { queueId });
       }).catch(err => console.error('[NotifQueue] Failed to log creation to debugger', err));
 
+      // Instantly trigger queue processing to achieve sub-2 second delivery
+      this.processQueue().catch(err => console.error('[NotifQueue] Background immediate process failed:', err));
+
       return queueId;
     } finally {
       client.release();
@@ -215,21 +218,7 @@ export class NotificationQueueService {
     }
   }
 
-  // ─── Queue Processor ─────────────────────────────────────────────────────────
-
-  private startProcessingLoop() {
-    const tick = async () => {
-      try {
-        await this.processQueue();
-      } catch (err) {
-        console.error('[NotifQueue] Processor error:', err);
-      } finally {
-        // Self-scheduling — 2s if items exist, 5s if idle
-        this.processingTimer = setTimeout(tick, 5000);
-      }
-    };
-    this.processingTimer = setTimeout(tick, 2000);
-  }
+  // Loop logic removed as we trigger instantly and have a fallback setInterval
 
   public async processQueue(): Promise<void> {
     if (this.isProcessing) return;

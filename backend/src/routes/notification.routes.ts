@@ -625,6 +625,33 @@ router.post('/cleanup', verifyToken, async (req: AuthRequest, res: Response): Pr
 });
 
 // =============================================================================
+// GET /notifications/debug
+// Provide comprehensive diagnostics for the Owner Dashboard
+// =============================================================================
+router.get('/debug', verifyToken, async (req: AuthRequest, res: Response): Promise<void> => {
+  const pgClient = await pgPool.connect();
+  try {
+    const queueRes = await pgClient.query("SELECT COUNT(*) as count FROM notification_queue WHERE status = 'queued'");
+    const failedRes = await pgClient.query("SELECT COUNT(*) as count FROM notification_history WHERE status = 'failed'");
+    
+    // Calculate average delivery time from history
+    const avgRes = await pgClient.query("SELECT AVG(EXTRACT(EPOCH FROM (updated_at - created_at))) as avg_sec FROM notification_queue WHERE status = 'sent'");
+
+    res.json({
+      queueSize: parseInt(queueRes.rows[0].count, 10),
+      failedNotifications: parseInt(failedRes.rows[0].count, 10),
+      averageDeliveryTimeSec: parseFloat(avgRes.rows[0].avg_sec || '0').toFixed(2),
+      currentFrontendUrl: process.env.FRONTEND_URL || (process.env.NODE_ENV === 'production' ? 'https://olive-pizza.vercel.app' : 'http://localhost:5173'),
+      environment: process.env.NODE_ENV || 'development'
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  } finally {
+    pgClient.release();
+  }
+});
+
+// =============================================================================
 // POST /notifications/trigger-event (Firebase-Native Notification Trigger)
 // =============================================================================
 router.post('/trigger-event', verifyToken, async (req: AuthRequest, res: Response): Promise<void> => {

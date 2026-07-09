@@ -1,4 +1,5 @@
 import { Order, CartItem } from '../../../frontend/src/types/models';
+import { FRONTEND_URL } from '../config/urls.js';
 
 const BRAND_COLOR = '#4a5d23'; // Premium Olive Green
 const BRAND_ORANGE = '#f97316';
@@ -94,7 +95,7 @@ export const buildOrderPlacedEmail = (order: Order) => {
     ${renderBilling(order)}
 
     <div style="text-align: center; margin-top: 40px;">
-      <a href="https://olivepizza.app/tracking/${order.id}" style="background-color: ${BRAND_COLOR}; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Track Order</a>
+      <a href="${FRONTEND_URL}/tracking/${order.id}" style="background-color: ${BRAND_COLOR}; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Track Order</a>
     </div>
   `;
 };
@@ -116,7 +117,7 @@ export const buildOrderConfirmedEmail = (order: Order) => {
     ${renderBilling(order)}
 
     <div style="text-align: center; margin-top: 40px;">
-      <a href="https://olivepizza.app/tracking/${order.id}" style="background-color: ${BRAND_COLOR}; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Track Live Order</a>
+      <a href="${FRONTEND_URL}/tracking/${order.id}" style="background-color: ${BRAND_COLOR}; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Track Live Order</a>
     </div>
   `;
 };
@@ -142,7 +143,7 @@ export const buildDeliveryPartnerAssignedEmail = (order: Order, partnerName: str
     ${renderProductCards(order.items)}
 
     <div style="text-align: center; margin-top: 40px;">
-      <a href="https://olivepizza.app/tracking/${order.id}" style="background-color: ${BRAND_ORANGE}; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Track Live on Map</a>
+      <a href="${FRONTEND_URL}/tracking/${order.id}" style="background-color: ${BRAND_ORANGE}; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Track Live on Map</a>
     </div>
   `;
 };
@@ -157,9 +158,9 @@ export const buildOrderDeliveredEmail = (order: Order, recommendedProducts: any[
 
     ${renderBilling(order)}
 
-    <div style="text-align: center; margin-top: 40px; display: flex; gap: 12px; justify-content: center;">
-      <a href="https://olivepizza.app/dashboard?rate=${order.id}" style="background-color: ${BRAND_COLOR}; color: white; padding: 14px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">⭐ Rate Order</a>
-      <a href="https://olivepizza.app/menu?reorder=${order.id}" style="background-color: rgba(255,255,255,0.1); color: white; padding: 14px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block; border: 1px solid rgba(255,255,255,0.2);">🔁 Reorder</a>
+    <div style="text-align: center; margin-top: 40px;">
+      <a href="${FRONTEND_URL}/dashboard?rate=${order.id}" style="background-color: ${BRAND_COLOR}; color: white; padding: 14px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block; margin-right: 12px;">⭐ Rate Order</a>
+      <a href="${FRONTEND_URL}/menu?reorder=${order.id}" style="background-color: rgba(255,255,255,0.1); color: white; padding: 14px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block; border: 1px solid rgba(255,255,255,0.2);">🔁 Reorder</a>
     </div>
 
     ${recommendedProducts && recommendedProducts.length > 0 ? `
@@ -172,7 +173,7 @@ export const buildOrderDeliveredEmail = (order: Order, recommendedProducts: any[
             <h4 style="margin: 0 0 4px 0; color: #ffffff; font-size: 16px;">${p.name || p.productName}</h4>
             <div style="color: ${BRAND_COLOR}; font-weight: bold; font-size: 14px;">₹${(p.basePrice || p.price || 0).toFixed(2)}</div>
           </div>
-          <a href="https://olivepizza.app/menu" style="background-color: rgba(249,115,22,0.1); color: ${BRAND_ORANGE}; padding: 8px 16px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 12px;">View</a>
+          <a href="${FRONTEND_URL}/menu" style="background-color: rgba(249,115,22,0.1); color: ${BRAND_ORANGE}; padding: 8px 16px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 12px;">View</a>
         </div>
       `).join('')}
     </div>

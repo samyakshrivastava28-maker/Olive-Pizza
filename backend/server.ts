@@ -9,8 +9,10 @@ import './src/services/DataLifecycleService.js';
 import './src/services/notification/NotificationQueueService.js';
 import './src/jobs/MonthlyReportJob.js';
 import { kb } from './src/services/KnowledgeBaseService.js';
+import { initScheduler } from './src/scripts/scheduler.js';
 
 dotenv.config();
+initScheduler();
 
 // ─── Environment Audit ────────────────────────────────────────────────────────
 const REQUIRED_ENV = [

@@ -425,7 +425,11 @@ self.addEventListener('message', async event => {
   }
 });
 
-// ─── Activate ─────────────────────────────────────────────────────────────────
+// ─── Install & Activate ─────────────────────────────────────────────────────────
+self.addEventListener('install', event => {
+  self.skipWaiting();
+});
+
 self.addEventListener('activate', event => {
   event.waitUntil(clients.claim());
 });
