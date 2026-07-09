@@ -13,6 +13,7 @@
 import { OwnerTemplates, CustomerTemplates, DeliveryTemplates, MarketingTemplates } from './NotificationTemplates.js';
 import { adminDb as db, adminAuth } from '../../config/firebase.js';
 import * as admin from 'firebase-admin';
+import { FieldValue } from 'firebase-admin/firestore';
 import { notificationDebugger } from './NotificationDebugger.js';
 import { pgPool } from '../../config/postgres.js';
 import { adminDb, adminMessaging } from '../../config/firebase.js';
@@ -195,9 +196,9 @@ export class NotificationQueueService {
       );
       // Also keep Firestore in sync for legacy reads
       await adminDb.collection('users').doc(firebaseUserId).update({
-        fcmTokens: admin.firestore.FieldValue.arrayUnion(token),
+        fcmTokens: FieldValue.arrayUnion(token),
         notificationReady: true,
-        lastTokenRefresh: admin.firestore.FieldValue.serverTimestamp(),
+        lastTokenRefresh: FieldValue.serverTimestamp(),
       });
     } finally {
       client.release();
@@ -315,7 +316,7 @@ export class NotificationQueueService {
       const failedTokens: string[] = [];
       response.responses.forEach((r, idx) => {
         if (r.error) {
-          console.error('[FCM Multicast Error]', r.error);
+          console.error(`[FCM Error] Token idx ${idx}:`, r.error);
           const code = r.error.code;
           if (
             code === 'messaging/invalid-registration-token' ||
@@ -334,7 +335,7 @@ export class NotificationQueueService {
           [target_user_id, failedTokens]
         );
         await adminDb.collection('users').doc(item.firebase_uid).update({
-          fcmTokens: admin.firestore.FieldValue.arrayRemove(...failedTokens),
+          fcmTokens: FieldValue.arrayRemove(...failedTokens),
         });
         console.log(`[NotifQueue] Deactivated ${failedTokens.length} invalid tokens for ${target_user_id}`);
       }

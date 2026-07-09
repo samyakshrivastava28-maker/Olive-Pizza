@@ -172,21 +172,33 @@ function buildPayload(
   const urgency =
     options.priority === 'critical' ? 'high' : options.priority === 'high' ? 'high' : 'normal';
 
+  // 1. Build a strict string-only map for FCM top-level data
+  const safeData: Record<string, string> = {
+    url: options.url || '/',
+    category: options.category || 'order',
+    priority: options.priority || 'normal',
+    sound: soundFile,
+    version: String(options.version || 1),
+  };
+  if (options.tag) safeData.tag = options.tag;
+  if (options.orderId) safeData.orderId = options.orderId;
+  if (options.role) safeData.role = options.role;
+  if (options.alert) safeData.alert = options.alert;
+  if (options.stage) safeData.stage = options.stage;
+  if (options.notificationId) safeData.notificationId = options.notificationId;
+
+  // 2. Build webpush notification data (can be anything, but let's keep it safe)
+  const webpushData: Record<string, any> = {
+    url: options.url || '/',
+    sound: soundFile,
+  };
+  if (options.orderId) webpushData.orderId = options.orderId;
+  if (options.stage) webpushData.stage = options.stage;
+  if (options.alert) webpushData.alert = options.alert;
+
   return {
     notification: { title, body, image: ICON },
-    data: {
-      tag: options.tag,
-      orderId: options.orderId,
-      url: options.url || '/',
-      category: options.category || 'order',
-      priority: options.priority || 'normal',
-      role: options.role,
-      sound: soundFile,
-      alert: options.alert,
-      stage: options.stage,
-      version: String(options.version || 1),
-      notificationId: options.notificationId,
-    },
+    data: safeData,
     android: {
       priority: urgency === 'high' ? 'high' : 'normal',
       notification: {
@@ -207,13 +219,13 @@ function buildPayload(
     apns: {
       headers: {
         'apns-priority': urgency === 'high' ? '10' : '5',
-        'apns-collapse-id': options.tag,
+        'apns-collapse-id': options.tag || 'default',
       },
       payload: {
         aps: {
           sound: soundFile,
           badge: 1,
-          'mutable-content': 1,
+          mutableContent: true,
         },
       },
     },
@@ -228,15 +240,9 @@ function buildPayload(
         silent: false,
         vibrate: options.vibrate || [200, 100, 200],
         actions: options.actions,
-        data: {
-          orderId: options.orderId,
-          url: options.url || '/',
-          stage: options.stage,
-          sound: soundFile,
-          alert: options.alert,
-        },
+        data: webpushData,
       },
-      fcm_options: { link: options.url || '/' },
+      fcmOptions: { link: options.url || '/' },
     },
   };
 }

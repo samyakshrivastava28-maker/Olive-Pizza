@@ -11,9 +11,15 @@ async function run() {
     
     const items = res.rows;
     for (const item of items) {
+      const data: Record<string, string> = {};
+      if (item.tag) data.tag = String(item.tag);
+      if (item.order_id) data.orderId = String(item.order_id);
+      if (item.version) data.version = String(item.version);
+      if (item.category) data.category = String(item.category);
+
       const payload = {
         notification: { title: item.title, body: item.body },
-        data: { tag: item.tag, orderId: item.order_id, version: item.version, category: item.category }
+        data
       };
       await pgPool.query(
         'INSERT INTO notification_queue (target_user_id, payload, status, category, priority, retry_count) VALUES ($1, $2, $3, $4, $5, 0)', 
