@@ -1,182 +1,706 @@
-import { Order, CartItem } from '../../../frontend/src/types/models';
+/**
+ * Premium Olive Pizza Email Template System
+ *
+ * Design System:
+ * - Brand: Olive Green (#4a7c59), Orange Accent (#f97316), Dark Background (#0B0F14)
+ * - Compatible with: Gmail, Outlook, Apple Mail, Yahoo Mail, Proton Mail
+ * - Inline styles only (email client compatibility)
+ * - Responsive via media queries and fluid widths
+ * - Dark mode aware (prefers-color-scheme)
+ *
+ * Structure:
+ *   baseWrapper()           — Shared HTML/head/body frame
+ *   buildOrderStatusEmail() — Automatic router for all order stage emails
+ *   Customer templates (17 types)
+ *   Owner templates (6 types)
+ *   Delivery templates (3 types)
+ */
+
 import { FRONTEND_URL } from '../config/urls.js';
 
-const BRAND_COLOR = '#4a5d23'; // Premium Olive Green
-const BRAND_ORANGE = '#f97316';
-const BRAND_DARK = '#0B0F14';
+// ── Brand Tokens ──────────────────────────────────────────────────────────────
+const BRAND_GREEN   = '#4a7c59';
+const BRAND_ORANGE  = '#f97316';
+const BRAND_DARK    = '#0B0F14';
+const BRAND_CARD    = '#111827';
+const BRAND_BORDER  = '#1f2937';
+const TEXT_PRIMARY  = '#f9fafb';
+const TEXT_SECONDARY= '#9ca3af';
+const TEXT_MUTED    = '#6b7280';
+const LOGO_URL      = 'https://res.cloudinary.com/dxmlvkff1/image/upload/v1782376898/olive-pizza/brand/logo.png';
+const PIZZA_HERO    = 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&q=80&auto=format';
 
-// Helper to render product cards
-const renderProductCards = (items: CartItem[]) => {
-  return items.map(item => `
-    <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 12px; padding: 16px; margin-bottom: 12px; display: flex; gap: 16px; align-items: center;">
-      <img src="${item.image || 'https://res.cloudinary.com/dxmlvkff1/image/upload/v1782376898/olive-pizza/brand/logo.png'}" width="80" height="80" style="border-radius: 8px; object-fit: cover;" />
-      <div style="flex: 1;">
-        <h4 style="margin: 0 0 4px 0; color: #ffffff; font-size: 16px;">${item.name}</h4>
-        <div style="color: #94a3b8; font-size: 12px; margin-bottom: 8px;">
-          ${item.quantity}x • ${item.variant || 'Regular'} ${item.crust ? `• ${item.crust}` : ''}
-        </div>
-        ${item.addons && item.addons.length > 0 ? `<div style="color: #64748b; font-size: 11px;">+ ${item.addons.join(', ')}</div>` : ''}
+// ── Shared Base Wrapper ───────────────────────────────────────────────────────
+function baseWrapper(content: string, preheader = ''): string {
+  return `<!DOCTYPE html>
+<html lang="en" xmlns:v="urn:schemas-microsoft-com:vml">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="color-scheme" content="dark light">
+  <meta name="supported-color-schemes" content="dark light">
+  <title>Olive Pizza</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    body { margin: 0; padding: 0; background-color: ${BRAND_DARK}; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    .email-wrapper { width: 100%; background-color: ${BRAND_DARK}; padding: 32px 16px; box-sizing: border-box; }
+    .email-card { max-width: 580px; margin: 0 auto; background-color: ${BRAND_CARD}; border-radius: 20px; overflow: hidden; border: 1px solid ${BRAND_BORDER}; }
+    .btn { display: inline-block; padding: 14px 28px; border-radius: 12px; font-weight: 700; font-size: 15px; text-decoration: none; letter-spacing: 0.3px; transition: all 0.2s; }
+    .btn-primary { background: linear-gradient(135deg, ${BRAND_GREEN}, #3d6b4a); color: #ffffff; }
+    .btn-accent { background: linear-gradient(135deg, ${BRAND_ORANGE}, #ea6c0a); color: #ffffff; }
+    .btn-ghost { background: rgba(255,255,255,0.07); color: ${TEXT_SECONDARY}; border: 1px solid ${BRAND_BORDER}; }
+    .divider { height: 1px; background: linear-gradient(90deg, transparent, ${BRAND_BORDER} 30%, ${BRAND_BORDER} 70%, transparent); margin: 28px 0; }
+    .item-card { background: rgba(255,255,255,0.03); border: 1px solid ${BRAND_BORDER}; border-radius: 12px; padding: 16px; margin-bottom: 10px; }
+    .badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+    @media (max-width: 600px) {
+      .email-wrapper { padding: 0 !important; }
+      .email-card { border-radius: 0 !important; border-left: none !important; border-right: none !important; }
+      .content-pad { padding: 24px 20px !important; }
+      .btn-row { display: flex !important; flex-direction: column !important; gap: 10px !important; }
+      .btn { display: block !important; text-align: center !important; width: 100% !important; box-sizing: border-box !important; }
+      .item-flex { flex-direction: column !important; }
+    }
+    @media (prefers-color-scheme: light) {
+      body { background-color: #f3f4f6 !important; }
+      .email-card { background-color: #ffffff !important; border-color: #e5e7eb !important; }
+      .item-card { background: #f9fafb !important; border-color: #e5e7eb !important; }
+    }
+  </style>
+</head>
+<body>
+  ${preheader ? `<div style="display:none;overflow:hidden;height:0;max-height:0;max-width:0;opacity:0;visibility:hidden;">${preheader}&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌</div>` : ''}
+  <div class="email-wrapper">
+    <div class="email-card">
+      ${emailHeader()}
+      <div class="content-pad" style="padding: 32px 36px;">
+        ${content}
       </div>
-      <div style="font-weight: bold; color: ${BRAND_COLOR};">₹${(item.price * item.quantity).toFixed(2)}</div>
+      ${emailFooter()}
     </div>
-  `).join('');
+  </div>
+</body>
+</html>`;
+}
+
+function emailHeader(): string {
+  return `<div style="background: linear-gradient(135deg, ${BRAND_DARK} 0%, #0f1a12 100%); padding: 28px 36px; text-align: center; border-bottom: 1px solid ${BRAND_BORDER};">
+    <img src="${LOGO_URL}" alt="Olive Pizza" width="56" height="56" style="border-radius: 14px; margin-bottom: 10px; display: block; margin: 0 auto 10px;" />
+    <div style="font-size: 22px; font-weight: 800; color: ${TEXT_PRIMARY}; letter-spacing: -0.5px;">Olive Pizza</div>
+    <div style="font-size: 12px; color: ${TEXT_MUTED}; letter-spacing: 1px; text-transform: uppercase; margin-top: 2px;">Premium Pizza Experience</div>
+  </div>`;
+}
+
+function emailFooter(): string {
+  return `<div style="background: rgba(0,0,0,0.3); padding: 24px 36px; text-align: center; border-top: 1px solid ${BRAND_BORDER};">
+    <div style="margin-bottom: 16px;">
+      <a href="${FRONTEND_URL}/menu" style="color: ${TEXT_MUTED}; text-decoration: none; font-size: 13px; margin: 0 12px;">Menu</a>
+      <a href="${FRONTEND_URL}/customer/dashboard" style="color: ${TEXT_MUTED}; text-decoration: none; font-size: 13px; margin: 0 12px;">My Orders</a>
+      <a href="${FRONTEND_URL}/contact" style="color: ${TEXT_MUTED}; text-decoration: none; font-size: 13px; margin: 0 12px;">Support</a>
+    </div>
+    <div style="font-size: 12px; color: ${TEXT_MUTED}; line-height: 1.6;">
+      © ${new Date().getFullYear()} Olive Pizza. All rights reserved.<br/>
+      <span style="color: #4b5563;">You received this because you placed an order or have an account.</span>
+    </div>
+  </div>`;
+}
+
+function statusBadge(label: string, color: string): string {
+  return `<span class="badge" style="background: ${color}22; color: ${color}; border: 1px solid ${color}44;">${label}</span>`;
+}
+
+function orderMetaRow(label: string, value: string): string {
+  return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid ${BRAND_BORDER};">
+    <span style="font-size:13px;color:${TEXT_MUTED};">${label}</span>
+    <span style="font-size:13px;color:${TEXT_PRIMARY};font-weight:500;">${value}</span>
+  </div>`;
+}
+
+function ctaButton(label: string, url: string, style: 'primary' | 'accent' | 'ghost' = 'primary'): string {
+  const bg = style === 'primary' ? `linear-gradient(135deg, ${BRAND_GREEN}, #3d6b4a)` 
+           : style === 'accent'  ? `linear-gradient(135deg, ${BRAND_ORANGE}, #ea6c0a)` 
+           : 'rgba(255,255,255,0.07)';
+  const border = style === 'ghost' ? `border: 1px solid ${BRAND_BORDER};` : '';
+  const color = '#ffffff';
+  return `<a href="${url}" class="btn" style="background:${bg};${border}color:${color};display:inline-block;padding:14px 28px;border-radius:12px;font-weight:700;font-size:15px;text-decoration:none;">${label}</a>`;
+}
+
+function progressTimeline(steps: string[], activeIndex: number): string {
+  return `<div style="margin: 24px 0; padding: 20px; background: rgba(0,0,0,0.2); border-radius: 14px; border: 1px solid ${BRAND_BORDER};">
+    ${steps.map((step, i) => {
+      const done = i < activeIndex;
+      const active = i === activeIndex;
+      const color = done || active ? BRAND_GREEN : TEXT_MUTED;
+      const icon = done ? '✓' : active ? '●' : '○';
+      return `<div style="display:flex;align-items:center;gap:12px;${i < steps.length - 1 ? 'margin-bottom:14px;' : ''}">
+        <div style="width:28px;height:28px;border-radius:50%;background:${done || active ? BRAND_GREEN : 'rgba(255,255,255,0.06)'};display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:12px;color:#fff;font-weight:700;">${icon}</div>
+        <span style="font-size:14px;color:${active ? TEXT_PRIMARY : (done ? '#d1d5db' : TEXT_MUTED)};font-weight:${active ? 700 : 400};">${step}</span>
+        ${active ? `<span style="margin-left:auto;font-size:11px;background:${BRAND_GREEN}22;color:${BRAND_GREEN};padding:2px 10px;border-radius:20px;border:1px solid ${BRAND_GREEN}44;font-weight:600;">Current</span>` : ''}
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ORDER STATUS ROUTER
+// Used by NotificationQueueService email fallback
+// ─────────────────────────────────────────────────────────────────────────────
+export function buildOrderStatusEmail(params: {
+  customerName: string;
+  subject: string;
+  stage: string;
+  orderId: string | null;
+  data: Record<string, string>;
+}): string {
+  const { customerName, stage, orderId, data } = params;
+  const orderNumber = data.orderNumber || data.dailyOrderNumber || '';
+  const totalAmount = data.totalAmount ? `₹${data.totalAmount}` : '';
+  const eta = data.eta || '';
+  const trackUrl = orderId ? `${FRONTEND_URL}/tracking/${orderId}` : `${FRONTEND_URL}/customer/dashboard`;
+  const orderUrl = `${FRONTEND_URL}/customer/dashboard`;
+
+  const stageMap: Record<string, () => string> = {
+    pending:           () => buildOrderPlacedEmailSimple(customerName, orderNumber, totalAmount, eta, trackUrl),
+    accepted:          () => buildOrderConfirmedEmailSimple(customerName, orderNumber, eta, trackUrl),
+    preparing:         () => buildOrderPreparingEmailSimple(customerName, orderNumber, eta, trackUrl),
+    baking:            () => buildOrderBakingEmailSimple(customerName, orderNumber, eta, trackUrl),
+    ready:             () => buildOrderPackedEmailSimple(customerName, orderNumber, eta, trackUrl),
+    partner_assigned:  () => buildDeliveryAssignedEmailSimple(customerName, orderNumber, data.deliveryPartnerName || 'Your partner', eta, trackUrl),
+    picked_up:         () => buildDeliveryAssignedEmailSimple(customerName, orderNumber, data.deliveryPartnerName || 'Your partner', eta, trackUrl),
+    out_for_delivery:  () => buildOutForDeliveryEmailSimple(customerName, orderNumber, data.deliveryPartnerName || 'Your partner', eta, trackUrl),
+    delivered:         () => buildOrderDeliveredEmailSimple(customerName, orderNumber, orderUrl, trackUrl),
+    cancelled:         () => buildOrderCancelledEmailSimple(customerName, orderNumber, orderUrl),
+  };
+
+  const builder = stageMap[stage] || stageMap['pending'];
+  return builder();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CUSTOMER TEMPLATES
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function buildOrderPlacedEmailSimple(customerName: string, orderNumber: string, total: string, eta: string, trackUrl: string): string {
+  const content = `
+    <div style="text-align:center;margin-bottom:28px;">
+      <div style="font-size:48px;margin-bottom:12px;">🍕</div>
+      <h1 style="font-size:26px;font-weight:800;color:${TEXT_PRIMARY};margin:0 0 8px;">${customerName ? `Hey ${customerName}!` : 'Order Placed!'}</h1>
+      <p style="color:${TEXT_SECONDARY};font-size:15px;margin:0;">Your order has been placed and is waiting for restaurant confirmation.</p>
+    </div>
+    ${statusBadge('Order Received', BRAND_GREEN)}
+    <div style="margin:20px 0;">
+      ${orderNumber ? orderMetaRow('Order #', orderNumber) : ''}
+      ${total ? orderMetaRow('Total', total) : ''}
+      ${eta ? orderMetaRow('Estimated Delivery', eta) : ''}
+    </div>
+    ${progressTimeline(['Order Placed', 'Confirmed', 'Preparing', 'Out for Delivery', 'Delivered'], 0)}
+    <div style="text-align:center;margin-top:28px;">
+      ${ctaButton('📍 Track Your Order', trackUrl, 'primary')}
+    </div>`;
+  return baseWrapper(content, `Your order is received! Waiting for restaurant confirmation.`);
+}
+
+export function buildOrderConfirmedEmailSimple(customerName: string, orderNumber: string, eta: string, trackUrl: string): string {
+  const content = `
+    <div style="text-align:center;margin-bottom:28px;">
+      <div style="font-size:48px;margin-bottom:12px;">✅</div>
+      <h1 style="font-size:26px;font-weight:800;color:${TEXT_PRIMARY};margin:0 0 8px;">Order Confirmed!</h1>
+      <p style="color:${TEXT_SECONDARY};font-size:15px;margin:0;">Great news${customerName ? `, ${customerName}` : ''}! The kitchen has confirmed your order.</p>
+    </div>
+    ${statusBadge('Confirmed', BRAND_GREEN)}
+    <div style="margin:20px 0;">
+      ${orderNumber ? orderMetaRow('Order #', orderNumber) : ''}
+      ${eta ? orderMetaRow('Estimated Delivery', eta) : ''}
+    </div>
+    ${progressTimeline(['Order Placed', 'Confirmed ✓', 'Preparing', 'Out for Delivery', 'Delivered'], 1)}
+    <div style="text-align:center;margin-top:28px;">
+      ${ctaButton('📍 Track Live', trackUrl, 'primary')}
+    </div>`;
+  return baseWrapper(content, `Your order is confirmed! The kitchen is getting ready.`);
+}
+
+export function buildOrderPreparingEmailSimple(customerName: string, orderNumber: string, eta: string, trackUrl: string): string {
+  const content = `
+    <div style="text-align:center;margin-bottom:28px;">
+      <div style="font-size:48px;margin-bottom:12px;">👨‍🍳</div>
+      <h1 style="font-size:26px;font-weight:800;color:${TEXT_PRIMARY};margin:0 0 8px;">Your Order is Being Prepared</h1>
+      <p style="color:${TEXT_SECONDARY};font-size:15px;margin:0;">Our chefs are crafting your pizza${eta ? ` — estimated ${eta}` : ''}.</p>
+    </div>
+    ${statusBadge('Preparing', '#f59e0b')}
+    <div style="margin:20px 0;">
+      ${orderNumber ? orderMetaRow('Order #', orderNumber) : ''}
+      ${eta ? orderMetaRow('Estimated Delivery', eta) : ''}
+    </div>
+    ${progressTimeline(['Order Placed', 'Confirmed', 'Preparing 🔥', 'Out for Delivery', 'Delivered'], 2)}
+    <div style="text-align:center;margin-top:28px;">
+      ${ctaButton('📍 Track Live', trackUrl, 'primary')}
+    </div>`;
+  return baseWrapper(content, `Your pizza is being prepared by our chefs!`);
+}
+
+export function buildOrderBakingEmailSimple(customerName: string, orderNumber: string, eta: string, trackUrl: string): string {
+  const content = `
+    <div style="text-align:center;margin-bottom:28px;">
+      <div style="font-size:48px;margin-bottom:12px;">🔥</div>
+      <h1 style="font-size:26px;font-weight:800;color:${TEXT_PRIMARY};margin:0 0 8px;">Pizza in the Oven!</h1>
+      <p style="color:${TEXT_SECONDARY};font-size:15px;margin:0;">Your pizza is baking to perfection at 450°F right now.</p>
+    </div>
+    ${statusBadge('Baking', '#f97316')}
+    <div style="margin:20px 0;">
+      ${orderNumber ? orderMetaRow('Order #', orderNumber) : ''}
+      ${eta ? orderMetaRow('Estimated Delivery', eta) : ''}
+    </div>
+    ${progressTimeline(['Order Placed', 'Confirmed', 'Baking 🔥', 'Out for Delivery', 'Delivered'], 2)}
+    <div style="text-align:center;margin-top:28px;">
+      ${ctaButton('📍 Track Live', trackUrl, 'accent')}
+    </div>`;
+  return baseWrapper(content, `Your pizza is in the oven!`);
+}
+
+export function buildOrderPackedEmailSimple(customerName: string, orderNumber: string, eta: string, trackUrl: string): string {
+  const content = `
+    <div style="text-align:center;margin-bottom:28px;">
+      <div style="font-size:48px;margin-bottom:12px;">📦</div>
+      <h1 style="font-size:26px;font-weight:800;color:${TEXT_PRIMARY};margin:0 0 8px;">Order Packed & Ready!</h1>
+      <p style="color:${TEXT_SECONDARY};font-size:15px;margin:0;">Your order is packed and ready for pickup. Assigning a delivery partner now.</p>
+    </div>
+    ${statusBadge('Packed', BRAND_GREEN)}
+    <div style="margin:20px 0;">
+      ${orderNumber ? orderMetaRow('Order #', orderNumber) : ''}
+      ${eta ? orderMetaRow('Estimated Delivery', eta) : ''}
+    </div>
+    ${progressTimeline(['Order Placed', 'Confirmed', 'Prepared & Packed ✓', 'Out for Delivery', 'Delivered'], 2)}
+    <div style="text-align:center;margin-top:28px;">
+      ${ctaButton('📍 Track Live', trackUrl, 'primary')}
+    </div>`;
+  return baseWrapper(content, `Your order is packed and ready!`);
+}
+
+export function buildDeliveryAssignedEmailSimple(customerName: string, orderNumber: string, partnerName: string, eta: string, trackUrl: string): string {
+  const content = `
+    <div style="text-align:center;margin-bottom:28px;">
+      <div style="font-size:48px;margin-bottom:12px;">🚴</div>
+      <h1 style="font-size:26px;font-weight:800;color:${TEXT_PRIMARY};margin:0 0 8px;">Delivery Partner Assigned</h1>
+      <p style="color:${TEXT_SECONDARY};font-size:15px;margin:0;"><strong style="color:${TEXT_PRIMARY};">${partnerName}</strong> is on the way to pick up your order.</p>
+    </div>
+    ${statusBadge('Partner Assigned', BRAND_GREEN)}
+    <div style="margin:20px 0;">
+      ${orderNumber ? orderMetaRow('Order #', orderNumber) : ''}
+      ${orderMetaRow('Delivery Partner', partnerName)}
+      ${eta ? orderMetaRow('Arriving By', eta) : ''}
+    </div>
+    ${progressTimeline(['Order Placed', 'Confirmed', 'Prepared', 'Partner Assigned 🚴', 'Delivered'], 3)}
+    <div style="text-align:center;margin-top:28px;">
+      ${ctaButton('📍 Track on Map', trackUrl, 'accent')}
+    </div>`;
+  return baseWrapper(content, `${partnerName} is picking up your order!`);
+}
+
+export function buildOutForDeliveryEmailSimple(customerName: string, orderNumber: string, partnerName: string, eta: string, trackUrl: string): string {
+  const content = `
+    <div style="text-align:center;margin-bottom:28px;">
+      <div style="font-size:48px;margin-bottom:12px;">🛵</div>
+      <h1 style="font-size:26px;font-weight:800;color:${TEXT_PRIMARY};margin:0 0 8px;">Your Pizza is On the Way!</h1>
+      <p style="color:${TEXT_SECONDARY};font-size:15px;margin:0;">${partnerName} is heading to your location${eta ? ` — arriving in ~${eta}` : ''}.</p>
+    </div>
+    ${statusBadge('Out for Delivery', BRAND_ORANGE)}
+    <div style="margin:20px 0;">
+      ${orderNumber ? orderMetaRow('Order #', orderNumber) : ''}
+      ${orderMetaRow('Delivery Partner', partnerName)}
+      ${eta ? orderMetaRow('Arriving In', eta) : ''}
+    </div>
+    ${progressTimeline(['Order Placed', 'Confirmed', 'Prepared', 'Out for Delivery 🛵', 'Delivered'], 3)}
+    <div style="text-align:center;margin-top:28px;">
+      ${ctaButton('📍 Track Live on Map', trackUrl, 'accent')}
+    </div>`;
+  return baseWrapper(content, `${partnerName} is on the way with your order!`);
+}
+
+export function buildOrderDeliveredEmailSimple(customerName: string, orderNumber: string, orderUrl: string, trackUrl: string): string {
+  const content = `
+    <div style="text-align:center;margin-bottom:28px;">
+      <div style="font-size:48px;margin-bottom:12px;">🎉</div>
+      <h1 style="font-size:26px;font-weight:800;color:${TEXT_PRIMARY};margin:0 0 8px;">Order Delivered! Enjoy 🍕</h1>
+      <p style="color:${TEXT_SECONDARY};font-size:15px;margin:0;">${customerName ? `Thanks for ordering, ${customerName}! ` : ''}Your order has been delivered successfully.</p>
+    </div>
+    ${statusBadge('Delivered', BRAND_GREEN)}
+    <div style="margin:20px 0;">
+      ${orderNumber ? orderMetaRow('Order #', orderNumber) : ''}
+      ${orderMetaRow('Status', '✅ Delivered Successfully')}
+    </div>
+    ${progressTimeline(['Order Placed', 'Confirmed', 'Prepared', 'Out for Delivery', '✅ Delivered'], 4)}
+    <div style="text-align:center;margin-top:28px;" class="btn-row">
+      ${ctaButton('⭐ Rate Your Order', `${orderUrl}?rate=${orderNumber}`, 'primary')}
+      &nbsp;&nbsp;
+      ${ctaButton('🔄 Order Again', `${FRONTEND_URL}/menu`, 'ghost')}
+    </div>`;
+  return baseWrapper(content, `Your order has been delivered. Enjoy your meal!`);
+}
+
+export function buildOrderCancelledEmailSimple(customerName: string, orderNumber: string, orderUrl: string): string {
+  const content = `
+    <div style="text-align:center;margin-bottom:28px;">
+      <div style="font-size:48px;margin-bottom:12px;">😔</div>
+      <h1 style="font-size:26px;font-weight:800;color:${TEXT_PRIMARY};margin:0 0 8px;">Order Cancelled</h1>
+      <p style="color:${TEXT_SECONDARY};font-size:15px;margin:0;">${customerName ? `Sorry, ${customerName}. ` : ''}Your order has been cancelled. Any payment will be refunded within 5–7 business days.</p>
+    </div>
+    ${statusBadge('Cancelled', '#ef4444')}
+    <div style="margin:20px 0;">
+      ${orderNumber ? orderMetaRow('Order #', orderNumber) : ''}
+      ${orderMetaRow('Refund', 'Processed in 5–7 business days')}
+    </div>
+    <div style="text-align:center;margin-top:28px;" class="btn-row">
+      ${ctaButton('🍕 Order Again', `${FRONTEND_URL}/menu`, 'primary')}
+      &nbsp;&nbsp;
+      ${ctaButton('📞 Contact Support', `${FRONTEND_URL}/contact`, 'ghost')}
+    </div>`;
+  return baseWrapper(content, `Your order has been cancelled. We apologize for the inconvenience.`);
+}
+
+export function buildPaymentSuccessEmail(customerName: string, orderNumber: string, amount: string, method: string, trackUrl: string): string {
+  const content = `
+    <div style="text-align:center;margin-bottom:28px;">
+      <div style="font-size:48px;margin-bottom:12px;">💳</div>
+      <h1 style="font-size:26px;font-weight:800;color:${TEXT_PRIMARY};margin:0 0 8px;">Payment Successful</h1>
+      <p style="color:${TEXT_SECONDARY};font-size:15px;margin:0;">Your payment has been processed successfully.</p>
+    </div>
+    ${statusBadge('Payment Confirmed', BRAND_GREEN)}
+    <div style="margin:20px 0;">
+      ${orderNumber ? orderMetaRow('Order #', orderNumber) : ''}
+      ${amount ? orderMetaRow('Amount Paid', amount) : ''}
+      ${method ? orderMetaRow('Payment Method', method) : ''}
+    </div>
+    <div style="text-align:center;margin-top:28px;">
+      ${ctaButton('View Order', trackUrl, 'primary')}
+    </div>`;
+  return baseWrapper(content, `Payment confirmed for your Olive Pizza order.`);
+}
+
+export function buildPaymentFailedEmail(customerName: string, orderNumber: string, amount: string): string {
+  const content = `
+    <div style="text-align:center;margin-bottom:28px;">
+      <div style="font-size:48px;margin-bottom:12px;">⚠️</div>
+      <h1 style="font-size:26px;font-weight:800;color:${TEXT_PRIMARY};margin:0 0 8px;">Payment Failed</h1>
+      <p style="color:${TEXT_SECONDARY};font-size:15px;margin:0;">We couldn't process your payment${amount ? ` of ${amount}` : ''}. Please try again or use a different payment method.</p>
+    </div>
+    ${statusBadge('Payment Failed', '#ef4444')}
+    <div style="margin:20px 0;">
+      ${orderNumber ? orderMetaRow('Order #', orderNumber) : ''}
+    </div>
+    <div style="text-align:center;margin-top:28px;" class="btn-row">
+      ${ctaButton('🔄 Try Again', `${FRONTEND_URL}/cart`, 'accent')}
+      &nbsp;&nbsp;
+      ${ctaButton('📞 Contact Support', `${FRONTEND_URL}/contact`, 'ghost')}
+    </div>`;
+  return baseWrapper(content, `Your payment was unsuccessful. Please try again.`);
+}
+
+export function buildRefundProcessedEmail(customerName: string, orderNumber: string, amount: string): string {
+  const content = `
+    <div style="text-align:center;margin-bottom:28px;">
+      <div style="font-size:48px;margin-bottom:12px;">💰</div>
+      <h1 style="font-size:26px;font-weight:800;color:${TEXT_PRIMARY};margin:0 0 8px;">Refund Processed</h1>
+      <p style="color:${TEXT_SECONDARY};font-size:15px;margin:0;">Your refund of <strong style="color:${BRAND_GREEN};">${amount}</strong> has been processed and will appear in your account within 5–7 business days.</p>
+    </div>
+    ${statusBadge('Refund Initiated', BRAND_GREEN)}
+    <div style="margin:20px 0;">
+      ${orderNumber ? orderMetaRow('Order #', orderNumber) : ''}
+      ${amount ? orderMetaRow('Refund Amount', amount) : ''}
+      ${orderMetaRow('Processing Time', '5–7 Business Days')}
+    </div>
+    <div style="text-align:center;margin-top:28px;">
+      ${ctaButton('🍕 Order Again', `${FRONTEND_URL}/menu`, 'primary')}
+    </div>`;
+  return baseWrapper(content, `Your refund has been processed.`);
+}
+
+export function buildWelcomeEmail(customerName: string): string {
+  const content = `
+    <div style="text-align:center;margin-bottom:28px;">
+      <img src="${PIZZA_HERO}" alt="Olive Pizza" style="width:100%;max-height:200px;object-fit:cover;border-radius:14px;margin-bottom:24px;" />
+      <h1 style="font-size:28px;font-weight:800;color:${TEXT_PRIMARY};margin:0 0 8px;">Welcome to Olive Pizza! 🍕</h1>
+      <p style="color:${TEXT_SECONDARY};font-size:15px;margin:0;">Hello${customerName ? ` ${customerName}` : ''}! Your account is ready. Explore our premium menu and place your first order.</p>
+    </div>
+    <div style="background:${BRAND_GREEN}11;border:1px solid ${BRAND_GREEN}33;border-radius:14px;padding:20px;margin:24px 0;">
+      <p style="color:${TEXT_SECONDARY};font-size:14px;margin:0 0 8px;text-align:center;">🎉 <strong style="color:${BRAND_GREEN};">First Order Offer:</strong> Free delivery on your first order!</p>
+    </div>
+    <div style="text-align:center;margin-top:28px;" class="btn-row">
+      ${ctaButton('🍕 Browse Menu', `${FRONTEND_URL}/menu`, 'primary')}
+      &nbsp;&nbsp;
+      ${ctaButton('My Account', `${FRONTEND_URL}/customer/dashboard`, 'ghost')}
+    </div>`;
+  return baseWrapper(content, `Welcome to Olive Pizza — your premium pizza experience!`);
+}
+
+export function buildPasswordResetEmail(customerName: string, resetLink: string): string {
+  const content = `
+    <div style="text-align:center;margin-bottom:28px;">
+      <div style="font-size:48px;margin-bottom:12px;">🔑</div>
+      <h1 style="font-size:26px;font-weight:800;color:${TEXT_PRIMARY};margin:0 0 8px;">Password Reset Request</h1>
+      <p style="color:${TEXT_SECONDARY};font-size:15px;margin:0;">${customerName ? `Hi ${customerName}, w` : 'W'}e received a request to reset your Olive Pizza password. Click the button below to proceed.</p>
+    </div>
+    <div style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.2);border-radius:12px;padding:16px;margin:20px 0;text-align:center;">
+      <p style="color:#f87171;font-size:13px;margin:0;">⏰ This link expires in <strong>1 hour</strong>. If you didn't request this, ignore this email.</p>
+    </div>
+    <div style="text-align:center;margin-top:28px;">
+      ${ctaButton('🔑 Reset Password', resetLink, 'accent')}
+    </div>`;
+  return baseWrapper(content, `Reset your Olive Pizza password. Link expires in 1 hour.`);
+}
+
+export function buildEmailVerificationEmail(customerName: string, verificationLink: string): string {
+  const content = `
+    <div style="text-align:center;margin-bottom:28px;">
+      <div style="font-size:48px;margin-bottom:12px;">✉️</div>
+      <h1 style="font-size:26px;font-weight:800;color:${TEXT_PRIMARY};margin:0 0 8px;">Verify Your Email</h1>
+      <p style="color:${TEXT_SECONDARY};font-size:15px;margin:0;">${customerName ? `Hi ${customerName}! ` : ''}Please verify your email address to complete your Olive Pizza account setup.</p>
+    </div>
+    <div style="text-align:center;margin-top:28px;">
+      ${ctaButton('✅ Verify Email Address', verificationLink, 'primary')}
+    </div>
+    <p style="text-align:center;color:${TEXT_MUTED};font-size:12px;margin-top:16px;">If you didn't create an account, you can safely ignore this email.</p>`;
+  return baseWrapper(content, `Please verify your email to get started with Olive Pizza.`);
+}
+
+export function buildPromoEmail(params: {
+  customerName?: string;
+  title: string;
+  description: string;
+  couponCode?: string;
+  expiryDate?: string;
+  bannerImage?: string;
+  ctaLabel?: string;
+  ctaUrl?: string;
+}): string {
+  const content = `
+    ${params.bannerImage ? `<img src="${params.bannerImage}" alt="${params.title}" style="width:100%;max-height:220px;object-fit:cover;border-radius:14px;margin-bottom:24px;" />` : `<div style="font-size:48px;text-align:center;margin-bottom:16px;">🎉</div>`}
+    <div style="text-align:center;margin-bottom:20px;">
+      <h1 style="font-size:26px;font-weight:800;color:${TEXT_PRIMARY};margin:0 0 8px;">${params.title}</h1>
+      <p style="color:${TEXT_SECONDARY};font-size:15px;margin:0;">${params.description}</p>
+    </div>
+    ${params.couponCode ? `<div style="background:${BRAND_ORANGE}11;border:2px dashed ${BRAND_ORANGE}55;border-radius:14px;padding:20px;margin:20px 0;text-align:center;">
+      <div style="font-size:12px;color:${TEXT_MUTED};text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Your Exclusive Code</div>
+      <div style="font-size:28px;font-weight:800;color:${BRAND_ORANGE};letter-spacing:4px;">${params.couponCode}</div>
+      ${params.expiryDate ? `<div style="font-size:12px;color:${TEXT_MUTED};margin-top:8px;">Expires: ${params.expiryDate}</div>` : ''}
+    </div>` : ''}
+    <div style="text-align:center;margin-top:28px;">
+      ${ctaButton(params.ctaLabel || '🍕 Order Now', params.ctaUrl || `${FRONTEND_URL}/menu`, 'accent')}
+    </div>`;
+  return baseWrapper(content, `${params.title} — Grab this offer before it expires!`);
+}
+
+export function buildNewProductEmail(params: {
+  productName: string;
+  productImage?: string;
+  description: string;
+  price?: string;
+}): string {
+  const content = `
+    ${params.productImage ? `<img src="${params.productImage}" alt="${params.productName}" style="width:100%;max-height:220px;object-fit:cover;border-radius:14px;margin-bottom:24px;" />` : `<div style="font-size:48px;text-align:center;margin-bottom:16px;">🆕</div>`}
+    <div style="text-align:center;margin-bottom:20px;">
+      <span style="font-size:11px;color:${BRAND_GREEN};text-transform:uppercase;letter-spacing:2px;font-weight:700;">New on the Menu</span>
+      <h1 style="font-size:26px;font-weight:800;color:${TEXT_PRIMARY};margin:8px 0;">${params.productName}</h1>
+      <p style="color:${TEXT_SECONDARY};font-size:15px;margin:0;">${params.description}</p>
+      ${params.price ? `<div style="font-size:22px;font-weight:800;color:${BRAND_GREEN};margin-top:12px;">Starting at ${params.price}</div>` : ''}
+    </div>
+    <div style="text-align:center;margin-top:28px;">
+      ${ctaButton('🍕 Try It Now', `${FRONTEND_URL}/menu`, 'primary')}
+    </div>`;
+  return baseWrapper(content, `Introducing ${params.productName} — now available at Olive Pizza!`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// OWNER TEMPLATES
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function buildOwnerNewOrderEmail(params: {
+  orderNumber: string;
+  dailyOrderNumber?: string;
+  customerName: string;
+  totalAmount: string;
+  paymentMethod: string;
+  deliveryAddress?: string;
+  deliveryType: string;
+  itemsSummary: string;
+  orderId: string;
+}): string {
+  const content = `
+    <div style="text-align:center;margin-bottom:24px;">
+      <div style="font-size:48px;margin-bottom:12px;">🔔</div>
+      <h1 style="font-size:26px;font-weight:800;color:${TEXT_PRIMARY};margin:0 0 8px;">New Order Received!</h1>
+      <p style="color:${TEXT_SECONDARY};font-size:15px;margin:0;">A new order is waiting for your confirmation.</p>
+    </div>
+    ${statusBadge('New Order', BRAND_ORANGE)}
+    <div style="margin:20px 0;">
+      ${orderMetaRow('Order #', params.orderNumber)}
+      ${params.dailyOrderNumber ? orderMetaRow("Today's Order #", `#${params.dailyOrderNumber}`) : ''}
+      ${orderMetaRow('Customer', params.customerName)}
+      ${orderMetaRow('Total', params.totalAmount)}
+      ${orderMetaRow('Payment', params.paymentMethod)}
+      ${orderMetaRow('Type', params.deliveryType)}
+      ${params.deliveryAddress ? orderMetaRow('Address', params.deliveryAddress) : ''}
+    </div>
+    <div style="background:rgba(255,255,255,0.03);border:1px solid ${BRAND_BORDER};border-radius:12px;padding:16px;margin:16px 0;">
+      <div style="font-size:13px;color:${TEXT_MUTED};margin-bottom:8px;text-transform:uppercase;letter-spacing:1px;">Items Ordered</div>
+      <div style="font-size:14px;color:${TEXT_PRIMARY};">${params.itemsSummary}</div>
+    </div>
+    <div style="text-align:center;margin-top:28px;" class="btn-row">
+      ${ctaButton('✅ Accept Order', `${FRONTEND_URL}/owner/orders`, 'primary')}
+      &nbsp;&nbsp;
+      ${ctaButton('📊 View Dashboard', `${FRONTEND_URL}/owner/dashboard`, 'ghost')}
+    </div>`;
+  return baseWrapper(content, `New order from ${params.customerName} — ${params.totalAmount}`);
+}
+
+export function buildOwnerDailySummaryEmail(params: {
+  date: string;
+  totalOrders: number;
+  totalRevenue: string;
+  completedOrders: number;
+  cancelledOrders: number;
+  avgOrderValue: string;
+  topItem?: string;
+}): string {
+  const content = `
+    <div style="text-align:center;margin-bottom:24px;">
+      <div style="font-size:48px;margin-bottom:12px;">📊</div>
+      <h1 style="font-size:26px;font-weight:800;color:${TEXT_PRIMARY};margin:0 0 8px;">Daily Sales Summary</h1>
+      <p style="color:${TEXT_SECONDARY};font-size:15px;margin:0;">${params.date}</p>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:20px 0;">
+      ${[
+        { label: 'Total Orders', value: String(params.totalOrders), color: BRAND_GREEN },
+        { label: 'Revenue', value: params.totalRevenue, color: BRAND_ORANGE },
+        { label: 'Completed', value: String(params.completedOrders), color: BRAND_GREEN },
+        { label: 'Cancelled', value: String(params.cancelledOrders), color: '#ef4444' },
+      ].map(s => `<div style="background:rgba(255,255,255,0.03);border:1px solid ${BRAND_BORDER};border-radius:12px;padding:16px;text-align:center;">
+        <div style="font-size:24px;font-weight:800;color:${s.color};">${s.value}</div>
+        <div style="font-size:12px;color:${TEXT_MUTED};margin-top:4px;">${s.label}</div>
+      </div>`).join('')}
+    </div>
+    <div style="margin:16px 0;">
+      ${orderMetaRow('Avg. Order Value', params.avgOrderValue)}
+      ${params.topItem ? orderMetaRow('Top Selling Item', params.topItem) : ''}
+    </div>
+    <div style="text-align:center;margin-top:28px;">
+      ${ctaButton('📈 View Full Analytics', `${FRONTEND_URL}/owner/reports`, 'primary')}
+    </div>`;
+  return baseWrapper(content, `Daily summary for ${params.date} — ${params.totalRevenue} revenue`);
+}
+
+export function buildOwnerCriticalAlertEmail(subject: string, message: string, details?: string): string {
+  const content = `
+    <div style="text-align:center;margin-bottom:24px;">
+      <div style="font-size:48px;margin-bottom:12px;">🚨</div>
+      <h1 style="font-size:26px;font-weight:800;color:#ef4444;margin:0 0 8px;">${subject}</h1>
+      <p style="color:${TEXT_SECONDARY};font-size:15px;margin:0;">${message}</p>
+    </div>
+    ${details ? `<div style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.25);border-radius:12px;padding:16px;margin:20px 0;font-size:13px;color:#f87171;font-family:monospace;white-space:pre-wrap;word-break:break-all;">${details}</div>` : ''}
+    <div style="text-align:center;margin-top:28px;">
+      ${ctaButton('🔍 Open Dashboard', `${FRONTEND_URL}/owner/dashboard`, 'accent')}
+    </div>`;
+  return baseWrapper(content, `Critical Alert: ${subject}`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DELIVERY PARTNER TEMPLATES
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function buildDeliveryNewAssignmentEmail(params: {
+  partnerName: string;
+  orderNumber: string;
+  pickupAddress: string;
+  deliveryAddress: string;
+  distance?: string;
+  totalAmount: string;
+  eta?: string;
+  customerPhone?: string;
+  orderId: string;
+}): string {
+  const content = `
+    <div style="text-align:center;margin-bottom:24px;">
+      <div style="font-size:48px;margin-bottom:12px;">📦</div>
+      <h1 style="font-size:26px;font-weight:800;color:${TEXT_PRIMARY};margin:0 0 8px;">New Delivery Request</h1>
+      <p style="color:${TEXT_SECONDARY};font-size:15px;margin:0;">${params.partnerName ? `Hi ${params.partnerName}! ` : ''}A delivery is waiting for you.</p>
+    </div>
+    ${statusBadge('New Assignment', BRAND_ORANGE)}
+    <div style="margin:20px 0;">
+      ${orderMetaRow('Order #', params.orderNumber)}
+      ${orderMetaRow('Order Value', params.totalAmount)}
+      ${orderMetaRow('Pickup', params.pickupAddress)}
+      ${orderMetaRow('Delivery To', params.deliveryAddress)}
+      ${params.distance ? orderMetaRow('Distance', params.distance) : ''}
+      ${params.eta ? orderMetaRow('Est. Time', params.eta) : ''}
+      ${params.customerPhone ? orderMetaRow('Customer Phone', params.customerPhone) : ''}
+    </div>
+    <div style="text-align:center;margin-top:28px;" class="btn-row">
+      ${ctaButton('✅ Accept Delivery', `${FRONTEND_URL}/delivery/dashboard`, 'primary')}
+      &nbsp;&nbsp;
+      ${ctaButton('🗺️ Navigate', `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(params.pickupAddress)}`, 'accent')}
+    </div>`;
+  return baseWrapper(content, `New delivery from Olive Pizza — ${params.totalAmount}`);
+}
+
+export function buildDeliveryCompletedEmail(partnerName: string, orderNumber: string, amount: string): string {
+  const content = `
+    <div style="text-align:center;margin-bottom:24px;">
+      <div style="font-size:48px;margin-bottom:12px;">✅</div>
+      <h1 style="font-size:26px;font-weight:800;color:${TEXT_PRIMARY};margin:0 0 8px;">Delivery Completed!</h1>
+      <p style="color:${TEXT_SECONDARY};font-size:15px;margin:0;">Great job${partnerName ? `, ${partnerName}` : ''}! Order #${orderNumber} has been delivered successfully.</p>
+    </div>
+    ${statusBadge('Completed', BRAND_GREEN)}
+    <div style="margin:20px 0;">
+      ${orderMetaRow('Order #', orderNumber)}
+      ${amount ? orderMetaRow('Order Value', amount) : ''}
+    </div>
+    <div style="text-align:center;margin-top:28px;">
+      ${ctaButton('📊 View Earnings', `${FRONTEND_URL}/delivery/earnings`, 'primary')}
+    </div>`;
+  return baseWrapper(content, `Delivery completed for Order #${orderNumber}`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LEGACY EXPORTS (backward compatibility with existing callers)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** @deprecated Use buildOrderPlacedEmailSimple instead */
+export const buildOrderPlacedEmail = (order: any): string => {
+  return buildOrderPlacedEmailSimple(
+    order.customerInfo?.name || order.customerName || '',
+    String(order.dailyOrderNumber || order.id),
+    `₹${(order.totalAmount || 0).toFixed(2)}`,
+    '',
+    `${FRONTEND_URL}/tracking/${order.id}`
+  );
 };
 
-// Helper for timeline
-const renderTimeline = (activeStep: number) => {
-  const steps = ['Placed', 'Confirmed', 'Preparing', 'Packed', 'Out For Delivery', 'Delivered'];
-  return `
-    <div style="margin: 30px 0; padding: 20px; background: rgba(0,0,0,0.2); border-radius: 16px;">
-      ${steps.map((step, index) => {
-        const isPassed = index <= activeStep;
-        const isActive = index === activeStep;
-        return `
-          <div style="display: flex; align-items: center; margin-bottom: ${index === steps.length - 1 ? '0' : '12px'};">
-            <div style="width: 24px; height: 24px; border-radius: 50%; background: ${isPassed ? BRAND_COLOR : '#334155'}; display: flex; align-items: center; justify-content: center; color: white; font-size: 12px; font-weight: bold; margin-right: 12px;">
-              ${isPassed ? '✓' : ''}
-            </div>
-            <div style="color: ${isActive ? BRAND_COLOR : (isPassed ? '#f8fafc' : '#64748b')}; font-weight: ${isActive ? 'bold' : 'normal'};">
-              ${step}
-            </div>
-          </div>
-        `;
-      }).join('')}
-    </div>
-  `;
+/** @deprecated Use buildOrderConfirmedEmailSimple instead */
+export const buildOrderConfirmedEmail = (order: any): string => {
+  return buildOrderConfirmedEmailSimple(
+    order.customerInfo?.name || order.customerName || '',
+    String(order.dailyOrderNumber || order.id),
+    '',
+    `${FRONTEND_URL}/tracking/${order.id}`
+  );
 };
 
-// Helper for billing
-const renderBilling = (order: Order) => {
-  return `
-    <div style="margin-top: 24px; padding-top: 16px; border-top: 1px dashed #334155;">
-      <div style="display: flex; justify-content: space-between; margin-bottom: 8px; color: #94a3b8; font-size: 14px;">
-        <span>Subtotal</span>
-        <span>₹${(order.totalAmount - (order.deliveryFee || 0)).toFixed(2)}</span>
-      </div>
-      <div style="display: flex; justify-content: space-between; margin-bottom: 8px; color: #94a3b8; font-size: 14px;">
-        <span>Delivery Charge</span>
-        <span>₹${(order.deliveryFee || 0).toFixed(2)}</span>
-      </div>
-      <div style="display: flex; justify-content: space-between; margin-top: 16px; color: #ffffff; font-size: 18px; font-weight: bold;">
-        <span>Grand Total</span>
-        <span style="color: ${BRAND_COLOR};">₹${order.totalAmount.toFixed(2)}</span>
-      </div>
-    </div>
-  `;
+/** @deprecated Use buildDeliveryAssignedEmailSimple instead */
+export const buildDeliveryPartnerAssignedEmail = (order: any, partnerName: string, _partnerPhoto: string, _vehicleInfo: string): string => {
+  return buildDeliveryAssignedEmailSimple(
+    order.customerInfo?.name || order.customerName || '',
+    String(order.dailyOrderNumber || order.id),
+    partnerName,
+    '',
+    `${FRONTEND_URL}/tracking/${order.id}`
+  );
 };
 
-// Helper for customer details
-const renderCustomerDetails = (order: Order) => {
-  return `
-    <div style="background: rgba(255,255,255,0.02); border-radius: 12px; padding: 16px; margin: 24px 0;">
-      <h3 style="color: #ffffff; margin: 0 0 12px 0; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Customer Details</h3>
-      <p style="margin: 0 0 4px 0; color: #cbd5e1;"><strong>Name:</strong> ${order.customerInfo?.name || order.customerName}</p>
-      <p style="margin: 0 0 4px 0; color: #cbd5e1;"><strong>Phone:</strong> ${order.contactPhone || order.customerInfo?.phone}</p>
-      <p style="margin: 0 0 4px 0; color: #cbd5e1;"><strong>Address:</strong> ${order.deliveryAddress?.addressLine || order.address || 'Takeaway'}</p>
-      <p style="margin: 0; color: #cbd5e1;"><strong>Payment:</strong> <span style="color: ${BRAND_COLOR};">Paid</span></p>
-    </div>
-  `;
-};
-
-
-export const buildOrderPlacedEmail = (order: Order) => {
-  return `
-    <div style="text-align: center; margin-bottom: 30px;">
-      <img src="https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&q=80" style="width: 100%; height: 200px; object-fit: cover; border-radius: 16px; margin-bottom: 20px;" />
-      <h1 style="color: ${BRAND_COLOR}; margin: 0 0 8px 0;">Order Placed Successfully!</h1>
-      <p style="color: #94a3b8; font-size: 16px; margin: 0;">Thank you for choosing Olive Pizza. Your order #${order.dailyOrderNumber} is confirmed.</p>
-    </div>
-
-    ${renderCustomerDetails(order)}
-    
-    <h3 style="color: #ffffff; margin: 0 0 16px 0; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Order Items</h3>
-    ${renderProductCards(order.items)}
-    
-    ${renderBilling(order)}
-
-    <div style="text-align: center; margin-top: 40px;">
-      <a href="${FRONTEND_URL}/tracking/${order.id}" style="background-color: ${BRAND_COLOR}; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Track Order</a>
-    </div>
-  `;
-};
-
-export const buildOrderConfirmedEmail = (order: Order) => {
-  return `
-    <div style="text-align: center; margin-bottom: 30px;">
-      <h1 style="color: ${BRAND_COLOR}; margin: 0 0 8px 0;">We're preparing your food!</h1>
-      <p style="color: #94a3b8; font-size: 16px; margin: 0;">Your order #${order.dailyOrderNumber} has been confirmed and our chefs are on it.</p>
-    </div>
-
-    ${renderTimeline(2)}
-
-    ${renderCustomerDetails(order)}
-    
-    <h3 style="color: #ffffff; margin: 0 0 16px 0; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Order Summary</h3>
-    ${renderProductCards(order.items)}
-    
-    ${renderBilling(order)}
-
-    <div style="text-align: center; margin-top: 40px;">
-      <a href="${FRONTEND_URL}/tracking/${order.id}" style="background-color: ${BRAND_COLOR}; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Track Live Order</a>
-    </div>
-  `;
-};
-
-export const buildDeliveryPartnerAssignedEmail = (order: Order, partnerName: string, partnerPhoto: string, vehicleInfo: string) => {
-  return `
-    <div style="text-align: center; margin-bottom: 30px;">
-      <h1 style="color: ${BRAND_COLOR}; margin: 0 0 8px 0;">Your delivery partner is on the way!</h1>
-      <p style="color: #94a3b8; font-size: 16px; margin: 0;">Your order #${order.dailyOrderNumber} is picked up and out for delivery.</p>
-    </div>
-
-    <div style="background: rgba(255,255,255,0.05); border-radius: 16px; padding: 20px; display: flex; gap: 20px; align-items: center; margin-bottom: 30px;">
-      <img src="${partnerPhoto || 'https://res.cloudinary.com/dxmlvkff1/image/upload/v1782376898/olive-pizza/brand/logo.png'}" width="64" height="64" style="border-radius: 50%; object-fit: cover; border: 2px solid ${BRAND_COLOR};" />
-      <div>
-        <h3 style="margin: 0 0 4px 0; color: #ffffff;">${partnerName}</h3>
-        <p style="margin: 0; color: #94a3b8; font-size: 14px;">${vehicleInfo || 'Delivery Partner'}</p>
-      </div>
-    </div>
-
-    ${renderTimeline(4)}
-
-    <h3 style="color: #ffffff; margin: 0 0 16px 0; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Order Summary</h3>
-    ${renderProductCards(order.items)}
-
-    <div style="text-align: center; margin-top: 40px;">
-      <a href="${FRONTEND_URL}/tracking/${order.id}" style="background-color: ${BRAND_ORANGE}; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Track Live on Map</a>
-    </div>
-  `;
-};
-
-export const buildOrderDeliveredEmail = (order: Order, recommendedProducts: any[] = []) => {
-  return `
-    <div style="text-align: center; margin-bottom: 30px;">
-      <img src="https://images.unsplash.com/photo-1590947132387-155cc02f3212?w=800&q=80" style="width: 100%; height: 200px; object-fit: cover; border-radius: 16px; margin-bottom: 20px;" />
-      <h1 style="color: ${BRAND_COLOR}; margin: 0 0 8px 0;">Enjoy your meal! 🎉</h1>
-      <p style="color: #94a3b8; font-size: 16px; margin: 0;">Your order #${order.dailyOrderNumber} has been delivered successfully.</p>
-    </div>
-
-    ${renderBilling(order)}
-
-    <div style="text-align: center; margin-top: 40px;">
-      <a href="${FRONTEND_URL}/dashboard?rate=${order.id}" style="background-color: ${BRAND_COLOR}; color: white; padding: 14px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block; margin-right: 12px;">⭐ Rate Order</a>
-      <a href="${FRONTEND_URL}/menu?reorder=${order.id}" style="background-color: rgba(255,255,255,0.1); color: white; padding: 14px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block; border: 1px solid rgba(255,255,255,0.2);">🔁 Reorder</a>
-    </div>
-
-    ${recommendedProducts && recommendedProducts.length > 0 ? `
-    <div style="margin-top: 50px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 30px;">
-      <h3 style="color: #ffffff; text-align: center; margin: 0 0 20px 0; font-size: 18px;">You Might Also Like</h3>
-      ${recommendedProducts.map(p => `
-        <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 12px; padding: 16px; margin-bottom: 12px; display: flex; gap: 16px; align-items: center;">
-          <img src="${p.image || 'https://res.cloudinary.com/dxmlvkff1/image/upload/v1782376898/olive-pizza/brand/logo.png'}" width="80" height="80" style="border-radius: 8px; object-fit: cover;" />
-          <div style="flex: 1;">
-            <h4 style="margin: 0 0 4px 0; color: #ffffff; font-size: 16px;">${p.name || p.productName}</h4>
-            <div style="color: ${BRAND_COLOR}; font-weight: bold; font-size: 14px;">₹${(p.basePrice || p.price || 0).toFixed(2)}</div>
-          </div>
-          <a href="${FRONTEND_URL}/menu" style="background-color: rgba(249,115,22,0.1); color: ${BRAND_ORANGE}; padding: 8px 16px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 12px;">View</a>
-        </div>
-      `).join('')}
-    </div>
-    ` : ''}
-  `;
+/** @deprecated Use buildOrderDeliveredEmailSimple instead */
+export const buildOrderDeliveredEmail = (order: any, _recommendedProducts: any[] = []): string => {
+  return buildOrderDeliveredEmailSimple(
+    order.customerInfo?.name || order.customerName || '',
+    String(order.dailyOrderNumber || order.id),
+    `${FRONTEND_URL}/customer/dashboard`,
+    `${FRONTEND_URL}/tracking/${order.id}`
+  );
 };

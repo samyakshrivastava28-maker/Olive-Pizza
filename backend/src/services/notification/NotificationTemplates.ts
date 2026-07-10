@@ -36,7 +36,7 @@ export type NotificationCategory =
 
 export interface NotificationPayload {
   /** FCM notification object (visible to user) */
-  notification: {
+  notification?: {
     title: string;
     body: string;
     image?: string;

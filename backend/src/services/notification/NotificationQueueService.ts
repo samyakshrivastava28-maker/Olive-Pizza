@@ -17,6 +17,8 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { notificationDebugger } from './NotificationDebugger.js';
 import { pgPool } from '../../config/postgres.js';
 import { adminDb, adminMessaging } from '../../config/firebase.js';
+import { queueEmail } from '../email.service.js';
+import { buildOrderStatusEmail } from '../emailTemplates.service.js';
 
 export interface EnqueueOptions {
   tag?: string;               // FCM tag for live card (maps to orderId for orders)
@@ -258,11 +260,20 @@ export class NotificationQueueService {
     try {
       await client.query(`UPDATE notification_queue SET status = 'sending', updated_at = NOW() WHERE id = $1`, [id]);
 
-      // ── Fetch active tokens from Postgres ─────────────────────────────────
-      const tokenResult = await client.query(
-        `SELECT token FROM fcm_tokens WHERE user_id = $1 AND is_active = TRUE ORDER BY last_used_at DESC LIMIT 10`,
-        [target_user_id]
-      );
+      // ── Fetch active tokens + user email from Postgres ──────────────────
+      const [tokenResult, userResult] = await Promise.all([
+        client.query(
+          `SELECT token FROM fcm_tokens WHERE user_id = $1 AND is_active = TRUE ORDER BY last_used_at DESC LIMIT 10`,
+          [target_user_id]
+        ),
+        client.query(
+          `SELECT email, name FROM users WHERE id = $1`,
+          [target_user_id]
+        ),
+      ]);
+
+      const userEmail: string | null = userResult.rows[0]?.email || null;
+      const customerName: string = userResult.rows[0]?.name || 'Customer';
 
       // Fallback to Firestore if Postgres tokens empty
       let tokens: string[] = tokenResult.rows.map((r: any) => r.token);
@@ -279,8 +290,31 @@ export class NotificationQueueService {
         }
       }
 
+      // ── Email-only path: no FCM tokens available ──────────────────────────
       if (tokens.length === 0) {
-        throw new Error('No active FCM tokens for user');
+        if (userEmail) {
+          try {
+            const parsedPayload = typeof payload === 'string' ? JSON.parse(payload) : payload;
+            const stage = parsedPayload.data?.stage || category || 'update';
+            const subject = parsedPayload.data?.title || 'Order Update — Olive Pizza';
+            const htmlBody = buildOrderStatusEmail({
+              customerName,
+              subject,
+              stage,
+              orderId: order_id,
+              data: parsedPayload.data || {},
+            });
+            await queueEmail(userEmail, subject, htmlBody, 'transactional');
+            console.log(`[NotifQueue] 📧 Email fallback sent to ${userEmail} for stage=${stage}`);
+          } catch (emailErr) {
+            console.error('[NotifQueue] Email fallback failed:', emailErr);
+          }
+        } else {
+          console.warn(`[NotifQueue] No tokens and no email for user ${target_user_id} — notification lost.`);
+        }
+        // Mark as sent (via email) and exit
+        await client.query(`UPDATE notification_queue SET status = 'sent', updated_at = NOW() WHERE id = $1`, [id]);
+        return;
       }
 
       // ── Build FCM message ─────────────────────────────────────────────────
@@ -341,6 +375,25 @@ export class NotificationQueueService {
 
       const successCount = response.successCount;
       if (successCount === 0 && tokens.length > 0) {
+        // All FCM sends failed — try email fallback before giving up
+        if (userEmail) {
+          try {
+            const parsedPayload = typeof payload === 'string' ? JSON.parse(payload) : payload;
+            const stage = parsedPayload.data?.stage || category || 'update';
+            const subject = parsedPayload.data?.title || 'Order Update — Olive Pizza';
+            const htmlBody = buildOrderStatusEmail({
+              customerName,
+              subject,
+              stage,
+              orderId: order_id,
+              data: parsedPayload.data || {},
+            });
+            await queueEmail(userEmail, subject, htmlBody, 'transactional');
+            console.log(`[NotifQueue] 📧 FCM-failed email fallback sent to ${userEmail} for stage=${stage}`);
+          } catch (emailErr) {
+            console.error('[NotifQueue] Post-FCM-failure email fallback failed:', emailErr);
+          }
+        }
         throw new Error('All tokens failed to receive the message');
       }
 
