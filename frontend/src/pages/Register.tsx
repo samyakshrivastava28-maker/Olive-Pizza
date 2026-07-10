@@ -5,6 +5,7 @@ import {
   signInWithPopup,
   getRedirectResult,
   GoogleAuthProvider,
+  signInWithCredential
 } from "firebase/auth";
 import { Capacitor } from '@capacitor/core';
 import { auth, db } from "../lib/firebase";
@@ -256,10 +257,16 @@ export default function Register() {
     try {
       const provider = new GoogleAuthProvider();
       let result;
-      // Use redirect on native app, popup on web
+      // Use native plugin on Android to avoid WebView storage issues, popup on web
       if (Capacitor.isNativePlatform()) {
-        await signInWithRedirect(auth, provider);
-        return;
+        const { FirebaseAuthentication } = await import('@capacitor-firebase/authentication');
+        const nativeResult = await FirebaseAuthentication.signInWithGoogle();
+        if (nativeResult.credential?.idToken) {
+          const credential = GoogleAuthProvider.credential(nativeResult.credential.idToken);
+          result = await signInWithCredential(auth, credential);
+        } else {
+          throw new Error("Google Sign-In failed on device.");
+        }
       } else {
         result = await withAuthRetry(() => signInWithPopup(auth, provider), "Google Popup");
       }
