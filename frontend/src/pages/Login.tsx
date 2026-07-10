@@ -161,8 +161,14 @@ export default function Login() {
     setLoading(true);
     try {
       const provider = new GoogleAuthProvider();
-      // Use popup to prevent cross-origin redirect loops dropping the auth session in modern browsers
-      const result = await withAuthRetry(() => signInWithPopup(auth, provider), "Google Popup");
+      let result;
+      // Use redirect on native app, popup on web
+      if (window.Capacitor && window.Capacitor.isNativePlatform()) {
+        await signInWithRedirect(auth, provider);
+        return; // Redirect leaves the page, so stop here
+      } else {
+        result = await withAuthRetry(() => signInWithPopup(auth, provider), "Google Popup");
+      }
       
       if (result && result.user) {
         const userRef = doc(db, "users", result.user.uid);

@@ -73,8 +73,6 @@ const lazyWithRetry = <T extends ComponentType<any>>(
 // Eager imports for layout, guards, and critical UI
 import MainLayout from './components/MainLayout';
 import AuthProvider from './components/AuthProvider';
-import AppPWAPrompt from "./components/ui/AppPWAPrompt";
-import { OwnerPWA } from "./components/owner/OwnerPWA";
 import AutoUpdater from "./components/ui/AutoUpdater";
 import ClickSpark from './components/ui/ClickSpark';
 import { CartAnimationProvider } from './components/ui/CartAnimationProvider';
