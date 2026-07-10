@@ -12,7 +12,6 @@ backend/credentials/
 !firebase.json
 !vercel.json
 !capacitor.config.json
-!android/app/google-services.json
 
 # Android build outputs (keep source, ignore compiled artefacts)
 android/.gradle/
