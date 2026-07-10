@@ -6,6 +6,7 @@ import {
   getRedirectResult,
   GoogleAuthProvider,
 } from "firebase/auth";
+import { Capacitor } from '@capacitor/core';
 import { auth, db } from "../lib/firebase";
 import { doc, setDoc } from "firebase/firestore";
 import { useNavigate, Link } from "react-router";
@@ -163,7 +164,7 @@ export default function Login() {
       const provider = new GoogleAuthProvider();
       let result;
       // Use redirect on native app, popup on web
-      if (window.Capacitor && window.Capacitor.isNativePlatform()) {
+      if (Capacitor.isNativePlatform()) {
         await signInWithRedirect(auth, provider);
         return; // Redirect leaves the page, so stop here
       } else {
