@@ -99,7 +99,7 @@ export default function PushNotificationManager() {
       const messaging = await getMessagingInstance();
       if (!messaging) return;
 
-      const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY || "BIq5vy-awOEQYWgW9bRJrkMu2Bs0XKbI-DYkuh-IypgeKcJLSDDj1ZkS__EFJxiyrKKPlOp3Dm12kmGGXR6RtkI";
+      const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY || "BDfxvZSqSw6Es3dvXz4VZMwjNFKMCCfRSgdCVty3rfqqBZ6AAWFlZ2EwWQR8ltp6DRMTUKOmH9Rlu0fjCziOKDk";
       if (!vapidKey) { console.error('[PushManager] Missing VITE_FIREBASE_VAPID_KEY'); return; }
 
       const swReg = await registerServiceWorker();

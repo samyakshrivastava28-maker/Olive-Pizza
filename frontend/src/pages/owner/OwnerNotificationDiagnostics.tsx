@@ -37,7 +37,7 @@ export default function OwnerNotificationDiagnostics() {
         if (messaging) {
           const { getToken } = await import('firebase/messaging');
           token = await getToken(messaging, { 
-            vapidKey: import.meta.env.VITE_FIREBASE_VAPID_KEY || "BIq5vy-awOEQYWgW9bRJrkMu2Bs0XKbI-DYkuh-IypgeKcJLSDDj1ZkS__EFJxiyrKKPlOp3Dm12kmGGXR6RtkI" 
+            vapidKey: import.meta.env.VITE_FIREBASE_VAPID_KEY || "BDfxvZSqSw6Es3dvXz4VZMwjNFKMCCfRSgdCVty3rfqqBZ6AAWFlZ2EwWQR8ltp6DRMTUKOmH9Rlu0fjCziOKDk" 
           }).catch(() => null);
         }
       }
