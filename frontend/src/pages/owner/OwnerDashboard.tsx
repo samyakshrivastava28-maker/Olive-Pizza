@@ -235,8 +235,8 @@ export default function OwnerDashboard() {
         </h1>
         <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
           <motion.a
-            href="/app-release.apk"
-            download="OlivePizza-Owner-Demo.apk"
+            href="https://github.com/samyakshrivastava28-maker/Olive-Pizza/releases/download/android-latest/OlivePizza-v1.0-debug.apk"
+            download="OlivePizza.apk"
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             className="flex items-center justify-center gap-2 bg-gradient-to-r from-[#3ddc84]/20 to-[#3ddc84]/10 border border-[#3ddc84]/40 hover:border-[#3ddc84]/70 text-[#3ddc84] px-4 py-2.5 rounded-full font-bold text-sm transition-all backdrop-blur-md shadow-lg"

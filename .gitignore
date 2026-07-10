@@ -11,3 +11,14 @@ backend/credentials/
 !tsconfig.json
 !firebase.json
 !vercel.json
+!capacitor.config.json
+
+# Android build outputs (keep source, ignore compiled artefacts)
+android/.gradle/
+android/app/build/
+android/build/
+android/local.properties
+*.apk
+*.aab
+*.keystore
+*.jks

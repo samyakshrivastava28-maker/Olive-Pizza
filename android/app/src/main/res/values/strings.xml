@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Olive Pizza</string>
+    <string name="title_activity_main">Olive Pizza</string>
+    <string name="package_name">com.olivepizza.app</string>
+    <string name="custom_url_scheme">com.olivepizza.app</string>
+</resources>
