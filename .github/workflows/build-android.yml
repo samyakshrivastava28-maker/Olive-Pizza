@@ -22,37 +22,22 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      # 3. Install dependencies
+      # 3. Install dependencies (only root, no build needed - app streams live site via server.url)
       - name: Install Node dependencies
-        run: npm ci --prefer-offline
+        run: npm ci
 
-      # 4. Build the frontend web assets (needed for Capacitor copy step)
-      - name: Build frontend
-        run: npx vite build
-        env:
-          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
-          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
-          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
-          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
-          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
-          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
-          VITE_FIREBASE_VAPID_KEY: ${{ secrets.VITE_FIREBASE_VAPID_KEY }}
-          VITE_BACKEND_URL: https://olive-pizza-backend.onrender.com
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
-
-      # 5. Sync Capacitor so Android project gets fresh web assets
-      - name: Sync Capacitor
-        run: npx cap sync android
-
-      # 6. Setup Java 17 (required for modern Android Gradle Plugin)
+      # 4. Setup Java 17 (required for Android Gradle Plugin)
       - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      # 7. Cache Gradle files for faster builds
+      # 5. Setup Android SDK
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      # 6. Cache Gradle files for faster builds
       - name: Cache Gradle packages
         uses: actions/cache@v4
         with:
@@ -63,45 +48,48 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
-      # 8. Grant execute permission to Gradle wrapper
+      # 7. Grant execute permission to Gradle wrapper
       - name: Grant Gradle execute permissions
         run: chmod +x android/gradlew
 
-      # 9. Build debug APK
+      # 8. Build debug APK
+      #    No signing needed for debug builds.
+      #    The app loads olive-pizza.vercel.app via Capacitor server.url — no frontend build required.
       - name: Build Debug APK
-        run: ./gradlew assembleDebug --no-daemon
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
         working-directory: android
 
-      # 10. Rename APK for easy identification
+      # 9. Rename APK for easy identification
       - name: Rename APK
         run: |
           mkdir -p artifact
-          cp android/app/build/outputs/apk/debug/app-debug.apk artifact/OlivePizza-v1.0-debug.apk
+          cp android/app/build/outputs/apk/debug/app-debug.apk artifact/OlivePizza-v1.0.apk
 
-      # 11. Upload APK as downloadable GitHub Actions artifact (available for 90 days)
+      # 10. Upload APK as GitHub Actions artifact (available 90 days)
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: OlivePizza-Android-APK
-          path: artifact/OlivePizza-v1.0-debug.apk
+          path: artifact/OlivePizza-v1.0.apk
           retention-days: 90
 
-      # 12. Create a GitHub Release so the APK is permanently accessible at a stable URL
-      - name: Create or update GitHub Release
+      # 11. Publish as a GitHub Release so the Owner Dashboard download button always works
+      - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: android-latest
-          name: "Android APK — Latest Build"
+          name: "Olive Pizza Android App — Latest Build"
           body: |
-            🍕 **Olive Pizza Android App** — Latest automated build
-            
-            This APK wraps the live production website ([olive-pizza.vercel.app](https://olive-pizza.vercel.app)) natively in an Android shell.
-            
-            **Install Instructions:**
-            1. Download the APK file below.
-            2. On your Android device, go to **Settings → Security → Install unknown apps** and allow your browser/Files app.
+            🍕 **Olive Pizza Android App** — automatically built from latest code.
+
+            This is a native Android wrapper that streams the live production site:
+            👉 https://olive-pizza.vercel.app
+
+            **How to install:**
+            1. Download `OlivePizza-v1.0.apk` below.
+            2. On your Android device: **Settings → Security → Install unknown apps** → allow your file manager.
             3. Open the downloaded APK and tap **Install**.
-          files: artifact/OlivePizza-v1.0-debug.apk
+          files: artifact/OlivePizza-v1.0.apk
           draft: false
           prerelease: false
           make_latest: true
