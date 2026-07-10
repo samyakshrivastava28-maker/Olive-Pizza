@@ -27,14 +27,11 @@ jobs:
         run: npm ci
 
       # 4. Initialize dummy webDir and sync Capacitor
-      #    Because we stripped Vite from CI to avoid missing Firebase secrets,
-      #    we must manually create the webDir before syncing so Capacitor doesn't crash.
-      #    The APK streams the live URL anyway, so web assets are ignored.
       - name: Sync Capacitor
         run: |
           mkdir -p dist/client
           echo "Placeholder" > dist/client/index.html
-          npx cap sync android
+          npx --yes cap sync android
 
       # 5. Setup Java 17 (required for Android Gradle Plugin)
       - name: Setup Java 17

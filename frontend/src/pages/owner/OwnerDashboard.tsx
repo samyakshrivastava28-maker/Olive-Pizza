@@ -23,6 +23,7 @@ import SystemDiagnostics from '../../components/owner/SystemDiagnostics';
 import LiveOrdersTable from "../../components/owner/LiveOrdersTable";
 import ActivityFeed from "../../components/owner/ActivityFeed";
 import SystemStatusPanel from "../../components/owner/SystemStatusPanel";
+import ApkBuildStatus from "../../components/owner/ApkBuildStatus";
 import QuickActions from "../../components/owner/QuickActions";
 import { GlassCard } from "../../components/ui/glass/GlassSystem";
 import { lazy, Suspense } from 'react';
@@ -60,27 +61,6 @@ export default function OwnerDashboard() {
 
   const [chartOrders, setChartOrders] = useState<any[]>([]);
   const [deliveryPartners, setDeliveryPartners] = useState<any[]>([]);
-  const [apkUrl, setApkUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    const fetchApkUrl = async () => {
-      try {
-        const res = await fetch("https://api.github.com/repos/samyakshrivastava28-maker/Olive-Pizza/releases/tags/android-latest");
-        if (res.ok) {
-          const data = await res.json();
-          const asset = data.assets?.find((a: any) => a.name.endsWith('.apk'));
-          if (asset) {
-            setApkUrl(asset.browser_download_url);
-            return;
-          }
-        }
-        setApkUrl(null);
-      } catch (e) {
-        setApkUrl(null);
-      }
-    };
-    fetchApkUrl();
-  }, []);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -255,24 +235,6 @@ export default function OwnerDashboard() {
           Overview
         </h1>
         <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
-          {apkUrl ? (
-            <motion.a
-              href={apkUrl}
-              download="OlivePizza.apk"
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className="flex items-center justify-center gap-2 bg-gradient-to-r from-[#3ddc84]/20 to-[#3ddc84]/10 border border-[#3ddc84]/40 hover:border-[#3ddc84]/70 text-[#3ddc84] px-4 py-2.5 rounded-full font-bold text-sm transition-all backdrop-blur-md shadow-lg"
-            >
-              <Smartphone className="w-4 h-4" />
-              <Download className="w-3.5 h-3.5" />
-              Download APK
-            </motion.a>
-          ) : (
-            <div className="flex items-center justify-center gap-2 bg-dark-800/50 border border-dark-700 text-gray-500 px-4 py-2.5 rounded-full font-bold text-sm transition-all backdrop-blur-md cursor-not-allowed">
-              <Smartphone className="w-4 h-4 opacity-50" />
-              APK Unavailable
-            </div>
-          )}
           <a
             href="/owner/reports"
             className="w-full md:w-auto bg-white/10 text-white border border-white/20 hover:bg-white/20 px-4 py-2.5 rounded-full font-bold text-sm transition-all backdrop-blur-md shadow-lg flex items-center justify-center gap-2 hover:scale-105 active:scale-95"
@@ -282,40 +244,7 @@ export default function OwnerDashboard() {
         </div>
       </div>
 
-      {/* APK Download Banner */}
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, delay: 0.05 }}
-        className="flex flex-col sm:flex-row items-start sm:items-center gap-4 bg-gradient-to-r from-[#3ddc84]/10 via-[#3ddc84]/5 to-transparent border border-[#3ddc84]/25 rounded-2xl px-5 py-4"
-      >
-        <div className="flex items-center gap-3 flex-1">
-          <div className="w-10 h-10 rounded-xl bg-[#3ddc84]/15 border border-[#3ddc84]/30 flex items-center justify-center flex-shrink-0">
-            <Smartphone className="w-5 h-5 text-[#3ddc84]" />
-          </div>
-          <div>
-            <p className="text-sm font-bold text-white">Android Demo APK Available</p>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Native Android wrapper streaming the live Olive Pizza production site — share with clients for demonstrations.
-            </p>
-          </div>
-        </div>
-        {apkUrl ? (
-          <a
-            href={apkUrl}
-            download="OlivePizza.apk"
-            className="flex-shrink-0 flex items-center gap-2 bg-[#3ddc84] hover:bg-[#34c077] text-black px-5 py-2.5 rounded-full font-bold text-sm transition-all hover:scale-105 active:scale-95 shadow-lg shadow-[#3ddc84]/20"
-          >
-            <Download className="w-4 h-4" />
-            Download APK
-          </a>
-        ) : (
-          <div className="flex-shrink-0 flex items-center gap-2 bg-dark-700 text-gray-500 px-5 py-2.5 rounded-full font-bold text-sm cursor-not-allowed border border-dark-600">
-            <Download className="w-4 h-4 opacity-50" />
-            Building...
-          </div>
-        )}
-      </motion.div>
+      <ApkBuildStatus />
 
       {/* 1. Top Section - 6 Premium KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 md:gap-6">
