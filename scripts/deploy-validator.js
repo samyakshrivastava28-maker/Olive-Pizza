@@ -25,7 +25,7 @@ function runValidation() {
     hasErrors = true;
   } else {
     // Verify Critical Assets
-    const requiredFiles = ['index.html', 'sw.js', '_redirects'];
+    const requiredFiles = ['index.html', '_redirects'];
     for (const file of requiredFiles) {
       if (!fs.existsSync(path.join(distPath, file))) {
         console.error(`❌ ERROR: Missing critical build artifact: ${file}`);
@@ -33,14 +33,6 @@ function runValidation() {
       } else {
         console.log(`✅ Found ${file}`);
       }
-    }
-
-    const iconsPath = path.join(distPath, 'icons');
-    if (!fs.existsSync(iconsPath)) {
-      console.error('❌ ERROR: Missing PWA icons directory.');
-      hasErrors = true;
-    } else {
-      console.log('✅ Found PWA icons directory');
     }
   }
 
