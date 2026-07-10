@@ -2,6 +2,9 @@
 <html lang="en" class="dark">
   <head>
     <meta charset="UTF-8" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=0" />
     <meta name="theme-color" content="#020617" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -15,6 +18,24 @@
     <link rel="dns-prefetch" href="https://res.cloudinary.com" />
     
     <script src="https://www.google.com/recaptcha/enterprise.js?render=6LdqyDctAAAAABn8isXOdDe-0roVqILKuAdIl_x-"></script>
+    <script>
+      // Aggressively unregister any stale PWA Service Workers to ensure the Android WebView always loads fresh Vercel deployments
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+          for(let registration of registrations) {
+            registration.unregister();
+          }
+        });
+      }
+      // Clear out Cache API so old chunks don't conflict
+      if ('caches' in window) {
+        caches.keys().then(function(names) {
+          for (let name of names) {
+            caches.delete(name);
+          }
+        });
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
