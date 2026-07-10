@@ -96,6 +96,9 @@ jobs:
           tag_name: android-latest
           name: "Olive Pizza Android App — Latest Build"
           body: |
+            Latest automatic build of the Olive Pizza Android APK.
+            Version Code: ${{ github.run_number }}
+
             🍕 **Olive Pizza Android App** — automatically built from latest code.
 
             This is a native Android wrapper that streams the live production site:
