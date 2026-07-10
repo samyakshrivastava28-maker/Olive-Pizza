@@ -10,6 +10,7 @@ import {
   count,
 } from "firebase/firestore";
 import { motion } from "framer-motion";
+import { Download, Smartphone } from "lucide-react";
 import { DashboardCardSkeleton } from "../../components/ui/SkeletonLoader";
 
 import StatCard from "../../components/owner/StatCard";
@@ -232,13 +233,54 @@ export default function OwnerDashboard() {
         <h1 className="text-2xl md:text-3xl font-black text-white tracking-tight drop-shadow-md">
           Overview
         </h1>
-        <a
-          href="/owner/reports"
-          className="w-full md:w-auto bg-white/10 text-white border border-white/20 hover:bg-white/20 px-4 py-2.5 rounded-full font-bold text-sm transition-all backdrop-blur-md shadow-lg flex items-center justify-center gap-2 hover:scale-105 active:scale-95"
-        >
-          📑 Quick View Reports
-        </a>
+        <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
+          <motion.a
+            href="https://github.com/samyakshrivastava28-maker/Olive-Pizza/releases/latest/download/app-release.apk"
+            download
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            className="flex items-center justify-center gap-2 bg-gradient-to-r from-[#3ddc84]/20 to-[#3ddc84]/10 border border-[#3ddc84]/40 hover:border-[#3ddc84]/70 text-[#3ddc84] px-4 py-2.5 rounded-full font-bold text-sm transition-all backdrop-blur-md shadow-lg"
+          >
+            <Smartphone className="w-4 h-4" />
+            <Download className="w-3.5 h-3.5" />
+            Download APK
+          </motion.a>
+          <a
+            href="/owner/reports"
+            className="w-full md:w-auto bg-white/10 text-white border border-white/20 hover:bg-white/20 px-4 py-2.5 rounded-full font-bold text-sm transition-all backdrop-blur-md shadow-lg flex items-center justify-center gap-2 hover:scale-105 active:scale-95"
+          >
+            📑 Quick View Reports
+          </a>
+        </div>
       </div>
+
+      {/* APK Download Banner */}
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.05 }}
+        className="flex flex-col sm:flex-row items-start sm:items-center gap-4 bg-gradient-to-r from-[#3ddc84]/10 via-[#3ddc84]/5 to-transparent border border-[#3ddc84]/25 rounded-2xl px-5 py-4"
+      >
+        <div className="flex items-center gap-3 flex-1">
+          <div className="w-10 h-10 rounded-xl bg-[#3ddc84]/15 border border-[#3ddc84]/30 flex items-center justify-center flex-shrink-0">
+            <Smartphone className="w-5 h-5 text-[#3ddc84]" />
+          </div>
+          <div>
+            <p className="text-sm font-bold text-white">Android Demo APK Available</p>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Native Android wrapper streaming the live Olive Pizza production site — share with clients for demonstrations.
+            </p>
+          </div>
+        </div>
+        <a
+          href="https://github.com/samyakshrivastava28-maker/Olive-Pizza/releases/latest/download/app-release.apk"
+          download
+          className="flex-shrink-0 flex items-center gap-2 bg-[#3ddc84] hover:bg-[#34c077] text-black px-5 py-2.5 rounded-full font-bold text-sm transition-all hover:scale-105 active:scale-95 shadow-lg shadow-[#3ddc84]/20"
+        >
+          <Download className="w-4 h-4" />
+          Download APK
+        </a>
+      </motion.div>
 
       {/* 1. Top Section - 6 Premium KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 md:gap-6">
