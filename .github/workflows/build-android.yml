@@ -22,22 +22,32 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      # 3. Install dependencies (only root, no build needed - app streams live site via server.url)
+      # 3. Install dependencies
       - name: Install Node dependencies
         run: npm ci
 
-      # 4. Setup Java 17 (required for Android Gradle Plugin)
+      # 4. Initialize dummy webDir and sync Capacitor
+      #    Because we stripped Vite from CI to avoid missing Firebase secrets,
+      #    we must manually create the webDir before syncing so Capacitor doesn't crash.
+      #    The APK streams the live URL anyway, so web assets are ignored.
+      - name: Sync Capacitor
+        run: |
+          mkdir -p dist/client
+          echo "Placeholder" > dist/client/index.html
+          npx cap sync android
+
+      # 5. Setup Java 17 (required for Android Gradle Plugin)
       - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      # 5. Setup Android SDK
+      # 6. Setup Android SDK
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      # 6. Cache Gradle files for faster builds
+      # 7. Cache Gradle files for faster builds
       - name: Cache Gradle packages
         uses: actions/cache@v4
         with:
@@ -48,13 +58,18 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
-      # 7. Grant execute permission to Gradle wrapper
+      # 8. Grant execute permission to Gradle wrapper
       - name: Grant Gradle execute permissions
         run: chmod +x android/gradlew
 
-      # 8. Build debug APK
-      #    No signing needed for debug builds.
-      #    The app loads olive-pizza.vercel.app via Capacitor server.url — no frontend build required.
+      # 9. Automatic Versioning
+      - name: Inject Version into Gradle
+        run: |
+          # Use GitHub Run Number as the version code and a generated version name
+          sed -i "s/versionCode 1/versionCode ${{ github.run_number }}/g" android/app/build.gradle
+          sed -i "s/versionName \"1.0\"/versionName \"1.0.${{ github.run_number }}\"/g" android/app/build.gradle
+
+      # 10. Build debug APK
       - name: Build Debug APK
         run: ./gradlew assembleDebug --no-daemon --stacktrace
         working-directory: android
