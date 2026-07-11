@@ -23,6 +23,8 @@ import { Bell, X, ShieldCheck } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
+import { Capacitor } from '@capacitor/core';
+import { PushNotifications } from '@capacitor/push-notifications';
 
 const API_BASE = '/api';
 const BROADCAST_CHANNEL = 'olive_pizza_notifications';
@@ -96,38 +98,115 @@ export default function PushNotificationManager() {
   // ─── Token Registration ────────────────────────────────────────────────────
   const registerToken = useCallback(async (uid: string): Promise<void> => {
     try {
-      const messaging = await getMessagingInstance();
-      if (!messaging) return;
+      let token = '';
 
-      const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY || "BDfxvZSqSw6Es3dvXz4VZMwjNFKMCCfRSgdCVty3rfqqBZ6AAWFlZ2EwWQR8ltp6DRMTUKOmH9Rlu0fjCziOKDk";
-      if (!vapidKey) { console.error('[PushManager] Missing VITE_FIREBASE_VAPID_KEY'); return; }
+      if (Capacitor.isNativePlatform()) {
+        // --- NATIVE ANDROID/IOS FCM REGISTRATION ---
+        let permStatus = await PushNotifications.checkPermissions();
+        if (permStatus.receive === 'prompt') {
+          permStatus = await PushNotifications.requestPermissions();
+        }
+        if (permStatus.receive !== 'granted') {
+          console.warn('[PushManager] Native Push permission denied');
+          return;
+        }
 
-      const swReg = await registerServiceWorker();
-      if (!swReg) return;
+        // Create Android Notification Channels for Premium grouping/sound
+        await PushNotifications.createChannel({
+          id: 'olive_order',
+          name: 'Olive Pizza Orders',
+          description: 'Order updates and status changes',
+          importance: 5, // MAX importance
+          visibility: 1, // Public
+          vibration: true,
+        });
 
-      const token = await getToken(messaging, { vapidKey, serviceWorkerRegistration: swReg });
-      if (!token) { console.warn('[PushManager] Empty token received'); return; }
+        // Register Action Types for Native Notification Buttons
+        await PushNotifications.registerActionTypes({
+          types: [
+            {
+              id: 'owner_order_actions',
+              actions: [
+                { id: 'accept', title: 'Accept' },
+                { id: 'reject', title: 'Reject', destructive: true },
+                { id: 'view', title: 'View Order' }
+              ]
+            },
+            {
+              id: 'customer_order_actions',
+              actions: [
+                { id: 'track', title: 'Track Order' },
+                { id: 'rate', title: 'Rate Order' }
+              ]
+            },
+            {
+              id: 'delivery_actions',
+              actions: [
+                { id: 'accept', title: 'Accept Delivery' },
+                { id: 'navigate', title: 'Navigate' }
+              ]
+            }
+          ]
+        });
+
+        await PushNotifications.register();
+        
+        // Wait for token registration event
+        token = await new Promise<string>((resolve, reject) => {
+          const timeout = setTimeout(() => reject('Token registration timeout'), 10000);
+          
+          PushNotifications.addListener('registration', (pushToken) => {
+            clearTimeout(timeout);
+            PushNotifications.removeAllListeners();
+            resolve(pushToken.value);
+          });
+          
+          PushNotifications.addListener('registrationError', (error) => {
+            clearTimeout(timeout);
+            PushNotifications.removeAllListeners();
+            reject(error);
+          });
+        });
+        
+        console.log('[PushManager] Native FCM token obtained');
+
+      } else {
+        // --- WEB PWA FIREBASE REGISTRATION ---
+        const messaging = await getMessagingInstance();
+        if (!messaging) return;
+
+        const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY || "BDfxvZSqSw6Es3dvXz4VZMwjNFKMCCfRSgdCVty3rfqqBZ6AAWFlZ2EwWQR8ltp6DRMTUKOmH9Rlu0fjCziOKDk";
+        if (!vapidKey) { console.error('[PushManager] Missing VITE_FIREBASE_VAPID_KEY'); return; }
+
+        const swReg = await registerServiceWorker();
+        if (!swReg) return;
+
+        token = await getToken(messaging, { vapidKey, serviceWorkerRegistration: swReg });
+        if (!token) { console.warn('[PushManager] Empty Web Push token received'); return; }
+      }
 
       // Register in Postgres via backend (handles dedup)
       const authToken = await auth.currentUser?.getIdToken();
+      if (!authToken) return;
+
       const res = await fetch(`${API_BASE}/notifications/token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
         body: JSON.stringify({
           token,
-          deviceName: navigator.userAgent.slice(0, 100),
-          platform: navigator.platform,
-          browser: getBrowserName(),
+          deviceName: Capacitor.isNativePlatform() ? 'Android Native App' : navigator.userAgent.slice(0, 100),
+          platform: Capacitor.isNativePlatform() ? 'android' : navigator.platform,
+          browser: Capacitor.isNativePlatform() ? 'capacitor' : getBrowserName(),
           appVersion: import.meta.env.VITE_APP_VERSION || '1.0',
         }),
       });
 
       if (res.ok) {
         setTokenRegistered(true);
-        console.log('[PushManager] ✅ Token registered');
+        console.log('[PushManager] ✅ Token registered successfully in Postgres');
 
-        // Forward auth token to SW for Quick Actions background API calls
-        if (navigator.serviceWorker.controller && authToken) {
+        // Forward auth token to SW for Web Quick Actions (only relevant on Web)
+        if (!Capacitor.isNativePlatform() && navigator.serviceWorker.controller) {
           navigator.serviceWorker.controller.postMessage({
             type: 'STORE_AUTH_TOKEN',
             uid,
@@ -163,9 +242,67 @@ export default function PushNotificationManager() {
   }, [registerToken]);
 
   // ─── Foreground Message Listener ──────────────────────────────────────────
-  const setupForegroundListener = useCallback((messaging: Messaging) => {
+  const setupForegroundListener = useCallback((messaging: Messaging | null) => {
     if (messageUnsubRef.current) messageUnsubRef.current();
 
+    if (Capacitor.isNativePlatform()) {
+      // NATIVE FOREGROUND NOTIFICATIONS
+      PushNotifications.addListener('pushNotificationReceived', (notification) => {
+        const data = notification.data || {};
+        const title = notification.title || 'Olive Pizza';
+        const body = notification.body || '';
+        const sound = data.sound;
+        const queueId = data.queueId;
+        const orderId = data.orderId;
+
+        // Acknowledge delivery
+        if (queueId) {
+          fetch(`${API_BASE}/notifications/track`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ queueId, stage: 'delivered', orderId }),
+          }).catch(() => {});
+        }
+
+        if (data.alert === 'continuous') {
+          startContinuousAlert(sound || 'order_alert.mp3');
+        } else if (sound && sound !== 'default') {
+          playNotificationSound(sound);
+        }
+
+        toast((t) => (
+          <div className="flex flex-col gap-2 relative">
+            <button onClick={() => toast.dismiss(t.id)} className="absolute -top-1 -right-1 text-slate-400 hover:text-white p-1 bg-slate-800 rounded-full"><X className="w-3 h-3" /></button>
+            <div className="flex gap-3">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center shrink-0">
+                <Bell className="w-5 h-5 text-white" />
+              </div>
+              <div className="flex-1 cursor-pointer pr-4" onClick={() => { if (data.url) navigate(data.url); toast.dismiss(t.id); stopContinuousAlert(); }}>
+                <p className="font-bold text-white text-sm">{title}</p>
+                <p className="text-slate-300 text-xs mt-0.5 whitespace-pre-wrap leading-tight">{body}</p>
+              </div>
+            </div>
+            {data.alert === 'continuous' && (
+              <div className="flex justify-end mt-1">
+                <button onClick={() => { stopContinuousAlert(); toast.dismiss(t.id); }} className="px-3 py-1 bg-red-500/20 text-red-500 hover:bg-red-500/30 rounded text-xs font-bold transition-colors">Stop Alert</button>
+              </div>
+            )}
+          </div>
+        ), { duration: data.alert === 'continuous' ? Infinity : 5000, style: { background: '#1e293b', color: '#fff', border: '1px solid #334155' } });
+      });
+
+      PushNotifications.addListener('pushNotificationActionPerformed', (notification) => {
+        const data = notification.notification.data || {};
+        stopContinuousAlert();
+        if (data.url) navigate(data.url);
+      });
+
+      messageUnsubRef.current = () => PushNotifications.removeAllListeners();
+      return;
+    }
+
+    // WEB FOREGROUND NOTIFICATIONS
+    if (!messaging) return;
     messageUnsubRef.current = onMessage(messaging, async payload => {
       const { notification, data } = payload;
       const title = notification?.title || 'Olive Pizza';
@@ -185,7 +322,6 @@ export default function PushNotificationManager() {
       }
 
       // If the tab is hidden (minimized/backgrounded), show a native OS notification
-      // This ensures users never miss alerts when the app is open but not visible
       if (document.hidden && Notification.permission === 'granted') {
         try {
           const swReg = await navigator.serviceWorker.ready;

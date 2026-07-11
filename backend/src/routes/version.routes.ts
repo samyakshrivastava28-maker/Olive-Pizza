@@ -19,6 +19,22 @@ router.get('/settings', async (req, res) => {
   }
 });
 
+// Get backend live status and version info (public)
+router.get('/status', (req, res) => {
+  let gitCommit = 'unknown';
+  try {
+    const { execSync } = require('child_process');
+    gitCommit = execSync('git rev-parse --short HEAD').toString().trim();
+  } catch (e) {}
+
+  res.json({
+    build_number: process.env.npm_package_version || '1.0.0',
+    git_commit: gitCommit,
+    build_timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development'
+  });
+});
+
 // Admin ONLY routes below (assuming some auth middleware, I will use a simple check or rely on caller for now)
 // In a real app we'd add `requireAdmin` middleware.
 

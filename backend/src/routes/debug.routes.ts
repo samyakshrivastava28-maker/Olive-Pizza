@@ -66,4 +66,58 @@ router.get('/', requireAuth, requireRole(['owner', 'admin']), async (req: Reques
   res.json({ success: true, diagnostics });
 });
 
+router.post('/test-email', requireAuth, requireRole(['owner', 'admin']), async (req: Request, res: Response) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      res.status(400).json({ error: 'Target email is required' });
+      return;
+    }
+
+    const { queueEmail } = require('../services/email.service.js');
+    const { buildOrderStatusEmail } = require('../services/emailTemplates.service.js');
+    
+    const dummyOrderData = {
+      order_number: "TEST-999",
+      total_amount: 1500,
+      subtotal: 1350,
+      tax_amount: 100,
+      delivery_fee: 50,
+      estimated_delivery_time: "30 mins",
+      payment_method: "cash",
+      delivery_address: {
+        fullName: "Test User",
+        addressLine1: "123 Debug St",
+        city: "Tech City",
+        state: "State",
+        postalCode: "12345",
+        phone: "+91 9999999999"
+      },
+      items: [
+        { product_name: "Test Pizza", quantity: 2, unit_price: 675, image_url: "https://res.cloudinary.com/dxmlvkff1/image/upload/v1/olive-pizza/farmhouse.jpg" }
+      ]
+    };
+
+    const html = buildOrderStatusEmail({
+      customerName: "Admin",
+      subject: "Test Email from Olive Pizza",
+      stage: "delivered",
+      orderId: "TEST-ORDER-ID",
+      data: {},
+      orderData: dummyOrderData
+    });
+
+    await queueEmail({
+      to: email,
+      subject: "Test Email from Olive Pizza",
+      html,
+      category: "system_test"
+    });
+
+    res.json({ success: true, message: 'Test email queued' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;

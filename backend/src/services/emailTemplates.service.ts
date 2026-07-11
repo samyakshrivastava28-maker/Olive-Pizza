@@ -151,36 +151,85 @@ export function buildOrderStatusEmail(params: {
   stage: string;
   orderId: string | null;
   data: Record<string, string>;
+  orderData?: any; // FULL ORDER OBJECT if provided by NotifQueue
 }): string {
-  const { customerName, stage, orderId, data } = params;
-  const orderNumber = data.orderNumber || data.dailyOrderNumber || '';
-  const totalAmount = data.totalAmount ? `₹${data.totalAmount}` : '';
-  const eta = data.eta || '';
+  const { customerName, stage, orderId, data, orderData } = params;
+  const orderNumber = data.orderNumber || data.dailyOrderNumber || orderData?.order_number || orderData?.daily_order_number || '';
+  const totalAmount = data.totalAmount || orderData?.total_amount || '';
+  const eta = data.eta || orderData?.estimated_delivery_time || '';
   const trackUrl = orderId ? `${FRONTEND_URL}/tracking/${orderId}` : `${FRONTEND_URL}/customer/dashboard`;
   const orderUrl = `${FRONTEND_URL}/customer/dashboard`;
 
   const stageMap: Record<string, () => string> = {
-    pending:           () => buildOrderPlacedEmailSimple(customerName, orderNumber, totalAmount, eta, trackUrl),
-    accepted:          () => buildOrderConfirmedEmailSimple(customerName, orderNumber, eta, trackUrl),
-    preparing:         () => buildOrderPreparingEmailSimple(customerName, orderNumber, eta, trackUrl),
-    baking:            () => buildOrderBakingEmailSimple(customerName, orderNumber, eta, trackUrl),
-    ready:             () => buildOrderPackedEmailSimple(customerName, orderNumber, eta, trackUrl),
-    partner_assigned:  () => buildDeliveryAssignedEmailSimple(customerName, orderNumber, data.deliveryPartnerName || 'Your partner', eta, trackUrl),
-    picked_up:         () => buildDeliveryAssignedEmailSimple(customerName, orderNumber, data.deliveryPartnerName || 'Your partner', eta, trackUrl),
-    out_for_delivery:  () => buildOutForDeliveryEmailSimple(customerName, orderNumber, data.deliveryPartnerName || 'Your partner', eta, trackUrl),
-    delivered:         () => buildOrderDeliveredEmailSimple(customerName, orderNumber, orderUrl, trackUrl),
-    cancelled:         () => buildOrderCancelledEmailSimple(customerName, orderNumber, orderUrl),
+    pending:           () => buildOrderPlacedEmailSimple(customerName, orderNumber, totalAmount, eta, trackUrl, orderData),
+    accepted:          () => buildOrderConfirmedEmailSimple(customerName, orderNumber, eta, trackUrl, orderData),
+    preparing:         () => buildOrderPreparingEmailSimple(customerName, orderNumber, eta, trackUrl, orderData),
+    baking:            () => buildOrderBakingEmailSimple(customerName, orderNumber, eta, trackUrl, orderData),
+    ready:             () => buildOrderPackedEmailSimple(customerName, orderNumber, eta, trackUrl, orderData),
+    partner_assigned:  () => buildDeliveryAssignedEmailSimple(customerName, orderNumber, data.deliveryPartnerName || 'Your partner', eta, trackUrl, orderData),
+    picked_up:         () => buildDeliveryAssignedEmailSimple(customerName, orderNumber, data.deliveryPartnerName || 'Your partner', eta, trackUrl, orderData),
+    out_for_delivery:  () => buildOutForDeliveryEmailSimple(customerName, orderNumber, data.deliveryPartnerName || 'Your partner', eta, trackUrl, orderData),
+    delivered:         () => buildOrderDeliveredEmailSimple(customerName, orderNumber, orderUrl, trackUrl, orderData),
+    cancelled:         () => buildOrderCancelledEmailSimple(customerName, orderNumber, orderUrl, orderData),
   };
 
   const builder = stageMap[stage] || stageMap['pending'];
   return builder();
 }
 
+function renderOrderSummary(orderData: any): string {
+  if (!orderData || !orderData.items) return '';
+  
+  const itemsHtml = orderData.items.map((item: any) => `
+    <div style="display:flex;padding:12px 0;border-bottom:1px solid ${BRAND_BORDER};">
+      ${item.image_url ? `<img src="${item.image_url}" width="60" height="60" style="border-radius:8px;object-fit:cover;margin-right:16px;background:#1f2937;" />` : ''}
+      <div style="flex-grow:1;">
+        <div style="font-weight:700;color:${TEXT_PRIMARY};font-size:15px;margin-bottom:4px;">${item.product_name}</div>
+        ${item.variant_name ? `<div style="font-size:12px;color:${TEXT_SECONDARY};margin-bottom:4px;">Variant: ${item.variant_name}</div>` : ''}
+        <div style="font-size:13px;color:${TEXT_MUTED};">Qty: ${item.quantity} × ₹${item.unit_price}</div>
+      </div>
+      <div style="font-weight:700;color:${TEXT_PRIMARY};font-size:15px;">
+        ₹${(item.quantity * item.unit_price).toFixed(2)}
+      </div>
+    </div>
+  `).join('');
+
+  return `
+    <div style="margin:24px 0;background:rgba(255,255,255,0.03);border:1px solid ${BRAND_BORDER};border-radius:14px;padding:20px;">
+      <h3 style="margin:0 0 16px 0;color:${TEXT_PRIMARY};font-size:16px;border-bottom:1px solid ${BRAND_BORDER};padding-bottom:12px;">Order Summary</h3>
+      ${itemsHtml}
+      <div style="margin-top:16px;">
+        ${orderMetaRow('Subtotal', `₹${orderData.subtotal || 0}`)}
+        ${orderMetaRow('Taxes (GST)', `₹${orderData.tax_amount || 0}`)}
+        ${orderData.discount_amount ? orderMetaRow('Discount', `-₹${orderData.discount_amount}`) : ''}
+        ${orderData.delivery_fee ? orderMetaRow('Delivery Fee', `₹${orderData.delivery_fee}`) : ''}
+        <div style="display:flex;justify-content:space-between;align-items:center;padding-top:12px;margin-top:12px;border-top:1px dashed ${BRAND_BORDER};">
+          <span style="font-size:16px;font-weight:700;color:${TEXT_PRIMARY};">Total</span>
+          <span style="font-size:18px;font-weight:800;color:${BRAND_GREEN};">₹${orderData.total_amount || 0}</span>
+        </div>
+      </div>
+    </div>
+    ${orderData.delivery_address ? `
+    <div style="margin:24px 0;background:rgba(255,255,255,0.03);border:1px solid ${BRAND_BORDER};border-radius:14px;padding:20px;">
+      <h3 style="margin:0 0 12px 0;color:${TEXT_PRIMARY};font-size:14px;text-transform:uppercase;letter-spacing:1px;">Delivery Details</h3>
+      <p style="margin:0;color:${TEXT_SECONDARY};font-size:14px;line-height:1.5;">
+        ${orderData.delivery_address.fullName || ''}<br/>
+        ${orderData.delivery_address.addressLine1 || ''}<br/>
+        ${orderData.delivery_address.addressLine2 ? orderData.delivery_address.addressLine2 + '<br/>' : ''}
+        ${orderData.delivery_address.city || ''}, ${orderData.delivery_address.state || ''} ${orderData.delivery_address.postalCode || ''}<br/>
+        📞 ${orderData.delivery_address.phone || ''}
+      </p>
+      ${orderData.payment_method ? `<p style="margin:12px 0 0 0;color:${TEXT_MUTED};font-size:13px;">Payment: <strong>${orderData.payment_method.toUpperCase()}</strong></p>` : ''}
+    </div>
+    ` : ''}
+  `;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // CUSTOMER TEMPLATES
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function buildOrderPlacedEmailSimple(customerName: string, orderNumber: string, total: string, eta: string, trackUrl: string): string {
+export function buildOrderPlacedEmailSimple(customerName: string, orderNumber: string, total: string, eta: string, trackUrl: string, orderData?: any): string {
   const content = `
     <div style="text-align:center;margin-bottom:28px;">
       <div style="font-size:48px;margin-bottom:12px;">🍕</div>
@@ -190,9 +239,9 @@ export function buildOrderPlacedEmailSimple(customerName: string, orderNumber: s
     ${statusBadge('Order Received', BRAND_GREEN)}
     <div style="margin:20px 0;">
       ${orderNumber ? orderMetaRow('Order #', orderNumber) : ''}
-      ${total ? orderMetaRow('Total', total) : ''}
       ${eta ? orderMetaRow('Estimated Delivery', eta) : ''}
     </div>
+    ${renderOrderSummary(orderData)}
     ${progressTimeline(['Order Placed', 'Confirmed', 'Preparing', 'Out for Delivery', 'Delivered'], 0)}
     <div style="text-align:center;margin-top:28px;">
       ${ctaButton('📍 Track Your Order', trackUrl, 'primary')}
@@ -200,7 +249,7 @@ export function buildOrderPlacedEmailSimple(customerName: string, orderNumber: s
   return baseWrapper(content, `Your order is received! Waiting for restaurant confirmation.`);
 }
 
-export function buildOrderConfirmedEmailSimple(customerName: string, orderNumber: string, eta: string, trackUrl: string): string {
+export function buildOrderConfirmedEmailSimple(customerName: string, orderNumber: string, eta: string, trackUrl: string, orderData?: any): string {
   const content = `
     <div style="text-align:center;margin-bottom:28px;">
       <div style="font-size:48px;margin-bottom:12px;">✅</div>
@@ -212,6 +261,7 @@ export function buildOrderConfirmedEmailSimple(customerName: string, orderNumber
       ${orderNumber ? orderMetaRow('Order #', orderNumber) : ''}
       ${eta ? orderMetaRow('Estimated Delivery', eta) : ''}
     </div>
+    ${renderOrderSummary(orderData)}
     ${progressTimeline(['Order Placed', 'Confirmed ✓', 'Preparing', 'Out for Delivery', 'Delivered'], 1)}
     <div style="text-align:center;margin-top:28px;">
       ${ctaButton('📍 Track Live', trackUrl, 'primary')}
@@ -219,7 +269,7 @@ export function buildOrderConfirmedEmailSimple(customerName: string, orderNumber
   return baseWrapper(content, `Your order is confirmed! The kitchen is getting ready.`);
 }
 
-export function buildOrderPreparingEmailSimple(customerName: string, orderNumber: string, eta: string, trackUrl: string): string {
+export function buildOrderPreparingEmailSimple(customerName: string, orderNumber: string, eta: string, trackUrl: string, orderData?: any): string {
   const content = `
     <div style="text-align:center;margin-bottom:28px;">
       <div style="font-size:48px;margin-bottom:12px;">👨‍🍳</div>
@@ -231,6 +281,7 @@ export function buildOrderPreparingEmailSimple(customerName: string, orderNumber
       ${orderNumber ? orderMetaRow('Order #', orderNumber) : ''}
       ${eta ? orderMetaRow('Estimated Delivery', eta) : ''}
     </div>
+    ${renderOrderSummary(orderData)}
     ${progressTimeline(['Order Placed', 'Confirmed', 'Preparing 🔥', 'Out for Delivery', 'Delivered'], 2)}
     <div style="text-align:center;margin-top:28px;">
       ${ctaButton('📍 Track Live', trackUrl, 'primary')}
@@ -238,7 +289,7 @@ export function buildOrderPreparingEmailSimple(customerName: string, orderNumber
   return baseWrapper(content, `Your pizza is being prepared by our chefs!`);
 }
 
-export function buildOrderBakingEmailSimple(customerName: string, orderNumber: string, eta: string, trackUrl: string): string {
+export function buildOrderBakingEmailSimple(customerName: string, orderNumber: string, eta: string, trackUrl: string, orderData?: any): string {
   const content = `
     <div style="text-align:center;margin-bottom:28px;">
       <div style="font-size:48px;margin-bottom:12px;">🔥</div>
@@ -250,6 +301,7 @@ export function buildOrderBakingEmailSimple(customerName: string, orderNumber: s
       ${orderNumber ? orderMetaRow('Order #', orderNumber) : ''}
       ${eta ? orderMetaRow('Estimated Delivery', eta) : ''}
     </div>
+    ${renderOrderSummary(orderData)}
     ${progressTimeline(['Order Placed', 'Confirmed', 'Baking 🔥', 'Out for Delivery', 'Delivered'], 2)}
     <div style="text-align:center;margin-top:28px;">
       ${ctaButton('📍 Track Live', trackUrl, 'accent')}
@@ -257,7 +309,7 @@ export function buildOrderBakingEmailSimple(customerName: string, orderNumber: s
   return baseWrapper(content, `Your pizza is in the oven!`);
 }
 
-export function buildOrderPackedEmailSimple(customerName: string, orderNumber: string, eta: string, trackUrl: string): string {
+export function buildOrderPackedEmailSimple(customerName: string, orderNumber: string, eta: string, trackUrl: string, orderData?: any): string {
   const content = `
     <div style="text-align:center;margin-bottom:28px;">
       <div style="font-size:48px;margin-bottom:12px;">📦</div>
@@ -269,6 +321,7 @@ export function buildOrderPackedEmailSimple(customerName: string, orderNumber: s
       ${orderNumber ? orderMetaRow('Order #', orderNumber) : ''}
       ${eta ? orderMetaRow('Estimated Delivery', eta) : ''}
     </div>
+    ${renderOrderSummary(orderData)}
     ${progressTimeline(['Order Placed', 'Confirmed', 'Prepared & Packed ✓', 'Out for Delivery', 'Delivered'], 2)}
     <div style="text-align:center;margin-top:28px;">
       ${ctaButton('📍 Track Live', trackUrl, 'primary')}
@@ -276,7 +329,7 @@ export function buildOrderPackedEmailSimple(customerName: string, orderNumber: s
   return baseWrapper(content, `Your order is packed and ready!`);
 }
 
-export function buildDeliveryAssignedEmailSimple(customerName: string, orderNumber: string, partnerName: string, eta: string, trackUrl: string): string {
+export function buildDeliveryAssignedEmailSimple(customerName: string, orderNumber: string, partnerName: string, eta: string, trackUrl: string, orderData?: any): string {
   const content = `
     <div style="text-align:center;margin-bottom:28px;">
       <div style="font-size:48px;margin-bottom:12px;">🚴</div>
@@ -289,6 +342,7 @@ export function buildDeliveryAssignedEmailSimple(customerName: string, orderNumb
       ${orderMetaRow('Delivery Partner', partnerName)}
       ${eta ? orderMetaRow('Arriving By', eta) : ''}
     </div>
+    ${renderOrderSummary(orderData)}
     ${progressTimeline(['Order Placed', 'Confirmed', 'Prepared', 'Partner Assigned 🚴', 'Delivered'], 3)}
     <div style="text-align:center;margin-top:28px;">
       ${ctaButton('📍 Track on Map', trackUrl, 'accent')}
@@ -296,7 +350,7 @@ export function buildDeliveryAssignedEmailSimple(customerName: string, orderNumb
   return baseWrapper(content, `${partnerName} is picking up your order!`);
 }
 
-export function buildOutForDeliveryEmailSimple(customerName: string, orderNumber: string, partnerName: string, eta: string, trackUrl: string): string {
+export function buildOutForDeliveryEmailSimple(customerName: string, orderNumber: string, partnerName: string, eta: string, trackUrl: string, orderData?: any): string {
   const content = `
     <div style="text-align:center;margin-bottom:28px;">
       <div style="font-size:48px;margin-bottom:12px;">🛵</div>
@@ -309,6 +363,7 @@ export function buildOutForDeliveryEmailSimple(customerName: string, orderNumber
       ${orderMetaRow('Delivery Partner', partnerName)}
       ${eta ? orderMetaRow('Arriving In', eta) : ''}
     </div>
+    ${renderOrderSummary(orderData)}
     ${progressTimeline(['Order Placed', 'Confirmed', 'Prepared', 'Out for Delivery 🛵', 'Delivered'], 3)}
     <div style="text-align:center;margin-top:28px;">
       ${ctaButton('📍 Track Live on Map', trackUrl, 'accent')}
@@ -316,7 +371,7 @@ export function buildOutForDeliveryEmailSimple(customerName: string, orderNumber
   return baseWrapper(content, `${partnerName} is on the way with your order!`);
 }
 
-export function buildOrderDeliveredEmailSimple(customerName: string, orderNumber: string, orderUrl: string, trackUrl: string): string {
+export function buildOrderDeliveredEmailSimple(customerName: string, orderNumber: string, orderUrl: string, trackUrl: string, orderData?: any): string {
   const content = `
     <div style="text-align:center;margin-bottom:28px;">
       <div style="font-size:48px;margin-bottom:12px;">🎉</div>
@@ -328,6 +383,7 @@ export function buildOrderDeliveredEmailSimple(customerName: string, orderNumber
       ${orderNumber ? orderMetaRow('Order #', orderNumber) : ''}
       ${orderMetaRow('Status', '✅ Delivered Successfully')}
     </div>
+    ${renderOrderSummary(orderData)}
     ${progressTimeline(['Order Placed', 'Confirmed', 'Prepared', 'Out for Delivery', '✅ Delivered'], 4)}
     <div style="text-align:center;margin-top:28px;" class="btn-row">
       ${ctaButton('⭐ Rate Your Order', `${orderUrl}?rate=${orderNumber}`, 'primary')}
@@ -337,7 +393,7 @@ export function buildOrderDeliveredEmailSimple(customerName: string, orderNumber
   return baseWrapper(content, `Your order has been delivered. Enjoy your meal!`);
 }
 
-export function buildOrderCancelledEmailSimple(customerName: string, orderNumber: string, orderUrl: string): string {
+export function buildOrderCancelledEmailSimple(customerName: string, orderNumber: string, orderUrl: string, orderData?: any): string {
   const content = `
     <div style="text-align:center;margin-bottom:28px;">
       <div style="font-size:48px;margin-bottom:12px;">😔</div>

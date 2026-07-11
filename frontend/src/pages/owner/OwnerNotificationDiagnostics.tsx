@@ -315,6 +315,87 @@ export default function OwnerNotificationDiagnostics() {
           </button>
         </div>
       </div>
+
+      {/* Runtime Diagnostics (Development / Versioning) */}
+      <div className="bg-slate-900 rounded-2xl p-6 border border-white/5 flex flex-col md:flex-row gap-6 mb-8">
+        <div className="flex-1">
+          <h3 className="text-white font-bold text-lg flex items-center gap-2 mb-4">
+            <ShieldCheck className="w-5 h-5 text-blue-500" />
+            Runtime Diagnostics (Live Updates)
+          </h3>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <p className="text-slate-400 text-xs uppercase tracking-wider">Frontend App Version</p>
+              <p className="text-white font-bold">{__APP_VERSION__}</p>
+            </div>
+            <div>
+              <p className="text-slate-400 text-xs uppercase tracking-wider">Web Git Commit</p>
+              <p className="text-white font-bold font-mono">{typeof __GIT_COMMIT__ !== 'undefined' ? __GIT_COMMIT__ : 'N/A'}</p>
+            </div>
+            <div className="col-span-2">
+              <p className="text-slate-400 text-xs uppercase tracking-wider">Frontend Build Timestamp</p>
+              <p className="text-white font-bold text-sm">{typeof __BUILD_TIMESTAMP__ !== 'undefined' ? new Date(__BUILD_TIMESTAMP__).toLocaleString() : 'N/A'}</p>
+            </div>
+          </div>
+        </div>
+        <div className="flex-1 bg-slate-800 rounded-xl p-4 flex items-center justify-center">
+            <button 
+              onClick={async () => {
+                const token = await auth.currentUser?.getIdToken();
+                const res = await fetch('/api/version/status', {
+                  headers: { Authorization: `Bearer ${token}` }
+                });
+                if (res.ok) {
+                  const data = await res.json();
+                  toast(`Backend Commit: ${data.git_commit}\nEnvironment: ${data.environment}`, { icon: 'ℹ️', duration: 4000 });
+                }
+              }}
+              className="w-full h-full flex flex-col items-center justify-center text-blue-400 hover:text-white hover:bg-blue-600/20 transition-all rounded-lg p-4 font-bold border border-blue-500/30"
+            >
+              Verify Live Version Consistency
+            </button>
+        </div>
+      </div>
+
+      {/* Test Email */}
+      <div className="bg-slate-900 rounded-2xl p-6 border border-white/5 flex flex-col md:flex-row items-center justify-between gap-4">
+        <div>
+          <h3 className="text-white font-bold text-lg flex items-center gap-2">
+            <Activity className="w-5 h-5 text-orange-500" />
+            Test Email Generator
+          </h3>
+          <p className="text-slate-400 text-sm mt-1 max-w-md">
+            Queue a test email using mock order data to verify rendering and deliverability.
+          </p>
+        </div>
+        <button 
+          onClick={async () => {
+            const token = await auth.currentUser?.getIdToken();
+            if (!token) return;
+            toast.loading("Queuing Test Email...");
+            try {
+              const res = await fetch('/api/system/debug/test-email', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ email: user?.email })
+              });
+              if (res.ok) {
+                toast.dismiss();
+                toast.success("Test Email Queued! Check your inbox.");
+              } else {
+                throw new Error();
+              }
+            } catch {
+              toast.dismiss();
+              toast.error("Failed to queue email.");
+            }
+          }}
+          className="px-6 py-3 bg-orange-600 hover:bg-orange-500 text-white rounded-xl font-bold transition-all text-sm"
+        >
+          Send Test Email
+        </button>
+      </div>
+
     </div>
   );
 }

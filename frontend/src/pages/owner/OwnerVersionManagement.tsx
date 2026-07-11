@@ -5,6 +5,7 @@ import {
   Settings, RefreshCw, ChevronDown, DownloadCloud 
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import OwnerAndroidBuilds from '../../components/OwnerAndroidBuilds';
 
 export default function OwnerVersionManagement() {
   const [settings, setSettings] = useState<any>(null);
@@ -92,10 +93,12 @@ export default function OwnerVersionManagement() {
       <div>
         <h1 className="text-3xl font-black text-white tracking-tight flex items-center gap-3">
           <Rocket className="w-8 h-8 text-orange-500" />
-          Version Management
+          Version & APK Management
         </h1>
-        <p className="text-slate-400 mt-2">Manage PWA updates, force updates, and system versions.</p>
+        <p className="text-slate-400 mt-2">Manage PWA updates, force updates, and native Android builds.</p>
       </div>
+
+      <OwnerAndroidBuilds />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         

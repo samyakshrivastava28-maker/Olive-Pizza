@@ -213,6 +213,7 @@ function buildPayload(
         channelId: `olive_${options.category || 'order'}`,
         tag: options.tag,
         icon: 'ic_notification',
+        clickAction: options.role === 'owner' ? 'owner_order_actions' : options.role === 'delivery' ? 'delivery_actions' : 'customer_order_actions',
         defaultVibrateTimings: !options.vibrate,
         vibrateTimingsMillis: options.vibrate,
         notificationPriority:

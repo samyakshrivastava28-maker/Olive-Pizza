@@ -18,6 +18,7 @@ import authRoutes from './routes/auth.routes.js';
 import heartbeatRoutes from './routes/heartbeat.routes.js';
 import seoRoutes from './routes/seo.routes.js';
 import versionRoutes from './routes/version.routes.js';
+import githubRoutes from './routes/github.routes.js';
 import { versionCheck } from './middleware/versionCheck.js';
 
 const app = express();
@@ -90,6 +91,7 @@ app.use('/slack', slackRoutes);
 app.use('/google-drive', googleDriveRoutes);
 app.use('/heartbeat', heartbeatRoutes);
 app.use('/version', versionRoutes);
+app.use('/github', githubRoutes);
 
 // SEO Routes (mounted at root via app in server.ts, but we map them here)
 app.use('/', seoRoutes);
