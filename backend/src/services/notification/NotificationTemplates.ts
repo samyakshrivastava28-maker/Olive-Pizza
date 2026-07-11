@@ -63,6 +63,7 @@ export interface NotificationPayload {
       channelId?: string;
       tag?: string;
       icon?: string;
+      clickAction?: string;
       defaultVibrateTimings?: boolean;
       defaultSound?: boolean;
       defaultLightSettings?: boolean;

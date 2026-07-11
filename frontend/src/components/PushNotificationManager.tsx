@@ -122,7 +122,8 @@ export default function PushNotificationManager() {
         });
 
         // Register Action Types for Native Notification Buttons
-        await PushNotifications.registerActionTypes({
+        if ('registerActionTypes' in PushNotifications) {
+          await (PushNotifications as any).registerActionTypes({
           types: [
             {
               id: 'owner_order_actions',
@@ -148,6 +149,7 @@ export default function PushNotificationManager() {
             }
           ]
         });
+        }
 
         await PushNotifications.register();
         

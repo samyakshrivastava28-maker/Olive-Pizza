@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import request from 'supertest';
 import app from '../src/app.js';
-import { adminAuth, adminDb, messaging } from '../src/config/firebase.js';
+import { adminAuth, adminDb } from '../src/config/firebase.js';
 
 describe('Notification API Integration Tests', () => {
   beforeEach(() => {
