@@ -1,16 +1,23 @@
 /**
- * Enterprise Notification Queue Service
+ * Enterprise Notification Queue Service — Production v2
  *
  * Responsibilities:
  * 1. Enqueue notifications with dedup (tag-based live cards)
- * 2. Fetch FCM tokens from Postgres (with invalid token cleanup)
- * 3. Send via Firebase Messaging with retry/backoff
- * 4. Write to notification_inbox so nothing is lost (offline recovery)
- * 5. Track analytics per category and role
- * 6. Auto-cleanup expired and processed queue items
+ * 2. PRE-FLIGHT STALE GUARD — reject notifications older than current DB state
+ * 3. Fetch FCM tokens from Postgres (with invalid token cleanup)
+ * 4. Send via Firebase Messaging with intelligent retry/backoff
+ * 5. EMAIL RULES ENGINE — enforce role and stage-based email sending
+ * 6. Write to notification_inbox so nothing is lost (offline recovery)
+ * 7. Full analytics lifecycle (Created → Queued → Sent → Delivered → Opened → Failed)
+ * 8. Auto-cleanup expired and processed queue items
+ *
+ * EMAIL RULES:
+ *   Customer + pending/accepted/delivered/cancelled  → ALWAYS email (transactional)
+ *   Customer + all other stages                      → email ONLY if FCM completely fails
+ *   Owner (any stage)                                → NEVER email (operational)
+ *   Delivery (any stage)                             → NEVER email (operational)
  */
 
-import { OwnerTemplates, CustomerTemplates, DeliveryTemplates, MarketingTemplates } from './NotificationTemplates.js';
 import { adminDb as db, adminAuth } from '../../config/firebase.js';
 import * as admin from 'firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
@@ -19,36 +26,74 @@ import { pgPool } from '../../config/postgres.js';
 import { adminDb, adminMessaging } from '../../config/firebase.js';
 import { queueEmail } from '../email.service.js';
 import { buildOrderStatusEmail } from '../emailTemplates.service.js';
+import { orderEventService } from '../order/OrderEventService.js';
 
 export interface EnqueueOptions {
-  tag?: string;               // FCM tag for live card (maps to orderId for orders)
+  tag?: string;
   orderId?: string;
   notificationId?: string;
   version?: number;
-  category?: string;          // 'order' | 'delivery' | 'marketing' | 'coupon' | 'announcement' | 'alert' | 'reward' | 'system'
+  category?: string;
   priority?: 'critical' | 'high' | 'normal';
   role?: 'customer' | 'owner' | 'delivery';
   groupKey?: string;
-  expiresInSeconds?: number;  // TTL for marketing/announcement
+  expiresInSeconds?: number;
 }
+
+// ─── Email Rules Engine ───────────────────────────────────────────────────────
+
+// Stages where customer ALWAYS gets an email regardless of push success
+const CUSTOMER_ALWAYS_EMAIL_STAGES = new Set([
+  'pending',     // Order Placed
+  'accepted',    // Order Confirmed
+  'delivered',   // Order Delivered
+  'cancelled',   // Order Cancelled
+]);
+
+// Owner and Delivery NEVER get operational emails
+const NO_EMAIL_ROLES = new Set(['owner', 'delivery']);
+
+class EmailRulesEngine {
+  /**
+   * Determine if an email should be sent.
+   * @param role         - The recipient's role
+   * @param stage        - The order stage triggering the notification
+   * @param fcmSuccess   - Whether FCM push succeeded (>0 tokens received)
+   * @returns true if email should be sent
+   */
+  static shouldSend(role: string, stage: string, fcmSuccess: boolean): boolean {
+    // Owner and Delivery: NEVER get operational emails
+    if (NO_EMAIL_ROLES.has(role)) return false;
+
+    // Customer: Always send transactional emails for critical stages
+    if (role === 'customer' && CUSTOMER_ALWAYS_EMAIL_STAGES.has(stage)) return true;
+
+    // Customer: Send other stage emails ONLY if FCM completely failed
+    if (role === 'customer' && !fcmSuccess) return true;
+
+    return false;
+  }
+
+  static isAlwaysEmail(role: string, stage: string): boolean {
+    return role === 'customer' && CUSTOMER_ALWAYS_EMAIL_STAGES.has(stage);
+  }
+}
+
+// ─── NotificationQueueService ─────────────────────────────────────────────────
 
 export class NotificationQueueService {
   private isProcessing = false;
   private processingTimer: NodeJS.Timeout | null = null;
 
   constructor() {
-    // Start periodic fallback cleanup (every 15 minutes)
+    // Fallback cleanup every 15 minutes
     setInterval(() => this.runCleanup(), 15 * 60 * 1000);
-    // Start fallback queue processor loop (every 10 seconds)
+    // Fallback queue processor every 10 seconds
     setInterval(() => this.processQueue(), 10 * 1000);
   }
 
-  // ─── Public API ─────────────────────────────────────────────────────────────
+  // ─── Public API ──────────────────────────────────────────────────────────────
 
-  /**
-   * Enqueue a notification. Returns the queue row ID.
-   * If a tag already exists in the queue (same live card), updates it in-place.
-   */
   public async enqueue(
     firebaseUserId: string,
     payload: any,
@@ -57,107 +102,104 @@ export class NotificationQueueService {
   ): Promise<string> {
     const client = await pgPool.connect();
     try {
-      // Resolve PostgreSQL UUID from Firebase UID
-      let targetUserId = firebaseUserId;
+      // Resolve Postgres UUID
+      let pgUserId = firebaseUserId;
       if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(firebaseUserId)) {
         const userRes = await client.query('SELECT id FROM users WHERE firebase_uid = $1', [firebaseUserId]);
         if (userRes.rows.length === 0) {
-          console.warn(`[NotifQueue] User not found in Postgres for firebase_uid ${firebaseUserId}`);
+          console.warn(`[NotifQueue] User not found: ${firebaseUserId}`);
           return 'user_not_found';
         }
-        targetUserId = userRes.rows[0].id;
+        pgUserId = userRes.rows[0].id;
       }
 
       const priority = priorityOverride || (options.priority === 'critical' ? 'high' : options.priority || 'normal');
-      const tag = options.tag || payload.data?.tag || null;
-      const orderId = options.orderId || payload.data?.orderId || null;
+      const tag      = options.tag      || payload.data?.tag      || null;
+      const orderId  = options.orderId  || payload.data?.orderId  || null;
       const category = options.category || payload.data?.category || 'general';
-      const version = options.version || parseInt(payload.data?.version || '1');
+      const version  = options.version  || parseInt(payload.data?.version || '1');
+      const role     = options.role     || payload.data?.role     || 'customer';
+      const stage    = payload.data?.stage || payload.data?.currentStatus || category;
       const expiresAt = options.expiresInSeconds
         ? new Date(Date.now() + options.expiresInSeconds * 1000)
         : null;
 
-      // ── Resolve PostgreSQL UUID from Firebase UID ───────────────────────
-      let pgUserId = targetUserId;
-      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetUserId)) {
-        const userRes = await client.query('SELECT id FROM users WHERE firebase_uid = $1', [targetUserId]);
-        if (userRes.rows.length > 0) {
-          pgUserId = userRes.rows[0].id;
-        } else {
-          console.warn(`[NotifQueue] User not found in postgres for firebase UID: ${targetUserId}`);
-          return 'user_not_found';
+      // ── PRE-FLIGHT STALE GUARD ───────────────────────────────────────────
+      if (orderId && version) {
+        const isStale = await orderEventService.isStale(orderId, version, stage);
+        if (isStale) {
+          console.log(`[NotifQueue] STALE — dropping notification for order ${orderId} v${version} stage=${stage}`);
+          return 'stale_dropped';
         }
       }
 
-      // ── Check DND preferences first ─────────────────────────────────────
+      // ── DND Check ────────────────────────────────────────────────────────
       if (await this.shouldSuppressByDND(pgUserId, category, priority)) {
-        console.log(`[NotifQueue] Suppressed by DND for user ${pgUserId} category=${category}`);
-        // Still write to inbox so user can see it when they check
+        console.log(`[NotifQueue] DND suppressed for ${pgUserId} category=${category}`);
         await this.writeToInbox(client, pgUserId, payload, tag, orderId, category, options, expiresAt);
         return 'dnd_suppressed';
       }
 
       let queueId: string;
 
-      // ── Live Card dedup: if a queued/sending entry with same tag exists, update it ──
+      // ── Live Card Dedup ───────────────────────────────────────────────────
       if (tag) {
         const existing = await client.query(
-          `SELECT id FROM notification_queue
-           WHERE target_user_id = $1 AND tag = $2
-             AND status IN ('queued', 'sending')
+          `SELECT id, version FROM notification_queue
+           WHERE target_user_id = $1 AND tag = $2 AND status IN ('queued','sending')
            LIMIT 1`,
           [pgUserId, tag]
         );
 
         if (existing.rows.length > 0) {
-          // Update the existing queued notification (live card update)
-          const updateResult = await client.query(
-            `UPDATE notification_queue
-             SET payload = $1, version = $2, priority = $3, updated_at = NOW(), status = 'queued'
-             WHERE id = $4
-             RETURNING id`,
-            [JSON.stringify(payload), version, priority, existing.rows[0].id]
-          );
-          queueId = updateResult.rows[0].id;
-          console.log(`[NotifQueue] Updated existing live card id=${queueId} tag=${tag} v${version}`);
+          // Only update if this version is newer
+          if (version >= (existing.rows[0].version || 0)) {
+            const upd = await client.query(
+              `UPDATE notification_queue
+               SET payload = $1, version = $2, priority = $3, updated_at = NOW(), status = 'queued'
+               WHERE id = $4 RETURNING id`,
+              [JSON.stringify(payload), version, priority, existing.rows[0].id]
+            );
+            queueId = upd.rows[0].id;
+            console.log(`[NotifQueue] Updated live card id=${queueId} tag=${tag} v${version}`);
+          } else {
+            console.log(`[NotifQueue] Skipped older v${version} < existing v${existing.rows[0].version} for tag ${tag}`);
+            return 'older_version_skipped';
+          }
         } else {
-          const result = await client.query(
+          const ins = await client.query(
             `INSERT INTO notification_queue
                (target_user_id, payload, priority, status, tag, order_id, notification_id, version, category, expires_at)
-             VALUES ($1, $2, $3, 'queued', $4, NULL, $5, $6, $7, $8)
-             RETURNING id`,
+             VALUES ($1,$2,$3,'queued',$4,NULL,$5,$6,$7,$8) RETURNING id`,
             [pgUserId, JSON.stringify(payload), priority, tag, options.notificationId, version, category, expiresAt]
           );
-          queueId = result.rows[0].id;
+          queueId = ins.rows[0].id;
         }
       } else {
-        const result = await client.query(
+        const ins = await client.query(
           `INSERT INTO notification_queue
              (target_user_id, payload, priority, status, order_id, notification_id, version, category, expires_at)
-           VALUES ($1, $2, $3, 'queued', NULL, $4, $5, $6, $7)
-           RETURNING id`,
+           VALUES ($1,$2,$3,'queued',NULL,$4,$5,$6,$7) RETURNING id`,
           [pgUserId, JSON.stringify(payload), priority, options.notificationId, version, category, expiresAt]
         );
-        queueId = result.rows[0].id;
+        queueId = ins.rows[0].id;
       }
 
-      // ── Write to notification_inbox (never lose a notification) ─────────
+      // Inbox write (never lose a notification)
       await this.writeToInbox(client, pgUserId, payload, tag, orderId, category, options, expiresAt);
 
-      await notificationDebugger.logCreation({
-        userId: pgUserId,
-        type: 'push',
-        category: category || 'marketing',
-        title: typeof payload === 'string' ? JSON.parse(payload).notification?.title : payload.notification?.title,
-        body: typeof payload === 'string' ? JSON.parse(payload).notification?.body : payload.notification?.body,
-        queueId: queueId,
-        tokensFound: 0
-      }, queueId).then(debugId => {
-        return notificationDebugger.updateStage(debugId, 'Queued', { queueId });
-      }).catch(err => console.error('[NotifQueue] Failed to log creation to debugger', err));
+      // Analytics: Created
+      await this.recordAnalytic(client, category, 'sent', 0).catch(() => {});
 
-      // Instantly trigger queue processing to achieve sub-2 second delivery
-      this.processQueue().catch(err => console.error('[NotifQueue] Background immediate process failed:', err));
+      notificationDebugger.logCreation({
+        userId: pgUserId, type: 'push', category: category || 'marketing',
+        title: payload.notification?.title || payload.data?.title,
+        body: payload.notification?.body || payload.data?.body,
+        queueId, tokensFound: 0,
+      }, queueId).then(debugId => notificationDebugger.updateStage(debugId, 'Queued', { queueId })).catch(() => {});
+
+      // Instantly trigger processing
+      this.processQueue().catch(err => console.error('[NotifQueue] Background process failed:', err));
 
       return queueId;
     } finally {
@@ -165,10 +207,6 @@ export class NotificationQueueService {
     }
   }
 
-  /**
-   * Register or refresh a device FCM token.
-   * Prevents duplicates and keeps an audit trail.
-   */
   public async registerToken(
     firebaseUserId: string,
     token: string,
@@ -176,51 +214,39 @@ export class NotificationQueueService {
   ): Promise<void> {
     const client = await pgPool.connect();
     try {
-      // Resolve PostgreSQL UUID from Firebase UID
       let pgUserId = firebaseUserId;
       if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(firebaseUserId)) {
         const userRes = await client.query('SELECT id FROM users WHERE firebase_uid = $1', [firebaseUserId]);
-        if (userRes.rows.length > 0) {
-          pgUserId = userRes.rows[0].id;
-        } else {
-          console.warn(`[NotifQueue] Could not find Postgres user for firebase_uid ${firebaseUserId}`);
-          return;
-        }
+        if (userRes.rows.length > 0) pgUserId = userRes.rows[0].id;
+        else { console.warn(`[NotifQueue] Cannot register token — user not found: ${firebaseUserId}`); return; }
       }
 
-      // If an old token is provided, mark it inactive in postgres and firestore
       if (deviceInfo.oldToken && deviceInfo.oldToken !== token) {
         await client.query('UPDATE fcm_tokens SET is_active = FALSE WHERE token = $1 AND user_id = $2', [deviceInfo.oldToken, pgUserId]);
-        try {
-          await adminDb.collection('users').doc(firebaseUserId).update({
-            fcmTokens: FieldValue.arrayRemove(deviceInfo.oldToken),
-          });
-        } catch (e) { /* ignore firestore error */ }
+        adminDb.collection('users').doc(firebaseUserId).update({ fcmTokens: FieldValue.arrayRemove(deviceInfo.oldToken) }).catch(() => {});
       }
 
       await client.query(
         `INSERT INTO fcm_tokens (user_id, token, device_name, platform, browser, app_version, is_active, last_used_at)
-         VALUES ($1, $2, $3, $4, $5, $6, TRUE, NOW())
+         VALUES ($1,$2,$3,$4,$5,$6,TRUE,NOW())
          ON CONFLICT (user_id, token)
          DO UPDATE SET is_active = TRUE, last_used_at = NOW(),
-           device_name = EXCLUDED.device_name,
-           platform = EXCLUDED.platform,
-           browser = EXCLUDED.browser,
-           app_version = EXCLUDED.app_version`,
+           device_name = EXCLUDED.device_name, platform = EXCLUDED.platform,
+           browser = EXCLUDED.browser, app_version = EXCLUDED.app_version`,
         [pgUserId, token, deviceInfo.deviceName, deviceInfo.platform, deviceInfo.browser, deviceInfo.appVersion]
       );
-      // Also keep Firestore in sync for legacy reads
-      await adminDb.collection('users').doc(firebaseUserId).update({
+
+      adminDb.collection('users').doc(firebaseUserId).update({
         fcmTokens: FieldValue.arrayUnion(token),
         notificationReady: true,
         lastTokenRefresh: FieldValue.serverTimestamp(),
-      });
+      }).catch(() => {});
     } finally {
       client.release();
     }
   }
 
-  // Loop logic removed as we trigger instantly and have a fallback setInterval
+  // ─── Queue Processor ─────────────────────────────────────────────────────────
 
   public async processQueue(): Promise<void> {
     if (this.isProcessing) return;
@@ -228,13 +254,13 @@ export class NotificationQueueService {
     const client = await pgPool.connect();
 
     try {
-      // Grab up to 20 high-priority items first, then normal
       const result = await client.query(
-        `SELECT q.*, u.firebase_uid 
+        `SELECT q.*, u.firebase_uid
          FROM notification_queue q
          JOIN users u ON q.target_user_id = u.id
          WHERE q.status = 'queued'
            AND (q.expires_at IS NULL OR q.expires_at > NOW())
+           AND (q.scheduled_at IS NULL OR q.scheduled_at <= NOW())
          ORDER BY
            CASE q.priority WHEN 'high' THEN 1 ELSE 2 END,
            q.created_at ASC
@@ -243,7 +269,6 @@ export class NotificationQueueService {
       );
 
       if (result.rows.length === 0) return;
-
       for (const row of result.rows) {
         await this.processItem(row, client);
       }
@@ -254,83 +279,98 @@ export class NotificationQueueService {
   }
 
   private async processItem(item: any, client: any): Promise<void> {
-    const { id, target_user_id, payload, retry_count, priority, tag, order_id, version, category } = item;
+    const { id, target_user_id, payload, retry_count, priority, tag, order_id, version, category, firebase_uid } = item;
     const startTime = Date.now();
 
     try {
       await client.query(`UPDATE notification_queue SET status = 'sending', updated_at = NOW() WHERE id = $1`, [id]);
 
-      // ── Fetch active tokens + user email from Postgres ──────────────────
+      const parsedPayload = typeof payload === 'string' ? JSON.parse(payload) : payload;
+      const role  = parsedPayload.data?.role  || 'customer';
+      const stage = parsedPayload.data?.stage || parsedPayload.data?.currentStatus || category || 'update';
+
+      // ── STALE GUARD (re-check at send time) ──────────────────────────────
+      if (order_id && version) {
+        const isStale = await orderEventService.isStale(order_id, version, stage);
+        if (isStale) {
+          await client.query(`DELETE FROM notification_queue WHERE id = $1`, [id]);
+          console.log(`[NotifQueue] STALE at send-time — dropped id=${id}`);
+          return;
+        }
+      }
+
+      // ── Fetch tokens + user info ──────────────────────────────────────────
       const [tokenResult, userResult] = await Promise.all([
         client.query(
           `SELECT token FROM fcm_tokens WHERE user_id = $1 AND is_active = TRUE ORDER BY last_used_at DESC LIMIT 10`,
           [target_user_id]
         ),
-        client.query(
-          `SELECT email, name FROM users WHERE id = $1`,
-          [target_user_id]
-        ),
+        client.query(`SELECT email, name FROM users WHERE id = $1`, [target_user_id]),
       ]);
 
       const userEmail: string | null = userResult.rows[0]?.email || null;
       const customerName: string = userResult.rows[0]?.name || 'Customer';
 
-      // Fallback to Firestore if Postgres tokens empty
+      // Fallback to Firestore if no Postgres tokens
       let tokens: string[] = tokenResult.rows.map((r: any) => r.token);
-      if (tokens.length === 0) {
-        const userDoc = await adminDb.collection('users').doc(item.firebase_uid).get();
+      if (tokens.length === 0 && firebase_uid) {
+        const userDoc = await adminDb.collection('users').doc(firebase_uid).get();
         tokens = userDoc.data()?.fcmTokens || [];
-        // Sync them into Postgres
         for (const t of tokens) {
           await client.query(
-            `INSERT INTO fcm_tokens (user_id, token, is_active) VALUES ($1, $2, TRUE)
-             ON CONFLICT (user_id, token) DO UPDATE SET is_active = TRUE`,
+            `INSERT INTO fcm_tokens (user_id, token, is_active) VALUES ($1,$2,TRUE) ON CONFLICT (user_id, token) DO UPDATE SET is_active=TRUE`,
             [target_user_id, t]
           ).catch(() => {});
         }
       }
 
-      // ── Email-only path: no FCM tokens available ──────────────────────────
+      // ── Always-send transactional emails ─────────────────────────────────
+      // These fire regardless of push success/failure
+      const alwaysEmail = EmailRulesEngine.isAlwaysEmail(role, stage);
+      if (alwaysEmail && userEmail) {
+        try {
+          const subject = parsedPayload.data?.title || `Order Update — Olive Pizza`;
+          const htmlBody = buildOrderStatusEmail({
+            customerName, subject, stage, orderId: order_id,
+            data: parsedPayload.data || {},
+          });
+          await queueEmail(userEmail, subject, htmlBody, 'transactional');
+          console.log(`[NotifQueue] 📧 Always-send email → ${userEmail} stage=${stage}`);
+        } catch (emailErr) {
+          console.error('[NotifQueue] Always-send email failed:', emailErr);
+        }
+      }
+
+      // ── No tokens path ────────────────────────────────────────────────────
       if (tokens.length === 0) {
-        if (userEmail) {
+        // Conditional fallback email for non-always stages
+        if (!alwaysEmail && EmailRulesEngine.shouldSend(role, stage, false) && userEmail) {
           try {
-            const parsedPayload = typeof payload === 'string' ? JSON.parse(payload) : payload;
-            const stage = parsedPayload.data?.stage || category || 'update';
-            const subject = parsedPayload.data?.title || 'Order Update — Olive Pizza';
+            const subject = parsedPayload.data?.title || `Order Update — Olive Pizza`;
             const htmlBody = buildOrderStatusEmail({
-              customerName,
-              subject,
-              stage,
-              orderId: order_id,
+              customerName, subject, stage, orderId: order_id,
               data: parsedPayload.data || {},
             });
             await queueEmail(userEmail, subject, htmlBody, 'transactional');
-            console.log(`[NotifQueue] 📧 Email fallback sent to ${userEmail} for stage=${stage}`);
+            console.log(`[NotifQueue] 📧 Fallback email (no tokens) → ${userEmail} stage=${stage}`);
           } catch (emailErr) {
-            console.error('[NotifQueue] Email fallback failed:', emailErr);
+            console.error('[NotifQueue] Fallback email failed:', emailErr);
           }
-        } else {
-          console.warn(`[NotifQueue] No tokens and no email for user ${target_user_id} — notification lost.`);
+        } else if (!userEmail) {
+          console.warn(`[NotifQueue] No tokens and no email for user ${target_user_id} — notification lost`);
         }
-        // Mark as sent (via email) and exit
         await client.query(`UPDATE notification_queue SET status = 'sent', updated_at = NOW() WHERE id = $1`, [id]);
         return;
       }
 
-      // ── Build FCM message ─────────────────────────────────────────────────
-      const parsedPayload = typeof payload === 'string' ? JSON.parse(payload) : payload;
-
-      // Inject queue ID for acknowledgement tracking
+      // ── Inject tracking fields ────────────────────────────────────────────
       parsedPayload.data = parsedPayload.data || {};
       parsedPayload.data.queueId = id;
       parsedPayload.data.version = String(version || 1);
       if (tag) parsedPayload.data.tag = tag;
       if (order_id) parsedPayload.data.orderId = order_id;
 
-      // Remove notification object for silent/data-only pushes
-      if (priority === 'silent') {
-        delete parsedPayload.notification;
-      }
+      if (priority === 'silent') delete parsedPayload.notification;
 
       // ── Send via FCM Multicast ────────────────────────────────────────────
       const message: admin.messaging.MulticastMessage = {
@@ -349,7 +389,6 @@ export class NotificationQueueService {
       const failedTokens: string[] = [];
       response.responses.forEach((r, idx) => {
         if (r.error) {
-          console.error(`[FCM Error] Token idx ${idx}:`, r.error);
           const code = r.error.code;
           if (
             code === 'messaging/invalid-registration-token' ||
@@ -358,86 +397,68 @@ export class NotificationQueueService {
           ) {
             failedTokens.push(tokens[idx]);
           }
+          // Do NOT retry invalid tokens
         }
       });
 
       if (failedTokens.length > 0) {
-        // Soft-deactivate invalid tokens (don't delete — keep for audit)
         await client.query(
           `UPDATE fcm_tokens SET is_active = FALSE WHERE user_id = $1 AND token = ANY($2)`,
           [target_user_id, failedTokens]
         );
-        await adminDb.collection('users').doc(item.firebase_uid).update({
-          fcmTokens: FieldValue.arrayRemove(...failedTokens),
-        });
+        if (firebase_uid) {
+          adminDb.collection('users').doc(firebase_uid).update({
+            fcmTokens: FieldValue.arrayRemove(...failedTokens),
+          }).catch(() => {});
+        }
         console.log(`[NotifQueue] Deactivated ${failedTokens.length} invalid tokens for ${target_user_id}`);
       }
 
       const successCount = response.successCount;
+
+      // ── FCM failed — conditional email fallback ───────────────────────────
       if (successCount === 0 && tokens.length > 0) {
-        // All FCM sends failed — try email fallback before giving up
-        if (userEmail) {
+        if (!alwaysEmail && EmailRulesEngine.shouldSend(role, stage, false) && userEmail) {
           try {
-            const parsedPayload = typeof payload === 'string' ? JSON.parse(payload) : payload;
-            const stage = parsedPayload.data?.stage || category || 'update';
-            const subject = parsedPayload.data?.title || 'Order Update — Olive Pizza';
+            const subject = parsedPayload.data?.title || `Order Update — Olive Pizza`;
             const htmlBody = buildOrderStatusEmail({
-              customerName,
-              subject,
-              stage,
-              orderId: order_id,
+              customerName, subject, stage, orderId: order_id,
               data: parsedPayload.data || {},
             });
             await queueEmail(userEmail, subject, htmlBody, 'transactional');
-            console.log(`[NotifQueue] 📧 FCM-failed email fallback sent to ${userEmail} for stage=${stage}`);
+            console.log(`[NotifQueue] 📧 FCM-fail fallback email → ${userEmail} stage=${stage}`);
           } catch (emailErr) {
-            console.error('[NotifQueue] Post-FCM-failure email fallback failed:', emailErr);
+            console.error('[NotifQueue] FCM-fail email failed:', emailErr);
           }
         }
-        throw new Error('All tokens failed to receive the message');
+        throw new Error('All FCM tokens failed');
       }
 
-      // ── Mark as sent ──────────────────────────────────────────────────────
-      await client.query(
-        `UPDATE notification_queue SET status = 'sent', updated_at = NOW() WHERE id = $1`,
-        [id]
-      );
-
-      // ── Track analytics ───────────────────────────────────────────────────
+      await client.query(`UPDATE notification_queue SET status = 'sent', updated_at = NOW() WHERE id = $1`, [id]);
       await this.recordAnalytic(client, category || 'general', 'sent', 1);
       await this.recordAnalytic(client, category || 'general', 'delivered', successCount);
       await this.recordDeliveryTime(client, category || 'general', deliveryMs);
 
-      // Update debugger
-      notificationDebugger.updateStage(id, 'Firebase Response', { 
-        tokensFound: tokens.length,
-        status: successCount > 0 ? 'sent' : 'failed' 
+      notificationDebugger.updateStage(id, 'Firebase Response', {
+        tokensFound: tokens.length, status: successCount > 0 ? 'sent' : 'failed',
       }).catch(() => {});
 
-      console.log(`[NotifQueue] ✅ Sent id=${id} tag=${tag || 'none'} to ${successCount}/${tokens.length} devices in ${deliveryMs}ms`);
+      console.log(`[NotifQueue] ✅ Sent id=${id} tag=${tag||'none'} to ${successCount}/${tokens.length} devices in ${deliveryMs}ms`);
     } catch (error: any) {
       const newRetryCount = (retry_count || 0) + 1;
 
       if (newRetryCount >= 3) {
-        // Give up — mark failed in queue and inbox
         await client.query(
           `INSERT INTO notification_history (target_user_id, title, body, category, status)
            SELECT target_user_id, payload->'notification'->>'title', payload->'notification'->>'body', category, 'failed'
-           FROM notification_queue WHERE id = $1
-           ON CONFLICT DO NOTHING`,
+           FROM notification_queue WHERE id = $1 ON CONFLICT DO NOTHING`,
           [id]
         ).catch(() => {});
         await client.query(`DELETE FROM notification_queue WHERE id = $1`, [id]);
         await this.recordAnalytic(client, category || 'general', 'failed', 1);
-        
-        notificationDebugger.updateStage(id, 'Failed', { 
-          error: error.message,
-          status: 'failed'
-        }).catch(() => {});
-        
+        notificationDebugger.updateStage(id, 'Failed', { error: error.message, status: 'failed' }).catch(() => {});
         console.error(`[NotifQueue] ❌ Permanently failed id=${id}: ${error.message}`);
       } else {
-        // Exponential backoff retry
         const backoffMs = 1000 * Math.pow(2, newRetryCount);
         await client.query(
           `UPDATE notification_queue
@@ -446,67 +467,57 @@ export class NotificationQueueService {
            WHERE id = $3`,
           [newRetryCount, backoffMs, id]
         );
-        console.warn(`[NotifQueue] Retry #${newRetryCount} for id=${id} in ${backoffMs}ms: ${error.message}`);
+        console.warn(`[NotifQueue] Retry #${newRetryCount} for id=${id} in ${backoffMs}ms`);
       }
     }
   }
 
-  // ─── Inbox Writer ────────────────────────────────────────────────────────────
+  // ─── Inbox Writer ─────────────────────────────────────────────────────────────
 
   private async writeToInbox(
-    client: any,
-    userId: string,
-    payload: any,
-    tag: string | null,
-    orderId: string | null,
-    category: string,
-    options: EnqueueOptions,
-    expiresAt: Date | null
+    client: any, userId: string, payload: any, tag: string | null, orderId: string | null,
+    category: string, options: EnqueueOptions, expiresAt: Date | null
   ): Promise<void> {
     try {
       const p = typeof payload === 'string' ? JSON.parse(payload) : payload;
-      const title = p.notification?.title || 'Notification';
-      const body = p.notification?.body || '';
+      const title = p.notification?.title || p.data?.title || 'Notification';
+      const body  = p.notification?.body  || p.data?.body  || '';
 
       if (tag) {
-        // Upsert: update existing inbox item with same tag (live card)
         await client.query(
           `INSERT INTO notification_inbox (user_id, tag, order_id, title, body, category, url, data, version, expires_at, is_read, updated_at)
-           VALUES ($1, $2, NULL, $3, $4, $5, $6, $7, $8, $9, FALSE, NOW())
+           VALUES ($1,$2,NULL,$3,$4,$5,$6,$7,$8,$9,FALSE,NOW())
            ON CONFLICT (user_id, tag) WHERE tag IS NOT NULL
-           DO UPDATE SET title = EXCLUDED.title, body = EXCLUDED.body, version = EXCLUDED.version,
-             data = EXCLUDED.data, expires_at = EXCLUDED.expires_at, is_read = FALSE, updated_at = NOW()`,
+           DO UPDATE SET title=EXCLUDED.title, body=EXCLUDED.body, version=EXCLUDED.version,
+             data=EXCLUDED.data, expires_at=EXCLUDED.expires_at, is_read=FALSE, updated_at=NOW()`,
           [userId, tag, title, body, category, p.data?.url || '/', JSON.stringify(p.data), options.version || 1, expiresAt]
         ).catch(() => {
-          // Fallback: plain insert if constraint doesn't exist yet
           client.query(
             `INSERT INTO notification_inbox (user_id, tag, order_id, title, body, category, url, data, version, expires_at)
-             VALUES ($1, $2, NULL, $3, $4, $5, $6, $7, $8, $9)
-             ON CONFLICT DO NOTHING`,
+             VALUES ($1,$2,NULL,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT DO NOTHING`,
             [userId, tag, title, body, category, p.data?.url || '/', JSON.stringify(p.data), options.version || 1, expiresAt]
           ).catch(() => {});
         });
       } else {
         await client.query(
           `INSERT INTO notification_inbox (user_id, order_id, title, body, category, url, data, version, expires_at)
-           VALUES ($1, NULL, $2, $3, $4, $5, $6, $7, $8)`,
+           VALUES ($1,NULL,$2,$3,$4,$5,$6,$7,$8)`,
           [userId, title, body, category, p.data?.url || '/', JSON.stringify(p.data), options.version || 1, expiresAt]
         ).catch(() => {});
       }
     } catch (err) {
-      // Never block main flow for inbox write failures
       console.error('[NotifQueue] Inbox write failed (non-blocking):', err);
     }
   }
 
-  // ─── Analytics ───────────────────────────────────────────────────────────────
+  // ─── Analytics ─────────────────────────────────────────────────────────────
 
   private async recordAnalytic(client: any, category: string, field: 'sent' | 'delivered' | 'opened' | 'failed', count: number): Promise<void> {
     const today = new Date().toISOString().slice(0, 10);
     const col = `${field}_count`;
     await client.query(
       `INSERT INTO notification_analytics (period_date, category, ${col})
-       VALUES ($1, $2, $3)
+       VALUES ($1,$2,$3)
        ON CONFLICT (period_date, category, role)
        DO UPDATE SET ${col} = notification_analytics.${col} + EXCLUDED.${col}, updated_at = NOW()`,
       [today, category, count]
@@ -517,18 +528,17 @@ export class NotificationQueueService {
     const today = new Date().toISOString().slice(0, 10);
     await client.query(
       `INSERT INTO notification_analytics (period_date, category, total_delivery_time_ms, delivered_count)
-       VALUES ($1, $2, $3, 1)
+       VALUES ($1,$2,$3,1)
        ON CONFLICT (period_date, category, role)
-       DO UPDATE SET total_delivery_time_ms = notification_analytics.total_delivery_time_ms + $3,
-         updated_at = NOW()`,
+       DO UPDATE SET total_delivery_time_ms = notification_analytics.total_delivery_time_ms + $3, updated_at = NOW()`,
       [today, category, ms]
     ).catch(() => {});
   }
 
-  // ─── DND Check ───────────────────────────────────────────────────────────────
+  // ─── DND Check ─────────────────────────────────────────────────────────────
 
   private async shouldSuppressByDND(userId: string, category: string, priority: string): Promise<boolean> {
-    if (priority === 'high') return false; // High priority always breaks through
+    if (priority === 'high') return false;
     try {
       const client = await pgPool.connect();
       try {
@@ -537,9 +547,9 @@ export class NotificationQueueService {
           [userId]
         );
         if (result.rows.length === 0) return false;
-        const prefs = result.rows[0];
-        if (prefs.mute_marketing && (category === 'marketing' || category === 'announcement')) return true;
-        if (prefs.mute_low_priority && priority === 'normal') return true;
+        const p = result.rows[0];
+        if (p.mute_marketing && (category === 'marketing' || category === 'announcement')) return true;
+        if (p.mute_low_priority && priority === 'normal') return true;
         return false;
       } finally {
         client.release();

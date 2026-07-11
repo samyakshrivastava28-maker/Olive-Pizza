@@ -4,12 +4,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useEffect, useState, Suspense } from 'react';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { Home, Menu as MenuIcon, ShoppingBag, User, Search, MapPin, ReceiptText, WifiOff, Download, RefreshCw, Bot } from 'lucide-react';
+import { Home, Menu as MenuIcon, ShoppingBag, User, Search, MapPin, ReceiptText, WifiOff, Download, RefreshCw, Bot, Bell } from 'lucide-react';
 
 import PWAPrompts from './ui/PWAPrompts';
 import { usePWA } from '../lib/usePWA';
 import Aurora from './ui/Aurora';
 import { prefetchRoute } from '../lib/prefetch';
+import NotificationCenter from './ui/NotificationCenter';
 
 export default function MainLayout() {
   const isAuthenticated = useAuthStore(state => state.isAuthenticated);
@@ -41,6 +42,7 @@ export default function MainLayout() {
   }, [user, role]);
 
   const [scrolled, setScrolled] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
@@ -50,6 +52,7 @@ export default function MainLayout() {
 
   return (
     <div className="min-h-screen flex flex-col bg-dark-950 pb-[72px] md:pb-0">
+      <NotificationCenter isOpen={notifOpen} onClose={() => setNotifOpen(false)} />
       <div className="fixed inset-0 z-0 pointer-events-none opacity-30">
         <Aurora 
           colorStops={["#749578", "#55775a", "#425e47"]}
@@ -189,7 +192,19 @@ export default function MainLayout() {
                 </AnimatePresence>
               </Link>
 
-              {/* Update/Install buttons */}
+              {/* Notification Center Bell */}
+              {isAuthenticated && (
+                <button
+                  onClick={() => setNotifOpen(true)}
+                  className="relative p-2.5 rounded-xl hover:bg-white/8 transition-all duration-200 ml-1"
+                  style={{ color: 'rgba(226,232,240,0.85)' }}
+                  title="Notifications"
+                >
+                  <Bell className="w-5 h-5" />
+                </button>
+              )}
+
+
               {updateAvailable && (
                 <button onClick={() => window.dispatchEvent(new Event('trigger-pwa-update'))}
                   className="ml-2 px-4 py-2 rounded-xl text-sm font-bold text-white bg-green-600 hover:bg-green-500 transition-all flex items-center gap-2 animate-pulse">

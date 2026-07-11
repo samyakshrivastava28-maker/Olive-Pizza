@@ -4,7 +4,9 @@ import { verifyToken, AuthRequest } from '../middleware/auth.middleware.js';
 import { adminDb } from '../config/firebase.js';
 import { OwnerTemplates, CustomerTemplates } from '../services/notification/NotificationTemplates.js';
 import { notificationQueue } from '../services/notification/NotificationQueueService.js';
-
+import { orderEventService } from '../services/order/OrderEventService.js';
+import { queueEmail } from '../services/email.service.js';
+import { buildOrderStatusEmail } from '../services/emailTemplates.service.js';
 
 const router = Router();
 
@@ -50,7 +52,7 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
       return;
     }
 
-    // 1. Fetch user data for address and phone
+    // 1. Fetch user data
     const userResult = await query('SELECT * FROM users WHERE firebase_uid = $1', [userId]);
     const userData = userResult.rows[0];
     
@@ -64,7 +66,7 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
       return;
     }
 
-    // 2. Validate Prices Against Server Database
+    // 2. Validate prices
     let serverCalculatedTotal = 0;
     const validatedItems = [];
 
@@ -81,12 +83,8 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
         return;
       }
 
-      // Very simple price validation for Phase 4 (Assume base price)
-      let itemPrice = Number(menuData.base_price);
-      
-      // Calculate total
-      const lineTotal = itemPrice * item.quantity;
-      serverCalculatedTotal += lineTotal;
+      const itemPrice = Number(menuData.base_price);
+      serverCalculatedTotal += itemPrice * item.quantity;
 
       validatedItems.push({
         menuItemId: item.menuItemId,
@@ -99,66 +97,89 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
       });
     }
 
-    // 3. Create the order in Postgres
-    const orderSql = `
-      INSERT INTO orders (user_id, status, total_amount, contact_phone, delivery_address_line)
-      VALUES ($1, 'pending', $2, $3, $4)
-      RETURNING id, created_at, updated_at
-    `;
-    
-    const orderInsertResult = await query(orderSql, [userData.id, serverCalculatedTotal, userData.phone, userData.full_address]);
+    // 3. Create order in Postgres
+    const orderInsertResult = await query(
+      `INSERT INTO orders (user_id, status, total_amount, contact_phone, delivery_address_line, notification_version)
+       VALUES ($1, 'pending', $2, $3, $4, 1)
+       RETURNING id, created_at, updated_at`,
+      [userData.id, serverCalculatedTotal, userData.phone, userData.full_address]
+    );
     const newOrder = orderInsertResult.rows[0];
 
     // Insert order items
     for (const item of validatedItems) {
       await query(
-        `INSERT INTO order_items (order_id, menu_item_id, quantity, size, crust, price_at_time) VALUES ($1, $2, $3, $4, $5, $6)`,
+        `INSERT INTO order_items (order_id, menu_item_id, quantity, size, crust, price_at_time)
+         VALUES ($1,$2,$3,$4,$5,$6)`,
         [newOrder.id, item.menuItemId, item.quantity, item.size, item.crust, item.price]
       );
     }
 
-    const orderData = {
-      id: newOrder.id,
-      userId,
-      items: validatedItems,
-      totalAmount: serverCalculatedTotal,
-      status: 'pending',
-      deliveryAddress: { addressLine: userData.full_address, lat: userData.lat, lng: userData.lng },
-      contactPhone: userData.phone,
-      createdAt: newOrder.created_at,
-      updatedAt: newOrder.updated_at
-    };
+    const shortId = newOrder.id.slice(-6).toUpperCase();
+    const orderNumber = `OP-${shortId}`;
 
-    // Push notification to all owners — no email
+    // 4. Push Firestore document for real-time tracking
     try {
-      const shortId = newOrder.id.slice(-6).toUpperCase();
-      const ownersSnap = await adminDb.collection('users').where('role', '==', 'owner').get();
-      const pushPayload = OwnerTemplates.newOrder(newOrder.id, {
+      await adminDb.collection('orders').doc(newOrder.id).set({
+        id: newOrder.id,
+        userId,
+        items: validatedItems,
+        totalAmount: serverCalculatedTotal,
+        status: 'pending',
+        notification_version: 1,
+        deliveryAddress: { addressLine: userData.full_address, lat: userData.lat, lng: userData.lng },
+        contactPhone: userData.phone,
         customerName: userData.name || 'Customer',
-        orderNumber: shortId,
+        daily_order_number: orderNumber,
+        paymentMethod: 'COD',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+    } catch (err) {
+      console.warn('[Orders] Firestore sync failed (non-fatal):', err);
+    }
+
+    // 5. Emit canonical OrderEvent via OrderEventService
+    try {
+      const event = await orderEventService.emitNewOrder(newOrder.id);
+      const eventId   = event?.eventId;
+      const eventTimestamp = event?.eventTimestamp;
+
+      // Push notification to all owners — critical wake-up
+      const ownersSnap = await adminDb.collection('users').where('role', '==', 'owner').get();
+      const ownerPayload = OwnerTemplates.newOrder(newOrder.id, {
+        customerName: userData.name || 'Customer',
+        orderNumber,
         totalAmount: serverCalculatedTotal,
         itemsCount: validatedItems.length,
         paymentMethod: 'COD',
         deliveryAddress: userData.full_address,
         phone: userData.phone,
         version: 1,
+        eventId,
+        previousStatus: undefined,
+        eventTimestamp,
       });
+
       for (const ownerDoc of ownersSnap.docs) {
         notificationQueue.enqueue(
           ownerDoc.id,
-          pushPayload,
+          ownerPayload,
           'high',
           { tag: `order_owner_${newOrder.id}`, orderId: newOrder.id, category: 'order', priority: 'critical', version: 1 }
         ).catch(console.error);
       }
-      
-      // Notify customer
+
+      // Customer push (persistent pinned tracker)
       if (userData.firebase_uid) {
         const customerPayload = CustomerTemplates.orderUpdate(newOrder.id, {
-          orderNumber: shortId,
+          orderNumber,
           totalAmount: serverCalculatedTotal,
           status: 'pending',
-          version: 1
+          version: 1,
+          eventId,
+          previousStatus: undefined,
+          eventTimestamp,
         });
         notificationQueue.enqueue(
           userData.firebase_uid,
@@ -171,7 +192,30 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
       console.error('[Orders] Push notification failed (non-blocking):', pushErr);
     }
 
-    res.status(201).json({ message: 'Order placed successfully', orderId: newOrder.id });
+    // 6. MANDATORY TRANSACTIONAL EMAIL — Order Placed (always sent, regardless of push)
+    if (userData.email) {
+      try {
+        const subject = `Order Placed — #${orderNumber}`;
+        const htmlBody = buildOrderStatusEmail({
+          customerName: userData.name || 'Customer',
+          subject,
+          stage: 'pending',
+          orderId: newOrder.id,
+          data: {
+            orderNumber,
+            totalAmount: String(serverCalculatedTotal),
+            paymentMethod: 'COD',
+            deliveryAddress: userData.full_address,
+          },
+        });
+        await queueEmail(userData.email, subject, htmlBody, 'transactional');
+        console.log(`[Orders] 📧 Order Placed email queued → ${userData.email}`);
+      } catch (emailErr) {
+        console.error('[Orders] Order Placed email failed (non-blocking):', emailErr);
+      }
+    }
+
+    res.status(201).json({ message: 'Order placed successfully', orderId: newOrder.id, orderNumber });
   } catch (error: any) {
     console.error('Order creation error:', error);
     res.status(500).json({ error: 'Failed to create order' });

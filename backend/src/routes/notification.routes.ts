@@ -23,6 +23,9 @@ import { notificationScheduler } from '../services/notification/NotificationSche
 import { OwnerTemplates, CustomerTemplates, DeliveryTemplates, MarketingTemplates, type OrderStatus } from '../services/notification/NotificationTemplates.js';
 import { notificationQueue } from '../services/notification/NotificationQueueService.js';
 import { verifyToken, AuthRequest } from '../middleware/auth.middleware.js';
+import { orderEventService } from '../services/order/OrderEventService.js';
+import { queueEmail } from '../services/email.service.js';
+import { buildOrderStatusEmail } from '../services/emailTemplates.service.js';
 
 const router = Router();
 
@@ -127,23 +130,36 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
 
     // ─── State Machine ─────────────────────────────────────────────────────
     if (action === 'accept' && currentStage === 'new_order' && userRole === 'owner') {
+      // Use OrderEventService for canonical state transition
+      await pgClient.query('ROLLBACK'); // Release lock — OrderEventService handles its own transaction
+      const event = await orderEventService.emitStatusChange(orderId, 'accepted', userId, { eta: '20-30 mins' });
+      if (!event) {
+        res.status(409).json({ error: 'Invalid state transition or order not found' });
+        return;
+      }
       newStatus = 'accepted';
-      await pgClient.query("UPDATE orders SET status = 'accepted', updated_at = NOW() WHERE id = $1", [orderId]);
+      const ev = event!;
 
       // Notify customer
-      if (customerFirebaseUid) {
+      if (ev.order.firebaseUid) {
         const payload = CustomerTemplates.orderUpdate(orderId, {
-          orderNumber: shortId, status: 'accepted', totalAmount: Number(order.total_amount),
-          eta: '20-30 mins', version: 2
+          orderNumber: ev.order.orderNumber, status: 'accepted', totalAmount: ev.order.totalAmount,
+          eta: '20-30 mins', version: ev.version,
+          eventId: ev.eventId, previousStatus: ev.previousStatus || undefined, eventTimestamp: ev.eventTimestamp,
         });
-        await notificationQueue.enqueue(customerFirebaseUid, payload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 2 });
+        await notificationQueue.enqueue(ev.order.firebaseUid, payload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: ev.version });
       }
       // Update owner live card
       const ownerPayload = OwnerTemplates.orderStatusUpdate(orderId, {
-        orderNumber: shortId, customerName: order.contact_phone, status: 'accepted', totalAmount: Number(order.total_amount), version: 2
+        orderNumber: ev.order.orderNumber, customerName: ev.order.contactPhone,
+        status: 'accepted', totalAmount: ev.order.totalAmount, version: ev.version,
+        eventId: ev.eventId, previousStatus: ev.previousStatus || undefined, eventTimestamp: ev.eventTimestamp,
       });
-      await notificationQueue.enqueue(userId, ownerPayload, 'normal', { tag: `order_owner_${orderId}`, orderId, category: 'order', version: 2 });
+      await notificationQueue.enqueue(userId, ownerPayload, 'normal', { tag: `order_owner_${orderId}`, orderId, category: 'order', version: ev.version });
       responseData = { message: 'Order accepted' };
+      res.json({ success: true, newStatus, ...responseData });
+      await releaseOrderLock(orderId);
+      return;
     }
 
     else if (action === 'reject' && userRole === 'owner') {
@@ -240,34 +256,50 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
     }
 
     else if (action === 'delivered' && userRole === 'delivery') {
+      await pgClient.query('ROLLBACK');
+      const event = await orderEventService.emitStatusChange(orderId, 'delivered', userId);
+      if (!event) {
+        res.status(409).json({ error: 'Invalid state transition' });
+        return;
+      }
       newStatus = 'delivered';
-      await pgClient.query(
-        "UPDATE orders SET status = 'delivered', updated_at = NOW() WHERE id = $1",
-        [orderId]
-      );
+      const ev = event!;
 
-      if (customerFirebaseUid) {
-        let title = `Update for ${shortId}`;
-        let body = `Order status updated to ${newStatus}`;
-        
-        switch (newStatus) {
-          case 'accepted': title = `Order Accepted — ${shortId}`; body = 'The restaurant is now preparing your pizza!'; break;
-          case 'ready': title = `Order Ready — ${shortId}`; body = 'Your order is packed and waiting for delivery.'; break;
-          case 'out_for_delivery': title = `Out for Delivery — ${shortId}`; body = 'Your pizza is on the way! Track live.'; break;
-          case 'delivered': title = `Delivered — ${shortId}`; body = 'Enjoy your meal! Thanks for choosing Olive Pizza.'; break;
+      if (ev.order.firebaseUid) {
+        const cPayload = CustomerTemplates.orderUpdate(orderId, {
+          orderNumber: ev.order.orderNumber, status: 'delivered', totalAmount: ev.order.totalAmount,
+          version: ev.version, eventId: ev.eventId, previousStatus: ev.previousStatus || undefined, eventTimestamp: ev.eventTimestamp,
+        });
+        await notificationQueue.enqueue(ev.order.firebaseUid, cPayload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: ev.version });
+
+        // MANDATORY Delivered email — always sent
+        const userRes2 = await pgPool.query('SELECT email, name FROM users WHERE id = $1', [ev.order.userId]).catch(() => ({ rows: [] as any[] }));
+        const userEmail = userRes2.rows[0]?.email;
+        const userName  = userRes2.rows[0]?.name || 'Customer';
+        if (userEmail) {
+          const subject = `Your order has been delivered! — #${ev.order.orderNumber}`;
+          const htmlBody = buildOrderStatusEmail({
+            customerName: userName, subject, stage: 'delivered',
+            orderId, data: { orderNumber: ev.order.orderNumber, totalAmount: String(ev.order.totalAmount) },
+          });
+          queueEmail(userEmail, subject, htmlBody, 'transactional').catch(console.error);
+          console.log(`[NotifRoutes] 📧 Delivered email queued → ${userEmail}`);
         }
-        
-        const cPayload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'delivered', totalAmount: Number(order.total_amount), version: 7 });
-        await notificationQueue.enqueue(customerFirebaseUid, cPayload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 7 });
       }
 
-      // Notify owner of completion
       const ownerIds = await getOwnerUserIds();
       for (const ownerId of ownerIds) {
-        const oPayload = OwnerTemplates.orderStatusUpdate(orderId, { orderNumber: shortId, customerName: '', status: 'delivered', totalAmount: Number(order.total_amount), version: 99 });
-        await notificationQueue.enqueue(ownerId, oPayload, 'normal', { tag: `order_owner_${orderId}`, orderId, category: 'order', version: 99 });
+        const oPayload = OwnerTemplates.orderStatusUpdate(orderId, {
+          orderNumber: ev.order.orderNumber, customerName: ev.order.contactPhone,
+          status: 'delivered', totalAmount: ev.order.totalAmount, version: ev.version,
+          eventId: ev.eventId, previousStatus: ev.previousStatus || undefined, eventTimestamp: ev.eventTimestamp,
+        });
+        await notificationQueue.enqueue(ownerId, oPayload, 'normal', { tag: `order_owner_${orderId}`, orderId, category: 'order', version: ev.version });
       }
       responseData = { message: 'Delivered — order complete' };
+      res.json({ success: true, newStatus, ...responseData });
+      await releaseOrderLock(orderId);
+      return;
     }
 
     else if (action === 'stop_alert') {

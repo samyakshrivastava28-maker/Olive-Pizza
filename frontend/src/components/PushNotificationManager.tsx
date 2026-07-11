@@ -17,7 +17,7 @@ import { getMessagingInstance, db, auth } from '../lib/firebase';
 import { getToken, onMessage, Messaging } from 'firebase/messaging';
 import { doc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { LocationManager } from '../lib/permissions';
-import { useAuthStore } from '../lib/store';
+import { useAuthStore } from '../lib/store.tsx';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Bell, X, ShieldCheck } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -25,6 +25,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Capacitor } from '@capacitor/core';
 import { PushNotifications } from '@capacitor/push-notifications';
+import { NOTIFICATION_CHANNELS, NOTIFICATION_ACTION_TYPES } from '../lib/notificationChannels';
 
 const API_BASE = '/api';
 const BROADCAST_CHANNEL = 'olive_pizza_notifications';
@@ -111,44 +112,16 @@ export default function PushNotificationManager() {
           return;
         }
 
-        // Create Android Notification Channels for Premium grouping/sound
-        await PushNotifications.createChannel({
-          id: 'olive_order',
-          name: 'Olive Pizza Orders',
-          description: 'Order updates and status changes',
-          importance: 5, // MAX importance
-          visibility: 1, // Public
-          vibration: true,
-        });
+        // Create all 7 Android Notification Channels
+        for (const channel of NOTIFICATION_CHANNELS) {
+          await PushNotifications.createChannel(channel).catch(() => {});
+        }
 
         // Register Action Types for Native Notification Buttons
         if ('registerActionTypes' in PushNotifications) {
           await (PushNotifications as any).registerActionTypes({
-          types: [
-            {
-              id: 'owner_order_actions',
-              actions: [
-                { id: 'accept', title: 'Accept' },
-                { id: 'reject', title: 'Reject', destructive: true },
-                { id: 'view', title: 'View Order' }
-              ]
-            },
-            {
-              id: 'customer_order_actions',
-              actions: [
-                { id: 'track', title: 'Track Order' },
-                { id: 'rate', title: 'Rate Order' }
-              ]
-            },
-            {
-              id: 'delivery_actions',
-              actions: [
-                { id: 'accept', title: 'Accept Delivery' },
-                { id: 'navigate', title: 'Navigate' }
-              ]
-            }
-          ]
-        });
+            types: NOTIFICATION_ACTION_TYPES,
+          });
         }
 
         await PushNotifications.register();
@@ -523,6 +496,34 @@ export default function PushNotificationManager() {
       if (tokenRefreshTimerRef.current) clearInterval(tokenRefreshTimerRef.current);
     };
   }, [user, tokenRegistered, registerToken, setupForegroundListener]);
+
+  // ─── Offline Recovery ─────────────────────────────────────────────────────
+  // When the device reconnects, re-register token if needed and fetch latest order state.
+  // We do NOT replay missed notifications — we only show the current state.
+  useEffect(() => {
+    if (!user) return;
+    const handleOnline = async () => {
+      console.log('[PushManager] 🌐 Network restored — checking token and order state');
+      try {
+        // Re-register channels on Android (in case app was killed + restarted)
+        if (Capacitor.isNativePlatform()) {
+          for (const channel of NOTIFICATION_CHANNELS) {
+            await PushNotifications.createChannel(channel).catch(() => {});
+          }
+        }
+        // Re-register token if it was reset
+        if (!tokenRegistered) {
+          await registerToken(user.uid);
+        }
+        // Dispatch event so FloatingTracker/OrderTracking pages can refresh live state
+        window.dispatchEvent(new CustomEvent('olive:network:restored', { detail: { uid: user.uid } }));
+      } catch (err) {
+        console.warn('[PushManager] Offline recovery failed (non-fatal):', err);
+      }
+    };
+    window.addEventListener('online', handleOnline);
+    return () => window.removeEventListener('online', handleOnline);
+  }, [user, tokenRegistered, registerToken]);
 
   // ─── Adaptive Heartbeat ────────────────────────────────────────────────────
   useEffect(() => {
