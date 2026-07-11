@@ -39,33 +39,6 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      # 6. Inject google-services.json from GitHub Secrets
-      # DOCUMENTATION: 
-      # The 'google-services.json' file is strictly required by the 'com.google.gms.google-services' Gradle plugin 
-      # and the '@capacitor-firebase/authentication' Native plugin. Without it, the Android build will fail.
-      # It is injected into the 'android/app/google-services.json' path, which is the exact location the Google Services 
-      # plugin expects it to be during the Gradle build phase.
-      # To prevent exposing this sensitive file in the public repository, it is stored as a GitHub Repository Secret.
-      - name: Inject google-services.json
-        env:
-          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
-        run: |
-          if [ -z "$GOOGLE_SERVICES_JSON" ]; then
-            echo "::error title=Missing Required Secret::The GOOGLE_SERVICES_JSON secret is missing or empty!"
-            echo "::error::Firebase is REQUIRED for this build configuration due to Native Firebase Authentication."
-            echo "::error::ACTION REQUIRED: Go to GitHub Settings -> Secrets and variables -> Actions."
-            echo "::error::Create a New repository secret named 'GOOGLE_SERVICES_JSON'."
-            echo "::error::Paste the exact contents of your google-services.json file and click 'Add secret'."
-            exit 1
-          fi
-          
-          echo "Secret found! Injecting google-services.json into android/app/ directory..."
-          mkdir -p android/app
-          
-          # We use cat to safely write the JSON string to the file to avoid quote parsing issues
-          cat << EOF > android/app/google-services.json
-          $GOOGLE_SERVICES_JSON
-          EOF
 
       # 7. Initialize dummy webDir and sync Capacitor
       #    We must create the webDir before syncing so Capacitor doesn't crash.
