@@ -210,6 +210,8 @@ function buildPayload(
     android: {
       priority: urgency === 'high' ? 'high' : 'normal',
       notification: {
+        title: title,
+        body: body,
         sound: soundFile,
         channelId: `olive_${options.category || 'order'}`,
         tag: options.tag,
