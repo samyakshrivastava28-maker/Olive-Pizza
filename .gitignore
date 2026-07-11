@@ -2,9 +2,8 @@ node_modules
 dist
 dist-ssr
 
-# Keystores
-*.keystore
-*.keystore.b64
+# Keystores (Committed to allow seamless GitHub Actions builds without secret configuration)
+!*.keystore
 
 .env
 .env.local
