@@ -164,19 +164,9 @@ export default function Login() {
     try {
       const provider = new GoogleAuthProvider();
       let result;
-      // Use native plugin on Android to avoid WebView storage issues, popup on web
-      if (Capacitor.isNativePlatform()) {
-        const { FirebaseAuthentication } = await import('@capacitor-firebase/authentication');
-        const nativeResult = await FirebaseAuthentication.signInWithGoogle();
-        if (nativeResult.credential?.idToken) {
-          const credential = GoogleAuthProvider.credential(nativeResult.credential.idToken);
-          result = await signInWithCredential(auth, credential);
-        } else {
-          throw new Error("Google Sign-In failed on device.");
-        }
-      } else {
-        result = await withAuthRetry(() => signInWithPopup(auth, provider), "Google Popup");
-      }
+      // Force Web Flow (signInWithRedirect) so the app can update OTA without needing a new APK download
+      // The Capacitor UserAgent is already overridden to allow this.
+      result = await withAuthRetry(() => signInWithRedirect(auth, provider), "Google Redirect");
       
       if (result && result.user) {
         const userRef = doc(db, "users", result.user.uid);
