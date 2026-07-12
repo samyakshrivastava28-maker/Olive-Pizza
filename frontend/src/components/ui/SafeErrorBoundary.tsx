@@ -24,9 +24,16 @@ export class SafeErrorBoundary extends Component<Props, State> {
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("SafeErrorBoundary caught an error:", error, errorInfo);
-    // Ignore ChunkLoadErrors specifically as they often require a hard reload
-    if (error.name === 'ChunkLoadError' || error.message.includes('dynamically imported module')) {
-      window.location.reload();
+    const msg = error.message.toLowerCase();
+    const isChunkError = error.name === 'ChunkLoadError' || 
+                         msg.includes('dynamically imported module') ||
+                         msg.includes('failed to fetch') ||
+                         msg.includes('importing a module script failed');
+                         
+    if (isChunkError) {
+      // Let the user see the error UI and click the button to nuke caches.
+      // Auto-reloading here can cause an infinite loop in some WebViews if cache isn't cleared synchronously.
+      console.warn("Caught chunk load error. Waiting for manual refresh to clear caches.");
     }
   }
 
@@ -35,7 +42,23 @@ export class SafeErrorBoundary extends Component<Props, State> {
     if (this.props.onReset) {
       this.props.onReset();
     } else {
-      window.location.reload();
+      // Nuke all PWA caches and service workers before reloading to fix ChunkLoadErrors
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(regs => {
+          for (const reg of regs) reg.unregister();
+        }).catch(() => {});
+      }
+      if ('caches' in window) {
+        caches.keys().then(keys => {
+          Promise.all(keys.map(k => caches.delete(k))).finally(() => {
+            window.location.href = window.location.pathname + '?v=' + new Date().getTime();
+          });
+        }).catch(() => {
+          window.location.reload();
+        });
+      } else {
+        window.location.reload();
+      }
     }
   };
 

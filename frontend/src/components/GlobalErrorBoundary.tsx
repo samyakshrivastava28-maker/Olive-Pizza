@@ -56,11 +56,22 @@ export class GlobalErrorBoundary extends Component<Props, State> {
   }
 
   private handleReload = () => {
-    // Clear any corrupted caches before reloading
-    if ('caches' in window) {
-      caches.keys().then(keys => keys.forEach(k => caches.delete(k))).catch(() => {});
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(regs => {
+        for (const reg of regs) reg.unregister();
+      }).catch(() => {});
     }
-    window.location.reload();
+    if ('caches' in window) {
+      caches.keys().then(keys => {
+        Promise.all(keys.map(k => caches.delete(k))).finally(() => {
+          window.location.href = window.location.pathname + '?v=' + new Date().getTime();
+        });
+      }).catch(() => {
+        window.location.reload();
+      });
+    } else {
+      window.location.reload();
+    }
   };
 
   private handleGoHome = () => {

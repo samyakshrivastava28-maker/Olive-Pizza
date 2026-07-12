@@ -287,6 +287,16 @@ export default function Register() {
             role: initialRole,
             createdAt: new Date().toISOString(),
           });
+          useAuthStore.getState().setUser({
+            uid: result.user.uid,
+            email: result.user.email,
+            name: result.user.displayName || "",
+            photoURL: result.user.photoURL,
+            emailVerified: result.user.emailVerified,
+            onboardingComplete: false,
+            phoneSetupCompleted: false,
+            locationSetupCompleted: false,
+          }, initialRole as "customer" | "owner" | "delivery_partner" | "admin");
         } else {
           const data = userDoc.data();
           finalRole = data?.role || "customer";
