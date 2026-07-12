@@ -257,9 +257,9 @@ export default function Register() {
     try {
       const provider = new GoogleAuthProvider();
       let result;
-      // Force Web Flow (signInWithRedirect) so the app can update OTA without needing a new APK download
-      // The Capacitor UserAgent is already overridden to allow this.
-      result = await withAuthRetry(() => signInWithRedirect(auth, provider), "Google Redirect");
+      // Force Web Flow (signInWithPopup) so the app can update OTA without needing a new APK download
+      // This avoids the 'never' TS error and the signInWithRedirect storage-partition error
+      result = await withAuthRetry(() => signInWithPopup(auth, provider), "Google Popup");
       
       if (result && result.user) {
         const userRef = doc(db, "users", result.user.uid);
