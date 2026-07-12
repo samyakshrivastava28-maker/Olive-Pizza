@@ -163,6 +163,7 @@ export default function Login() {
     setLoading(true);
     try {
       const provider = new GoogleAuthProvider();
+      let result;
       // Use native plugin on Android to avoid WebView storage issues
       if (Capacitor.isNativePlatform()) {
         const { FirebaseAuthentication } = await import('@capacitor-firebase/authentication');
