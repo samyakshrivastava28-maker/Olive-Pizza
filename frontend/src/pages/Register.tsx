@@ -256,10 +256,19 @@ export default function Register() {
     setLoading(true);
     try {
       const provider = new GoogleAuthProvider();
-      let result;
-      // Force Web Flow (signInWithPopup) so the app can update OTA without needing a new APK download
-      // This avoids the 'never' TS error and the signInWithRedirect storage-partition error
-      result = await withAuthRetry(() => signInWithPopup(auth, provider), "Google Popup");
+      // Use native plugin on Android to avoid WebView storage issues
+      if (Capacitor.isNativePlatform()) {
+        const { FirebaseAuthentication } = await import('@capacitor-firebase/authentication');
+        const nativeResult = await FirebaseAuthentication.signInWithGoogle();
+        if (nativeResult.credential?.idToken) {
+          const credential = GoogleAuthProvider.credential(nativeResult.credential.idToken);
+          result = await signInWithCredential(auth, credential);
+        } else {
+          throw new Error("Google Sign-In failed on device.");
+        }
+      } else {
+        result = await withAuthRetry(() => signInWithPopup(auth, provider), "Google Popup");
+      }
       
       if (result && result.user) {
         const userRef = doc(db, "users", result.user.uid);
