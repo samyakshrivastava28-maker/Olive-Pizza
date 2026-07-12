@@ -65,11 +65,24 @@ export class RouteErrorBoundary extends Component<Props, State> {
             This section couldn't load. Please check your connection.
           </p>
           <button
-            onClick={() => this.setState({ hasError: false, retryCount: 0 })}
+            onClick={() => {
+              if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+                navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(r => r.unregister())).catch(() => {});
+              }
+              if (typeof window !== 'undefined' && 'caches' in window) {
+                caches.keys().then(keys => {
+                  Promise.all(keys.map(k => caches.delete(k))).finally(() => {
+                    window.location.href = window.location.pathname + '?v=' + new Date().getTime();
+                  });
+                }).catch(() => (window as any).location.reload());
+              } else {
+                (window as any).location.reload();
+              }
+            }}
             className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-white font-semibold py-2 px-5 rounded-xl transition-all border border-slate-700 text-sm"
           >
             <RefreshCcw className="w-4 h-4" />
-            Try Again
+            Hard Reload
           </button>
         </div>
       );
