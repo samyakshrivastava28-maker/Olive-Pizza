@@ -11,6 +11,17 @@ import { initCrashLogger } from './lib/crashLogger';
 // 1. Init crash logger FIRST — must suppress non-fatal rejections before anything else runs
 initCrashLogger();
 
+// 1.5. Patch global fetch to route /api/ to the backend on Capacitor/Native apps
+const originalFetch = window.fetch;
+window.fetch = async (...args) => {
+  let [resource, config] = args;
+  if (typeof resource === 'string' && resource.startsWith('/api/')) {
+    const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://olive-pizza-backend.onrender.com';
+    resource = `${backendUrl}${resource}`;
+  }
+  return originalFetch(resource, config);
+};
+
 // 2. Validate env vars (logs warnings only, never throws)
 validateEnvironment();
 

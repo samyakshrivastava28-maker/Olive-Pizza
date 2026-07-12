@@ -61,7 +61,7 @@ export class GlobalErrorBoundary extends Component<Props, State> {
         for (const reg of regs) reg.unregister();
       }).catch(() => {});
     }
-    if ('caches' in window) {
+    if (typeof window !== 'undefined' && 'caches' in window) {
       caches.keys().then(keys => {
         Promise.all(keys.map(k => caches.delete(k))).finally(() => {
           window.location.href = window.location.pathname + '?v=' + new Date().getTime();
@@ -70,7 +70,7 @@ export class GlobalErrorBoundary extends Component<Props, State> {
         window.location.reload();
       });
     } else {
-      window.location.reload();
+      (window as any).location.reload();
     }
   };
 

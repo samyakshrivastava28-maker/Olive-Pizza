@@ -11,6 +11,7 @@ import { Capacitor } from '@capacitor/core';
 import { auth, db } from "../lib/firebase";
 import { doc, setDoc, getDoc } from "firebase/firestore";
 import { useNavigate, Link } from "react-router";
+import { useAuthStore } from "../lib/store";
 import { parsePhoneNumber } from "libphonenumber-js";
 import toast from "react-hot-toast";
 import { withAuthRetry } from "../lib/authRetry";
