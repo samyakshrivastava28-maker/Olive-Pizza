@@ -4,11 +4,11 @@
   "webDir": "dist/client",
   "server": {
     "url": "https://olive-pizza.vercel.app",
-    "cleartext": true,
+    "cleartext": false,
     "allowNavigation": ["olive-pizza.vercel.app", "*.firebaseapp.com", "*.googleapis.com"]
   },
   "android": {
-    "allowMixedContent": true,
+    "allowMixedContent": false,
     "captureInput": true,
     "webContentsDebuggingEnabled": false,
     "backgroundColor": "#0B0F14",

@@ -28,58 +28,63 @@ export default function Login() {
 
   // Handle redirect result on mount
   useEffect(() => {
-    getRedirectResult(auth).then(async (result) => {
-      if (result && result.user) {
-        try {
-          const userRef = doc(db, "users", result.user.uid);
-          const { getDoc } = await import("firebase/firestore");
-          const userDoc = await getDoc(userRef);
+    const checkRedirect = async () => {
+      try {
+        const result = await getRedirectResult(auth);
+        if (result && result.user) {
+          try {
+            const userRef = doc(db, "users", result.user.uid);
+            const { getDoc } = await import("firebase/firestore");
+            const userDoc = await getDoc(userRef);
 
-          const userEmail = result.user.email?.toLowerCase() || "";
-          const initialRole = userEmail === "olivepizzarjn@gmail.com" ? "owner" : "customer";
-          let finalRole = initialRole;
+            const userEmail = result.user.email?.toLowerCase() || "";
+            const initialRole = userEmail === "olivepizzarjn@gmail.com" ? "owner" : "customer";
+            let finalRole = initialRole;
 
-          if (!userDoc.exists()) {
-            await setDoc(userRef, {
-              email: userEmail,
-              name: result.user.displayName || "",
-              role: initialRole,
-              createdAt: new Date().toISOString(),
-            });
-          } else {
-            const data = userDoc.data();
-            finalRole = data?.role || "customer";
-            
-            // Immediately populate auth store for returning users
-            useAuthStore.getState().setUser({
-              uid: result.user.uid,
-              email: result.user.email,
-              name: data?.name,
-              phone: data?.phone,
-              photoURL: result.user.photoURL || data?.photoUrl,
-              onboardingComplete: data?.locationSetupCompleted,
-              phoneSetupCompleted: data?.phoneSetupCompleted,
-              locationSetupCompleted: data?.locationSetupCompleted,
-              lat: data?.lat,
-              lng: data?.lng,
-              fullAddress: data?.fullAddress,
-              emailVerified: result.user.emailVerified,
-              status: data?.status,
-            }, finalRole as "customer" | "owner" | "delivery_partner" | "admin");
+            if (!userDoc.exists()) {
+              await setDoc(userRef, {
+                email: userEmail,
+                name: result.user.displayName || "",
+                role: initialRole,
+                createdAt: new Date().toISOString(),
+              });
+            } else {
+              const data = userDoc.data();
+              finalRole = data?.role || "customer";
+              
+              useAuthStore.getState().setUser({
+                uid: result.user.uid,
+                email: result.user.email,
+                name: data?.name,
+                phone: data?.phone,
+                photoURL: result.user.photoURL || data?.photoUrl,
+                onboardingComplete: data?.locationSetupCompleted,
+                phoneSetupCompleted: data?.phoneSetupCompleted,
+                locationSetupCompleted: data?.locationSetupCompleted,
+                lat: data?.lat,
+                lng: data?.lng,
+                fullAddress: data?.fullAddress,
+                emailVerified: result.user.emailVerified,
+                status: data?.status,
+              }, finalRole as "customer" | "owner" | "delivery_partner" | "admin");
+            }
+
+            if (finalRole === "owner" || finalRole === "admin") navigate("/owner/dashboard");
+            else if (finalRole === "delivery_partner") navigate("/delivery/dashboard");
+            else navigate("/");
+          } catch (err) {
+            logDetailedError(err, { context: "Redirect Result Sync" });
+            console.error("Firestore sync failed on redirect result", err);
+            toast.error("Failed to sync user data after login.");
           }
-
-          if (finalRole === "owner" || finalRole === "admin") navigate("/owner/dashboard");
-          else if (finalRole === "delivery_partner") navigate("/delivery/dashboard");
-          else navigate("/");
-        } catch (err) {
-          logDetailedError(err, { context: "Redirect Result Sync" });
-          console.error("Firestore sync failed on redirect result", err);
         }
+      } catch (err: any) {
+        logDetailedError(err, { context: "Redirect Sign-In Error" });
+        console.error("Redirect sign-in error", err);
+        toast.error(translateError(err));
       }
-    }).catch((err) => {
-      logDetailedError(err, { context: "Redirect Sign-In Error" });
-      console.error("Redirect sign-in error", err);
-    });
+    };
+    checkRedirect();
   }, [navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -194,6 +199,17 @@ export default function Login() {
             role: initialRole,
             createdAt: new Date().toISOString(),
           });
+
+          fetch("/api/email/auth/welcome", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name: result.user.displayName || "", 
+              email: userEmail,
+              isReturning: false
+            }),
+          }).catch((e) => console.error("Email trigger failed:", e));
+
           useAuthStore.getState().setUser({
             uid: result.user.uid,
             email: result.user.email,

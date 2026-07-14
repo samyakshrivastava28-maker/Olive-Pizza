@@ -78,7 +78,7 @@ export async function logCrash(errorDetails: any) {
     };
 
     // Store in internal Firebase collection
-    await addDoc(collection(db, 'client_errors'), errorPayload);
+    await addDoc(collection(db, 'crash_reports'), errorPayload);
   } catch (e) {
     // Silent fail if Firestore is unreachable
     console.warn('[CrashLogger] Failed to log crash', e);

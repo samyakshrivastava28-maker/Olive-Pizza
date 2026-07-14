@@ -1,8 +1,37 @@
 import { Router } from 'express';
 import { pgPool } from '../config/postgres.js';
 import { requireAuth, requireRole } from '../middleware/auth.middleware.js';
+import { execSync } from 'child_process';
+import os from 'os';
 
 const router = Router();
+
+let cachedCommitHash: string | null = null;
+let cachedBuildTimestamp: string | null = null;
+
+router.get('/version', (req, res) => {
+  if (!cachedCommitHash) {
+    try {
+      cachedCommitHash = execSync('git rev-parse HEAD').toString().trim();
+    } catch {
+      cachedCommitHash = 'unknown';
+    }
+  }
+  if (!cachedBuildTimestamp) {
+    cachedBuildTimestamp = process.env.VITE_APP_BUILD_TIMESTAMP || new Date().toISOString();
+  }
+
+  res.json({
+    status: 'ok',
+    api_version: 'v1.1.0',
+    frontend_version: process.env.VITE_APP_VERSION || '1.1.0',
+    native_version: '1.1.0',
+    build_hash: process.env.VITE_APP_BUILD_HASH || cachedCommitHash,
+    git_commit: cachedCommitHash,
+    build_timestamp: cachedBuildTimestamp,
+    environment: process.env.NODE_ENV || 'development'
+  });
+});
 
 router.get('/metrics', requireAuth, requireRole(['owner', 'admin']), async (req, res) => {
   let client = null;

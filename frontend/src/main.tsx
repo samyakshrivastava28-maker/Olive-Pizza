@@ -11,6 +11,14 @@ import { initCrashLogger } from './lib/crashLogger';
 // 1. Init crash logger FIRST — must suppress non-fatal rejections before anything else runs
 initCrashLogger();
 
+// 1.1 Silence non-error console logs in production
+if (import.meta.env.PROD) {
+  console.log = () => {};
+  console.info = () => {};
+  console.debug = () => {};
+  console.warn = () => {}; // optionally keep warn or silence it; typically we silence warn too unless debugging.
+}
+
 // 1.5. Patch global fetch to route /api/ to the backend on Capacitor/Native apps
 const originalFetch = window.fetch;
 window.fetch = async (...args) => {

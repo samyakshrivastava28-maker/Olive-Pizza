@@ -61,6 +61,7 @@ export default function Checkout() {
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [hasRunningOrder, setHasRunningOrder] = useState(false);
 
   const [address, setAddress] = useState(user?.fullAddress || "");
   const [deliveryType, setDeliveryType] = useState<"delivery" | "pickup">(
@@ -93,6 +94,19 @@ export default function Checkout() {
   };
 
   const availableSlots = generateTimeSlots(scheduledDate);
+
+  useEffect(() => {
+    if (user?.uid) {
+      const q = query(
+        collection(db, "orders"),
+        where("userId", "==", user.uid),
+        where("status", "in", ["pending", "accepted", "preparing", "out_for_delivery"])
+      );
+      getDocs(q).then(snapshot => {
+        setHasRunningOrder(!snapshot.empty);
+      }).catch(err => console.error("Running order check failed", err));
+    }
+  }, [user?.uid]);
 
   useEffect(() => {
     if (
@@ -813,10 +827,10 @@ export default function Checkout() {
 
               <button
                 onClick={placeOrder}
-                disabled={loading}
-                className="w-full bg-primary-600 hover:bg-primary-500 text-white py-4 rounded-full font-bold transition-transform active:scale-95 flex items-center justify-center disabled:opacity-50"
+                disabled={loading || isOffline || hasRunningOrder}
+                className="w-full bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-400 hover:to-red-500 text-white font-bold py-4 px-6 rounded-xl shadow-lg transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {loading ? "Processing..." : "Place Order"}
+                {hasRunningOrder ? "Active Order Found (Checkout Locked)" : (loading ? "Processing..." : "Place Order")}
               </button>
             </motion.div>
           )}

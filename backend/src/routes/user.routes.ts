@@ -149,8 +149,8 @@ router.post('/revoke-all-sessions', async (req: AuthRequest, res: Response) => {
     // 1. Revoke Firebase Auth tokens (forces all devices to re-authenticate when current token expires)
     await adminAuth.revokeRefreshTokens(userId);
 
-    // 2. Mark all Firestore user_sessions as inactive (forces realtime listeners to sign out instantly)
-    const sessionsSnapshot = await adminDb.collection('user_sessions')
+    // 2. Mark all Firestore device_heartbeats as inactive (forces realtime listeners to sign out instantly)
+    const sessionsSnapshot = await adminDb.collection('device_heartbeats')
       .where('uid', '==', userId)
       .where('isActive', '==', true)
       .get();

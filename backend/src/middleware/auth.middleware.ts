@@ -95,3 +95,38 @@ export const requireRole = (allowedRoles: string[]) => {
 };
 
 export const requireAuth = verifyToken;
+
+export const optionalAuth = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    next();
+    return;
+  }
+
+  const token = authHeader.split('Bearer ')[1];
+
+  try {
+    const decodedToken = await adminAuth.verifyIdToken(token);
+    const uid = decodedToken.uid;
+    
+    let role = 'customer';
+    try {
+      const userResult = await query('SELECT role FROM users WHERE firebase_uid = $1', [uid]);
+      if (userResult.rows.length > 0 && userResult.rows[0].role) {
+        role = userResult.rows[0].role;
+      }
+    } catch (dbErr) {
+      // Ignore DB errors
+    }
+
+    req.user = {
+      uid,
+      email: decodedToken.email,
+      role
+    };
+    next();
+  } catch (error) {
+    // If token invalid, proceed as guest
+    next();
+  }
+};

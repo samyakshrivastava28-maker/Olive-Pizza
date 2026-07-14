@@ -2,6 +2,10 @@ import express from 'express';
 import { generateEmailTemplate, generateImage, generateProductDescription, generateProductImage, generateChatReply, enhancePrompt, aiProviderStats } from '../services/ai.service.js';
 import kb from '../services/KnowledgeBaseService.js';
 import { requireAuth, requireRole } from '../middleware/auth.middleware.js';
+import { aiContextBuilder } from '../services/ai/AIContextBuilder.js';
+import { qdrantService } from '../services/ai/QdrantService.js';
+import { recommendationEngine } from '../services/ai/RecommendationEngine.js';
+import { optionalAuth, AuthRequest } from '../middleware/auth.middleware.js';
 
 const router = express.Router();
 
@@ -40,7 +44,7 @@ router.post('/kb-rebuild', requireAuth, requireRole(['owner', 'admin']), async (
 });
 
 // ─── Primary Chat Route (4-tier priority) ─────────────────────────────────────
-router.post('/chat', async (req, res) => {
+router.post('/chat', optionalAuth, async (req: AuthRequest, res) => {
   try {
     const { message, history, frontendContext } = req.body;
     if (!message) return res.status(400).json({ error: 'Message is required' });
@@ -58,7 +62,40 @@ router.post('/chat', async (req, res) => {
 
     // Always search for relevant products for any query
     const products = kb.searchProducts(message, 4);
-    const kbContext = kb.buildContextForQuery(message);
+    
+    // Retrieve personalized context if user is logged in
+    let userContext = '';
+    if (req.user) {
+      if (req.user.role === 'customer') {
+        userContext = await recommendationEngine.getUserProfileContext(req.user.uid);
+      } else if (req.user.role === 'delivery') {
+        userContext = await recommendationEngine.getDeliveryPartnerContext(req.user.uid);
+      } else if (req.user.role === 'owner' || req.user.role === 'admin') {
+        userContext = await recommendationEngine.getOwnerContext();
+      }
+    }
+    
+    let kbContext = '';
+    const qStatus = await qdrantService.getStatus();
+    if (qStatus.ok && (qStatus.vectorCount ?? 0) > 0) {
+      kbContext = await aiContextBuilder.buildContext(message);
+    } else {
+      kbContext = kb.buildContextForQuery(message);
+    }
+
+    if (userContext) {
+      kbContext += `\n\n${userContext}`;
+    }
+
+    // ── TIER 1.5: Security Hard Block ────────────────────────────────────────
+    if (kbContext.startsWith("I cannot assist with queries regarding system credentials")) {
+      return res.json({
+        success: true,
+        reply: "I cannot assist with queries regarding system credentials, passwords, or internal security configurations. Please ask me about the menu, orders, or restaurant policies!",
+        source: 'security_guardrail',
+        products: [],
+      });
+    }
 
     // ── TIER 2 & 3: AI with Knowledge Context ────────────────────────────────
     const result = await generateChatReply(message, history || [], {

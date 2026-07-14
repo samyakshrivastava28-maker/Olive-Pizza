@@ -7,6 +7,9 @@ import { useAuthStore } from './lib/store';
 import { UpdateBanner, ForceUpdateScreen } from './components/VersionUpdateScreens';
 import { useDeviceSession } from './hooks/useDeviceSession';
 import OfflineBanner from './components/ui/OfflineBanner';
+import { useVersionCheck } from './hooks/useVersionCheck';
+import NativeAppUpdater from './components/NativeAppUpdater';
+import CartSyncManager from './components/CartSyncManager';
 
 // Custom lazy loading with retry for chunk errors (prevents black screen on PWA update)
 const lazyWithRetry = <T extends ComponentType<any>>(
@@ -140,9 +143,11 @@ const OwnerCoupons = lazyWithRetry(() => import('./pages/owner/OwnerCoupons'));
 const OwnerSecurity = lazyWithRetry(() => import('./pages/owner/OwnerSecurity'));
 const OwnerEmailCenter = lazyWithRetry(() => import('./pages/owner/OwnerEmailCenter'));
 const OwnerSpecialCategories = lazyWithRetry(() => import('./pages/owner/OwnerSpecialCategories'));
+const OwnerVerificationMetrics = lazyWithRetry(() => import('./pages/owner/OwnerVerificationMetrics'));
 const OwnerHomepageManager = lazyWithRetry(() => import('./pages/owner/OwnerHomepageManager'));
 const OwnerVersionManagement = lazyWithRetry(() => import('./pages/owner/OwnerVersionManagement'));
 const OwnerSlackCenter = lazyWithRetry(() => import('./pages/owner/OwnerSlackCenter'));
+const OwnerAIKnowledge = lazyWithRetry(() => import('./pages/owner/OwnerAIKnowledge'));
 const OwnerNotificationCenter = lazyWithRetry(() => import('./pages/owner/OwnerNotificationCenter'));
 const AIHealthMonitor = lazyWithRetry(() => import('./pages/owner/AIHealthMonitor'));
 const OwnerNotificationDiagnostics = lazyWithRetry(() => import('./pages/owner/OwnerNotificationDiagnostics'));
@@ -166,6 +171,9 @@ function AppContent() {
 
   // Track active device session
   useDeviceSession();
+  
+  // Automatic background update checker
+  useVersionCheck();
 
   // Prevent authenticated users from visiting login/register/forgot-password
   useEffect(() => {
@@ -221,6 +229,8 @@ function AppContent() {
 
   return (
     <>
+      <NativeAppUpdater />
+      <CartSyncManager />
       <PushNotificationManager />
       <AutoUpdater />
       <AnimatePresence mode="wait">
@@ -294,7 +304,9 @@ function AppContent() {
                   <Route path="special-categories" element={<OwnerSpecialCategories />} />
                   <Route path="homepage" element={<OwnerHomepageManager />} />
                   <Route path="notifications" element={<OwnerNotificationCenter />} />
+                  <Route path="verification-metrics" element={<OwnerVerificationMetrics />} />
                   <Route path="versions" element={<OwnerVersionManagement />} />
+                  <Route path="ai-knowledge" element={<OwnerAIKnowledge />} />
                   <Route path="ai-monitor" element={<AIHealthMonitor />} />
                   <Route path="notification-diagnostics" element={<OwnerNotificationDiagnostics />} />
                 </Route>

@@ -6,6 +6,7 @@
  * with no external AI providers needed for menu/policy/FAQ queries.
  */
 
+import { knowledgeSync } from './ai/KnowledgeSync.js';
 import { adminDb } from '../config/firebase.js';
 
 export interface KBProduct {
@@ -301,6 +302,7 @@ class KnowledgeBaseService {
           this.indexProduct(change.doc.id, data);
           console.log(`[KB] Product updated: ${data.name}`);
         }
+        knowledgeSync.syncProduct(change.doc.id).catch(err => console.error('[KB] Failed to sync product to Qdrant:', err));
       });
       this.stats.lastProductUpdate = Date.now();
       this.updateStats();
@@ -325,6 +327,7 @@ class KnowledgeBaseService {
         this.indexSettings(snap.data()!);
         this.stats.lastSettingsUpdate = Date.now();
         console.log('[KB] Settings updated');
+        knowledgeSync.syncSetting().catch(err => console.error('[KB] Failed to sync settings to Qdrant:', err));
       }
     }, err => console.warn('[KB] Settings listener error:', err.message));
 
@@ -342,6 +345,7 @@ class KnowledgeBaseService {
             _indexedAt: Date.now(),
           });
         }
+        knowledgeSync.syncCoupon(change.doc.id).catch(err => console.error('[KB] Failed to sync coupon to Qdrant:', err));
       });
       this.updateStats();
     }, err => console.warn('[KB] Coupons listener error:', err.message));
@@ -358,6 +362,7 @@ class KnowledgeBaseService {
             category: data.category, _indexedAt: Date.now(),
           });
         }
+        knowledgeSync.syncFaq(change.doc.id).catch(err => console.error('[KB] Failed to sync FAQ to Qdrant:', err));
       });
       this.updateStats();
     }, err => console.warn('[KB] FAQs listener error:', err.message));
@@ -631,6 +636,9 @@ class KnowledgeBaseService {
   getProductCount() { return this.products.size; }
   getAllCategories() { return [...this.categories.values()]; }
   getAllCoupons() { return [...this.coupons.values()].filter(c => c.isActive); }
+  getAllProducts() { return [...this.products.values()]; }
+  getAllPolicies() { return [...this.policies.values()]; }
+  getAllFaqs() { return [...this.faqs.values()]; }
   getSettings() { return this.settings; }
   isReady() { return this.isInitialized; }
 

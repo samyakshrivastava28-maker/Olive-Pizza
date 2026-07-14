@@ -58,12 +58,13 @@ export default function Register() {
               createdAt: new Date().toISOString(),
             });
 
-            fetch("/api/email/transactional", {
+            fetch("/api/email/auth/welcome", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
-                event: "REGISTER",
-                data: { name: result.user.displayName || "", email: userEmail },
+                name: result.user.displayName || "", 
+                email: userEmail,
+                isReturning: false
               }),
             }).catch((e) => console.error("Email trigger failed:", e));
           } else {
@@ -226,12 +227,13 @@ export default function Register() {
         ), "Create User Doc");
 
         // Trigger Welcome Email
-        fetch("/api/email/transactional", {
+        fetch("/api/email/auth/welcome", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            event: "REGISTER",
-            data: { name: name || "", email: userEmail },
+            name: name || "", 
+            email: userEmail,
+            isReturning: false
           }),
         }).catch((e) => console.error("Email trigger failed:", e));
 
@@ -288,6 +290,16 @@ export default function Register() {
             role: initialRole,
             createdAt: new Date().toISOString(),
           });
+          
+          fetch("/api/email/auth/welcome", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name: result.user.displayName || "", 
+              email: userEmail,
+              isReturning: false
+            }),
+          }).catch((e) => console.error("Email trigger failed:", e));
           useAuthStore.getState().setUser({
             uid: result.user.uid,
             email: result.user.email,

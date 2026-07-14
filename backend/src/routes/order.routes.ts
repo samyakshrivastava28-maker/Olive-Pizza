@@ -38,6 +38,7 @@ router.get('/', verifyToken, async (req: AuthRequest, res: Response) => {
 
 // Create a new order securely
 router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<void> => {
+  const userId = req.user?.uid;
   try {
     const { items } = req.body;
     
@@ -46,7 +47,6 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
       return;
     }
 
-    const userId = req.user?.uid;
     if (!userId) {
       res.status(401).json({ error: 'Unauthorized' });
       return;
@@ -95,6 +95,27 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
         crust: item.crust || 'normal',
         image: menuData.image_url
       });
+    }
+
+    // 2.5 Duplicate Order Prevention (Idempotency / Distributed Lock)
+    // Prevent same user from submitting duplicate orders across multiple devices
+    const deviceId = req.headers['x-device-id'] || req.ip || 'unknown';
+    
+    // Attempt to acquire a lock for this user. Locks automatically expire after 3 minutes (timeout).
+    const lockResult = await query(`
+      INSERT INTO checkout_locks (user_id, device_id, expires_at)
+      VALUES ($1, $2, NOW() + INTERVAL '3 minutes')
+      ON CONFLICT (user_id) DO UPDATE 
+      SET device_id = EXCLUDED.device_id,
+          locked_at = NOW(),
+          expires_at = NOW() + INTERVAL '3 minutes'
+      WHERE checkout_locks.expires_at < NOW()
+      RETURNING user_id;
+    `, [userData.id, deviceId]);
+
+    if (lockResult.rows.length === 0) {
+      res.status(409).json({ error: 'This account is currently placing an order from another device.' });
+      return;
     }
 
     // 3. Create order in Postgres
@@ -216,9 +237,21 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
     }
 
     res.status(201).json({ message: 'Order placed successfully', orderId: newOrder.id, orderNumber });
-  } catch (error: any) {
-    console.error('Order creation error:', error);
+  } catch (error) {
+    console.error('Error creating order:', error);
     res.status(500).json({ error: 'Failed to create order' });
+  } finally {
+    // Release the checkout lock regardless of success or failure
+    if (userId) {
+      try {
+        const userCheck = await query('SELECT id FROM users WHERE firebase_uid = $1', [userId]);
+        if (userCheck.rows.length > 0) {
+           await query('DELETE FROM checkout_locks WHERE user_id = $1', [userCheck.rows[0].id]);
+        }
+      } catch(e) {
+        console.error('Failed to release checkout lock:', e);
+      }
+    }
   }
 });
 

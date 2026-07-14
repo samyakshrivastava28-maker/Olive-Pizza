@@ -46,7 +46,7 @@ export function useDeviceSession() {
     const uid = auth.currentUser.uid;
     const deviceId = getDeviceFingerprint();
     const sessionDocId = `${uid}_${deviceId}`;
-    const sessionRef = doc(db, 'user_sessions', sessionDocId);
+    const sessionRef = doc(db, 'device_heartbeats', sessionDocId);
 
     const { browser, os, isPWA } = parseUserAgent(navigator.userAgent);
     

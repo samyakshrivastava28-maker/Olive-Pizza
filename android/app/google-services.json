@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "1017239455106-e4og98pcurg4olfqq472p9o0uvtfpg6r.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.olivepizza.app",
+            "certificate_hash": "4c6b4a1e7d43966d7482175f08d887e53bc4b57e"
+          }
+        },
+        {
           "client_id": "1017239455106-i8vrpdq1v51pkg0308k7btu1o4img597.apps.googleusercontent.com",
           "client_type": 3
         }

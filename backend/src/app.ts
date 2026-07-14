@@ -19,6 +19,7 @@ import heartbeatRoutes from './routes/heartbeat.routes.js';
 import seoRoutes from './routes/seo.routes.js';
 import versionRoutes from './routes/version.routes.js';
 import githubRoutes from './routes/github.routes.js';
+import phoneVerificationRoutes from './routes/phoneVerification.routes.js';
 import { versionCheck } from './middleware/versionCheck.js';
 
 const app = express();
@@ -45,14 +46,13 @@ app.use(cors({
 app.use(express.json());
 app.use(versionCheck);
 
-import debugRoutes from './routes/debug.routes.js';
+
 import healthRoutes from './routes/health.routes.js';
 import healthStreamRoutes from './routes/health.stream.routes.js';
 
 // Exclude health streams from global rate limit
 app.use('/health', healthStreamRoutes); // Must go before healthRoutes to catch /health/stream
 app.use('/health', healthRoutes);
-app.use('/system/debug', debugRoutes);
 
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -75,10 +75,12 @@ app.get('/health', (req, res) => {
 
 import emailRoutes from './routes/email.routes.js';
 import googleDriveRoutes from './routes/googleDrive.routes.js';
+import aiKnowledgeRoutes from './routes/aiKnowledge.routes.js';
 
 app.use('/orders', orderRoutes);
 app.use('/admin', adminRoutes);
 app.use('/ai', aiRoutes);
+app.use('/api/ai', aiKnowledgeRoutes);
 app.use('/delivery', deliveryRoutes);
 app.use('/users', userRoutes);
 app.use('/auth', authRoutes);
@@ -94,6 +96,7 @@ app.use('/google-drive', googleDriveRoutes);
 app.use('/heartbeat', heartbeatRoutes);
 app.use('/version', versionRoutes);
 app.use('/github', githubRoutes);
+app.use('/phone', phoneVerificationRoutes);
 
 // SEO Routes (mounted at root via app in server.ts, but we map them here)
 app.use('/', seoRoutes);

@@ -8,10 +8,13 @@ Olive Pizza is a modern, full-stack web application designed for a pizza deliver
 The project follows a Monorepo structure, separating the `frontend` (React + Vite) and `backend` (Node.js + Express). 
 
 - **Frontend:** Client-side rendered Single Page Application (SPA) built with React 19, TypeScript, and Tailwind CSS. State management is handled globally via Zustand.
+- **Native Android Wrappers:** Capacitor is used to compile the frontend web build into a native Android APK/AAB (`android/app`), utilizing native plugins for Google Sign-In and Push Notifications.
 - **Backend:** RESTful API built with Node.js and Express, written in TypeScript. 
-- **Database:** PostgreSQL hosted on Supabase, acting as the primary data store and enabling real-time functionalities via WebSockets.
-- **Authentication:** Firebase Authentication manages user identity and issues JWTs, which the backend verifies.
-- **Media Storage:** Cloudinary is used for uploading and serving images (e.g., menu items).
+- **Primary Database (Firestore):** Acts as the single source of truth for the entire project's core data, including authentication records, menu items, orders, and reports.
+- **Secondary Database (Supabase PostgreSQL):** Used exclusively for ephemeral or background tasks such as live delivery tracking, notification queues, and email reporting.
+- **Vector Database (Qdrant):** Used strictly for the AI knowledge base.
+- **Media Storage (Cloudinary):** Used for uploading and serving images and videos (e.g., menu items).
+- **Document Storage (Google Drive):** Used for generating and storing monthly business reports.
 
 ---
 
@@ -31,9 +34,9 @@ The project follows a Monorepo structure, separating the `frontend` (React + Vit
 ### Backend
 - **Core:** Node.js, Express 4, TypeScript
 - **Security:** Helmet, CORS, Express Rate Limit
-- **Database Client:** pg (node-postgres)
-- **AI Integration:** OpenAI, @google/genai
-- **Utilities:** Node Cron, Node Cache, Nodemailer, libphonenumber-js
+- **Database Clients:** Firebase Admin SDK (Primary), pg (node-postgres for Supabase)
+- **AI Integration:** OpenAI, @google/genai, Qdrant
+- **Utilities:** Node Cron, Node Cache, Nodemailer, libphonenumber-js, Google Drive API
 
 ---
 
@@ -47,15 +50,22 @@ State is managed efficiently using **Zustand** stores (`frontend/src/lib/store.t
 - `useAIStore`: Manages chat history and UI state for the AI Assistant feature.
 
 ### 3.2 Data Flow (Order Lifecycle)
-1. **Selection:** Customer adds `menu_items` to Cart (`useCartStore`).
+1. **Selection:** Customer adds menu items to Cart (`useCartStore`).
 2. **Checkout:** Customer submits order payload to backend `/orders` route.
-3. **Database Insertion:** Backend validates and inserts the order into `orders` and `order_items` tables in Supabase Postgres.
-4. **Real-time Alert:** Supabase Realtime (or push notifications) notifies the Owner dashboard of a new `pending` order.
+3. **Database Insertion:** Backend validates and inserts the order into **Firestore** (`orders` collection) as the primary source of truth.
+4. **Real-time Alert:** Firestore snapshot listeners (or push notifications) notify the Owner dashboard of a new `pending` order.
 5. **Acceptance:** Owner accepts the order, status changes to `preparing`.
 6. **Assignment:** Order is assigned to a `delivery_partner`, status changes to `out_for_delivery`. A record is created in `active_deliveries`.
 7. **Tracking:** Delivery partner's app sends periodic GPS coordinates to update `active_deliveries` (`current_lat`, `current_lng`).
 8. **Customer Tracking:** Customer views `OrderTracking.tsx`, which subscribes to Supabase Realtime on `active_deliveries` to map the driver's location via Leaflet.
 9. **Completion:** Driver marks order as `delivered`.
+
+### 3.3 Automatic Version Management Flow
+To ensure clients always have the latest PWA version without manual refreshing:
+1. Backend exposes `GET /api/health/version` which returns the current `git_commit` and `build_hash`.
+2. Frontend `AutoUpdater.tsx` polls this endpoint every 10 minutes in the background.
+3. If a mismatch is detected, the frontend aggressively unregisters all Service Workers, clears the PWA Cache, and triggers a silent `window.location.reload()`.
+4. Capacitor Native App checks GitHub releases (`/tags/android-latest`) on startup and prompts the user to download an updated APK if `Version Code` increases.
 
 ---
 
@@ -63,7 +73,7 @@ State is managed efficiently using **Zustand** stores (`frontend/src/lib/store.t
 
 ### 4.1 Customer Workflow
 - **Onboarding:** Registers via Firebase Auth. Requires email verification, phone setup, and location setup (guarded by `OnboardingGuard.tsx`).
-- **Browsing:** Views menu (fetched from Supabase `menu_items`).
+- **Browsing:** Views menu (fetched from Firestore).
 - **Purchasing:** Adds to cart, proceeds to checkout, tracks live delivery.
 - **AI Assistant:** Can interact with the AI assistant for recommendations.
 
@@ -93,33 +103,51 @@ State is managed efficiently using **Zustand** stores (`frontend/src/lib/store.t
 - **CORS:** Restricts cross-origin requests to trusted domains.
 - **Rate Limiting:** Protects endpoints against brute-force and DDoS. Distinct limits for global (`100 req/15min`), auth (`5 req/min`), and AI endpoints (`20 req/min`).
 
-### 5.3 Environment Configuration
+### 5.3 Environment Configuration & Strict Startup Validation
 Requires `.env` with:
-- Firebase Admin/Client credentials.
-- Supabase URL and keys (Anon for frontend, Service Role for backend).
-- Cloudinary URL.
-- OpenAI / Google GenAI API Keys.
+- Firebase Admin/Client credentials (e.g., `FIREBASE_SERVICE_ACCOUNT_BASE64`).
+- Supabase URL and keys (for live tracking/queues).
+- Cloudinary URL/Keys.
+- PostgreSQL `DATABASE_URL`.
 - Nodemailer SMTP credentials.
+- Google Drive & Qdrant API credentials.
+
+To prevent silent failures in production, the backend features a strict boot validator (`validator.ts`) that runs synchronously. If any required environment variable is missing or malformed (like invalid base64), it prints a critical error table and halts execution with `process.exit(1)`.
+
+### 5.4 Idempotency & Distributed Checkout Locks
+To prevent a user from submitting the same order multiple times due to a bad network, multi-device clicking, or UI bugs, the backend uses a distributed PostgreSQL lock:
+- When a user submits an order, `order.routes.ts` executes `INSERT INTO checkout_locks ... ON CONFLICT (user_id) DO UPDATE`.
+- This ensures only ONE checkout transaction can happen per user within a 3-minute window.
+- The lock is cleared in a `finally` block once the order creation succeeds or gracefully fails.
 
 ---
 
 ## 6. Integrations
 
-- **Supabase (PostgreSQL):** The source of truth for structured data (`users`, `orders`, `menu_items`). Also leveraged for its real-time capabilities via websockets to push database changes directly to the frontend.
-- **Firebase:** Identity Provider (IdP) and potentially used for push notifications (`pushNotifications.ts`).
-- **Cloudinary:** Media storage solution. Images are uploaded here, and the resulting CDN URLs are saved in the Postgres database.
-- **OpenAI/Gemini:** Powers `ai.service.ts` for the intelligent chatbot that assists customers with menu inquiries and order status.
+- **Firestore (Primary DB):** The source of truth for structured project data (`users`, `orders`, `menu_items`, `reports`).
+- **Supabase PostgreSQL (Secondary DB):** Leveraged strictly for real-time live tracking (`active_deliveries`), notification queues, and backend email reporting processing.
+- **Qdrant (Vector DB):** Used exclusively for storing AI context and vector embeddings.
+- **Firebase Authentication:** Identity Provider (IdP) for web and native platforms.
+- **Cloudinary:** Media storage solution for images and videos.
+- **Google Drive:** Used for securely storing generated monthly business reports.
+- **OpenAI/Gemini:** Powers `ai.service.ts` for the intelligent chatbot.
 - **Leaflet & OpenStreetMap:** Free-tier mapping solution for live tracking, eliminating expensive Google Maps API costs.
 
 ---
 
-## 7. Database Schema Highlights
+## 7. Database Schema & Architecture Highlights
 
-- `users`: Core identity table tied to `firebase_uid`. Stores roles, onboarding flags, and saved locations.
+### Firestore (Primary)
+- `users`: Core identity table tied to Firebase UID. Stores roles, onboarding flags, and saved locations.
 - `menu_items`: Product catalog.
-- `orders`: Transactional records linking `user_id` and `delivery_partner_id`.
-- `order_items`: Line items for each order (Many-to-One with `orders`).
+- `orders`: Transactional records linking users and delivery partners, including nested order items.
+- `reports`: Saved historical reporting data.
+
+### Supabase PostgreSQL (Secondary / Ephemeral)
 - `active_deliveries`: Ephemeral tracking data containing live lat/lng coordinates, continuously updated by delivery partners.
+- `checkout_locks`: Ephemeral table that locks user accounts during the payment/order creation phase to prevent duplicate orders across devices.
+- `device_heartbeats`: Tracks online/offline status, battery level, and app versions for active driver & owner devices.
+- `notification_queue` & `notification_history`: Manages background task processing for sending push notifications and transactional emails asynchronously.
 
 ---
 
@@ -131,12 +159,13 @@ Requires `.env` with:
 
 ---
 
-## 9. Risks, Assumptions, & Technical Debt
+### 9. Risks, Assumptions, & Technical Debt
 
-- **Data Synchronization:** Firebase Auth and Supabase Postgres `users` table must be kept in sync. If a user is created in Firebase but fails to insert into Postgres, they will exist in a broken state.
+- **Data Synchronization:** If any workflows require data to exist in both Firestore and Supabase simultaneously (e.g. user ids inside tracking tables), they must be kept in sync. 
 - **Location Battery Drain:** The delivery app constantly tracking and broadcasting GPS coordinates is battery-intensive. Optimization around update intervals (e.g., only update every 10 seconds or when distance changes > 10m) is critical.
+- **Web vs Native Discrepancies:** Capacitor wraps the PWA in a WebView. Features like Google Sign-In and Push Notifications require explicit native plugin bridging. Testing must be verified on an actual physical Android device, as browser testing will bypass native API failures.
 - **Rate Limit Bottlenecks:** Memory-based rate limiting (`express-rate-limit`) in Node.js works for single-instance deployments but will fail to sync limits if the backend is scaled horizontally across multiple instances. A Redis store would be required for distributed rate limiting.
-- **Technical Debt:** Managing two separate "Backend as a Service" platforms (Firebase and Supabase) adds complexity. Future refactoring might consider moving Auth entirely to Supabase Auth to consolidate infrastructure.
+- **Technical Debt:** Managing two separate databases (Firestore and Supabase) requires careful orchestration to ensure the backend always knows which database to query for which task.
 
 ---
 

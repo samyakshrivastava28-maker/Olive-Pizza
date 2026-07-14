@@ -1,16 +1,11 @@
 import { useState, useEffect } from 'react';
 import { auth, db } from '../../../lib/firebase';
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
-import { PhoneAuthProvider, RecaptchaVerifier, updatePhoneNumber, PhoneAuthCredential } from 'firebase/auth';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Smartphone, CheckCircle, Loader2 } from 'lucide-react';
+import { X, ShieldCheck, Loader2, MessageSquare } from 'lucide-react';
 import toast from 'react-hot-toast';
-
-declare global {
-  interface Window {
-    recaptchaVerifier?: RecaptchaVerifier;
-  }
-}
+import { parsePhoneNumber } from "libphonenumber-js";
+import { Truecaller } from '../../../plugins/Truecaller';
 
 interface PhoneUpdateModalProps {
   isOpen: boolean;
@@ -20,34 +15,66 @@ interface PhoneUpdateModalProps {
 }
 
 export default function PhoneUpdateModal({ isOpen, onClose, currentPhone, onSuccess }: PhoneUpdateModalProps) {
-  const [step, setStep] = useState<'input' | 'otp'>('input');
+  const [step, setStep] = useState<'detect' | 'truecaller' | 'phone_input' | 'otp_input'>('detect');
   const [newPhone, setNewPhone] = useState('');
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
-  const [verificationId, setVerificationId] = useState('');
 
-  // Clean up recaptcha on close
   useEffect(() => {
-    if (!isOpen) {
-      setStep('input');
+    if (isOpen) {
+      setStep('detect');
+      checkTruecaller();
+    } else {
+      setStep('detect');
       setNewPhone('');
       setOtp('');
       setLoading(false);
     }
   }, [isOpen]);
 
-  const initRecaptcha = () => {
-    if (!window.recaptchaVerifier) {
-      window.recaptchaVerifier = new RecaptchaVerifier(auth, 'phone-update-recaptcha', {
-        'size': 'invisible',
-      });
+  const checkTruecaller = async () => {
+    try {
+      const result = await Truecaller.isSupported();
+      if (result.isSupported) {
+        setStep('truecaller');
+      } else {
+        setStep('phone_input');
+      }
+    } catch (err) {
+      setStep('phone_input');
     }
   };
 
-  const validateIndianNumber = (phone: string) => {
-    // Exact 10 digits starting with 6,7,8,9
-    const regex = /^[6-9]\d{9}$/;
-    return regex.test(phone.replace('+91', '').trim());
+  const handleTruecallerVerify = async () => {
+    setLoading(true);
+    try {
+      const response = await Truecaller.verify();
+      
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch('/api/phone/truecaller', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(response)
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        toast.success("Phone verified securely!");
+        onSuccess(data.phone);
+        onClose();
+      } else {
+        throw new Error(data.error || 'Verification failed');
+      }
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.message || "Truecaller verification failed. Falling back to OTP.");
+      setStep('phone_input');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSendOtp = async (e: React.FormEvent) => {
@@ -56,58 +83,40 @@ export default function PhoneUpdateModal({ isOpen, onClose, currentPhone, onSucc
     setLoading(true);
 
     try {
-      let cleanPhone = newPhone.replace(/[\s-]/g, '');
-      if (cleanPhone.startsWith('0')) cleanPhone = cleanPhone.substring(1);
-      if (!cleanPhone.startsWith('+91')) cleanPhone = '+91' + cleanPhone;
-
-      if (!validateIndianNumber(cleanPhone)) {
-        toast.error('Please enter a valid 10-digit Indian mobile number starting with 6-9.');
+      const phoneNumber = parsePhoneNumber(newPhone, "IN");
+      if (!phoneNumber || !phoneNumber.isValid() || phoneNumber.country !== "IN") {
+        toast.error("Please enter a valid Indian mobile number");
         setLoading(false);
         return;
       }
+      
+      const formattedPhone = phoneNumber.format("E.164");
 
-      if (cleanPhone === currentPhone || cleanPhone === currentPhone.replace('+91', '')) {
+      if (formattedPhone === currentPhone) {
         toast.error('You are already using this phone number.');
         setLoading(false);
         return;
       }
 
-      // Check Duplicates in customer_identities
-      const identityRef = doc(db, 'customer_identities', cleanPhone);
-      try {
-        const identityDoc = await getDoc(identityRef);
-        if (identityDoc.exists()) {
-          const identityData = identityDoc.data();
-          if (identityData.primaryUid !== auth.currentUser.uid) {
-            toast.error('This phone number is already registered to another account.');
-            setLoading(false);
-            return;
-          }
-        }
-      } catch (err: any) {
-        if (err.code === 'unavailable' || err.message?.includes('offline')) {
-          console.warn('Network offline during uniqueness check. Bypassing check to allow OTP.');
-        } else {
-          throw err;
-        }
-      }
+      const token = await auth.currentUser.getIdToken();
+      const res = await fetch('/api/phone/send-otp', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ phone: formattedPhone })
+      });
+      const data = await res.json();
 
-      initRecaptcha();
-      const appVerifier = window.recaptchaVerifier;
-      const provider = new PhoneAuthProvider(auth);
-      
-      const vId = await provider.verifyPhoneNumber(cleanPhone, appVerifier);
-      setVerificationId(vId);
-      setNewPhone(cleanPhone);
-      setStep('otp');
-      toast.success('OTP sent successfully!');
-    } catch (err: any) {
-      console.error('OTP Send Error', err);
-      toast.error(err.message || 'Failed to send OTP.');
-      if (window.recaptchaVerifier) {
-        window.recaptchaVerifier.clear();
-        window.recaptchaVerifier = undefined;
+      if (data.success) {
+        toast.success("OTP Sent!");
+        setStep('otp_input');
+      } else {
+        toast.error(data.error || "Failed to send OTP.");
       }
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || err.message || "An error occurred");
     } finally {
       setLoading(false);
     }
@@ -116,42 +125,32 @@ export default function PhoneUpdateModal({ isOpen, onClose, currentPhone, onSucc
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!auth.currentUser) return;
+    
     setLoading(true);
 
     try {
-      const credential = PhoneAuthProvider.credential(verificationId, otp);
+      const phoneNumber = parsePhoneNumber(newPhone, "IN")!.format("E.164");
+      const token = await auth.currentUser.getIdToken();
       
-      // Update Auth Phone Number securely
-      await updatePhoneNumber(auth.currentUser, credential);
+      const res = await fetch('/api/phone/verify-otp', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ phone: phoneNumber, code: otp })
+      });
+      const data = await res.json();
 
-      // Update Firestore Users Table
-      const userRef = doc(db, 'users', auth.currentUser.uid);
-      await updateDoc(userRef, { phone: newPhone });
-
-      // Update Identities Table securely
-      const identityRef = doc(db, 'customer_identities', newPhone);
-      const identityDoc = await getDoc(identityRef);
-      if (!identityDoc.exists()) {
-        await setDoc(identityRef, {
-          primaryUid: auth.currentUser.uid,
-          primaryEmail: auth.currentUser.email || '',
-          firstOrderCouponUsed: false,
-          totalOrders: 0,
-          totalSpent: 0,
-          createdAt: new Date().toISOString()
-        });
-      }
-
-      toast.success('Phone number updated successfully!');
-      onSuccess(newPhone);
-      onClose();
-    } catch (err: any) {
-      console.error('OTP Verify Error', err);
-      if (err.code === 'auth/invalid-verification-code') {
-        toast.error('Invalid OTP. Please try again.');
+      if (data.success) {
+        toast.success("Phone verified successfully!");
+        onSuccess(phoneNumber);
+        onClose();
       } else {
-        toast.error(err.message || 'Failed to update phone number.');
+        toast.error(data.error || "Invalid OTP");
       }
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || err.message || "An error occurred");
     } finally {
       setLoading(false);
     }
@@ -160,97 +159,128 @@ export default function PhoneUpdateModal({ isOpen, onClose, currentPhone, onSucc
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+        <>
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50"
             onClick={onClose}
           />
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="relative bg-white dark:bg-slate-900 rounded-3xl w-full max-w-md p-6 shadow-2xl border border-slate-200 dark:border-slate-700"
-          >
-            <button onClick={onClose} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
-              <X className="w-5 h-5" />
-            </button>
-
-            <div className="w-12 h-12 bg-primary-500/10 rounded-2xl flex items-center justify-center mb-6">
-              <Smartphone className="w-6 h-6 text-primary-500" />
-            </div>
-
-            <h2 className="text-2xl font-black text-slate-800 dark:text-white mb-2">Change Phone Number</h2>
-            <p className="text-slate-500 dark:text-slate-400 text-sm mb-6">
-              {step === 'input' ? 'Enter your new 10-digit Indian mobile number.' : `Enter the 6-digit OTP sent to ${newPhone}`}
-            </p>
-
-            <div id="phone-update-recaptcha" className="mb-4"></div>
-
-            {step === 'input' ? (
-              <form onSubmit={handleSendOtp} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">New Mobile Number</label>
-                  <div className="flex bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden focus-within:border-primary-500 transition-colors">
-                    <div className="bg-slate-100 dark:bg-slate-900 px-4 py-3 flex items-center text-slate-600 dark:text-slate-400 font-bold border-r border-slate-200 dark:border-slate-700">
-                      +91
-                    </div>
-                    <input
-                      type="tel"
-                      required
-                      maxLength={10}
-                      value={newPhone}
-                      onChange={(e) => setNewPhone(e.target.value.replace(/\D/g, ''))}
-                      className="w-full bg-transparent p-3 text-slate-800 dark:text-white outline-none font-bold tracking-wider"
-                      placeholder="9876543210"
-                    />
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-md overflow-hidden pointer-events-auto"
+            >
+              <div className="flex items-center justify-between p-6 border-b border-slate-100 dark:border-slate-700">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-orange-100 dark:bg-orange-900/20 flex items-center justify-center text-orange-600 dark:text-orange-500">
+                    <ShieldCheck className="w-5 h-5" />
                   </div>
+                  <h2 className="text-lg font-bold text-slate-900 dark:text-white">Update Phone</h2>
                 </div>
                 <button
-                  type="submit"
-                  disabled={loading || newPhone.length < 10}
-                  className="w-full bg-primary-600 hover:bg-primary-500 text-white font-black py-4 rounded-xl transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                  onClick={onClose}
+                  className="p-2 text-slate-400 hover:text-slate-500 dark:hover:text-slate-300 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
                 >
-                  {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Send OTP'}
+                  <X className="w-5 h-5" />
                 </button>
-              </form>
-            ) : (
-              <form onSubmit={handleVerifyOtp} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Enter OTP</label>
-                  <input
-                    type="text"
-                    required
-                    maxLength={6}
-                    value={otp}
-                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
-                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-4 rounded-xl text-slate-800 dark:text-white outline-none focus:border-primary-500 font-black tracking-[0.5em] text-center text-xl transition-colors"
-                    placeholder="••••••"
-                  />
-                </div>
-                <div className="flex gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setStep('input')}
-                    disabled={loading}
-                    className="flex-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold py-4 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
-                  >
-                    Back
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={loading || otp.length < 6}
-                    className="flex-[2] bg-primary-600 hover:bg-primary-500 text-white font-black py-4 rounded-xl transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-                  >
-                    {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <><CheckCircle className="w-5 h-5" /> Verify & Save</>}
-                  </button>
-                </div>
-              </form>
-            )}
-          </motion.div>
-        </div>
+              </div>
+
+              <div className="p-6">
+                
+                {step === 'detect' && (
+                  <div className="flex flex-col items-center justify-center py-8">
+                    <Loader2 className="w-8 h-8 animate-spin text-orange-500 mb-4" />
+                    <p className="text-slate-500 dark:text-slate-400 animate-pulse">Detecting secure verification methods...</p>
+                  </div>
+                )}
+
+                {step === 'truecaller' && (
+                  <div className="space-y-6 flex flex-col items-center">
+                    <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl w-full text-center border border-blue-100 dark:border-blue-800">
+                        <p className="text-blue-700 dark:text-blue-300 font-medium">Truecaller Detected ✓</p>
+                        <p className="text-sm text-blue-600 dark:text-blue-400 mt-1">Verify instantly with one tap.</p>
+                    </div>
+                    
+                    <button
+                        onClick={handleTruecallerVerify}
+                        disabled={loading}
+                        className="w-full flex justify-center py-3 px-4 border border-transparent rounded-xl shadow-sm text-sm font-bold text-white bg-[#0052CC] hover:bg-[#0040A8] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition-colors"
+                    >
+                        {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Verify with Truecaller"}
+                    </button>
+                    
+                    <button onClick={() => setStep('phone_input')} className="text-sm text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">
+                        Use SMS OTP instead
+                    </button>
+                  </div>
+                )}
+
+                {step === 'phone_input' && (
+                  <form onSubmit={handleSendOtp} className="space-y-6">
+                    <div>
+                      <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">New Mobile Number</label>
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                          <span className="text-slate-500 font-medium">+91</span>
+                        </div>
+                        <input
+                          type="tel"
+                          required
+                          maxLength={10}
+                          className="block w-full pl-14 pr-4 py-3 border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-900/50 text-slate-900 dark:text-white focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors"
+                          placeholder="9999999999"
+                          value={newPhone}
+                          onChange={(e) => setNewPhone(e.target.value.replace(/\D/g, ''))}
+                        />
+                      </div>
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={loading || newPhone.length < 10}
+                      className="w-full flex justify-center py-3 px-4 border border-transparent rounded-xl shadow-sm text-sm font-bold text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 disabled:opacity-50 transition-colors"
+                    >
+                      {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Send OTP"}
+                    </button>
+                  </form>
+                )}
+
+                {step === 'otp_input' && (
+                  <form onSubmit={handleVerifyOtp} className="space-y-6">
+                    <div className="text-center mb-6">
+                        <MessageSquare className="w-12 h-12 text-orange-500 mx-auto mb-2 opacity-80" />
+                        <p className="text-sm text-slate-600 dark:text-slate-400">
+                          Enter the 6-digit code sent to <br/><span className="font-bold text-slate-900 dark:text-white">+91 {newPhone}</span>
+                        </p>
+                    </div>
+
+                    <div>
+                      <input
+                        type="text"
+                        required
+                        maxLength={6}
+                        className="block w-full text-center tracking-widest text-2xl py-3 border border-slate-300 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors"
+                        placeholder="------"
+                        value={otp}
+                        onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={loading || otp.length < 6}
+                      className="w-full flex justify-center py-3 px-4 border border-transparent rounded-xl shadow-sm text-sm font-bold text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 disabled:opacity-50 transition-colors"
+                    >
+                      {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Verify OTP"}
+                    </button>
+                  </form>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        </>
       )}
     </AnimatePresence>
   );

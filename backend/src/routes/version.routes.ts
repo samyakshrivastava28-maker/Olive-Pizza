@@ -1,5 +1,6 @@
 import express from 'express';
 import { supabase } from '../lib/supabase.js';
+import { query } from '../lib/db.js';
 
 const router = express.Router();
 
@@ -20,18 +21,25 @@ router.get('/settings', async (req, res) => {
 });
 
 // Get backend live status and version info (public)
-router.get('/status', (req, res) => {
+router.get('/status', async (req, res) => {
   let gitCommit = 'unknown';
   try {
     const { execSync } = require('child_process');
     gitCommit = execSync('git rev-parse --short HEAD').toString().trim();
   } catch (e) {}
 
+  let dbStatus = 'disconnected';
+  try {
+    const dbRes = await query('SELECT 1');
+    if (dbRes) dbStatus = 'connected';
+  } catch (e) {}
+
   res.json({
     build_number: process.env.npm_package_version || '1.0.0',
     git_commit: gitCommit,
     build_timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development'
+    environment: process.env.NODE_ENV || 'development',
+    db_status: dbStatus
   });
 });
 

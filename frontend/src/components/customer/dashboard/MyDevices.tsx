@@ -32,7 +32,7 @@ export default function MyDevices() {
     if (!auth.currentUser) return;
     try {
       const q = query(
-        collection(db, "user_sessions"),
+        collection(db, "device_heartbeats"),
         where("uid", "==", auth.currentUser.uid),
         where("isActive", "==", true)
       );
@@ -49,7 +49,7 @@ export default function MyDevices() {
   const handleRevoke = async (sessionId: string) => {
     setRevokingId(sessionId);
     try {
-      await updateDoc(doc(db, "user_sessions", sessionId), {
+      await updateDoc(doc(db, "device_heartbeats", sessionId), {
         isActive: false
       });
       toast.success("Device logged out successfully");

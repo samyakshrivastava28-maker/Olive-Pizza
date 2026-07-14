@@ -1,5 +1,7 @@
 import { Component, ReactNode } from 'react';
 import { RefreshCcw } from 'lucide-react';
+import type { ErrorInfo } from 'react';
+import { logCrash } from '../lib/crashLogger';
 
 interface Props {
   children: ReactNode;
@@ -7,6 +9,8 @@ interface Props {
 
 interface State {
   hasError: boolean;
+  error: Error | null;
+  errorInfo: ErrorInfo | null;
   retryCount: number;
 }
 
@@ -20,15 +24,27 @@ const MAX_AUTO_RETRIES = 1;
 export class RouteErrorBoundary extends Component<Props, State> {
   public state: State = {
     hasError: false,
+    error: null,
+    errorInfo: null,
     retryCount: 0,
   };
 
-  public static getDerivedStateFromError(_: Error): Partial<State> {
-    return { hasError: true };
+  public static getDerivedStateFromError(error: Error): Partial<State> {
+    return { hasError: true, error };
   }
 
-  public componentDidCatch(error: Error) {
-    console.warn('[RouteErrorBoundary] Route error caught:', error.message);
+  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.warn('[RouteErrorBoundary] Route error caught:', error.message, errorInfo.componentStack);
+    
+    // Log crash to Firestore
+    logCrash({
+      type: 'RouteErrorBoundary',
+      message: error.message,
+      stack: error.stack,
+      componentStack: errorInfo.componentStack
+    });
+
+    this.setState({ errorInfo });
 
     // Auto-retry transient chunk loading errors
     const msg = error.message?.toLowerCase() || '';
@@ -42,6 +58,8 @@ export class RouteErrorBoundary extends Component<Props, State> {
       setTimeout(() => {
         this.setState(prev => ({
           hasError: false,
+          error: null,
+          errorInfo: null,
           retryCount: prev.retryCount + 1,
         }));
       }, 800);
@@ -56,14 +74,25 @@ export class RouteErrorBoundary extends Component<Props, State> {
       }
 
       return (
-        <div className="flex flex-col items-center justify-center p-12 text-center w-full min-h-[40vh]">
-          <div className="w-14 h-14 bg-slate-800 rounded-full flex items-center justify-center mb-4">
-            <RefreshCcw className="w-7 h-7 text-orange-500 opacity-60" />
+        <div className="flex flex-col items-center justify-center p-8 text-center w-full min-h-[40vh]">
+          <div className="w-14 h-14 bg-red-900/20 rounded-full flex items-center justify-center mb-4">
+            <RefreshCcw className="w-7 h-7 text-red-500 opacity-80" />
           </div>
-          <h2 className="text-lg font-bold text-white mb-2">Section Unavailable</h2>
-          <p className="text-slate-400 mb-5 text-sm max-w-sm">
-            This section couldn't load. Please check your connection.
+          <h2 className="text-lg font-bold text-red-500 mb-2">Section Crashed</h2>
+          <p className="text-slate-400 mb-4 text-sm max-w-sm">
+            We encountered a critical error while rendering this section.
           </p>
+          
+          <div className="w-full text-left bg-[#0f172a] p-4 rounded-xl border border-red-500/30 overflow-auto max-h-[300px] mb-6">
+            <div className="text-red-400 font-mono text-sm font-bold mb-2 break-words">
+              {this.state.error?.toString()}
+            </div>
+            {this.state.errorInfo && (
+              <pre className="text-slate-400 font-mono text-xs whitespace-pre-wrap">
+                {this.state.errorInfo.componentStack}
+              </pre>
+            )}
+          </div>
           <button
             onClick={() => {
               if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {

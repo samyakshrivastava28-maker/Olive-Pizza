@@ -18,7 +18,6 @@ import StatCard from "../../components/owner/StatCard";
 import { useHeartbeat } from '../../hooks/useHeartbeat';
 import { useLiveMetrics } from '../../hooks/useLiveMetrics';
 import { SystemHealthPanel } from '../../components/owner/SystemHealthPanel';
-import { SystemDebugPanel } from '../../components/owner/SystemDebugPanel';
 import SystemDiagnostics from '../../components/owner/SystemDiagnostics';
 import LiveOrdersTable from "../../components/owner/LiveOrdersTable";
 import ActivityFeed from "../../components/owner/ActivityFeed";
@@ -309,10 +308,6 @@ export default function OwnerDashboard() {
         </div>
       </div>
       
-      <div className="mt-8">
-        <SystemDebugPanel />
-      </div>
-
       <div className="mt-6">
         <SystemDiagnostics />
       </div>

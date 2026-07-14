@@ -51,8 +51,10 @@ export default function OwnerLayout() {
     { name: 'Special Categories', path: '/owner/special-categories', icon: '🎪' },
     { name: 'Homepage Manager', path: '/owner/homepage', icon: '🏗️' },
     { name: 'Versions', path: '/owner/versions', icon: '🚀' },
+    { name: 'AI Knowledge', path: '/owner/ai-knowledge', icon: '🧠' },
     { name: 'AI Monitor', path: '/owner/ai-monitor', icon: '🤖' },
     { name: 'Notification Diagnostics', path: '/owner/notification-diagnostics', icon: '📡' },
+    { name: 'Verification Diagnostics', path: '/owner/verification-metrics', icon: '🛡️' },
     { name: 'Settings', path: '/owner/settings', icon: '⚙️' },
   ];
 
