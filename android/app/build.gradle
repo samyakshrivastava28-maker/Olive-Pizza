@@ -55,7 +55,7 @@ dependencies {
     implementation 'com.google.firebase:firebase-analytics'
 
     // Truecaller SDK
-    implementation 'com.truecaller.android.sdk:truecaller-sdk:3.0.0'
+    implementation 'com.truecaller.android.sdk:truecaller-sdk:2.9.0'
 }
 
 apply from: 'capacitor.build.gradle'

@@ -134,6 +134,36 @@ export const initPostgres = async () => {
       );
     `);
 
+    // Create storage_analytics table (High frequency, retained for 24h)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS storage_analytics (
+        id SERIAL PRIMARY KEY,
+        provider VARCHAR(50) NOT NULL,
+        used_bytes BIGINT NOT NULL,
+        capacity_bytes BIGINT,
+        health_status VARCHAR(20),
+        latency_ms INTEGER,
+        timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_storage_analytics_provider_timestamp 
+      ON storage_analytics(provider, timestamp);
+    `);
+
+    // Create storage_analytics_daily table (Aggregated long-term)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS storage_analytics_daily (
+        id SERIAL PRIMARY KEY,
+        provider VARCHAR(50) NOT NULL,
+        used_bytes_avg BIGINT NOT NULL,
+        capacity_bytes_avg BIGINT,
+        date DATE NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(provider, date)
+      );
+    `);
+
     client.release();
     console.log('PostgreSQL initialized successfully');
   } catch (error: any) {

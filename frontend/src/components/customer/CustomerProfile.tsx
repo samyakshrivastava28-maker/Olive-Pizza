@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { auth, db } from '../../lib/firebase';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import { updatePassword, sendPasswordResetEmail, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
+import { updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
 import toast from 'react-hot-toast';
 import FloatingLines from '../../components/ui/FloatingLines';
 import PhoneUpdateModal from './dashboard/PhoneUpdateModal';
@@ -103,11 +103,19 @@ export default function CustomerProfile() {
   const handleResetEmail = async () => {
     if (!auth.currentUser || !auth.currentUser.email) return;
     try {
-      await sendPasswordResetEmail(auth, auth.currentUser.email);
+      const res = await fetch("/api/email/auth/reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: auth.currentUser.email }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to send reset email");
+      }
       toast.success("Password reset link sent to your email.");
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to send reset email", err);
-      toast.error("Could not send reset email.");
+      toast.error(err.message || "Could not send reset email.");
     }
   };
 

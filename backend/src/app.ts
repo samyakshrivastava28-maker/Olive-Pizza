@@ -76,6 +76,7 @@ app.get('/health', (req, res) => {
 import emailRoutes from './routes/email.routes.js';
 import googleDriveRoutes from './routes/googleDrive.routes.js';
 import aiKnowledgeRoutes from './routes/aiKnowledge.routes.js';
+import dataManagerRoutes from './routes/dataManager.routes.js';
 
 app.use('/orders', orderRoutes);
 app.use('/admin', adminRoutes);
@@ -97,6 +98,7 @@ app.use('/heartbeat', heartbeatRoutes);
 app.use('/version', versionRoutes);
 app.use('/github', githubRoutes);
 app.use('/phone', phoneVerificationRoutes);
+app.use('/api/data-manager', dataManagerRoutes);
 
 // SEO Routes (mounted at root via app in server.ts, but we map them here)
 app.use('/', seoRoutes);

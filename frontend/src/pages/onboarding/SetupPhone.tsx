@@ -4,7 +4,8 @@ import { doc, getDoc } from "firebase/firestore";
 import { useNavigate } from "react-router";
 import { parsePhoneNumber } from "libphonenumber-js";
 import { Truecaller } from "../../plugins/Truecaller";
-import { Loader2, Phone, ShieldCheck, MessageSquare } from "lucide-react";
+import { Phone, ShieldCheck, MessageSquare, Loader2 } from "lucide-react";
+import PizzaLoader from "../../components/ui/PizzaLoader";
 import toast from "react-hot-toast";
 import { useAuthStore } from "../../lib/store";
 
@@ -200,8 +201,8 @@ export default function SetupPhone() {
           
           {step === 'detect' && (
              <div className="flex flex-col items-center justify-center py-8">
-                <Loader2 className="w-8 h-8 animate-spin text-orange-500 mb-4" />
-                <p className="text-slate-500 dark:text-slate-400 animate-pulse">Detecting secure verification methods...</p>
+                <PizzaLoader size="small" text="" />
+                <p className="text-slate-500 dark:text-slate-400 animate-pulse mt-4">Detecting secure verification methods...</p>
              </div>
           )}
 

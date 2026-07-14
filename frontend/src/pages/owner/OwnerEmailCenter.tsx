@@ -320,10 +320,30 @@ export default function OwnerEmailCenter() {
       
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed");
-      
-      toast.success(data.message || "Test email sent!", { id: "test-email" });
+      if (data.diagnostics) {
+        console.log("Test Email Diagnostics:", data.diagnostics);
+        toast.success(
+          <div>
+            <strong>{data.message || "Test email sent!"}</strong>
+            <div className="text-xs mt-1 text-slate-100 opacity-80 break-words">
+              {data.diagnostics.response} ({data.diagnostics.durationMs}ms)
+            </div>
+          </div>, 
+          { id: "test-email", duration: 6000 }
+        );
+      } else {
+        toast.success(data.message || "Test email sent!", { id: "test-email" });
+      }
     } catch (e: any) {
-      toast.error(e.message || "Failed to send test email", { id: "test-email" });
+      toast.error(
+        <div>
+          <strong>Failed to send test email</strong>
+          <div className="text-xs mt-1 text-slate-100 opacity-80 break-words">
+            {e.message}
+          </div>
+        </div>, 
+        { id: "test-email", duration: 8000 }
+      );
     } finally {
       setIsSendingTest(false);
     }

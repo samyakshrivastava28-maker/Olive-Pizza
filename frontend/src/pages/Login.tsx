@@ -13,9 +13,10 @@ import { doc, setDoc } from "firebase/firestore";
 import { useNavigate, Link } from "react-router";
 import toast from 'react-hot-toast';
 import { useAuthStore } from "../lib/store";
+import PizzaLoader from "../components/ui/PizzaLoader";
 import { withAuthRetry } from "../lib/authRetry";
 import { translateError, logDetailedError } from "../lib/errorTranslator";
-import { Loader2 } from "lucide-react";
+import { Mail, Lock, EyeOff, Eye, AlertCircle, ArrowRight, User } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 export default function Login() {
@@ -260,22 +261,12 @@ export default function Login() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 z-50 bg-[#020617]/90 backdrop-blur-sm flex flex-col items-center justify-center rounded-2xl"
+            className="absolute inset-0 z-50 rounded-2xl"
           >
-            <motion.div
-              animate={{ rotate: 360 }}
-              transition={{ repeat: Infinity, duration: 1.5, ease: "linear" }}
-            >
-              <Loader2 className="w-12 h-12 text-primary-500 mb-4" />
-            </motion.div>
-            <motion.p
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className="text-white font-bold tracking-wide"
-            >
-              Authenticating...
-            </motion.p>
+            <PizzaLoader 
+              text="Authenticating..." 
+              overlayClassName="absolute inset-0 z-50 bg-[#020617]/90 backdrop-blur-sm rounded-2xl" 
+            />
           </motion.div>
         )}
       </AnimatePresence>

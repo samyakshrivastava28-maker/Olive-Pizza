@@ -225,18 +225,39 @@ router.post('/test', async (req, res) => {
   const testRecipient = recipient || 'olivepizzarjn@gmail.com';
   
   try {
-    await transporter.sendMail({
+    const info = await transporter.sendMail({
       from: `"Olive Pizza" <${process.env.SMTP_USER}>`,
       to: testRecipient,
       subject: subject || 'Test Email from Owner Dashboard',
       html: wrapper(htmlContent || '<p>Test Email Content</p>'),
     });
     
-    console.log(`[Email] Test | Recipient: ${testRecipient} | Subject: ${subject} | Success: true | Duration: ${Date.now() - startTime}ms`);
-    res.json({ success: true, message: `Test email sent to ${testRecipient}` });
+    const duration = Date.now() - startTime;
+    console.log(`[Email] Test | Recipient: ${testRecipient} | Subject: ${subject} | Success: true | Duration: ${duration}ms`);
+    res.json({ 
+      success: true, 
+      message: `Test email sent to ${testRecipient}`,
+      diagnostics: {
+        messageId: info.messageId,
+        response: info.response,
+        accepted: info.accepted,
+        rejected: info.rejected,
+        durationMs: duration
+      }
+    });
   } catch (error: any) {
-    console.error(`[Email] Test | Recipient: ${testRecipient} | Success: false | Duration: ${Date.now() - startTime}ms | Error: ${error.message}\n${error.stack}`);
-    res.status(500).json({ success: false, error: error.message || 'Failed to send test email' });
+    const duration = Date.now() - startTime;
+    console.error(`[Email] Test | Recipient: ${testRecipient} | Success: false | Duration: ${duration}ms | Error: ${error.message}\n${error.stack}`);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Failed to send test email',
+      diagnostics: {
+        code: error.code,
+        command: error.command,
+        durationMs: duration,
+        stack: error.stack
+      }
+    });
   }
 });
 

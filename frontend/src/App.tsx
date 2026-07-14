@@ -151,6 +151,7 @@ const OwnerAIKnowledge = lazyWithRetry(() => import('./pages/owner/OwnerAIKnowle
 const OwnerNotificationCenter = lazyWithRetry(() => import('./pages/owner/OwnerNotificationCenter'));
 const AIHealthMonitor = lazyWithRetry(() => import('./pages/owner/AIHealthMonitor'));
 const OwnerNotificationDiagnostics = lazyWithRetry(() => import('./pages/owner/OwnerNotificationDiagnostics'));
+const OwnerDataManager = lazyWithRetry(() => import('./pages/owner/DataManager/index'));
 
 // Lazy loaded delivery pages
 const CustomerDashboard = lazyWithRetry(() => import('./pages/CustomerDashboard'));
@@ -309,6 +310,7 @@ function AppContent() {
                   <Route path="ai-knowledge" element={<OwnerAIKnowledge />} />
                   <Route path="ai-monitor" element={<AIHealthMonitor />} />
                   <Route path="notification-diagnostics" element={<OwnerNotificationDiagnostics />} />
+                  <Route path="data-manager/*" element={<OwnerDataManager />} />
                 </Route>
               </Route>
     

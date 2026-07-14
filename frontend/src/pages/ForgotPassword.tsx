@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { sendPasswordResetEmail } from "firebase/auth";
+// Removed sendPasswordResetEmail
 import { auth } from "../lib/firebase";
 import { Link } from "react-router";
 
@@ -15,7 +15,15 @@ export default function ForgotPassword() {
     setMessage("");
     setLoading(true);
     try {
-      await sendPasswordResetEmail(auth, email);
+      const res = await fetch("/api/email/auth/reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to send reset email");
+      }
       setMessage("Password reset email sent! Check your inbox.");
     } catch (err: any) {
       setError(err.message || "Failed to send reset email");

@@ -46,6 +46,7 @@ export default function OwnerLayout() {
     { name: 'Customers', path: '/owner/customers', icon: '👥' },
     { name: 'Delivery Partners', path: '/owner/partners', icon: '🛵' },
     { name: 'Reports', path: '/owner/reports', icon: '📑' },
+    { name: 'Data Manager', path: '/owner/data-manager', icon: '💽' },
     { name: 'Email Center', path: '/owner/email', icon: '✉️' },
     { name: 'Slack Center', path: '/owner/slack', icon: '💬' },
     { name: 'Special Categories', path: '/owner/special-categories', icon: '🎪' },

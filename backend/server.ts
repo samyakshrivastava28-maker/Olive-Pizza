@@ -10,6 +10,7 @@ import './src/services/notification/NotificationQueueService.js';
 import './src/jobs/MonthlyReportJob.js';
 import { kb } from './src/services/KnowledgeBaseService.js';
 import { qdrantService } from './src/services/ai/QdrantService.js';
+import { storageAnalyzer } from './src/services/storageAnalyzer.service.js';
 
 import { validateEnvironmentVariables } from './src/config/validator.js';
 
@@ -48,6 +49,9 @@ app.get('/health', (req, res) => {
     timestamp: new Date().toISOString()
   });
 });
+
+// Initialize Storage Analyzer Cron Jobs
+storageAnalyzer.startCronJobs();
 
 app.get('/keep-alive', (req, res) => {
   res.json({

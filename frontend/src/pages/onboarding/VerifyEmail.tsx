@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
-import { sendEmailVerification } from "firebase/auth";
+// Removed sendEmailVerification
 import { auth } from "../../lib/firebase";
 import { useAuthStore } from "../../lib/store";
 import { useNavigate } from "react-router";
+import toast from "react-hot-toast";
 
 export default function VerifyEmail() {
   const { user } = useAuthStore();
@@ -10,6 +11,7 @@ export default function VerifyEmail() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [cooldown, setCooldown] = useState(0);
 
   useEffect(() => {
     if (user?.emailVerified) {
@@ -17,20 +19,36 @@ export default function VerifyEmail() {
     }
   }, [user, navigate]);
 
+  useEffect(() => {
+    if (cooldown > 0) {
+      const timer = setTimeout(() => setCooldown(cooldown - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [cooldown]);
+
   const handleSendVerification = async () => {
-    if (!auth.currentUser) return;
+    if (!auth.currentUser || cooldown > 0) return;
     setLoading(true);
     setError("");
     setMessage("");
     try {
-      await sendEmailVerification(auth.currentUser);
-      setMessage(
-        "Verification email sent! Please check your inbox and refresh this page.",
-      );
+      const res = await fetch("/api/email/auth/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: auth.currentUser.email }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to send verification email");
+      }
+      toast.success("Verification email sent!");
+      setMessage("Verification email sent! Please check your inbox and refresh this page.");
+      setCooldown(60);
     } catch (err: any) {
       setError(
         err.message || "Failed to send verification email. Try again later.",
       );
+      toast.error(err.message || "Failed to send email");
     } finally {
       setLoading(false);
     }

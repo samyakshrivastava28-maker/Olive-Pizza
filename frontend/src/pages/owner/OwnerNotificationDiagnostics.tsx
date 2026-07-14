@@ -372,22 +372,41 @@ export default function OwnerNotificationDiagnostics() {
           onClick={async () => {
             const token = await auth.currentUser?.getIdToken();
             if (!token) return;
-            toast.loading("Queuing Test Email...");
+            const toastId = toast.loading("Sending Test Email...");
             try {
-              const res = await fetch('/api/system/debug/test-email', {
+              const res = await fetch('/api/email/test', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify({ email: user?.email })
+                body: JSON.stringify({ recipient: user?.email, subject: "System Diagnostic Test" })
               });
+              const data = await res.json();
               if (res.ok) {
-                toast.dismiss();
-                toast.success("Test Email Queued! Check your inbox.");
+                if (data.diagnostics) {
+                  toast.success(
+                    <div>
+                      <strong>{data.message || "Test email sent!"}</strong>
+                      <div className="text-xs mt-1 text-slate-100 opacity-80 break-words">
+                        {data.diagnostics.response} ({data.diagnostics.durationMs}ms)
+                      </div>
+                    </div>, 
+                    { id: toastId, duration: 6000 }
+                  );
+                } else {
+                  toast.success(data.message || "Test Email Queued! Check your inbox.", { id: toastId });
+                }
               } else {
-                throw new Error();
+                throw new Error(data.error || "Failed to send email");
               }
-            } catch {
-              toast.dismiss();
-              toast.error("Failed to queue email.");
+            } catch (err: any) {
+              toast.error(
+                <div>
+                  <strong>Failed to send test email</strong>
+                  <div className="text-xs mt-1 text-slate-100 opacity-80 break-words">
+                    {err.message}
+                  </div>
+                </div>, 
+                { id: toastId, duration: 8000 }
+              );
             }
           }}
           className="px-6 py-3 bg-orange-600 hover:bg-orange-500 text-white rounded-xl font-bold transition-all text-sm"
