@@ -6,6 +6,7 @@ export default function QuickActions() {
     { name: 'Create Coupon', icon: '🎟️', path: '/owner/coupons', color: 'bg-green-100 text-green-600 dark:bg-green-500/20 dark:text-green-400' },
     { name: 'New Ad Campaign', icon: '📢', path: '/owner/ads', color: 'bg-pink-100 text-pink-600 dark:bg-pink-500/20 dark:text-pink-400' },
     { name: 'Generate Report', icon: '📑', path: '/owner/reports', color: 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400' },
+    { name: 'Data Manager', icon: '💽', path: '/owner/data-manager', color: 'bg-indigo-100 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-400' },
   ];
 
   return (

@@ -240,6 +240,12 @@ export default function OwnerDashboard() {
           >
             📑 Quick View Reports
           </a>
+          <a
+            href="/owner/data-manager"
+            className="w-full md:w-auto bg-indigo-500/20 text-white border border-indigo-500/30 hover:bg-indigo-500/30 px-4 py-2.5 rounded-full font-bold text-sm transition-all backdrop-blur-md shadow-lg flex items-center justify-center gap-2 hover:scale-105 active:scale-95"
+          >
+            💽 Data Manager
+          </a>
         </div>
       </div>
 

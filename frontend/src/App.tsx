@@ -151,7 +151,7 @@ const OwnerAIKnowledge = lazyWithRetry(() => import('./pages/owner/OwnerAIKnowle
 const OwnerNotificationCenter = lazyWithRetry(() => import('./pages/owner/OwnerNotificationCenter'));
 const AIHealthMonitor = lazyWithRetry(() => import('./pages/owner/AIHealthMonitor'));
 const OwnerNotificationDiagnostics = lazyWithRetry(() => import('./pages/owner/OwnerNotificationDiagnostics'));
-const OwnerDataManager = lazyWithRetry(() => import('./pages/owner/DataManager/index'));
+const OwnerDataManager = lazyWithRetry(() => import('./pages/owner/DataManager'));
 
 // Lazy loaded delivery pages
 const CustomerDashboard = lazyWithRetry(() => import('./pages/CustomerDashboard'));
