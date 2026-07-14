@@ -121,4 +121,100 @@ router.get('/history', async (req, res) => {
   }
 });
 
+router.get('/app-storage', async (req, res) => {
+  try {
+    const fs = await import('fs');
+    const path = await import('path');
+    const { fileURLToPath } = await import('url');
+    
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
+    
+    const getDirSize = (dirPath: string): number => {
+      if (!fs.existsSync(dirPath)) return 0;
+      let totalSize = 0;
+      const items = fs.readdirSync(dirPath, { withFileTypes: true });
+      for (const item of items) {
+        const fullPath = path.join(dirPath, item.name);
+        if (item.isDirectory()) {
+          totalSize += getDirSize(fullPath);
+        } else {
+          try { totalSize += fs.statSync(fullPath).size; } catch {}
+        }
+      }
+      return totalSize;
+    };
+
+    // Scan dist folder relative to project root
+    const projectRoot = path.resolve(__dirname, '../../../../');
+    const distPath = path.join(projectRoot, 'dist');
+    const distClientPath = path.join(distPath, 'client');
+    const distServerPath = path.join(distPath, 'server.js');
+
+    const clientSize = getDirSize(distClientPath);
+    const serverSize = fs.existsSync(distServerPath) ? fs.statSync(distServerPath).size : 0;
+    const totalSize = clientSize + serverSize;
+
+    res.json({
+      totalUsedBytes: totalSize,
+      breakdown: {
+        'client (dist/client)': clientSize,
+        'server (dist/server.js)': serverSize,
+      },
+      status: 'Healthy',
+      scannedAt: new Date().toISOString(),
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message, status: 'Error' });
+  }
+});
+
+router.get('/logs', async (req, res) => {
+  try {
+    const fs = await import('fs');
+    const path = await import('path');
+    const { fileURLToPath } = await import('url');
+
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
+    const projectRoot = path.resolve(__dirname, '../../../../');
+
+    const logDirs = [
+      path.join(projectRoot, 'logs'),
+      path.join(projectRoot, 'backend', 'logs'),
+      '/tmp',
+    ];
+
+    let totalSize = 0;
+    let fileCount = 0;
+    const scanned: string[] = [];
+
+    for (const dir of logDirs) {
+      if (!fs.existsSync(dir)) continue;
+      const files = fs.readdirSync(dir);
+      for (const f of files) {
+        if (f.endsWith('.log') || f.endsWith('.txt')) {
+          try {
+            const stat = fs.statSync(path.join(dir, f));
+            totalSize += stat.size;
+            fileCount++;
+          } catch {}
+        }
+      }
+      scanned.push(dir);
+    }
+
+    res.json({
+      totalUsedBytes: totalSize,
+      fileCount,
+      scannedDirectories: scanned,
+      status: 'Healthy',
+      note: totalSize === 0 ? 'No log files found — logs may be streamed to stdout only.' : undefined,
+      scannedAt: new Date().toISOString(),
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message, status: 'Error' });
+  }
+});
+
 export default router;

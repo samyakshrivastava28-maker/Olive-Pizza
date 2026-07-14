@@ -200,7 +200,13 @@ export default function PushNotificationManager() {
       const messaging = await getMessagingInstance();
       if (!messaging) return;
 
-      const permission = await Notification.requestPermission();
+      // SAFE: Guard against Android/Capacitor where Notification API does not exist
+      if (typeof window === 'undefined' || !('Notification' in window)) {
+        setShowPrompt(false);
+        return;
+      }
+
+      const permission = await window.Notification.requestPermission();
       setShowPrompt(false);
 
       if (permission === 'granted') {
@@ -297,7 +303,7 @@ export default function PushNotificationManager() {
       }
 
       // If the tab is hidden (minimized/backgrounded), show a native OS notification
-      if (document.hidden && Notification.permission === 'granted') {
+      if (document.hidden && typeof window !== 'undefined' && ('Notification' in window) && window.Notification.permission === 'granted') {
         try {
           const swReg = await navigator.serviceWorker.ready;
           swReg.showNotification(title, {
@@ -458,13 +464,17 @@ export default function PushNotificationManager() {
 
     const uid = user.uid;
 
-    // Show permission prompt after 3 seconds if not yet granted
-    if (Notification.permission === 'default') {
+    // Show permission prompt after 3 seconds if not yet granted (web only, not on Android/Capacitor)
+    const notifPermission = typeof window !== 'undefined' && ('Notification' in window)
+      ? window.Notification.permission
+      : 'denied'; // treat unavailable as denied — never prompt on Android native
+
+    if (notifPermission === 'default') {
       const timer = setTimeout(() => setShowPrompt(true), 3000);
       return () => clearTimeout(timer);
     }
 
-    if (Notification.permission === 'granted') {
+    if (notifPermission === 'granted') {
       // Register token immediately if not done yet
       if (!tokenRegistered) {
         registerToken(uid);
@@ -541,7 +551,7 @@ export default function PushNotificationManager() {
           browser: getBrowserName(),
           platform: navigator.platform,
           appVersion: import.meta.env.VITE_APP_VERSION || '1.0',
-          notificationReady: Notification.permission === 'granted',
+          notificationReady: typeof window !== 'undefined' && ('Notification' in window) && window.Notification.permission === 'granted',
         };
 
         // Delivery partners include GPS in heartbeat

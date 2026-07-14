@@ -34,7 +34,13 @@ export async function requestNotificationPermission(userId: string): Promise<str
       return null;
     }
 
-    const permission = await Notification.requestPermission();
+    // SAFE: Only access Notification API after confirming it exists in window
+    if (typeof window === 'undefined' || !('Notification' in window)) {
+      console.warn('[FCM] Notification API not available in this environment.');
+      return null;
+    }
+
+    const permission = await window.Notification.requestPermission();
     if (permission === 'granted') {
       return await verifyAndRefreshTokens(userId);
     } else {
@@ -47,6 +53,7 @@ export async function requestNotificationPermission(userId: string): Promise<str
   }
 }
 
+
 /**
  * Silently verifies and refreshes the FCM token on app startup.
  * Skips silently if Capacitor native, not supported, or permission not granted.
@@ -57,7 +64,7 @@ export async function verifyAndRefreshTokens(userId?: string): Promise<string | 
     if (isCapacitorNative()) return null;
 
     const supported = await isSupported();
-    if (!supported || Notification.permission !== 'granted') return null;
+    if (!supported || typeof window === 'undefined' || !('Notification' in window) || window.Notification.permission !== 'granted') return null;
 
     // Register our standalone FCM service worker (separate from any Workbox SW)
     const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');

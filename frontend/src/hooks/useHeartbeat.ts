@@ -30,7 +30,7 @@ export function useHeartbeat() {
             platform: navigator.platform,
             appVersion: '1.0.0',
             isOnline: navigator.onLine,
-            notificationReady: Notification.permission === 'granted',
+            notificationReady: typeof window !== 'undefined' && ('Notification' in window) && window.Notification.permission === 'granted',
             batteryLevel,
             connectionQuality
           }),

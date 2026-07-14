@@ -1,173 +1,391 @@
-import React, { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
-import { RefreshCw, Database, Cloud, HardDrive, Layers, Mail, Bell, AlertTriangle } from 'lucide-react';
-import { Doughnut, Line } from 'react-chartjs-2';
+import React, { useEffect, useState, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  RefreshCw, Database, Cloud, HardDrive, Layers, Mail, Bell,
+  AlertTriangle, CheckCircle, XCircle, Clock, Zap, Server, FileText
+} from 'lucide-react';
+import { Doughnut } from 'react-chartjs-2';
 import 'chart.js/auto';
 
-const formatBytes = (bytes: number, decimals = 2) => {
-  if (!+bytes) return '0 Bytes';
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+const formatBytes = (bytes: number, decimals = 2): string => {
+  if (!bytes || bytes <= 0) return '0 B';
   const k = 1024;
   const dm = decimals < 0 ? 0 : decimals;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
 };
 
+// ─── Provider Config ──────────────────────────────────────────────────────────
+const PROVIDERS = [
+  { id: 'firestore',     label: 'Firestore',        icon: Database,  color: '#FF7A00', endpoint: 'firestore' },
+  { id: 'supabase',      label: 'PostgreSQL',        icon: Database,  color: '#6B8E23', endpoint: 'supabase' },
+  { id: 'cloudinary',    label: 'Cloudinary',        icon: Cloud,     color: '#FFC107', endpoint: 'cloudinary' },
+  { id: 'google-drive',  label: 'Google Drive',      icon: HardDrive, color: '#4285F4', endpoint: 'google-drive' },
+  { id: 'qdrant',        label: 'Qdrant (AI)',        icon: Layers,    color: '#E91E63', endpoint: 'qdrant' },
+  { id: 'email',         label: 'Email Queue',        icon: Mail,      color: '#9C27B0', endpoint: 'email' },
+  { id: 'notifications', label: 'Notifications',     icon: Bell,      color: '#00BCD4', endpoint: 'notifications' },
+  { id: 'app-storage',   label: 'App Storage',       icon: Server,    color: '#FF5722', endpoint: 'app-storage' },
+  { id: 'logs',          label: 'Logs',              icon: FileText,  color: '#607D8B', endpoint: 'logs' },
+] as const;
+
+type ProviderId = typeof PROVIDERS[number]['id'];
+
+interface ProviderState {
+  status: 'loading' | 'loaded' | 'error';
+  data: any | null;
+  error: string | null;
+  httpStatus: number | null;
+  latencyMs: number | null;
+  lastUpdated: string | null;
+}
+
+// ─── Provider Card ────────────────────────────────────────────────────────────
+const ProviderCard = React.memo(({ 
+  provider, 
+  state, 
+  onRetry 
+}: { 
+  provider: typeof PROVIDERS[number], 
+  state: ProviderState, 
+  onRetry: () => void 
+}) => {
+  const Icon = provider.icon;
+  const usedBytes = state.data?.totalUsedBytes || 0;
+  const capacity = state.data?.capacityBytes || null;
+  const pct = capacity && capacity > 0 ? Math.round((usedBytes / capacity) * 100) : null;
+  const healthStatus = state.data?.status || 'Unknown';
+
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 20, scale: 0.97 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ duration: 0.35, ease: [0.4, 0, 0.2, 1] }}
+      className="relative overflow-hidden rounded-2xl border transition-all duration-300 group"
+      style={{
+        background: 'rgba(22,22,22,0.75)',
+        backdropFilter: 'blur(20px)',
+        borderColor: state.status === 'error' ? 'rgba(239,68,68,0.3)' : `${provider.color}30`,
+        boxShadow: state.status === 'loaded' ? `0 0 0 0 ${provider.color}00` : undefined,
+      }}
+      whileHover={{ 
+        y: -4, 
+        boxShadow: `0 12px 40px ${provider.color}25, 0 0 0 1px ${provider.color}40`,
+        borderColor: `${provider.color}60`
+      }}
+    >
+      {/* Top color accent */}
+      <div className="h-1 w-full" style={{ background: `linear-gradient(90deg, ${provider.color}, transparent)` }} />
+
+      <div className="p-5">
+        {/* Header */}
+        <div className="flex items-start justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl" style={{ background: `${provider.color}20` }}>
+              <Icon className="w-5 h-5" style={{ color: provider.color }} />
+            </div>
+            <div>
+              <h3 className="font-bold text-white text-sm">{provider.label}</h3>
+              {state.latencyMs !== null && (
+                <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
+                  <Zap className="w-3 h-3" /> {state.latencyMs}ms
+                </p>
+              )}
+            </div>
+          </div>
+          {state.status === 'loading' && (
+            <div className="w-5 h-5 border-2 rounded-full animate-spin border-t-transparent" style={{ borderColor: `${provider.color}60`, borderTopColor: 'transparent' }} />
+          )}
+          {state.status === 'loaded' && (
+            <CheckCircle className="w-5 h-5" style={{ color: provider.color }} />
+          )}
+          {state.status === 'error' && (
+            <XCircle className="w-5 h-5 text-red-400" />
+          )}
+        </div>
+
+        {/* Content */}
+        {state.status === 'loading' && (
+          <div className="space-y-2 animate-pulse">
+            <div className="h-8 bg-white/5 rounded-lg w-3/4" />
+            <div className="h-3 bg-white/5 rounded w-1/2" />
+          </div>
+        )}
+
+        {state.status === 'loaded' && (
+          <div>
+            <div className="text-3xl font-black mb-1" style={{ color: provider.color }}>
+              {formatBytes(usedBytes)}
+            </div>
+            {capacity && (
+              <p className="text-xs text-gray-400 mb-3">of {formatBytes(capacity)} capacity</p>
+            )}
+            {!capacity && (
+              <p className="text-xs text-gray-500 mb-3">calculated from real data</p>
+            )}
+
+            {/* Progress Bar */}
+            {pct !== null && (
+              <div>
+                <div className="flex justify-between text-xs text-gray-400 mb-1.5">
+                  <span>Used</span>
+                  <span style={{ color: pct > 80 ? '#ef4444' : provider.color }}>{pct}%</span>
+                </div>
+                <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                  <motion.div
+                    className="h-full rounded-full"
+                    style={{ background: `linear-gradient(90deg, ${provider.color}, ${provider.color}aa)` }}
+                    initial={{ width: 0 }}
+                    animate={{ width: `${Math.min(pct, 100)}%` }}
+                    transition={{ duration: 0.8, delay: 0.2, ease: 'easeOut' }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Status badge */}
+            <div className="mt-3 flex items-center gap-1.5">
+              <div
+                className="w-1.5 h-1.5 rounded-full"
+                style={{ background: healthStatus === 'Healthy' ? '#22c55e' : '#f59e0b' }}
+              />
+              <span className="text-xs font-medium text-gray-400">{healthStatus}</span>
+            </div>
+          </div>
+        )}
+
+        {state.status === 'error' && (
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <AlertTriangle className="w-4 h-4 text-red-400 flex-shrink-0" />
+              <p className="text-xs text-red-400 font-medium">Provider unavailable</p>
+            </div>
+            <p className="text-xs text-gray-500 mb-1 font-mono break-all line-clamp-2">{state.error}</p>
+            {state.httpStatus && (
+              <p className="text-xs text-gray-600 mb-3">HTTP {state.httpStatus}</p>
+            )}
+            <button
+              onClick={onRetry}
+              className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg transition-all"
+              style={{ background: `${provider.color}20`, color: provider.color }}
+            >
+              <RefreshCw className="w-3 h-3" /> Retry
+            </button>
+          </div>
+        )}
+
+        {/* Last updated */}
+        {state.lastUpdated && (
+          <p className="text-xs text-gray-600 mt-3 flex items-center gap-1">
+            <Clock className="w-3 h-3" />
+            {new Date(state.lastUpdated).toLocaleTimeString()}
+          </p>
+        )}
+      </div>
+    </motion.div>
+  );
+});
+
+// ─── Main Overview Component ──────────────────────────────────────────────────
 export default function Overview() {
-  const [data, setData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-
-  const fetchOverview = async (force = false) => {
-    try {
-      if (force) setIsRefreshing(true);
-      const res = await fetch(`/api/data-manager/overview${force ? '?force=true' : ''}`);
-      if (!res.ok) throw new Error('Failed to fetch data manager overview');
-      const json = await res.json();
-      setData(json);
-      setError(null);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-      setIsRefreshing(false);
+  const [providerStates, setProviderStates] = useState<Record<ProviderId, ProviderState>>(() => {
+    const initial: any = {};
+    for (const p of PROVIDERS) {
+      initial[p.id] = { status: 'loading', data: null, error: null, httpStatus: null, latencyMs: null, lastUpdated: null };
     }
-  };
+    return initial;
+  });
 
-  useEffect(() => {
-    fetchOverview();
+  const fetchProvider = useCallback(async (provider: typeof PROVIDERS[number], force = false) => {
+    setProviderStates(prev => ({
+      ...prev,
+      [provider.id]: { ...prev[provider.id as ProviderId], status: 'loading', error: null }
+    }));
+
+    const t0 = performance.now();
+    try {
+      const res = await fetch(`/api/data-manager/${provider.endpoint}${force ? '?force=true' : ''}`);
+      const latencyMs = Math.round(performance.now() - t0);
+      
+      if (!res.ok) {
+        const errText = await res.text().catch(() => 'Unknown error');
+        setProviderStates(prev => ({
+          ...prev,
+          [provider.id]: {
+            status: 'error',
+            data: null,
+            error: errText.slice(0, 200),
+            httpStatus: res.status,
+            latencyMs,
+            lastUpdated: new Date().toISOString(),
+          }
+        }));
+        return;
+      }
+
+      const json = await res.json();
+
+      // Treat error status from backend gracefully  
+      if (json.status === 'Error' || json.status === 'Offline') {
+        setProviderStates(prev => ({
+          ...prev,
+          [provider.id]: {
+            status: 'error',
+            data: json,
+            error: json.error || `${provider.label} is ${json.status}`,
+            httpStatus: res.status,
+            latencyMs,
+            lastUpdated: new Date().toISOString(),
+          }
+        }));
+        return;
+      }
+
+      setProviderStates(prev => ({
+        ...prev,
+        [provider.id]: {
+          status: 'loaded',
+          data: json,
+          error: null,
+          httpStatus: res.status,
+          latencyMs,
+          lastUpdated: new Date().toISOString(),
+        }
+      }));
+    } catch (err: any) {
+      const latencyMs = Math.round(performance.now() - t0);
+      setProviderStates(prev => ({
+        ...prev,
+        [provider.id]: {
+          status: 'error',
+          data: null,
+          error: err.message,
+          httpStatus: null,
+          latencyMs,
+          lastUpdated: new Date().toISOString(),
+        }
+      }));
+    }
   }, []);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="w-16 h-16 border-4 border-[#6B8E23] border-t-transparent rounded-full animate-spin"></div>
-      </div>
-    );
-  }
+  // Load all providers in parallel on mount — each resolves independently
+  useEffect(() => {
+    PROVIDERS.forEach(p => fetchProvider(p));
+  }, [fetchProvider]);
 
-  if (error) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full text-red-400">
-        <AlertTriangle className="w-16 h-16 mb-4" />
-        <h2 className="text-xl font-bold">Failed to load overview</h2>
-        <p>{error}</p>
-      </div>
-    );
-  }
+  const refreshAll = useCallback(() => {
+    PROVIDERS.forEach(p => fetchProvider(p, true));
+  }, [fetchProvider]);
 
-  const providers = [
-    { id: 'firestore', label: 'Firestore', value: data?.firestore?.totalUsedBytes || 0, color: '#FF7A00', icon: Database },
-    { id: 'supabase', label: 'Supabase DB', value: data?.supabase?.totalUsedBytes || 0, color: '#6B8E23', icon: Database },
-    { id: 'cloudinary', label: 'Cloudinary', value: data?.cloudinary?.totalUsedBytes || 0, color: '#FFC107', icon: Cloud },
-    { id: 'drive', label: 'Google Drive', value: data?.drive?.totalUsedBytes || 0, color: '#4285F4', icon: HardDrive },
-    { id: 'qdrant', label: 'Qdrant (AI)', value: data?.qdrant?.totalUsedBytes || 0, color: '#E91E63', icon: Layers },
-    { id: 'email', label: 'Email Queue', value: data?.email?.totalUsedBytes || 0, color: '#9C27B0', icon: Mail },
-    { id: 'notifications', label: 'Notifications', value: data?.notifications?.totalUsedBytes || 0, color: '#00BCD4', icon: Bell },
-  ];
-
-  const totalBytes = providers.reduce((sum, p) => sum + p.value, 0);
+  // Chart data — only include loaded providers
+  const loadedProviders = PROVIDERS.filter(p => providerStates[p.id].status === 'loaded');
+  const totalBytes = loadedProviders.reduce((sum, p) => sum + (providerStates[p.id].data?.totalUsedBytes || 0), 0);
 
   const chartData = {
-    labels: providers.map(p => p.label),
-    datasets: [
-      {
-        data: providers.map(p => p.value),
-        backgroundColor: providers.map(p => p.color),
-        borderWidth: 0,
-        hoverOffset: 10,
-      },
-    ],
+    labels: loadedProviders.map(p => p.label),
+    datasets: [{
+      data: loadedProviders.map(p => providerStates[p.id].data?.totalUsedBytes || 0),
+      backgroundColor: loadedProviders.map(p => p.color),
+      borderWidth: 0,
+      hoverOffset: 12,
+    }],
   };
 
   const chartOptions = {
-    cutout: '75%',
+    cutout: '78%',
     plugins: {
       legend: { display: false },
       tooltip: {
         callbacks: {
-          label: (context: any) => ` ${context.label}: ${formatBytes(context.raw)}`
+          label: (ctx: any) => ` ${ctx.label}: ${formatBytes(ctx.raw)}`
         }
       }
-    }
+    },
+    animation: { animateRotate: true, duration: 800 }
   };
 
+  const loadedCount = PROVIDERS.filter(p => providerStates[p.id].status === 'loaded').length;
+  const errorCount = PROVIDERS.filter(p => providerStates[p.id].status === 'error').length;
+  const loadingCount = PROVIDERS.filter(p => providerStates[p.id].status === 'loading').length;
+
   return (
-    <motion.div 
-      initial={{ opacity: 0, y: 20 }}
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
-      className="space-y-8"
+      exit={{ opacity: 0, y: -16 }}
+      transition={{ duration: 0.3 }}
     >
-      <div className="flex justify-between items-center">
+      {/* ─── Summary Header ─────────────────────────────────────────────────── */}
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
-            Storage Overview
-          </h1>
-          <p className="text-gray-400 mt-2">Real-time consolidated cloud usage</p>
+          <h2 className="text-3xl font-black text-white tracking-tight">Storage Overview</h2>
+          <p className="text-gray-400 mt-1 text-sm">
+            {loadingCount > 0 && <span className="text-yellow-400">Loading {loadingCount} provider{loadingCount > 1 ? 's' : ''}… </span>}
+            {loadedCount > 0 && <span className="text-green-400">{loadedCount} online. </span>}
+            {errorCount > 0 && <span className="text-red-400">{errorCount} failed. </span>}
+            {totalBytes > 0 && <span className="text-white font-medium">{formatBytes(totalBytes)} total used.</span>}
+          </p>
         </div>
-        <button 
-          onClick={() => fetchOverview(true)}
-          disabled={isRefreshing}
-          className="flex items-center space-x-2 px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-all"
+        <button
+          onClick={refreshAll}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm transition-all hover:scale-105 active:scale-95"
+          style={{ background: 'rgba(107,142,35,0.15)', border: '1px solid rgba(107,142,35,0.4)', color: '#6B8E23' }}
         >
-          <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-          <span>Refresh</span>
+          <RefreshCw className={`w-4 h-4 ${loadingCount > 0 ? 'animate-spin' : ''}`} />
+          Refresh All
         </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Main Chart Card */}
-        <motion.div 
-          whileHover={{ y: -5 }}
-          className="lg:col-span-1 bg-[#161616]/60 backdrop-blur-md border border-white/10 rounded-3xl p-8 relative overflow-hidden shadow-2xl"
+      {/* ─── Doughnut Chart + Legend ─────────────────────────────────────────── */}
+      {loadedCount > 0 && (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.5 }}
+          className="mb-10 p-6 rounded-2xl border"
+          style={{ background: 'rgba(22,22,22,0.6)', backdropFilter: 'blur(20px)', borderColor: 'rgba(255,255,255,0.08)' }}
         >
-          <div className="absolute top-0 right-0 w-32 h-32 bg-[#6B8E23]/10 blur-[50px] rounded-full" />
-          <h3 className="text-lg font-medium text-gray-300 mb-6">Total Distribution</h3>
-          <div className="relative w-full aspect-square max-w-[250px] mx-auto">
-            <Doughnut data={chartData} options={chartOptions} />
-            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-              <span className="text-sm text-gray-400">Total</span>
-              <span className="text-2xl font-bold text-white">{formatBytes(totalBytes)}</span>
+          <div className="flex flex-col lg:flex-row items-center gap-8">
+            <div className="relative w-52 h-52 flex-shrink-0">
+              <Doughnut data={chartData} options={chartOptions} />
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                <p className="text-2xl font-black text-white">{formatBytes(totalBytes)}</p>
+                <p className="text-xs text-gray-500 mt-0.5">total used</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 flex-1 w-full">
+              {loadedProviders.map(p => {
+                const bytes = providerStates[p.id].data?.totalUsedBytes || 0;
+                const pct = totalBytes > 0 ? ((bytes / totalBytes) * 100).toFixed(1) : '0.0';
+                return (
+                  <div key={p.id} className="flex items-center gap-2.5">
+                    <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: p.color }} />
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium text-gray-300 truncate">{p.label}</p>
+                      <p className="text-xs text-gray-500">{formatBytes(bytes)} · {pct}%</p>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </motion.div>
+      )}
 
-        {/* Provider Cards */}
-        <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {providers.map((provider, i) => (
-            <motion.div
+      {/* ─── Provider Cards Grid ─────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <AnimatePresence>
+          {PROVIDERS.map(provider => (
+            <ProviderCard
               key={provider.id}
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: i * 0.1 }}
-              whileHover={{ scale: 1.02, backgroundColor: 'rgba(255,255,255,0.08)' }}
-              className="bg-[#161616]/40 backdrop-blur-sm border border-white/5 rounded-2xl p-5 flex items-center space-x-4 cursor-pointer relative overflow-hidden group"
-            >
-              <div 
-                className="w-12 h-12 rounded-xl flex items-center justify-center"
-                style={{ backgroundColor: `${provider.color}20`, color: provider.color }}
-              >
-                <provider.icon className="w-6 h-6" />
-              </div>
-              <div className="flex-1">
-                <h4 className="text-gray-300 font-medium">{provider.label}</h4>
-                <div className="flex items-end space-x-2">
-                  <span className="text-2xl font-bold tracking-tight">{formatBytes(provider.value)}</span>
-                  <span className="text-xs text-gray-500 mb-1">
-                    ({((provider.value / totalBytes) * 100 || 0).toFixed(1)}%)
-                  </span>
-                </div>
-              </div>
-              {/* Highlight bar */}
-              <div 
-                className="absolute bottom-0 left-0 h-1 bg-gradient-to-r transition-all duration-500 transform scale-x-0 group-hover:scale-x-100 origin-left"
-                style={{ width: '100%', backgroundImage: `linear-gradient(to right, ${provider.color}00, ${provider.color})` }}
-              />
-            </motion.div>
+              provider={provider}
+              state={providerStates[provider.id]}
+              onRetry={() => fetchProvider(provider, true)}
+            />
           ))}
-        </div>
+        </AnimatePresence>
       </div>
     </motion.div>
   );

@@ -66,7 +66,7 @@ export function useDeviceSession() {
         }, { merge: true });
 
         // Automated Silent Token Validation / Refresh
-        if (Notification.permission === 'granted') {
+        if (typeof window !== 'undefined' && ('Notification' in window) && window.Notification.permission === 'granted') {
           import('../lib/fcm').then(({ verifyAndRefreshTokens }) => {
             verifyAndRefreshTokens(uid).catch(console.error);
           });

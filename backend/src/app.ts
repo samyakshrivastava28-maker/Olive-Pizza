@@ -98,7 +98,7 @@ app.use('/heartbeat', heartbeatRoutes);
 app.use('/version', versionRoutes);
 app.use('/github', githubRoutes);
 app.use('/phone', phoneVerificationRoutes);
-app.use('/api/data-manager', dataManagerRoutes);
+app.use('/data-manager', dataManagerRoutes);
 
 // SEO Routes (mounted at root via app in server.ts, but we map them here)
 app.use('/', seoRoutes);

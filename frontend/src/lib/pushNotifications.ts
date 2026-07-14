@@ -29,7 +29,7 @@ export function subscribeToTopic(topic: 'new_orders' | 'delivery_updates' | 'pro
 }
 
 export function simulateLocalNotification(title: string, body: string, url: string = '/') {
-  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  if (typeof window === 'undefined' || !('Notification' in window) || window.Notification.permission !== 'granted') return;
   
   if (navigator.serviceWorker.controller) {
     navigator.serviceWorker.ready.then(registration => {
@@ -40,6 +40,6 @@ export function simulateLocalNotification(title: string, body: string, url: stri
       });
     });
   } else {
-    new Notification(title, { body, icon: '/icons/icon-192x192.webp' });
+    new window.Notification(title, { body, icon: '/icons/icon-192x192.webp' });
   }
 }

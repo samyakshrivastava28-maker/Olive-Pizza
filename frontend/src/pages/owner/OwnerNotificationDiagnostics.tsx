@@ -24,7 +24,9 @@ export default function OwnerNotificationDiagnostics() {
     
     let swRegistered = false;
     let token = null;
-    let permission = Notification.permission;
+    let permission: NotificationPermission = (typeof window !== 'undefined' && ('Notification' in window))
+      ? window.Notification.permission
+      : 'denied';
     
     if ('serviceWorker' in navigator) {
       const regs = await navigator.serviceWorker.getRegistrations();
