@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="sdk_disclaimer_bg">#55000000</color>
+    <color name="white">#FFF</color>
+    <dimen name="com_truecaller_truebutton_margin">4dp</dimen>
+    <dimen name="com_truecaller_truebutton_padding">8dp</dimen>
+    <dimen name="sdk_close_button_size">24dp</dimen>
+    <dimen name="sdk_privacy_text_size">10sp</dimen>
+    <string name="cancel">Cancel</string>
+    <string name="ok">OK</string>
+    <string name="permission_rationale_msg">For verifying your number, we need Calls and Phone permission</string>
+    <string name="sdk_disclaimer_text">By proceeding, your phone number will be verified by Truecaller
+        and you thereby accept to the *Terms of Service.*</string>
+    <string name="sdk_disclaimer_url" translatable="false">https://developer.truecaller.com/phone-number-verification/privacy-notice</string>
+    <string name="sdk_variant" translatable="false">native</string>
+    <string name="sdk_variant_version" translatable="false">2.9.0</string>
+    <string name="tc_logo">TC Logo</string>
+</resources>

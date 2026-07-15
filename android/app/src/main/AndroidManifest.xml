@@ -7,6 +7,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
+
         <activity
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
             android:name=".MainActivity"
@@ -20,6 +21,16 @@
             </intent-filter>
         </activity>
 
+        <!--
+            FCM Default Channel — olive_order_new is MAX importance.
+            When the app is killed, FCM uses this channel to deliver.
+            Replace with your actual highest-priority channel ID.
+        -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="olive_order_new" />
+
+        <!-- Truecaller SDK -->
         <meta-data android:name="com.truecaller.android.sdk.ClientId" android:value="um2vaxqdcr3nroydqvyg_hahzikmqrla8w_yxiptsry" />
 
         <provider
@@ -31,7 +42,46 @@
         </provider>
     </application>
 
-    <!-- Permissions -->
+    <!-- ═══════════════════════════════════════════════════════════════
+         PERMISSIONS — Production Grade
+         ═══════════════════════════════════════════════════════════════ -->
 
+    <!-- Network -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- Push Notifications (Android 13 / API 33+) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Wake device for critical alerts (new orders ringing) -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <!-- Full-screen intent: notification appears over the lock screen -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+
+    <!-- Foreground Service for sustained work (GPS, audio) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+
+    <!-- Re-send notifications after device reboot -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- Location — Foreground precise (required for background location below) -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+
+    <!-- Location — Background (delivery partner tracking when app closed)
+         Android 10+ (API 29+). Must be requested separately, after foreground is granted. -->
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+
+    <!-- Battery Optimization — allow directing user to disable battery restriction -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+    <!-- Camera (profile photos, order images) -->
+    <uses-permission android:name="android.permission.CAMERA" />
+
+    <!-- Phone State (Truecaller) -->
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+
 </manifest>

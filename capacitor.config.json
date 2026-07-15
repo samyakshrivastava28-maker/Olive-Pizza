@@ -22,6 +22,12 @@
       "skipNativeAuth": false,
       "providers": ["google.com"],
       "googleClientId": "1017239455106-i8vrpdq1v51pkg0308k7btu1o4img597.apps.googleusercontent.com"
+    },
+    "PushNotifications": {
+      "presentationOptions": ["badge", "sound", "alert"]
+    },
+    "Geolocation": {
+      "requestPermissions": true
     }
   }
 }
