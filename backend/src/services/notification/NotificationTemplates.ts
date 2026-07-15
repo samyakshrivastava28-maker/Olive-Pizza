@@ -248,27 +248,32 @@ function buildPayload(title: string, body: string, opts: BuildOptions): Notifica
   if (opts.actions)           safeData.actions           = JSON.stringify(opts.actions);
   if (opts.vibrate)           safeData.vibrate           = JSON.stringify(opts.vibrate);
 
-  return {
-    notification: {
-      title,
-      body,
-    },
+  const basePayload: any = {
     data: safeData,
     android: {
       priority: isHigh ? 'high' : 'normal',
       collapseKey: opts.ongoing ? opts.tag : undefined, // Live card collapse
-      notification: {
-        sound: soundFile,
-        channelId: opts.channelId,
-        tag: opts.tag,
-        icon: ICON,
-        clickAction: opts.role === 'owner' ? 'owner_order_actions' : opts.role === 'delivery' ? 'delivery_actions' : 'customer_order_actions',
-        defaultVibrateTimings: !opts.vibrate,
-        vibrateTimingsMillis: opts.vibrate,
-        notificationPriority: opts.priority === 'critical' ? 'PRIORITY_MAX'
-          : opts.priority === 'high' ? 'PRIORITY_HIGH' : 'PRIORITY_DEFAULT',
-      },
     },
+  };
+
+  // If ongoing is true, we want a DATA-ONLY push for Android so OliveMessagingService handles it.
+  // Standard notifications will include the root `notification` and `android.notification` blocks.
+  if (!opts.ongoing) {
+    basePayload.notification = { title, body };
+    basePayload.android.notification = {
+      sound: soundFile,
+      channelId: opts.channelId,
+      tag: opts.tag,
+      icon: ICON,
+      clickAction: opts.role === 'owner' ? 'owner_order_actions' : opts.role === 'delivery' ? 'delivery_actions' : 'customer_order_actions',
+      defaultVibrateTimings: !opts.vibrate,
+      vibrateTimingsMillis: opts.vibrate,
+      notificationPriority: opts.priority === 'critical' ? 'PRIORITY_MAX'
+        : opts.priority === 'high' ? 'PRIORITY_HIGH' : 'PRIORITY_DEFAULT',
+    };
+  }
+  return {
+    ...basePayload,
     apns: {
       headers: {
         'apns-priority': isHigh ? '10' : '5',
@@ -629,18 +634,18 @@ export class CustomerTemplates {
         body: `Order #${payload.orderNumber} delivered. Rate your experience!\n${progressBar('delivered')}`,
         sound: 'delivered',
         requireInteraction: true,
-        ongoing: false, // Remove pinned notification on delivery
+        ongoing: true, // MUST be true so it stays data-only and triggers OliveMessagingService to cancel the pinned one
       },
       completed: {
         title: `🏁 Order Completed`,
         body: `Thank you for choosing Olive Pizza! See you again soon.`,
-        ongoing: false,
+        ongoing: true,
       },
       cancelled: {
         title: `❌ Order Cancelled — #${payload.orderNumber}`,
         body: `Your order has been cancelled. Contact us if you need help.`,
         sound: 'cancelled',
-        ongoing: false,
+        ongoing: true,
       },
     };
 

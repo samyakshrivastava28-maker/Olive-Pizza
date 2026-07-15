@@ -8,6 +8,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(TruecallerPlugin.class);
+        registerPlugin(DeliveryPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }

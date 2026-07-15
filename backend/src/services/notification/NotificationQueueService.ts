@@ -229,6 +229,9 @@ export class NotificationQueueService {
         adminDb.collection('users').doc(firebaseUserId).update({ fcmTokens: FieldValue.arrayRemove(deviceInfo.oldToken) }).catch(() => {});
       }
 
+      // CRITICAL FIX: Ensure 1 Device = 1 User. Deactivate this token for ANY OTHER user who might have previously logged in on this device.
+      await client.query('UPDATE fcm_tokens SET is_active = FALSE WHERE token = $1 AND user_id != $2', [token, pgUserId]);
+
       await client.query(
         `INSERT INTO fcm_tokens (user_id, token, device_name, platform, browser, app_version, is_active, last_used_at)
          VALUES ($1,$2,$3,$4,$5,$6,TRUE,NOW())

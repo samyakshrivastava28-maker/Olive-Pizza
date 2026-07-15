@@ -1,11 +1,17 @@
 package com.olivepizza.app;
 
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.content.Context;
+import android.content.Intent;
 import android.media.MediaPlayer;
+import android.os.Build;
 import android.os.PowerManager;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
+import androidx.core.app.NotificationCompat;
 
 import com.capacitorjs.plugins.pushnotifications.MessagingService;
 import com.google.firebase.messaging.RemoteMessage;
@@ -24,7 +30,7 @@ public class OliveMessagingService extends MessagingService {
         
         Log.d(TAG, "From: " + remoteMessage.getFrom());
 
-        // We ALSO intercept data payloads for background alarms
+        // We ALSO intercept data payloads for background alarms and ongoing notifications
         if (remoteMessage.getData().size() > 0) {
             Log.d(TAG, "Message data payload: " + remoteMessage.getData());
             Map<String, String> data = remoteMessage.getData();
@@ -34,7 +40,62 @@ public class OliveMessagingService extends MessagingService {
             } else if ("stop_alert".equals(data.get("action"))) {
                 stopAlarm();
             }
+
+            if ("true".equals(data.get("ongoing"))) {
+                showOngoingNotification(data);
+            }
         }
+    }
+
+    private void showOngoingNotification(Map<String, String> data) {
+        String orderId = data.get("orderId");
+        if (orderId == null) return;
+        
+        int notificationId = orderId.hashCode();
+        String title = data.get("title");
+        String body = data.get("body");
+        String channelId = "olive_orders_ongoing"; // Needs to be created if not exists
+
+        NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel(channelId, "Live Orders", NotificationManager.IMPORTANCE_DEFAULT);
+            notificationManager.createNotificationChannel(channel);
+        }
+
+        Intent intent = new Intent(this, MainActivity.class);
+        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        intent.putExtra("url", "/customer/orders/" + orderId);
+        PendingIntent pendingIntent = PendingIntent.getActivity(this, notificationId, intent, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, channelId)
+                .setSmallIcon(getResources().getIdentifier("ic_stat_icon_config_sample", "drawable", getPackageName())) // Or use default push icon
+                .setContentTitle(title)
+                .setContentText(body)
+                .setStyle(new NotificationCompat.BigTextStyle().bigText(body))
+                .setOngoing(true)
+                .setOnlyAlertOnce(true)
+                .setContentIntent(pendingIntent);
+
+        // Cancel if delivered or cancelled and show a dismissable notification
+        String status = data.get("stage");
+        if ("delivered".equals(status) || "cancelled".equals(status) || "completed".equals(status)) {
+            notificationManager.cancel(notificationId);
+            
+            // Create a new NON-ongoing notification for the final status
+            NotificationCompat.Builder finalBuilder = new NotificationCompat.Builder(this, channelId)
+                    .setSmallIcon(getResources().getIdentifier("ic_stat_icon_config_sample", "drawable", getPackageName()))
+                    .setContentTitle(title)
+                    .setContentText(body)
+                    .setStyle(new NotificationCompat.BigTextStyle().bigText(body))
+                    .setOngoing(false)
+                    .setAutoCancel(true)
+                    .setContentIntent(pendingIntent);
+                    
+            notificationManager.notify(notificationId + 1, finalBuilder.build());
+            return;
+        }
+
+        notificationManager.notify(notificationId, builder.build());
     }
 
     private void startAlarm(Context context, String soundName) {

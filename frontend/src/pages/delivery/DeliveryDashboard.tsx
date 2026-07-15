@@ -15,6 +15,8 @@ import { GlassCard, GlassButton } from "../../components/ui/glass/GlassSystem";
 import { playNotificationSound } from "../../hooks/useNotificationSound";
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTrackingStore } from "../../lib/trackingStore";
+import { Capacitor } from '@capacitor/core';
+import { DeliveryPlugin } from "../../lib/DeliveryPlugin";
 import { useShallow } from 'zustand/react/shallow';
 import DeliveryMap from "../../components/delivery/DeliveryMap";
 
@@ -129,13 +131,40 @@ export default function DeliveryDashboard() {
 
   useEffect(() => {
     const activeDeliveries = tasks.filter((t) => t.status === "out_for_delivery");
-    if (!user?.uid || user.status !== "online") {
+    
+    const stopAllTracking = async () => {
       if (watchIdRef.current !== null) { navigator.geolocation.clearWatch(watchIdRef.current); watchIdRef.current = null; }
       if (heartbeatRef.current) { clearInterval(heartbeatRef.current); heartbeatRef.current = null; }
+      if (Capacitor.isNativePlatform()) {
+        await DeliveryPlugin.stopTracking().catch(console.error);
+      }
+    };
+
+    if (!user?.uid || user.status !== "online") {
+      stopAllTracking();
       return;
     }
 
     const activeOrderId = activeDeliveries.length > 0 ? activeDeliveries[0].id || null : null;
+    
+    const startNativeTracking = async (orderId: string) => {
+      if (Capacitor.isNativePlatform()) {
+        const { auth } = await import('../../lib/firebase');
+        const token = await auth.currentUser?.getIdToken();
+        if (token) {
+          await DeliveryPlugin.startTracking({ orderId, token }).catch(console.error);
+        }
+      }
+    };
+
+    if (activeOrderId) {
+      startNativeTracking(activeOrderId);
+    } else {
+      if (Capacitor.isNativePlatform()) {
+        DeliveryPlugin.stopTracking().catch(console.error);
+      }
+    }
+
     if (!navigator.geolocation) return;
 
     watchIdRef.current = navigator.geolocation.watchPosition(
@@ -161,13 +190,17 @@ export default function DeliveryDashboard() {
         const newLoc = { lat, lng, time: now, heading };
         lastLocationRef.current = newLoc;
         setLocation(newLoc);
-        await writeLocationToSupabase(lat, lng, heading, speed, accuracy, activeOrderId);
+        
+        // Only write to supabase from frontend if not native (web fallback)
+        if (!Capacitor.isNativePlatform()) {
+          await writeLocationToSupabase(lat, lng, heading, speed, accuracy, activeOrderId);
+        }
       },
       (error) => console.error("GPS Error", error),
       { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
     );
 
-    if (activeDeliveries.length > 0) {
+    if (activeDeliveries.length > 0 && !Capacitor.isNativePlatform()) {
       if (heartbeatRef.current) clearInterval(heartbeatRef.current);
       heartbeatRef.current = setInterval(async () => {
         const pos = lastGPSPositionRef.current;
@@ -179,8 +212,7 @@ export default function DeliveryDashboard() {
     }
 
     return () => {
-      if (watchIdRef.current !== null) { navigator.geolocation.clearWatch(watchIdRef.current); watchIdRef.current = null; }
-      if (heartbeatRef.current) { clearInterval(heartbeatRef.current); heartbeatRef.current = null; }
+      stopAllTracking();
     };
   }, [tasks, user?.uid, user?.status, writeLocationToSupabase]);
 

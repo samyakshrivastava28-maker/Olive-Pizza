@@ -50,6 +50,12 @@
             </intent-filter>
         </service>
 
+        <!-- Custom Foreground Service for Delivery Partner Location Tracking -->
+        <service
+            android:name=".DeliveryLocationService"
+            android:foregroundServiceType="location"
+            android:exported="false" />
+
     </application>
 
     <!-- ═══════════════════════════════════════════════════════════════
