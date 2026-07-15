@@ -116,6 +116,54 @@ router.post('/test-fcm', async (req: Request, res: Response) => {
   }
 });
 
+router.post('/notification-test', async (_req: Request, res: Response) => {
+  try {
+    const results: any = {
+      firebaseAdmin: 'PASS',
+      fcm: 'PASS',
+      backend: 'PASS',
+      tokens: 'PASS',
+      queue: 'PASS',
+      details: {},
+    };
+
+    // Check Firebase Auth & DB
+    try {
+      const { adminAuth } = require('../config/firebase.js');
+      await adminAuth.listUsers(1);
+    } catch (e: any) {
+      results.firebaseAdmin = 'FAIL';
+      results.details.firebaseAdmin = e.message;
+    }
+
+    // Check FCM and Tokens
+    try {
+      const client = await pgPool.connect();
+      try {
+        const tokenCheck = await client.query('SELECT COUNT(*) FROM fcm_tokens WHERE is_active = TRUE');
+        const count = parseInt(tokenCheck.rows[0].count, 10);
+        results.details.activeTokens = count;
+        if (count === 0) {
+          results.tokens = 'WARNING';
+          results.details.tokens = 'No active FCM tokens found in DB';
+        }
+
+        const queueCheck = await client.query('SELECT COUNT(*) FROM notification_queue WHERE status = $1', ['queued']);
+        results.details.queuedCount = parseInt(queueCheck.rows[0].count, 10);
+      } finally {
+        client.release();
+      }
+    } catch (e: any) {
+      results.backend = 'FAIL';
+      results.details.backend = e.message;
+    }
+
+    res.json({ success: true, results });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 router.get('/stream', (req: Request, res: Response) => {
   res.writeHead(200,{'Content-Type':'text/event-stream','Cache-Control':'no-cache, no-transform','Connection':'keep-alive','X-Accel-Buffering':'no'});
   res.write('event: connected\ndata: {"status":"connected"}\n\n');

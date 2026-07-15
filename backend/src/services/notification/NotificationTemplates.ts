@@ -323,12 +323,12 @@ export class OwnerTemplates {
       customerName: string;
       orderNumber: string;
       totalAmount: number;
-      itemsCount: number;
+      items: string[];
       paymentMethod: string;
       deliveryAddress: string;
       phone?: string;
       distance?: string;
-      notes?: string;
+      orderTime: string;
       version?: number;
       notificationId?: string;
       // Sync fields
@@ -337,13 +337,18 @@ export class OwnerTemplates {
       eventTimestamp?: string;
     }
   ): NotificationPayload {
-    const title = `🍕 New Order — ₹${payload.totalAmount}`;
+    const title = `🍕 New Order Received`;
     const body = [
-      `#${payload.orderNumber} • ${payload.customerName} • ${payload.itemsCount} items`,
-      `${payload.paymentMethod}${payload.phone ? ` • 📞 ${payload.phone}` : ''}`,
-      `📍 ${payload.deliveryAddress}`,
-      progressBar('pending'),
-    ].join('\n');
+      `Order #${payload.orderNumber}`,
+      `Customer:\n${payload.customerName}`,
+      `Phone:\n${payload.phone || 'N/A'}`,
+      `Delivery Address:\n${payload.deliveryAddress}`,
+      `Items:\n${payload.items.slice(0, 5).map(item => `• ${item}`).join('\n')}${payload.items.length > 5 ? `\n• ... and ${payload.items.length - 5} more` : ''}`,
+      `Total:\n₹${payload.totalAmount}`,
+      `Payment:\n${payload.paymentMethod}`,
+      payload.distance ? `Estimated Distance:\n${payload.distance}` : '',
+      `Order Time:\n${payload.orderTime}`,
+    ].filter(Boolean).join('\n\n');
 
     return buildPayload(title, body, {
       tag: `order_owner_${orderId}`,

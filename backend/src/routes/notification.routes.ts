@@ -149,13 +149,16 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
         });
         await notificationQueue.enqueue(ev.order.firebaseUid, payload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: ev.version });
       }
-      // Update owner live card
+      // Update owner live card for ALL owners
+      const ownerIds = await getOwnerUserIds();
       const ownerPayload = OwnerTemplates.orderStatusUpdate(orderId, {
         orderNumber: ev.order.orderNumber, customerName: ev.order.contactPhone,
         status: 'accepted', totalAmount: ev.order.totalAmount, version: ev.version,
         eventId: ev.eventId, previousStatus: ev.previousStatus || undefined, eventTimestamp: ev.eventTimestamp,
       });
-      await notificationQueue.enqueue(userId, ownerPayload, 'normal', { tag: `order_owner_${orderId}`, orderId, category: 'order', version: ev.version });
+      for (const oid of ownerIds) {
+        await notificationQueue.enqueue(oid, ownerPayload, 'normal', { tag: `order_owner_${orderId}`, orderId, category: 'order', version: ev.version });
+      }
       responseData = { message: 'Order accepted' };
       res.json({ success: true, newStatus, ...responseData });
       await releaseOrderLock(orderId);
@@ -170,6 +173,16 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
         const payload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'cancelled', totalAmount: Number(order.total_amount), version: 2 });
         await notificationQueue.enqueue(customerFirebaseUid, payload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 2 });
       }
+
+      const ownerIds = await getOwnerUserIds();
+      const ownerPayload = OwnerTemplates.orderStatusUpdate(orderId, {
+        orderNumber: shortId, customerName: String(order.contact_phone),
+        status: 'cancelled', totalAmount: Number(order.total_amount), version: 2,
+      });
+      for (const oid of ownerIds) {
+        await notificationQueue.enqueue(oid, ownerPayload, 'normal', { tag: `order_owner_${orderId}`, orderId, category: 'order', version: 2 });
+      }
+
       responseData = { message: 'Order rejected' };
     }
 
@@ -554,7 +567,7 @@ router.get('/analytics', verifyToken, async (req: AuthRequest, res: Response): P
 
     const client = await pgPool.connect();
     try {
-      const [analytics, queueStats, tokenStats] = await Promise.all([
+      const [analytics, queueStats, tokenStats, deliveryLogs, activeOrders] = await Promise.all([
         client.query(
           `SELECT * FROM notification_analytics
            WHERE period_date >= CURRENT_DATE - INTERVAL '7 days'
@@ -566,12 +579,22 @@ router.get('/analytics', verifyToken, async (req: AuthRequest, res: Response): P
         client.query(
           `SELECT is_active, COUNT(*) as count FROM fcm_tokens GROUP BY is_active`
         ),
+        client.query(
+          `SELECT id, target_user_id, status, error_message, retry_count, created_at, updated_at 
+           FROM notification_queue 
+           ORDER BY created_at DESC LIMIT 50`
+        ),
+        client.query(
+          `SELECT COUNT(*) as count FROM orders WHERE status NOT IN ('delivered', 'completed', 'cancelled')`
+        ),
       ]);
 
       res.json({
         analytics: analytics.rows,
         queue: queueStats.rows,
         tokens: tokenStats.rows,
+        logs: deliveryLogs.rows,
+        activeOrders: parseInt(activeOrders.rows[0].count, 10) || 0,
       });
     } finally {
       client.release();

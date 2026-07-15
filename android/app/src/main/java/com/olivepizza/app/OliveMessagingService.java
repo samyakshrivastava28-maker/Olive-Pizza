@@ -17,6 +17,8 @@ import com.capacitorjs.plugins.pushnotifications.MessagingService;
 import com.google.firebase.messaging.RemoteMessage;
 
 import java.util.Map;
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 public class OliveMessagingService extends MessagingService {
     private static final String TAG = "OliveMessagingService";
@@ -131,6 +133,34 @@ public class OliveMessagingService extends MessagingService {
                 .setFullScreenIntent(pendingIntent, true) // Wake up screen
                 .setContentIntent(pendingIntent);
 
+        String actionsStr = data.get("actions");
+        if (actionsStr != null) {
+            try {
+                JSONArray actionsArr = new JSONArray(actionsStr);
+                for (int i = 0; i < actionsArr.length(); i++) {
+                    JSONObject actionObj = actionsArr.getJSONObject(i);
+                    String actionName = actionObj.getString("action");
+                    String actionTitle = actionObj.getString("title");
+
+                    Intent actionIntent = new Intent(this, NotificationActionReceiver.class);
+                    actionIntent.setAction(actionName);
+                    actionIntent.putExtra("orderId", orderId);
+                    actionIntent.putExtra("notificationId", notificationId);
+
+                    PendingIntent actionPendingIntent = PendingIntent.getBroadcast(
+                            this,
+                            orderId.hashCode() + i, // Unique request code per action
+                            actionIntent,
+                            PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT
+                    );
+
+                    builder.addAction(0, actionTitle, actionPendingIntent);
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Error parsing actions", e);
+            }
+        }
+
         notificationManager.notify(notificationId, builder.build());
     }
 
@@ -168,7 +198,7 @@ public class OliveMessagingService extends MessagingService {
         }
     }
 
-    private void stopAlarm() {
+    public static void stopAlarm() {
         if (mediaPlayer != null) {
             if (mediaPlayer.isPlaying()) {
                 mediaPlayer.stop();
