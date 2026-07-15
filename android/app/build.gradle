@@ -57,6 +57,9 @@ dependencies {
 
     // Truecaller SDK
     implementation 'com.truecaller.android.sdk:truecaller-sdk:2.7.0'
+
+    // Play Services Location (for Delivery Tracking Foreground Service)
+    implementation 'com.google.android.gms:play-services-location:21.3.0'
 }
 
 apply from: 'capacitor.build.gradle'
