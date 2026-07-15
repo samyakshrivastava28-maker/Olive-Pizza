@@ -37,7 +37,8 @@ public class OliveMessagingService extends MessagingService {
             
             if ("continuous".equals(data.get("alert"))) {
                 startAlarm(this, data.get("sound"));
-            } else if ("stop_alert".equals(data.get("action"))) {
+                showStandardNotification(data);
+            } else {
                 stopAlarm();
             }
 
@@ -94,6 +95,41 @@ public class OliveMessagingService extends MessagingService {
             notificationManager.notify(notificationId + 1, finalBuilder.build());
             return;
         }
+
+        notificationManager.notify(notificationId, builder.build());
+    }
+
+    private void showStandardNotification(Map<String, String> data) {
+        String orderId = data.get("orderId");
+        if (orderId == null) return;
+
+        int notificationId = orderId.hashCode() + 1000; // Offset to avoid colliding with ongoing
+        String title = data.get("title");
+        String body = data.get("body");
+        String channelId = "olive_orders_new";
+
+        NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel(channelId, "New Orders", NotificationManager.IMPORTANCE_HIGH);
+            notificationManager.createNotificationChannel(channel);
+        }
+
+        Intent intent = new Intent(this, MainActivity.class);
+        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        intent.putExtra("url", data.get("url"));
+        PendingIntent pendingIntent = PendingIntent.getActivity(this, notificationId, intent, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, channelId)
+                .setSmallIcon(getResources().getIdentifier("ic_stat_icon_config_sample", "drawable", getPackageName()))
+                .setContentTitle(title)
+                .setContentText(body)
+                .setStyle(new NotificationCompat.BigTextStyle().bigText(body))
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setCategory(NotificationCompat.CATEGORY_ALARM)
+                .setOngoing(false) // Not ongoing, but high priority
+                .setAutoCancel(true)
+                .setFullScreenIntent(pendingIntent, true) // Wake up screen
+                .setContentIntent(pendingIntent);
 
         notificationManager.notify(notificationId, builder.build());
     }

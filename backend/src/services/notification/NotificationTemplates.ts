@@ -256,9 +256,9 @@ function buildPayload(title: string, body: string, opts: BuildOptions): Notifica
     },
   };
 
-  // If ongoing is true, we want a DATA-ONLY push for Android so OliveMessagingService handles it.
+  // If ongoing is true or alert is continuous, we want a DATA-ONLY push for Android so OliveMessagingService handles it.
   // Standard notifications will include the root `notification` and `android.notification` blocks.
-  if (!opts.ongoing) {
+  if (!opts.ongoing && opts.alert !== 'continuous') {
     basePayload.notification = { title, body };
     basePayload.android.notification = {
       sound: soundFile,
