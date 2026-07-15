@@ -581,6 +581,48 @@ export default function OwnerNotificationDiagnostics() {
               }}
             />
             <TestBtn
+              label="Test Closed App Alert (10s delay)"
+              variant="success"
+              result={testResults['closed']}
+              onClick={async () => {
+                try {
+                  const token = await getAuthToken();
+                  const res = await fetch('/api/notifications/test-center', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                    body: JSON.stringify({ action: 'alarm', delayMs: 10000 }),
+                  });
+                  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                  toast.success('Close the app completely! Alarm will ring in 10s...');
+                  setTestResult('closed', 'success');
+                } catch (err: any) {
+                  toast.error(`Test failed: ${err.message}`);
+                  setTestResult('closed', 'failed');
+                }
+              }}
+            />
+            <TestBtn
+              label="Force Email Fallback"
+              variant="warning"
+              result={testResults['fallback']}
+              onClick={async () => {
+                try {
+                  const token = await getAuthToken();
+                  const res = await fetch('/api/notifications/test-center', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                    body: JSON.stringify({ action: 'force_email' }),
+                  });
+                  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                  toast.success('Test triggered. Check your backend logs and email!');
+                  setTestResult('fallback', 'success');
+                } catch (err: any) {
+                  toast.error(`Test failed: ${err.message}`);
+                  setTestResult('fallback', 'failed');
+                }
+              }}
+            />
+            <TestBtn
               label="Test Notification Channel"
               result={testResults['channel']}
               onClick={async () => {

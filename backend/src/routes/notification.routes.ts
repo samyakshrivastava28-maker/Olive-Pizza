@@ -802,4 +802,73 @@ router.post('/trigger-event', verifyToken, async (req: AuthRequest, res: Respons
   }
 });
 
+// =============================================================================
+// POST /notifications/test-center
+// Dedicated endpoint for testing the entire notification pipeline
+// =============================================================================
+router.post('/test-center', verifyToken, async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user!.uid;
+    const ownerDoc = await db.collection('users').doc(userId).get();
+    if (!ownerDoc.exists || ownerDoc.data()?.role !== 'owner') {
+      res.status(403).json({ error: 'Owner access required' });
+      return;
+    }
+
+    const { action, targetUserId, delayMs } = req.body;
+    let payload: any = {};
+    const tag = `test_center_${Date.now()}`;
+
+    // Basic payload builder for tests
+    const buildPayload = (title: string, body: string, isAlarm: boolean = false) => {
+      const p: any = {
+        notification: { title, body },
+        data: { category: 'test', action: 'test_action' }
+      };
+      if (isAlarm) {
+        p.data.alert = 'continuous';
+        p.data.sound = 'order_alert.mp3';
+        p.android = { priority: 'high' };
+      }
+      return p;
+    };
+
+    let targetId = targetUserId || userId;
+
+    if (action === 'owner') {
+      payload = buildPayload('Test Owner Notification', 'This is a standard push for the owner.');
+    } else if (action === 'customer') {
+      payload = buildPayload('Test Customer Notification', 'This is a standard push for the customer.');
+      payload.data.role = 'customer';
+    } else if (action === 'delivery') {
+      payload = buildPayload('Test Delivery Notification', 'This is a standard push for the delivery partner.');
+      payload.data.role = 'delivery';
+    } else if (action === 'alarm') {
+      payload = buildPayload('🚨 TEST ALARM 🚨', 'This should trigger the continuous ringtone and WakeLock.', true);
+    } else if (action === 'force_email') {
+      // Simulate by targeting a non-existent UID or removing tokens
+      payload = buildPayload('Email Fallback Test', 'This should fail FCM and fall back to email immediately.');
+      payload.data.role = 'customer'; 
+      payload.data.stage = 'update'; // Non-always stage
+      // Target a fake UUID to ensure 0 tokens
+      targetId = '00000000-0000-0000-0000-000000000000';
+    } else {
+      res.status(400).json({ error: 'Unknown test action' });
+      return;
+    }
+
+    if (delayMs && delayMs > 0) {
+      setTimeout(() => {
+        notificationQueue.enqueue(targetId, payload, 'high', { tag, category: 'test' }).catch(console.error);
+      }, delayMs);
+      res.json({ success: true, message: `Scheduled ${action} with ${delayMs}ms delay.` });
+    } else {
+      const queueId = await notificationQueue.enqueue(targetId, payload, 'high', { tag, category: 'test' });
+      res.json({ success: true, queueId, message: `Queued ${action} immediately.` });
+    }
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;

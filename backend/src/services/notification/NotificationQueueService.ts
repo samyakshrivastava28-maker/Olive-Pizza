@@ -61,8 +61,11 @@ class EmailRulesEngine {
    * @param fcmSuccess   - Whether FCM push succeeded (>0 tokens received)
    * @returns true if email should be sent
    */
-  static shouldSend(role: string, stage: string, fcmSuccess: boolean): boolean {
-    // Owner and Delivery: NEVER get operational emails
+  static shouldSend(role: string, stage: string, fcmSuccess: boolean, isFinalFailure: boolean = false): boolean {
+    // If Push completely fails (all retries exhausted or 0 tokens), ALWAYS fallback to email
+    if (isFinalFailure) return true;
+
+    // Owner and Delivery: NEVER get operational emails UNLESS it's a hard fallback (above)
     if (NO_EMAIL_ROLES.has(role)) return false;
 
     // Customer: Always send transactional emails for critical stages
@@ -343,8 +346,8 @@ export class NotificationQueueService {
 
       // ── No tokens path ────────────────────────────────────────────────────
       if (tokens.length === 0) {
-        // Conditional fallback email for non-always stages
-        if (!alwaysEmail && EmailRulesEngine.shouldSend(role, stage, false) && userEmail) {
+        // Hard fallback: 0 tokens means instant final failure
+        if (!alwaysEmail && EmailRulesEngine.shouldSend(role, stage, false, true) && userEmail) {
           try {
             const subject = parsedPayload.data?.title || `Order Update — Olive Pizza`;
             const htmlBody = buildOrderStatusEmail({
@@ -352,7 +355,7 @@ export class NotificationQueueService {
               data: parsedPayload.data || {},
             });
             await queueEmail(userEmail, subject, htmlBody, 'transactional');
-            console.log(`[NotifQueue] 📧 Fallback email (no tokens) → ${userEmail} stage=${stage}`);
+            console.log(`[NotifQueue] 📧 Hard fallback email (0 tokens) → ${userEmail} stage=${stage}`);
           } catch (emailErr) {
             console.error('[NotifQueue] Fallback email failed:', emailErr);
           }
@@ -373,6 +376,13 @@ export class NotificationQueueService {
       if (priority === 'silent') delete parsedPayload.notification;
 
       // ── Send via FCM Multicast ────────────────────────────────────────────
+      // Ensure Android wakes up custom service
+      if (parsedPayload.android) {
+        parsedPayload.android.priority = 'high';
+      } else {
+        parsedPayload.android = { priority: 'high' };
+      }
+
       const message: admin.messaging.MulticastMessage = {
         tokens,
         notification: parsedPayload.notification,
@@ -416,21 +426,8 @@ export class NotificationQueueService {
 
       const successCount = response.successCount;
 
-      // ── FCM failed — conditional email fallback ───────────────────────────
+      // ── FCM failed — throw to trigger retry ───────────────────────────
       if (successCount === 0 && tokens.length > 0) {
-        if (!alwaysEmail && EmailRulesEngine.shouldSend(role, stage, false) && userEmail) {
-          try {
-            const subject = parsedPayload.data?.title || `Order Update — Olive Pizza`;
-            const htmlBody = buildOrderStatusEmail({
-              customerName, subject, stage, orderId: order_id,
-              data: parsedPayload.data || {},
-            });
-            await queueEmail(userEmail, subject, htmlBody, 'transactional');
-            console.log(`[NotifQueue] 📧 FCM-fail fallback email → ${userEmail} stage=${stage}`);
-          } catch (emailErr) {
-            console.error('[NotifQueue] FCM-fail email failed:', emailErr);
-          }
-        }
         throw new Error('All FCM tokens failed');
       }
 
@@ -448,12 +445,43 @@ export class NotificationQueueService {
       const newRetryCount = (retry_count || 0) + 1;
 
       if (newRetryCount >= 3) {
+        // ── Final failure: queue fallback email ─────────────────────────
+        const parsedPayload = typeof payload === 'string' ? JSON.parse(payload) : payload;
+        const role = parsedPayload.data?.role || 'customer';
+        const stage = parsedPayload.data?.stage || parsedPayload.data?.currentStatus || category || 'update';
+        const alwaysEmail = EmailRulesEngine.isAlwaysEmail(role, stage);
+        const userResult = await client.query(`SELECT email, name FROM users WHERE id = $1`, [target_user_id]);
+        const userEmail = userResult.rows[0]?.email || null;
+        const customerName = userResult.rows[0]?.name || 'Customer';
+
+        if (!alwaysEmail && EmailRulesEngine.shouldSend(role, stage, false, true) && userEmail) {
+          try {
+            const subject = parsedPayload.data?.title || `Order Update — Olive Pizza`;
+            const htmlBody = buildOrderStatusEmail({
+              customerName, subject, stage, orderId: order_id,
+              data: parsedPayload.data || {},
+            });
+            await queueEmail(userEmail, subject, htmlBody, 'transactional');
+            console.log(`[NotifQueue] 📧 Hard fallback email (after 3 retries) → ${userEmail} stage=${stage}`);
+          } catch (emailErr) {
+            console.error('[NotifQueue] Fallback email failed:', emailErr);
+          }
+        }
+
+        // Log to history and dead letter queue
         await client.query(
           `INSERT INTO notification_history (target_user_id, title, body, category, status)
            SELECT target_user_id, payload->'notification'->>'title', payload->'notification'->>'body', category, 'failed'
            FROM notification_queue WHERE id = $1 ON CONFLICT DO NOTHING`,
           [id]
         ).catch(() => {});
+        
+        await client.query(
+          `INSERT INTO dead_letter_queue (original_queue_id, recipient, subject, payload, final_error)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [id, target_user_id, parsedPayload.data?.title || 'Push Failed', JSON.stringify(payload), error.message]
+        ).catch(() => {});
+
         await client.query(`DELETE FROM notification_queue WHERE id = $1`, [id]);
         await this.recordAnalytic(client, category || 'general', 'failed', 1);
         notificationDebugger.updateStage(id, 'Failed', { error: error.message, status: 'failed' }).catch(() => {});
