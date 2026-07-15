@@ -94,6 +94,17 @@ function TestBtn({
   );
 }
 
+function StatusRow({ label, value, isGood }: { label: string; value: string | number; isGood?: boolean }) {
+  return (
+    <div className="bg-slate-800 rounded-xl p-4 flex justify-between items-center">
+      <span className="text-slate-400 text-sm font-medium">{label}</span>
+      <span className={`text-sm font-bold ${isGood === undefined ? 'text-white' : isGood ? 'text-green-400' : 'text-red-400'}`}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface DiagnosticState {
   // Device
@@ -306,7 +317,8 @@ export default function OwnerNotificationDiagnostics() {
         }
       } catch {}
 
-      setDiag({
+      setDiag(prev => ({
+        ...prev,
         platform,
         isNative,
         isPlayServicesAvailable,
@@ -321,7 +333,7 @@ export default function OwnerNotificationDiagnostics() {
         lastNotificationSent: backend?.lastSentAt ?? null,
         lastNotificationReceived: backend?.lastReceivedAt ?? null,
         failedNotifications: backend?.failedCount ?? 0,
-      });
+      }));
     } catch (err) {
       console.error('[Diagnostics] Error gathering status:', err);
     } finally {

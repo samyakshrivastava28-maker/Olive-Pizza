@@ -737,10 +737,11 @@ router.post('/trigger-event', verifyToken, async (req: AuthRequest, res: Respons
         customerName: order.customerName || 'Customer',
         orderNumber: shortId,
         totalAmount,
-        itemsCount: order.items?.length || 0,
+        items: Array.isArray(order.items) ? order.items.map((i: any) => `${i.quantity}x ${i.name}`) : [],
         paymentMethod: order.paymentMethod || 'COD',
         deliveryAddress,
         phone: contactPhone,
+        orderTime: order.createdAt || new Date().toISOString(),
         version: 1
       });
       for (const ownerId of ownerIds) {
