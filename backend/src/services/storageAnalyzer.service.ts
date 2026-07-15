@@ -356,7 +356,7 @@ export class StorageAnalyzerService {
       // Assume a notification_history or push_queue table exists. We'll check sizes safely.
       let size = 0;
       try {
-        const res = await client.query('SELECT pg_total_relation_size(\\\'notifications\\\') as size;');
+        const res = await client.query('SELECT pg_total_relation_size(\\\'notification_queue\\\') as size;');
         size = parseInt(res.rows[0].size, 10) || 0;
       } catch (e) {
         // Ignore if table missing
