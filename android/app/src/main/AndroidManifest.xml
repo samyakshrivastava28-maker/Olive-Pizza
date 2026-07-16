@@ -44,8 +44,9 @@
         <!-- Custom FirebaseMessagingService for Background Alarm -->
         <service
             android:name=".OliveMessagingService"
+            android:directBootAware="true"
             android:exported="true">
-            <intent-filter android:priority="100">
+            <intent-filter android:priority="999">
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />
             </intent-filter>
         </service>
@@ -59,6 +60,7 @@
         <!-- Receiver for Notification Action Buttons -->
         <receiver
             android:name=".NotificationActionReceiver"
+            android:directBootAware="true"
             android:exported="false" />
 
     </application>

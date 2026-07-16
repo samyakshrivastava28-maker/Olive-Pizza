@@ -21,27 +21,49 @@ import java.util.Map;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import android.os.PowerManager;
+
 public class OliveMessagingService extends MessagingService {
     private static final String TAG = "OliveMessagingService";
 
     @Override
     public void onMessageReceived(@NonNull RemoteMessage remoteMessage) {
-        // Let Capacitor do its thing (JS foreground events)
-        super.onMessageReceived(remoteMessage);
-        
         Log.d(TAG, "From: " + remoteMessage.getFrom());
 
-        // We ALSO intercept data payloads for background alarms and ongoing notifications
-        if (remoteMessage.getData().size() > 0) {
-            Log.d(TAG, "Message data payload: " + remoteMessage.getData());
-            Map<String, String> data = remoteMessage.getData();
-            
-            if ("continuous".equals(data.get("alert")) || "true".equals(data.get("ongoing"))) {
-                showNativeNotification(data);
-            } else if (data.containsKey("action") && "stop_alert".equals(data.get("action"))) {
-                // If a stop alert is sent
-                stopNativeAlarm(data);
+        // 1. Acquire Partial WakeLock to ensure CPU doesn't sleep while processing
+        PowerManager powerManager = (PowerManager) getSystemService(Context.POWER_SERVICE);
+        PowerManager.WakeLock wakeLock = null;
+        if (powerManager != null) {
+            wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "OlivePizza::NotificationWakeLock");
+            wakeLock.acquire(10000); // 10 seconds max
+        }
+
+        try {
+            // 2. We intercept data payloads for background alarms and ongoing notifications FIRST
+            if (remoteMessage.getData().size() > 0) {
+                Log.d(TAG, "Message data payload: " + remoteMessage.getData());
+                Map<String, String> data = remoteMessage.getData();
+                
+                if ("continuous".equals(data.get("alert")) || "true".equals(data.get("ongoing"))) {
+                    showNativeNotification(data);
+                } else if (data.containsKey("action") && "stop_alert".equals(data.get("action"))) {
+                    stopNativeAlarm(data);
+                }
             }
+        } catch (Exception e) {
+            Log.e(TAG, "Error processing native notification", e);
+        } finally {
+            if (wakeLock != null && wakeLock.isHeld()) {
+                wakeLock.release();
+            }
+        }
+
+        // 3. Let Capacitor do its thing (JS foreground events) LAST
+        // Wrapped in try-catch because if app is swiped away (dead), Capacitor might crash trying to init the JS bridge.
+        try {
+            super.onMessageReceived(remoteMessage);
+        } catch (Exception e) {
+            Log.e(TAG, "Capacitor MessagingService failed (expected if app is closed)", e);
         }
     }
 
@@ -89,6 +111,7 @@ public class OliveMessagingService extends MessagingService {
                     }
                 }
                 channel.enableVibration(true);
+                channel.setBypassDnd(true); // Ensure alarms bypass Do Not Disturb
                 notificationManager.createNotificationChannel(channel);
             }
         }

@@ -8,6 +8,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
 import android.widget.Toast;
+import android.os.PowerManager;
 
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
@@ -22,7 +23,7 @@ public class NotificationActionReceiver extends BroadcastReceiver {
     private static final String TAG = "NotificationAction";
     // Using relative path isn't possible here natively without build config, so we use the prod URL.
     // In a real app this would be injected via BuildConfig.
-    private static final String BACKEND_URL = "https://olive-pizza-backend.onrender.com/api/notification/action";
+    private static final String BACKEND_URL = "https://olive-pizza-backend.onrender.com/api/notifications/action";
 
     @Override
     public void onReceive(Context context, Intent intent) {
@@ -64,6 +65,15 @@ public class NotificationActionReceiver extends BroadcastReceiver {
     }
 
     private void performBackendAction(Context context, String action, String orderId, int notificationId, String token, PendingResult pendingResult) {
+        // Acquire WakeLock for backend call
+        PowerManager powerManager = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
+        PowerManager.WakeLock wakeLock = null;
+        if (powerManager != null) {
+            wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "OlivePizza::ActionReceiverWakeLock");
+            wakeLock.acquire(15000); // Max 15s for network call
+        }
+        final PowerManager.WakeLock finalWakeLock = wakeLock;
+
         new Thread(() -> {
             HttpURLConnection conn = null;
             try {
@@ -98,15 +108,17 @@ public class NotificationActionReceiver extends BroadcastReceiver {
                 } else {
                     showToast(context, "Action failed: Server error (" + responseCode + "). Open the app to complete.");
                 }
-
             } catch (Exception e) {
-                Log.e(TAG, "Exception during backend action", e);
-                showToast(context, "Network error. Please open the app to complete.");
+                Log.e(TAG, "Error performing action", e);
+                showToast(context, "Network error. Open the app to complete.");
             } finally {
                 if (conn != null) {
                     conn.disconnect();
                 }
                 pendingResult.finish();
+                if (finalWakeLock != null && finalWakeLock.isHeld()) {
+                    finalWakeLock.release();
+                }
             }
         }).start();
     }
