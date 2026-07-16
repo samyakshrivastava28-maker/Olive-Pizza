@@ -6,7 +6,7 @@ export interface NotificationOptions {
   tag?: string;
   orderId?: string;
   category?: string;
-  priority?: 'normal' | 'high' | 'critical';
+  priority?: 'normal' | 'high' | 'critical' | 'silent';
   version?: number;
   expiresInSeconds?: number;
 }
@@ -15,14 +15,14 @@ export class DirectNotificationService {
   /**
    * Instantly push a notification to a single user without queuing.
    */
-  public async sendPush(firebaseUserId: string, payload: any, priorityOverride?: 'normal' | 'high' | 'critical', options: NotificationOptions = {}): Promise<void> {
+  public async sendPush(firebaseUserId: string, payload: any, priorityOverride?: 'normal' | 'high' | 'critical' | 'silent', options: NotificationOptions = {}): Promise<void> {
     await this.sendBulkPush([firebaseUserId], payload, priorityOverride, options);
   }
 
   /**
    * Instantly push a notification to multiple users, chunking by 500 tokens.
    */
-  public async sendBulkPush(firebaseUserIds: string[], payload: any, priorityOverride?: 'normal' | 'high' | 'critical', options: NotificationOptions = {}): Promise<void> {
+  public async sendBulkPush(firebaseUserIds: string[], payload: any, priorityOverride?: 'normal' | 'high' | 'critical' | 'silent', options: NotificationOptions = {}): Promise<void> {
     if (!firebaseUserIds || firebaseUserIds.length === 0) return;
 
     const client = await pgPool.connect();

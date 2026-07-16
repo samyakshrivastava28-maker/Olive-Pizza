@@ -22,6 +22,7 @@ import { pgPool } from '../config/postgres.js';
 import { notificationScheduler } from '../services/notification/NotificationScheduler.js';
 import { OwnerTemplates, CustomerTemplates, DeliveryTemplates, MarketingTemplates, type OrderStatus } from '../services/notification/NotificationTemplates.js';
 import { directNotification } from '../services/notification/DirectNotificationService.js';
+import { notificationQueue } from '../services/notification/NotificationQueueService.js';
 import { verifyToken, AuthRequest } from '../middleware/auth.middleware.js';
 import { orderEventService } from '../services/order/OrderEventService.js';
 import { queueEmail } from '../services/email.service.js';
