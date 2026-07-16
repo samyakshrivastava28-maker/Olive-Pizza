@@ -105,7 +105,8 @@ export class NotificationScheduler {
       }
       
       // Enqueue the notification instead of sending directly
-      const queueId = await directNotification.sendPush(userId, payloadCopy, priority);
+      await directNotification.sendPush(userId, payloadCopy, priority);
+      const queueId = 'direct-push';
       
       if (notificationId) {
         await notificationDebugger.updateStage(notificationId, 'Queued', { queueId });
