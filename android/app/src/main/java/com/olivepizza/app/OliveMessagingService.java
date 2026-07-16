@@ -1,13 +1,14 @@
 package com.olivepizza.app;
 
+import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
-import android.media.MediaPlayer;
+import android.media.AudioAttributes;
+import android.net.Uri;
 import android.os.Build;
-import android.os.PowerManager;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -22,8 +23,6 @@ import org.json.JSONObject;
 
 public class OliveMessagingService extends MessagingService {
     private static final String TAG = "OliveMessagingService";
-    private static MediaPlayer mediaPlayer;
-    private static PowerManager.WakeLock wakeLock;
 
     @Override
     public void onMessageReceived(@NonNull RemoteMessage remoteMessage) {
@@ -37,83 +36,61 @@ public class OliveMessagingService extends MessagingService {
             Log.d(TAG, "Message data payload: " + remoteMessage.getData());
             Map<String, String> data = remoteMessage.getData();
             
-            if ("continuous".equals(data.get("alert"))) {
-                startAlarm(this, data.get("sound"));
-                showStandardNotification(data);
-            } else {
-                stopAlarm();
-            }
-
-            if ("true".equals(data.get("ongoing"))) {
-                showOngoingNotification(data);
+            if ("continuous".equals(data.get("alert")) || "true".equals(data.get("ongoing"))) {
+                showNativeNotification(data);
+            } else if (data.containsKey("action") && "stop_alert".equals(data.get("action"))) {
+                // If a stop alert is sent
+                stopNativeAlarm(data);
             }
         }
     }
 
-    private void showOngoingNotification(Map<String, String> data) {
+    private void showNativeNotification(Map<String, String> data) {
         String orderId = data.get("orderId");
         if (orderId == null) return;
+
+        boolean isOngoing = "true".equals(data.get("ongoing"));
+        boolean isContinuous = "continuous".equals(data.get("alert"));
         
-        int notificationId = orderId.hashCode();
+        // Ongoing tracker uses same ID. Alarms use offset to not collide.
+        int notificationId = isOngoing ? orderId.hashCode() : (orderId.hashCode() + 1000);
+        
         String title = data.get("title");
         String body = data.get("body");
-        String channelId = "olive_orders_ongoing"; // Needs to be created if not exists
+        String soundName = data.get("sound");
+        
+        // Use v2 channels to guarantee sound configuration applies
+        String baseChannelId = data.get("channelId");
+        if (baseChannelId == null) {
+            baseChannelId = isOngoing ? "olive_orders_ongoing" : "olive_orders_new";
+        }
+        String channelId = baseChannelId + "_v2";
 
         NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        
+        // Create Channel with Sound
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationChannel channel = new NotificationChannel(channelId, "Live Orders", NotificationManager.IMPORTANCE_DEFAULT);
-            notificationManager.createNotificationChannel(channel);
-        }
-
-        Intent intent = new Intent(this, MainActivity.class);
-        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
-        intent.putExtra("url", "/customer/orders/" + orderId);
-        PendingIntent pendingIntent = PendingIntent.getActivity(this, notificationId, intent, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
-
-        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, channelId)
-                .setSmallIcon(getResources().getIdentifier("ic_stat_icon_config_sample", "drawable", getPackageName())) // Or use default push icon
-                .setContentTitle(title)
-                .setContentText(body)
-                .setStyle(new NotificationCompat.BigTextStyle().bigText(body))
-                .setOngoing(true)
-                .setOnlyAlertOnce(true)
-                .setContentIntent(pendingIntent);
-
-        // Cancel if delivered or cancelled and show a dismissable notification
-        String status = data.get("stage");
-        if ("delivered".equals(status) || "cancelled".equals(status) || "completed".equals(status)) {
-            notificationManager.cancel(notificationId);
-            
-            // Create a new NON-ongoing notification for the final status
-            NotificationCompat.Builder finalBuilder = new NotificationCompat.Builder(this, channelId)
-                    .setSmallIcon(getResources().getIdentifier("ic_stat_icon_config_sample", "drawable", getPackageName()))
-                    .setContentTitle(title)
-                    .setContentText(body)
-                    .setStyle(new NotificationCompat.BigTextStyle().bigText(body))
-                    .setOngoing(false)
-                    .setAutoCancel(true)
-                    .setContentIntent(pendingIntent);
-                    
-            notificationManager.notify(notificationId + 1, finalBuilder.build());
-            return;
-        }
-
-        notificationManager.notify(notificationId, builder.build());
-    }
-
-    private void showStandardNotification(Map<String, String> data) {
-        String orderId = data.get("orderId");
-        if (orderId == null) return;
-
-        int notificationId = orderId.hashCode() + 1000; // Offset to avoid colliding with ongoing
-        String title = data.get("title");
-        String body = data.get("body");
-        String channelId = "olive_orders_new";
-
-        NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationChannel channel = new NotificationChannel(channelId, "New Orders", NotificationManager.IMPORTANCE_HIGH);
-            notificationManager.createNotificationChannel(channel);
+            NotificationChannel channel = notificationManager.getNotificationChannel(channelId);
+            if (channel == null) {
+                int importance = isContinuous ? NotificationManager.IMPORTANCE_MAX : 
+                                 (isOngoing ? NotificationManager.IMPORTANCE_DEFAULT : NotificationManager.IMPORTANCE_HIGH);
+                channel = new NotificationChannel(channelId, channelId.replace("_", " "), importance);
+                
+                if (soundName != null && !soundName.isEmpty() && !"default".equals(soundName)) {
+                    String cleanSoundName = soundName.contains(".") ? soundName.split("\\.")[0] : soundName;
+                    int resId = getResources().getIdentifier(cleanSoundName, "raw", getPackageName());
+                    if (resId != 0) {
+                        Uri soundUri = Uri.parse("android.resource://" + getPackageName() + "/" + resId);
+                        AudioAttributes audioAttributes = new AudioAttributes.Builder()
+                                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                                .setUsage(isContinuous ? AudioAttributes.USAGE_ALARM : AudioAttributes.USAGE_NOTIFICATION)
+                                .build();
+                        channel.setSound(soundUri, audioAttributes);
+                    }
+                }
+                channel.enableVibration(true);
+                notificationManager.createNotificationChannel(channel);
+            }
         }
 
         Intent intent = new Intent(this, MainActivity.class);
@@ -126,13 +103,26 @@ public class OliveMessagingService extends MessagingService {
                 .setContentTitle(title)
                 .setContentText(body)
                 .setStyle(new NotificationCompat.BigTextStyle().bigText(body))
-                .setPriority(NotificationCompat.PRIORITY_HIGH)
-                .setCategory(NotificationCompat.CATEGORY_ALARM)
-                .setOngoing(false) // Not ongoing, but high priority
-                .setAutoCancel(true)
-                .setFullScreenIntent(pendingIntent, true) // Wake up screen
                 .setContentIntent(pendingIntent);
 
+        if (isOngoing) {
+            builder.setOngoing(true).setOnlyAlertOnce(true);
+            
+            String status = data.get("stage");
+            if ("delivered".equals(status) || "cancelled".equals(status) || "completed".equals(status)) {
+                notificationManager.cancel(notificationId);
+                builder.setOngoing(false).setAutoCancel(true);
+                notificationManager.notify(notificationId + 1, builder.build());
+                return;
+            }
+        } else {
+            builder.setPriority(NotificationCompat.PRIORITY_MAX)
+                   .setCategory(NotificationCompat.CATEGORY_ALARM)
+                   .setAutoCancel(true)
+                   .setFullScreenIntent(pendingIntent, true);
+        }
+
+        // Actions
         String actionsStr = data.get("actions");
         if (actionsStr != null) {
             try {
@@ -149,11 +139,10 @@ public class OliveMessagingService extends MessagingService {
 
                     PendingIntent actionPendingIntent = PendingIntent.getBroadcast(
                             this,
-                            orderId.hashCode() + i, // Unique request code per action
+                            orderId.hashCode() + i,
                             actionIntent,
                             PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT
                     );
-
                     builder.addAction(0, actionTitle, actionPendingIntent);
                 }
             } catch (Exception e) {
@@ -161,56 +150,34 @@ public class OliveMessagingService extends MessagingService {
             }
         }
 
-        notificationManager.notify(notificationId, builder.build());
+        Notification notification = builder.build();
+        
+        if (isContinuous) {
+            notification.flags |= Notification.FLAG_INSISTENT; // Continuous loop sound!
+        }
+
+        notificationManager.notify(notificationId, notification);
+    }
+    
+    private void stopNativeAlarm(Map<String, String> data) {
+        String orderId = data.get("orderId");
+        if (orderId != null) {
+            int notificationId = orderId.hashCode() + 1000;
+            NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            notificationManager.cancel(notificationId);
+        }
     }
 
-    private void startAlarm(Context context, String soundName) {
-        try {
-            stopAlarm(); // Stop any existing alarm
-
-            PowerManager pm = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
-            if (pm != null) {
-                wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK |
-                        PowerManager.ACQUIRE_CAUSES_WAKEUP |
-                        PowerManager.ON_AFTER_RELEASE, "OlivePizza::AlarmWakeLock");
-                wakeLock.acquire(10 * 60 * 1000L /*10 minutes*/);
-            }
-
-            int resId = context.getResources().getIdentifier("order_alert", "raw", context.getPackageName());
-            if (soundName != null && soundName.contains(".")) {
-                String name = soundName.split("\\.")[0];
-                int specificResId = context.getResources().getIdentifier(name, "raw", context.getPackageName());
-                if (specificResId != 0) resId = specificResId;
-            }
-
-            if (resId != 0) {
-                mediaPlayer = MediaPlayer.create(context, resId);
-                if (mediaPlayer != null) {
-                    mediaPlayer.setLooping(true);
-                    mediaPlayer.start();
-                    Log.d(TAG, "Alarm started");
-                }
-            } else {
-                Log.e(TAG, "Sound resource not found");
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "Error starting alarm", e);
+    // Static helper for NotificationActionReceiver to cancel
+    public static void stopAlarm(Context context, int notificationId) {
+        NotificationManager notificationManager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+        if (notificationManager != null) {
+            notificationManager.cancel(notificationId);
         }
     }
 
     public static void stopAlarm() {
-        if (mediaPlayer != null) {
-            if (mediaPlayer.isPlaying()) {
-                mediaPlayer.stop();
-            }
-            mediaPlayer.release();
-            mediaPlayer = null;
-            Log.d(TAG, "Alarm stopped");
-        }
-        if (wakeLock != null && wakeLock.isHeld()) {
-            wakeLock.release();
-            wakeLock = null;
-        }
+        // Fallback for any lingering calls that expected the old parameterless stopAlarm()
     }
 
     @Override
@@ -219,3 +186,4 @@ public class OliveMessagingService extends MessagingService {
         Log.d(TAG, "Refreshed token: " + token);
     }
 }
+

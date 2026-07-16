@@ -15,6 +15,7 @@ public class DeliveryPlugin extends Plugin {
     public void startTracking(PluginCall call) {
         String orderId = call.getString("orderId");
         String token = call.getString("token");
+        String apiUrl = call.getString("apiUrl", "https://olive-pizza-backend.onrender.com/api/delivery/location");
 
         if (orderId == null || token == null) {
             call.reject("Must provide orderId and token");
@@ -25,6 +26,7 @@ public class DeliveryPlugin extends Plugin {
         Intent intent = new Intent(context, DeliveryLocationService.class);
         intent.putExtra("orderId", orderId);
         intent.putExtra("token", token);
+        intent.putExtra("apiUrl", apiUrl);
         
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
             context.startForegroundService(intent);

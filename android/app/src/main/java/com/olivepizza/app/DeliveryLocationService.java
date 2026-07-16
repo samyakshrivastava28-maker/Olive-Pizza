@@ -40,6 +40,7 @@ public class DeliveryLocationService extends Service {
     private LocationCallback locationCallback;
     private String orderId;
     private String token;
+    private String apiUrl;
     
     // For local queue
     private String lastLocationCache = null;
@@ -63,6 +64,10 @@ public class DeliveryLocationService extends Service {
         if (intent != null) {
             orderId = intent.getStringExtra("orderId");
             token = intent.getStringExtra("token");
+            apiUrl = intent.getStringExtra("apiUrl");
+            if (apiUrl == null) {
+                apiUrl = "https://olive-pizza-backend.onrender.com/api/delivery/location";
+            }
         }
 
         Notification notification = createNotification();
@@ -112,10 +117,7 @@ public class DeliveryLocationService extends Service {
         new Thread(() -> {
             HttpURLConnection conn = null;
             try {
-                // Hardcoded backend URL, you might want to pass this from JS via intent
-                URL url = new URL("https://olive-pizza-backend.vercel.app/api/delivery/location"); 
-                // Or "http://10.0.2.2:3000/api/delivery/location" if testing locally. 
-                // Let's pass it via intent.
+                URL url = new URL(apiUrl); 
                 
                 conn = (HttpURLConnection) url.openConnection();
                 conn.setRequestMethod("POST");

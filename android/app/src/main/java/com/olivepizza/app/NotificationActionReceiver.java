@@ -37,7 +37,9 @@ public class NotificationActionReceiver extends BroadcastReceiver {
         Log.d(TAG, "Received action: " + action + " for order: " + orderId);
 
         // For instantly stopping the alarm on this device before the network call completes
-        OliveMessagingService.stopAlarm();
+        if (notificationId != -1) {
+            OliveMessagingService.stopAlarm(context, notificationId);
+        }
 
         final PendingResult pendingResult = goAsync();
 

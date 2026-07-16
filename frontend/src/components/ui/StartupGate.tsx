@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNetworkStore } from '../../lib/networkQuality';
+import { getAuth } from 'firebase/auth';
 
 interface StartupGateProps {
   children: React.ReactNode;
@@ -10,17 +11,27 @@ export default function StartupGate({ children }: StartupGateProps) {
   const [videoFading, setVideoFading] = useState(false);
   const [deviceType, setDeviceType] = useState<'mobile' | 'tablet' | 'desktop'>('desktop');
   const [videoReady, setVideoReady] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const playStarted = useRef(false);
+
+  const logDiagnostic = (reason: string, details?: any) => {
+    const auth = getAuth();
+    const userId = auth.currentUser?.uid || 'anonymous';
+    const timestamp = new Date().toISOString();
+    console.log(`[StartupGate] [${timestamp}] User: ${userId} | Reason: ${reason}`, details || '');
+  };
 
   useEffect(() => {
     // Check session storage to see if we already played it in this browser tab session
     const hasPlayed = sessionStorage.getItem('startup_video_played');
     if (!hasPlayed) {
+      logDiagnostic("Initializing intro video");
       setShowVideo(true);
       document.body.style.overflow = "hidden";
       
       // Strict fallback timer — if video hangs or network drops, force skip to prevent black screens
       const fallbackTimer = setTimeout(() => {
-        console.warn("Startup video timed out, forcing skip.");
+        logDiagnostic("Startup video timed out, forcing skip.", { timeout: 4500 });
         handleVideoEnd();
       }, 4500);
       
@@ -36,6 +47,27 @@ export default function StartupGate({ children }: StartupGateProps) {
     else if (w < 1024) setDeviceType('tablet');
     else setDeviceType('desktop');
   }, []);
+
+  useEffect(() => {
+    if (showVideo && videoRef.current && !playStarted.current) {
+      playStarted.current = true;
+      const video = videoRef.current;
+      
+      logDiagnostic("Attempting video play()");
+      const playPromise = video.play();
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            logDiagnostic("Video autoplay started successfully");
+          })
+          .catch((error) => {
+            logDiagnostic("Video autoplay rejected or failed", error);
+            // Instantly dismiss if autoplay is blocked
+            handleVideoEnd();
+          });
+      }
+    }
+  }, [showVideo, videoReady]);
 
   const getOptimizedIntroUrls = () => {
     const base = "https://res.cloudinary.com/dxmlvkff1/video/upload";
@@ -70,6 +102,7 @@ export default function StartupGate({ children }: StartupGateProps) {
   const handleVideoEnd = () => {
     if (videoFading || !showVideo) return;
     
+    logDiagnostic("Ending video");
     setVideoFading(true);
     document.body.style.overflow = "";
     sessionStorage.setItem('startup_video_played', 'true');
@@ -103,15 +136,20 @@ export default function StartupGate({ children }: StartupGateProps) {
           />
 
           <video
+            ref={videoRef}
             src={videoUrl}
             autoPlay
             playsInline
             muted
+            preload="auto"
             poster={posterUrl}
             onEnded={handleVideoEnd}
             onCanPlay={() => setVideoReady(true)}
             onPlaying={() => setVideoReady(true)}
-            onError={handleVideoEnd} // Skip if video fails to load entirely
+            onError={(e) => {
+              logDiagnostic("Video onError fired", e);
+              handleVideoEnd();
+            }} // Skip if video fails to load entirely
             className={`absolute inset-0 w-full h-full object-cover z-20 transition-opacity duration-500 ${videoReady ? 'opacity-100' : 'opacity-0'}`}
           />
         </div>
@@ -119,3 +157,4 @@ export default function StartupGate({ children }: StartupGateProps) {
     </>
   );
 }
+
