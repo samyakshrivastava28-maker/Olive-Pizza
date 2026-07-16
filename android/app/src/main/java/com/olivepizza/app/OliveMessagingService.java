@@ -86,7 +86,7 @@ public class OliveMessagingService extends MessagingService {
         if (baseChannelId == null) {
             baseChannelId = isOngoing ? "olive_orders_ongoing" : "olive_orders_new";
         }
-        String channelId = baseChannelId + "_v2";
+        String channelId = baseChannelId + "_v3";
 
         NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         
