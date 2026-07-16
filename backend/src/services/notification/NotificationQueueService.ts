@@ -89,10 +89,7 @@ export class NotificationQueueService {
   private processingTimer: NodeJS.Timeout | null = null;
 
   constructor() {
-    // Fallback cleanup every 15 minutes
-    setInterval(() => this.runCleanup(), 15 * 60 * 1000);
-    // Fallback queue processor every 10 seconds
-    setInterval(() => this.processQueue(), 10 * 1000);
+    // Background processors disabled. We now use DirectNotificationService for instant FCM delivery.
   }
 
   // ─── Public API ──────────────────────────────────────────────────────────────

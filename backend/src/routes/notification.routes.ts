@@ -21,7 +21,7 @@ import * as admin from 'firebase-admin';
 import { pgPool } from '../config/postgres.js';
 import { notificationScheduler } from '../services/notification/NotificationScheduler.js';
 import { OwnerTemplates, CustomerTemplates, DeliveryTemplates, MarketingTemplates, type OrderStatus } from '../services/notification/NotificationTemplates.js';
-import { notificationQueue } from '../services/notification/NotificationQueueService.js';
+import { directNotification } from '../services/notification/DirectNotificationService.js';
 import { verifyToken, AuthRequest } from '../middleware/auth.middleware.js';
 import { orderEventService } from '../services/order/OrderEventService.js';
 import { queueEmail } from '../services/email.service.js';
@@ -147,7 +147,7 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
           eta: '20-30 mins', version: ev.version,
           eventId: ev.eventId, previousStatus: ev.previousStatus || undefined, eventTimestamp: ev.eventTimestamp,
         });
-        await notificationQueue.enqueue(ev.order.firebaseUid, payload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: ev.version });
+        await directNotification.sendPush(ev.order.firebaseUid, payload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: ev.version });
       }
       // Update owner live card for ALL owners
       const ownerIds = await getOwnerUserIds();
@@ -157,7 +157,7 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
         eventId: ev.eventId, previousStatus: ev.previousStatus || undefined, eventTimestamp: ev.eventTimestamp,
       });
       for (const oid of ownerIds) {
-        await notificationQueue.enqueue(oid, ownerPayload, 'normal', { tag: `order_owner_${orderId}`, orderId, category: 'order', version: ev.version });
+        await directNotification.sendPush(oid, ownerPayload, 'normal', { tag: `order_owner_${orderId}`, orderId, category: 'order', version: ev.version });
       }
       responseData = { message: 'Order accepted' };
       res.json({ success: true, newStatus, ...responseData });
@@ -171,7 +171,7 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
 
       if (customerFirebaseUid) {
         const payload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'cancelled', totalAmount: Number(order.total_amount), version: 2 });
-        await notificationQueue.enqueue(customerFirebaseUid, payload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 2 });
+        await directNotification.sendPush(customerFirebaseUid, payload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 2 });
       }
 
       const ownerIds = await getOwnerUserIds();
@@ -180,7 +180,7 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
         status: 'cancelled', totalAmount: Number(order.total_amount), version: 2,
       });
       for (const oid of ownerIds) {
-        await notificationQueue.enqueue(oid, ownerPayload, 'normal', { tag: `order_owner_${orderId}`, orderId, category: 'order', version: 2 });
+        await directNotification.sendPush(oid, ownerPayload, 'normal', { tag: `order_owner_${orderId}`, orderId, category: 'order', version: 2 });
       }
 
       responseData = { message: 'Order rejected' };
@@ -192,7 +192,7 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
 
       if (customerFirebaseUid) {
         const payload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'preparing', totalAmount: Number(order.total_amount), version: 3 });
-        await notificationQueue.enqueue(customerFirebaseUid, payload, 'normal', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 3 });
+        await directNotification.sendPush(customerFirebaseUid, payload, 'normal', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 3 });
       }
       responseData = { message: 'Cooking started' };
     }
@@ -203,7 +203,7 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
 
       if (customerFirebaseUid) {
         const payload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'ready', totalAmount: Number(order.total_amount), version: 4 });
-        await notificationQueue.enqueue(customerFirebaseUid, payload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 4 });
+        await directNotification.sendPush(customerFirebaseUid, payload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 4 });
       }
       responseData = { message: 'Order marked ready' };
     }
@@ -233,12 +233,12 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
         deliveryAddress: order.delivery_address_line, distance: '?', eta: '15 mins',
         totalAmount: Number(order.total_amount), paymentMethod: 'COD', version: 1
       });
-      await notificationQueue.enqueue(partner.firebase_uid, deliveryPayload, 'high', { tag: `order_delivery_${orderId}`, orderId, category: 'delivery', priority: 'critical', version: 1 });
+      await directNotification.sendPush(partner.firebase_uid, deliveryPayload, 'high', { tag: `order_delivery_${orderId}`, orderId, category: 'delivery', priority: 'critical', version: 1 });
 
       // Update customer
       if (customerFirebaseUid) {
         const cPayload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'partner_assigned', totalAmount: Number(order.total_amount), deliveryPartnerName: partner.name || 'Partner', version: 5 });
-        await notificationQueue.enqueue(customerFirebaseUid, cPayload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 5 });
+        await directNotification.sendPush(customerFirebaseUid, cPayload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 5 });
       }
       responseData = { message: 'Partner assigned' };
     }
@@ -250,7 +250,7 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
         return;
       }
       const dPayload = DeliveryTemplates.deliveryUpdate(orderId, { orderNumber: shortId, customerName: 'Customer', deliveryAddress: order.delivery_address_line, stage: 'navigate_restaurant', version: 2 });
-      await notificationQueue.enqueue(userId, dPayload, 'high', { tag: `order_delivery_${orderId}`, orderId, category: 'delivery', version: 2 });
+      await directNotification.sendPush(userId, dPayload, 'high', { tag: `order_delivery_${orderId}`, orderId, category: 'delivery', version: 2 });
       responseData = { message: 'Delivery accepted' };
     }
 
@@ -259,11 +259,11 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
       await pgClient.query("UPDATE orders SET status = 'out_for_delivery', updated_at = NOW() WHERE id = $1", [orderId]);
 
       const dPayload = DeliveryTemplates.deliveryUpdate(orderId, { orderNumber: shortId, customerName: 'Customer', deliveryAddress: order.delivery_address_line, stage: 'out_for_delivery', version: 3 });
-      await notificationQueue.enqueue(userId, dPayload, 'high', { tag: `order_delivery_${orderId}`, orderId, category: 'delivery', version: 3 });
+      await directNotification.sendPush(userId, dPayload, 'high', { tag: `order_delivery_${orderId}`, orderId, category: 'delivery', version: 3 });
 
       if (customerFirebaseUid) {
         const cPayload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'out_for_delivery', totalAmount: Number(order.total_amount), version: 6 });
-        await notificationQueue.enqueue(customerFirebaseUid, cPayload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 6 });
+        await directNotification.sendPush(customerFirebaseUid, cPayload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 6 });
       }
       responseData = { message: 'Picked up — out for delivery' };
     }
@@ -283,7 +283,7 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
           orderNumber: ev.order.orderNumber, status: 'delivered', totalAmount: ev.order.totalAmount,
           version: ev.version, eventId: ev.eventId, previousStatus: ev.previousStatus || undefined, eventTimestamp: ev.eventTimestamp,
         });
-        await notificationQueue.enqueue(ev.order.firebaseUid, cPayload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: ev.version });
+        await directNotification.sendPush(ev.order.firebaseUid, cPayload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: ev.version });
 
         // MANDATORY Delivered email — always sent
         const userRes2 = await pgPool.query('SELECT email, name FROM users WHERE id = $1', [ev.order.userId]).catch(() => ({ rows: [] as any[] }));
@@ -307,7 +307,7 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
           status: 'delivered', totalAmount: ev.order.totalAmount, version: ev.version,
           eventId: ev.eventId, previousStatus: ev.previousStatus || undefined, eventTimestamp: ev.eventTimestamp,
         });
-        await notificationQueue.enqueue(ownerId, oPayload, 'normal', { tag: `order_owner_${orderId}`, orderId, category: 'order', version: ev.version });
+        await directNotification.sendPush(ownerId, oPayload, 'normal', { tag: `order_owner_${orderId}`, orderId, category: 'order', version: ev.version });
       }
       responseData = { message: 'Delivered — order complete' };
       res.json({ success: true, newStatus, ...responseData });
@@ -323,7 +323,7 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
       };
       // For data-only, we can just omit notification property. But NotificationPayload type requires it.
       // So we send an empty one and handle it in SW.
-      await notificationQueue.enqueue(userId, { notification: { title: 'Stop Alert', body: '' }, data: stopPayload.data }, 'high', { tag: `stop_alert_${orderId}`, orderId, category: 'system' });
+      await directNotification.sendPush(userId, { notification: { title: 'Stop Alert', body: '' }, data: stopPayload.data }, 'high', { tag: `stop_alert_${orderId}`, orderId, category: 'system' });
       responseData = { message: 'Alert stopped' };
     }
 
@@ -521,31 +521,28 @@ router.post('/send-custom', verifyToken, async (req: AuthRequest, res: Response)
       client.release();
     }
 
-    let queuedCount = 0;
+    // Extract an array of firebase UIDs
+    const targetUids = pgUsers.map(row => row.firebase_uid);
 
-    for (const row of pgUsers) {
-      const targetId = row.firebase_uid;
-      let payload: any;
-
-      if (category === 'coupon' && couponCode) {
-        payload = MarketingTemplates.couponAlert({ title, body, couponCode, expiryDate: expiryDate || 'soon' });
-      } else if (category === 'announcement') {
-        payload = MarketingTemplates.announcement({ title, body, url });
-      } else {
-        payload = {
-          notification: { title, body },
-          data: { url: url || '/', category: category || 'marketing', source: 'owner_broadcast' }
-        };
-      }
-
-      await notificationQueue.enqueue(targetId, payload, 'normal', {
-        category: category || 'marketing',
-        expiresInSeconds: category === 'marketing' || category === 'announcement' ? 86400 : undefined,
-      });
-      queuedCount++;
+    // Build common payload
+    let payload: any;
+    if (category === 'coupon' && couponCode) {
+      payload = MarketingTemplates.couponAlert({ title, body, couponCode, expiryDate: expiryDate || 'soon' });
+    } else if (category === 'announcement') {
+      payload = MarketingTemplates.announcement({ title, body, url });
+    } else {
+      payload = {
+        notification: { title, body },
+        data: { url: url || '/', category: category || 'marketing', source: 'owner_broadcast' }
+      };
     }
 
-    res.json({ success: true, message: `Queued for ${queuedCount} users` });
+    // Dispatch a single bulk push (fire and forget for massive blasts so the HTTP response is instant)
+    directNotification.sendBulkPush(targetUids, payload, 'normal', {
+      category: category || 'marketing',
+    }).catch(err => console.error('[NotificationRoutes] sendBulkPush failed:', err));
+
+    res.json({ success: true, message: `Dispatched notifications to ${targetUids.length} users` });
   } catch (error: any) {
     console.error('[NotificationRoutes] send-custom error:', error);
     res.status(500).json({ error: error.message });
@@ -745,42 +742,42 @@ router.post('/trigger-event', verifyToken, async (req: AuthRequest, res: Respons
         version: 1
       });
       for (const ownerId of ownerIds) {
-        await notificationQueue.enqueue(ownerId, payload, 'high', { tag: `order_owner_${orderId}`, orderId, category: 'order', priority: 'critical', version: 1 });
+        await directNotification.sendPush(ownerId, payload, 'high', { tag: `order_owner_${orderId}`, orderId, category: 'order', priority: 'critical', version: 1 });
       }
       
       if (customerFirebaseUid) {
         const cPayload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'pending', totalAmount, version: 1 });
-        await notificationQueue.enqueue(customerFirebaseUid, cPayload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 1 });
+        await directNotification.sendPush(customerFirebaseUid, cPayload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 1 });
       }
     }
     else if (action === 'accepted') {
       if (customerFirebaseUid) {
         const payload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'accepted', totalAmount, eta: '20-30 mins', version: 2 });
-        await notificationQueue.enqueue(customerFirebaseUid, payload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 2 });
+        await directNotification.sendPush(customerFirebaseUid, payload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 2 });
       }
       // Also update owner live card
       const ownerIds = await getOwnerUserIds();
       const ownerPayload = OwnerTemplates.orderStatusUpdate(orderId, { orderNumber: shortId, customerName: contactPhone, status: 'accepted', totalAmount, version: 2 });
       for (const ownerId of ownerIds) {
-        await notificationQueue.enqueue(ownerId, ownerPayload, 'normal', { tag: `order_owner_${orderId}`, orderId, category: 'order', version: 2 });
+        await directNotification.sendPush(ownerId, ownerPayload, 'normal', { tag: `order_owner_${orderId}`, orderId, category: 'order', version: 2 });
       }
     }
     else if (action === 'cancelled') {
       if (customerFirebaseUid) {
         const payload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'cancelled', totalAmount, version: 2 });
-        await notificationQueue.enqueue(customerFirebaseUid, payload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 2 });
+        await directNotification.sendPush(customerFirebaseUid, payload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 2 });
       }
     }
     else if (action === 'preparing') {
       if (customerFirebaseUid) {
         const payload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'preparing', totalAmount, version: 3 });
-        await notificationQueue.enqueue(customerFirebaseUid, payload, 'normal', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 3 });
+        await directNotification.sendPush(customerFirebaseUid, payload, 'normal', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 3 });
       }
     }
     else if (action === 'ready') {
       if (customerFirebaseUid) {
         const payload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'ready', totalAmount, version: 4 });
-        await notificationQueue.enqueue(customerFirebaseUid, payload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 4 });
+        await directNotification.sendPush(customerFirebaseUid, payload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 4 });
       }
     }
     else if (action === 'partner_assigned') {
@@ -793,29 +790,29 @@ router.post('/trigger-event', verifyToken, async (req: AuthRequest, res: Respons
           orderNumber: shortId, customerName: 'Customer', customerPhone: contactPhone,
           deliveryAddress, distance: '?', eta: '15 mins', totalAmount, paymentMethod: order.paymentMethod || 'COD', version: 1
         });
-        await notificationQueue.enqueue(realPartnerId, deliveryPayload, 'high', { tag: `order_delivery_${orderId}`, orderId, category: 'delivery', priority: 'critical', version: 1 });
+        await directNotification.sendPush(realPartnerId, deliveryPayload, 'high', { tag: `order_delivery_${orderId}`, orderId, category: 'delivery', priority: 'critical', version: 1 });
         
         if (customerFirebaseUid) {
           const cPayload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'partner_assigned', totalAmount, deliveryPartnerName: partnerName, version: 5 });
-          await notificationQueue.enqueue(customerFirebaseUid, cPayload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 5 });
+          await directNotification.sendPush(customerFirebaseUid, cPayload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 5 });
         }
       }
     }
     else if (action === 'picked_up' || action === 'out_for_delivery') {
       if (customerFirebaseUid) {
         const cPayload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'out_for_delivery', totalAmount, version: 6 });
-        await notificationQueue.enqueue(customerFirebaseUid, cPayload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 6 });
+        await directNotification.sendPush(customerFirebaseUid, cPayload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 6 });
       }
     }
     else if (action === 'delivered') {
       if (customerFirebaseUid) {
         const cPayload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'delivered', totalAmount, version: 7 });
-        await notificationQueue.enqueue(customerFirebaseUid, cPayload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 7 });
+        await directNotification.sendPush(customerFirebaseUid, cPayload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 7 });
       }
       const ownerIds = await getOwnerUserIds();
       const oPayload = OwnerTemplates.orderStatusUpdate(orderId, { orderNumber: shortId, customerName: '', status: 'delivered', totalAmount, version: 99 });
       for (const ownerId of ownerIds) {
-        await notificationQueue.enqueue(ownerId, oPayload, 'normal', { tag: `order_owner_${orderId}`, orderId, category: 'order', version: 99 });
+        await directNotification.sendPush(ownerId, oPayload, 'normal', { tag: `order_owner_${orderId}`, orderId, category: 'order', version: 99 });
       }
     }
     
@@ -883,11 +880,11 @@ router.post('/test-center', verifyToken, async (req: AuthRequest, res: Response)
 
     if (delayMs && delayMs > 0) {
       setTimeout(() => {
-        notificationQueue.enqueue(targetId, payload, 'high', { tag, category: 'test' }).catch(console.error);
+        directNotification.sendPush(targetId, payload, 'high', { tag, category: 'test' }).catch(console.error);
       }, delayMs);
       res.json({ success: true, message: `Scheduled ${action} with ${delayMs}ms delay.` });
     } else {
-      const queueId = await notificationQueue.enqueue(targetId, payload, 'high', { tag, category: 'test' });
+      const queueId = await directNotification.sendPush(targetId, payload, 'high', { tag, category: 'test' });
       res.json({ success: true, queueId, message: `Queued ${action} immediately.` });
     }
   } catch (error: any) {

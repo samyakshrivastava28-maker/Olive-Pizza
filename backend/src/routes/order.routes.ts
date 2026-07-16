@@ -3,7 +3,7 @@ import { query } from '../lib/db.js';
 import { verifyToken, AuthRequest } from '../middleware/auth.middleware.js';
 import { adminDb } from '../config/firebase.js';
 import { OwnerTemplates, CustomerTemplates } from '../services/notification/NotificationTemplates.js';
-import { notificationQueue } from '../services/notification/NotificationQueueService.js';
+import { directNotification } from '../services/notification/DirectNotificationService.js';
 import { orderEventService } from '../services/order/OrderEventService.js';
 import { queueEmail } from '../services/email.service.js';
 import { buildOrderStatusEmail } from '../services/emailTemplates.service.js';
@@ -184,7 +184,7 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
       });
 
       for (const ownerDoc of ownersSnap.docs) {
-        notificationQueue.enqueue(
+        directNotification.sendPush(
           ownerDoc.id,
           ownerPayload,
           'high',
@@ -203,7 +203,7 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
           previousStatus: undefined,
           eventTimestamp,
         });
-        notificationQueue.enqueue(
+        directNotification.sendPush(
           userData.firebase_uid,
           customerPayload,
           'high',
