@@ -256,10 +256,10 @@ function buildPayload(title: string, body: string, opts: BuildOptions): Notifica
     },
   };
 
-  // For standard notifications OR if the app is force-stopped, we need the `notification` block.
-  // If the app is alive, it will intercept the data payload and trigger continuous alarm.
-  // If it's dead, the system tray will display the notification and play the sound once (fallback).
-  if (!opts.ongoing) {
+  // CRITICAL: If alert is continuous, we MUST use a DATA-ONLY push for Android.
+  // If we include the `notification` block, Android will intercept it in the background
+  // and our native AlarmActivity will never wake up.
+  if (!opts.ongoing && opts.alert !== 'continuous') {
     basePayload.notification = { title, body };
     basePayload.android.notification = {
       sound: soundFile,
