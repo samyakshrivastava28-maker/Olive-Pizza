@@ -86,7 +86,7 @@ public class OliveMessagingService extends MessagingService {
         if (baseChannelId == null) {
             baseChannelId = isOngoing ? "olive_orders_ongoing" : "olive_orders_new";
         }
-        String channelId = baseChannelId + "_v3";
+        String channelId = baseChannelId + "_v4";
 
         NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         
@@ -111,7 +111,12 @@ public class OliveMessagingService extends MessagingService {
                     }
                 }
                 channel.enableVibration(true);
-                channel.setBypassDnd(true); // Ensure alarms bypass Do Not Disturb
+                // Set Bypass DND for critical alarms (Requires special permission on some OS versions)
+                try {
+                    channel.setBypassDnd(true);
+                } catch (Exception e) {
+                    Log.w(TAG, "Failed to set Bypass DND (missing permission): " + e.getMessage());
+                }
                 notificationManager.createNotificationChannel(channel);
             }
         }
