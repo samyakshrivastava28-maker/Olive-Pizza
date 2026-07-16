@@ -1,6 +1,6 @@
 import { adminDb } from '../../config/firebase.js';
 import { FieldValue } from 'firebase-admin/firestore';
-import { directNotification } from '../services/notification/DirectNotificationService.js';
+import { directNotification } from './DirectNotificationService.js';
 import { notificationDebugger } from './NotificationDebugger.js';
 
 export class NotificationScheduler {

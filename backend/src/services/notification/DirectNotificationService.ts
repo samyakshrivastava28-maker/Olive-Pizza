@@ -7,6 +7,8 @@ export interface NotificationOptions {
   orderId?: string;
   category?: string;
   priority?: 'normal' | 'high' | 'critical';
+  version?: number;
+  expiresInSeconds?: number;
 }
 
 export class DirectNotificationService {
