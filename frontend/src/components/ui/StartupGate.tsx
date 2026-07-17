@@ -9,7 +9,15 @@ interface StartupGateProps {
 export default function StartupGate({ children }: StartupGateProps) {
   const [showVideo, setShowVideo] = useState(false);
   const [videoFading, setVideoFading] = useState(false);
-  const [deviceType, setDeviceType] = useState<'mobile' | 'tablet' | 'desktop'>('desktop');
+  const [deviceType, setDeviceType] = useState<'mobile' | 'tablet' | 'desktop'>(() => {
+    if (typeof window !== 'undefined') {
+      const w = window.innerWidth;
+      if (w < 768) return 'mobile';
+      if (w < 1024) return 'tablet';
+      return 'desktop';
+    }
+    return 'desktop';
+  });
   const [videoReady, setVideoReady] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const playStarted = useRef(false);
@@ -42,13 +50,6 @@ export default function StartupGate({ children }: StartupGateProps) {
   }, []);
 
   useEffect(() => {
-    const w = window.innerWidth;
-    if (w < 768) setDeviceType('mobile');
-    else if (w < 1024) setDeviceType('tablet');
-    else setDeviceType('desktop');
-  }, []);
-
-  useEffect(() => {
     if (showVideo && videoRef.current && !playStarted.current) {
       playStarted.current = true;
       const video = videoRef.current;
@@ -70,30 +71,16 @@ export default function StartupGate({ children }: StartupGateProps) {
   }, [showVideo, videoReady]);
 
   const getOptimizedIntroUrls = () => {
-    const base = "https://res.cloudinary.com/dxmlvkff1/video/upload";
-    const transformations = ["f_auto", "vc_auto"];
-    
-    // We can't guarantee useNetworkStore has hydrated instantly on mount if it's async,
-    // but we can try to grab the current state.
-    const speed = useNetworkStore.getState().speed;
-
-    // Degrade video quality if network is slow
-    if (speed === 'slow-2g' || speed === '2g' || speed === '3g') {
-      transformations.push("q_auto:eco", "h_360", "c_scale", "br_250k");
-    } else if (deviceType === 'mobile') {
-      transformations.push("q_auto:eco", "h_540", "c_scale");
-    } else if (deviceType === 'tablet') {
-      transformations.push("q_auto:good", "h_720", "c_scale");
+    let videoUrl = "";
+    if (deviceType === 'mobile') {
+      videoUrl = "https://res.cloudinary.com/dxmlvkff1/video/upload/v1782199117/Olive_Pizza_logo_reveal_202606231246_xeyk9t.mp4";
     } else {
-      transformations.push("q_auto:best", "h_1080", "c_scale");
+      videoUrl = "https://res.cloudinary.com/dxmlvkff1/video/upload/v1782199127/Olive_Pizza_logo_reveal_202606231247_rrtc3u.mp4";
     }
-    
-    const paramsStr = transformations.join(",");
-    const videoId = "v1782199127/Olive_Pizza_logo_reveal_202606231247_rrtc3u";
-    
+
     return {
-      videoUrl: `${base}/${paramsStr}/${videoId}.mp4`,
-      posterUrl: `${base}/${paramsStr}/${videoId}.jpg`
+      videoUrl,
+      posterUrl: videoUrl.replace('.mp4', '.jpg')
     };
   };
 
