@@ -71,7 +71,7 @@ export default function StartupGate({ children }: StartupGateProps) {
 
   const getOptimizedIntroUrls = () => {
     const base = "https://res.cloudinary.com/dxmlvkff1/video/upload";
-    const transformations = ["f_auto", "vc_auto", "fl_fast_start"];
+    const transformations = ["f_auto", "vc_auto"];
     
     // We can't guarantee useNetworkStore has hydrated instantly on mount if it's async,
     // but we can try to grab the current state.
