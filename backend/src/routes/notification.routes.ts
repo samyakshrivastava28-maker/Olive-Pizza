@@ -32,8 +32,13 @@ const router = Router();
 
 // ─── Helper: Resolve owner UIDs ───────────────────────────────────────────────
 async function getOwnerUserIds(): Promise<string[]> {
-  const snapshot = await db.collection('users').where('role', '==', 'owner').get();
-  return snapshot.docs.map(d => d.id);
+  const client = await pgPool.connect();
+  try {
+    const result = await client.query("SELECT firebase_uid FROM users WHERE role = 'owner'");
+    return result.rows.map(row => row.firebase_uid);
+  } finally {
+    client.release();
+  }
 }
 
 // ─── Helper: Resolve user's Postgres UUID from Firebase UID ───────────────────

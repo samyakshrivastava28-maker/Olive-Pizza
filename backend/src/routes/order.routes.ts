@@ -167,7 +167,8 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
       const eventTimestamp = event?.eventTimestamp;
 
       // Push notification to all owners — critical wake-up
-      const ownersSnap = await adminDb.collection('users').where('role', '==', 'owner').get();
+      const ownerUidsRes = await query('SELECT firebase_uid FROM users WHERE role = $1', ['owner']);
+      
       const ownerPayload = OwnerTemplates.newOrder(newOrder.id, {
         customerName: userData.name || 'Customer',
         orderNumber,
@@ -183,9 +184,10 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
         eventTimestamp,
       });
 
-      for (const ownerDoc of ownersSnap.docs) {
-        directNotification.sendPush(
-          ownerDoc.id,
+      const ownerUids = ownerUidsRes.rows.map(r => r.firebase_uid);
+      if (ownerUids.length > 0) {
+        directNotification.sendBulkPush(
+          ownerUids,
           ownerPayload,
           'high',
           { tag: `order_owner_${newOrder.id}`, orderId: newOrder.id, category: 'order', priority: 'critical', version: 1 }
