@@ -44,6 +44,21 @@ app.use(cors({
   credentials: true
 }));
 app.use(express.json());
+
+// API Performance Tracker
+app.use((req, res, next) => {
+  const start = process.hrtime();
+  res.on('finish', () => {
+    const diff = process.hrtime(start);
+    const time = diff[0] * 1e3 + diff[1] * 1e-6;
+    if (time > 500) {
+      console.warn(`[PERF ALERT] Slow API detected: ${req.method} ${req.originalUrl} - ${time.toFixed(2)}ms`);
+    } else {
+      console.log(`[API] ${req.method} ${req.originalUrl} - ${time.toFixed(2)}ms`);
+    }
+  });
+  next();
+});
 app.use(versionCheck);
 
 

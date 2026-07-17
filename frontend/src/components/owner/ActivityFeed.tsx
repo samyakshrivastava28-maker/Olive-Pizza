@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, memo } from 'react';
 import { db } from '../../lib/firebase';
 import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
 
-export default function ActivityFeed() {
+function ActivityFeed() {
   const [logs, setLogs] = useState<any[]>([]);
 
   useEffect(() => {
@@ -41,3 +41,5 @@ export default function ActivityFeed() {
     </div>
   );
 }
+
+export default memo(ActivityFeed);

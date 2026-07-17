@@ -87,16 +87,6 @@ export default function OwnerDashboard() {
         // Aggregation Queries for extreme performance (no doc reads)
         const ordersRef = collection(db, "orders");
 
-        // Today's Aggregations
-        const qToday = query(
-          ordersRef,
-          where("createdAt", ">=", today.toISOString()),
-        );
-        const aggToday = await getAggregateFromServer(qToday, {
-          count: count(),
-          revenue: sum("totalAmount"),
-        });
-
         // Month's Aggregations
         const qMonth = query(
           ordersRef,
@@ -117,28 +107,6 @@ export default function OwnerDashboard() {
           count: count(),
           revenue: sum("totalAmount"),
         });
-
-        // Status Counts
-        const aggPending = await getAggregateFromServer(
-          query(ordersRef, where("status", "==", "pending")),
-          { count: count() },
-        );
-        const aggPreparing = await getAggregateFromServer(
-          query(ordersRef, where("status", "==", "preparing")),
-          { count: count() },
-        );
-        const aggOut = await getAggregateFromServer(
-          query(ordersRef, where("status", "==", "out_for_delivery")),
-          { count: count() },
-        );
-        const aggCompleted = await getAggregateFromServer(
-          query(ordersRef, where("status", "==", "delivered")),
-          { count: count() },
-        );
-        const aggCancelled = await getAggregateFromServer(
-          query(ordersRef, where("status", "==", "cancelled")),
-          { count: count() },
-        );
 
         // Other Stats
         const aggProducts = await getAggregateFromServer(
@@ -170,8 +138,6 @@ export default function OwnerDashboard() {
           pOrd > 0 ? ((cOrd - pOrd) / pOrd) * 100 : cOrd > 0 ? 100 : 0;
 
         setMetrics({
-          todayRevenue: aggToday.data().revenue || 0,
-          todayOrders: aggToday.data().count || 0,
           monthRevenue: cRev,
           monthOrders: cOrd,
           prevMonthRevenue: pRev,

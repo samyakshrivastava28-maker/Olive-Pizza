@@ -38,8 +38,13 @@ export class DirectNotificationService {
 
       const tokens = tokenRes.rows.map(r => r.token);
       
-      // 2. Ensure Android payload triggers immediately
-      const priority = priorityOverride || options.priority || 'high';
+      // 2. Ensure Android payload triggers immediately. FCM only supports 'normal' or 'high'.
+      // If priority is 'critical' (our internal abstraction), map it to 'high' for Android.
+      let priority = priorityOverride || options.priority || 'high';
+      if (priority === 'critical' || priority === 'silent') {
+        priority = 'high'; // Android only supports 'high' or 'normal'
+      }
+      
       if (payload.android) {
         payload.android.priority = priority;
       } else {

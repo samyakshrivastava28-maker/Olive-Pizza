@@ -216,6 +216,8 @@ export default function DeliveryDashboard() {
     };
   }, [tasks, user?.uid, user?.status, writeLocationToSupabase]);
 
+  const prevAssignmentsCountRef = useRef(0);
+
   useEffect(() => {
     if (navigator.permissions && navigator.geolocation) {
       navigator.permissions.query({ name: "geolocation" }).then((result) => {
@@ -228,11 +230,13 @@ export default function DeliveryDashboard() {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const liveOrders = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }) as Order);
       const newAssignments = liveOrders.filter((o) => o.status === "partner_assigned");
-      const oldAssignments = tasks.filter((o) => o.status === "partner_assigned");
-      if (newAssignments.length > oldAssignments.length) {
+      
+      if (newAssignments.length > prevAssignmentsCountRef.current) {
         playNotificationSound("partner_assigned");
         toast.success("New Delivery Assigned!", { duration: 5000 });
       }
+      prevAssignmentsCountRef.current = newAssignments.length;
+      
       setTasks(liveOrders);
       setLoading(false);
     });

@@ -16,10 +16,6 @@ import {
 } from "firebase/firestore";
 import { Order } from "../../types/models";
 import toast from "react-hot-toast";
-import Papa from "papaparse";
-import * as XLSX from "xlsx";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
 
 type DateFilter =
   | "today"
@@ -213,41 +209,57 @@ export default function OwnerOrderHistory() {
     }));
   };
 
-  const exportCSV = () => {
-    const csv = Papa.unparse(getExportData());
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = `orders_export_${new Date().toISOString().split("T")[0]}.csv`;
-    link.click();
+  const exportCSV = async () => {
+    try {
+      const { default: Papa } = await import("papaparse");
+      const csv = Papa.unparse(getExportData());
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `orders_export_${new Date().toISOString().split("T")[0]}.csv`;
+      link.click();
+    } catch (error) {
+      toast.error("Failed to generate CSV export");
+    }
   };
 
-  const exportExcel = () => {
-    const ws = XLSX.utils.json_to_sheet(getExportData());
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Orders");
-    XLSX.writeFile(
-      wb,
-      `orders_export_${new Date().toISOString().split("T")[0]}.xlsx`,
-    );
+  const exportExcel = async () => {
+    try {
+      const XLSX = await import("xlsx");
+      const ws = XLSX.utils.json_to_sheet(getExportData());
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Orders");
+      XLSX.writeFile(
+        wb,
+        `orders_export_${new Date().toISOString().split("T")[0]}.xlsx`,
+      );
+    } catch (error) {
+      toast.error("Failed to generate Excel export");
+    }
   };
 
-  const exportPDF = () => {
-    const doc = new jsPDF();
-    doc.text("Order History Export", 14, 15);
-    const tableData = orders.map((o) => [
-      o.id ? o.id.slice(-6).toUpperCase() : "UNKNOWN",
-      new Date(o.createdAt).toLocaleDateString(),
-      o.customerName || "Unknown",
-      o.status,
-      `Rs. ${o.totalAmount}`,
-    ]);
-    autoTable(doc, {
-      head: [["ID", "Date", "Customer", "Status", "Amount"]],
-      body: tableData,
-      startY: 20,
-    });
-    doc.save(`orders_export_${new Date().toISOString().split("T")[0]}.pdf`);
+  const exportPDF = async () => {
+    try {
+      const { default: jsPDF } = await import("jspdf");
+      const { default: autoTable } = await import("jspdf-autotable");
+      const doc = new jsPDF();
+      doc.text("Order History Export", 14, 15);
+      const tableData = orders.map((o) => [
+        o.id ? o.id.slice(-6).toUpperCase() : "UNKNOWN",
+        new Date(o.createdAt).toLocaleDateString(),
+        o.customerName || "Unknown",
+        o.status,
+        `Rs. ${o.totalAmount}`,
+      ]);
+      autoTable(doc, {
+        head: [["ID", "Date", "Customer", "Status", "Amount"]],
+        body: tableData,
+        startY: 20,
+      });
+      doc.save(`orders_export_${new Date().toISOString().split("T")[0]}.pdf`);
+    } catch (error) {
+      toast.error("Failed to generate PDF export");
+    }
   };
 
   const handleDeleteOrder = async (orderId: string | undefined) => {
