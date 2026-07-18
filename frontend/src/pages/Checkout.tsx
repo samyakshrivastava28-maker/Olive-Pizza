@@ -1,34 +1,15 @@
 import { useState, useEffect } from "react";
-import { useCartStore, useAuthStore } from "../lib/store";
-import { useNavigate } from "react-router";
+import { ArrowLeft, Clock, CreditCard, Loader2, MapPin, MapPinned, Receipt, Check, ChevronLeft } from "lucide-react";
+import { Link, useNavigate } from "react-router";
+import { useAuthStore, useCartStore } from "../lib/store";
 import { auth, db } from "../lib/firebase";
-import {
-  collection,
-  addDoc,
-  getDocs,
-  query,
-  where,
-  getDoc,
-  updateDoc,
-  increment,
-  runTransaction,
-  setDoc,
-  doc,
-  serverTimestamp,
-} from "firebase/firestore";
-import { motion, AnimatePresence } from "framer-motion";
+import { collection, query, where, getDocs, doc, getDoc, addDoc } from "firebase/firestore";
 import PageTransition from "../components/PageTransition";
+import { useNotificationDebugger } from "../hooks/useNotificationDebugger";
 import { useStoreStatus } from "../lib/useStoreStatus";
 import { usePWA } from "../lib/usePWA";
 import { RESTAURANT_LOCATION, MAX_DELIVERY_RADIUS_KM } from "../lib/config";
-import {
-  Check,
-  ChevronLeft,
-  CreditCard,
-  MapPin,
-  MapPinned,
-  Receipt,
-} from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
 
 // Haversine distance calculator
@@ -277,140 +258,45 @@ export default function Checkout() {
     setLoading(true);
     setError("");
     try {
-      // 1. Fetch Global Settings for Timezone (Fallback to Asia/Kolkata)
-      let timezone = "Asia/Kolkata";
-      await runTransaction(db, async (transaction) => {
-        const settingsSnap = await transaction.get(doc(db, "settings", "global"));
-        const settings = settingsSnap.exists() ? (settingsSnap.data() as any) : {};
-        timezone = settings.restaurantTimezone || "Asia/Kolkata";
-      });
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error('User not authenticated');
 
-      // 2. Generate Time-Based Keys
-      const dateObj = new Date();
-      const options: Intl.DateTimeFormatOptions = { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' };
-      const dateParts = new Intl.DateTimeFormat('en-CA', options).formatToParts(dateObj); // YYYY-MM-DD
-      const year = dateParts.find(p => p.type === 'year')?.value;
-      const month = dateParts.find(p => p.type === 'month')?.value;
-      const day = dateParts.find(p => p.type === 'day')?.value;
-      const dateKey = `${year}${month}${day}`;
-
-      const displayOptions: Intl.DateTimeFormatOptions = { timeZone: timezone, day: '2-digit', month: 'long', year: 'numeric' };
-      const displayDateStr = new Intl.DateTimeFormat('en-GB', displayOptions).format(dateObj); // 02 July 2026
-
-      const counterRef = doc(db, 'daily_counters', dateKey);
-      let currentOrderNumber = 1;
-
-      // 3. Atomic Transaction for Daily Counter
-      await runTransaction(db, async (transaction) => {
-        const counterDoc = await transaction.get(counterRef);
-        if (!counterDoc.exists()) {
-          transaction.set(counterRef, { count: 1 });
-          currentOrderNumber = 1;
-        } else {
-          currentOrderNumber = counterDoc.data().count + 1;
-          transaction.update(counterRef, { count: currentOrderNumber });
-        }
-      });
-
-      // 4. Generate Identifiers
-      const paddedNumber = `#${String(currentOrderNumber).padStart(3, '0')}`;
-      const dailyOrderNumber = `${displayDateStr} ${paddedNumber}`;
-      const randomStr = Math.random().toString(36).substring(2, 10).toUpperCase();
-      const permanentOrderId = `OP-${dateKey}-${randomStr}`;
-      
-      const orderRef = doc(db, "orders", permanentOrderId);
-      await setDoc(orderRef, {
-        dailyOrderNumber,
-        dateKey,
-        dailySequence: currentOrderNumber,
-        userId: auth.currentUser?.uid || null,
-        customerName: user?.name || "Guest",
-        contactPhone: user?.phone || "",
-        customerInfo: {
-          name: user?.name || "Guest",
-          phone: user?.phone || "",
-          email: user?.email || "",
-        },
-        items: items,
-        subtotal: total,
-        discountApplied: discountAmount,
-        promoCode: appliedPromo?.code || null,
-        deliveryFee,
-        deliveryType,
-        paymentMethod,
-        orderTiming,
-        scheduledDate: orderTiming === 'scheduled' ? scheduledDate : null,
-        scheduledTime: orderTiming === 'scheduled' ? scheduledTime : null,
-        noContactDelivery: deliveryType === 'delivery' ? noContactDelivery : false,
-        address: deliveryType === "delivery" ? address : "Self Pickup",
-        deliveryAddress:
-          deliveryType === "delivery"
-            ? {
-                addressLine: address,
-                landmark: user?.defaultAddress?.landmark || "",
-                pincode: user?.pincode || user?.defaultAddress?.pincode || "",
-                lat: user?.lat || null,
-                lng: user?.lng || null,
-              }
-            : null,
-        totalAmount: finalTotal,
-        status: "pending",
-        createdAt: new Date().toISOString(),
-        alertSent: false,
-        firstAlertAt: null,
-        secondAlertAt: null,
-        urgentAlertAt: null,
-      });
-
-      // Update customer_identities ledger for abuse prevention
-      if (user?.phone) {
-        const identityRef = doc(db, "customer_identities", user.phone);
-        const updateData: any = {
-          totalOrders: increment(1),
-          totalSpent: increment(finalTotal),
-        };
-
-        if (appliedPromo?.isFirstOrderOnly) {
-          updateData.firstOrderCouponUsed = true;
-          updateData.firstOrderDate = new Date().toISOString();
-          updateData.firstOrderCouponCode = appliedPromo.code;
-        }
-
-        try {
-          await updateDoc(identityRef, updateData);
-        } catch (identityError) {
-          console.error("Failed to update identity ledger", identityError);
-        }
+      const isDebug = useNotificationDebugger.getState().isDebugMode;
+      if (isDebug) {
+        useNotificationDebugger.getState().startTrace('POST /api/orders', 'Place Order', 'pending...');
       }
 
-      // Trigger Order Placed Email
-      fetch("/api/email/transactional", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      const res = await fetch('/api/orders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          ...(isDebug ? { 'X-Debug-Mode': 'true' } : {})
+        },
         body: JSON.stringify({
-          event: "ORDER_PLACED",
-          data: {
-            orderId: permanentOrderId,
-            dailyOrderNumber,
-            customerName: user?.name || "Guest",
-            customerEmail: user?.email || "",
-            totalAmount: finalTotal,
-            deliveryType,
-          },
-        }),
-      }).catch((e) => console.error("Email trigger failed:", e));
-
-      // Trigger Push Notification for new order
-      auth.currentUser?.getIdToken().then((token: string) => {
-        fetch("/api/notifications/trigger-event", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-          body: JSON.stringify({ orderId: permanentOrderId, action: "new_order" })
-        }).catch(console.error);
+          items: items.map(item => ({
+            menuItemId: item.id,
+            name: item.name,
+            quantity: item.quantity,
+            price: item.price,
+            size: item.variant || 'regular',
+            crust: item.crust || 'normal'
+          }))
+        })
       });
 
+      const data = await res.json();
+      
+      if (isDebug && data.trace) {
+        useNotificationDebugger.getState().updateTrace(data.trace);
+      }
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to place order');
+      }
+
       clearCart();
-      navigate(`/order-success/${permanentOrderId}`);
+      navigate(`/order-success/${data.orderId}`);
     } catch (err: any) {
       setError(err.message);
     } finally {

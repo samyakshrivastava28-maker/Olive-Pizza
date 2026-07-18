@@ -7,9 +7,11 @@ import {
   lazy,
   Suspense,
 } from "react";
-import { useParams, useNavigate } from "react-router";
+import { useParams, useNavigate, useLocation } from "react-router";
+import { useAuthStore } from "../lib/store";
+import { auth, db } from "../lib/firebase";
 import { doc, getDoc, onSnapshot, updateDoc } from "firebase/firestore";
-import { db } from "../lib/firebase";
+import { useNotificationDebugger } from "../hooks/useNotificationDebugger";
 import { supabase } from "../lib/supabase";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { RESTAURANT_LOCATION } from "../lib/config";
@@ -531,7 +533,30 @@ export default function OrderTracking() {
   const handleCancel = async () => {
     if (!orderId || cancelling) return;
     setCancelling(true);
-    try { await updateDoc(doc(db, "orders", orderId), { status: "cancelled" }); } catch (e) {} finally { setCancelling(false); }
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error('Not authenticated');
+      
+      const isDebug = useNotificationDebugger.getState().isDebugMode;
+      if (isDebug) useNotificationDebugger.getState().startTrace('POST /api/notifications/action', 'Cancel Order', orderId);
+
+      const res = await fetch('/api/notifications/action', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          ...(isDebug ? { 'X-Debug-Mode': 'true' } : {})
+        },
+        body: JSON.stringify({ orderId, action: 'cancel', currentStage: order.status })
+      });
+      const data = await res.json();
+      if (isDebug && data.trace) useNotificationDebugger.getState().updateTrace(data.trace);
+      if (!res.ok) throw new Error(data.error);
+    } catch (e) {
+      console.error('Cancel failed', e);
+    } finally {
+      setCancelling(false);
+    }
   };
 
   if (!order) {

@@ -1,0 +1,60 @@
+import { create } from 'zustand';
+
+export interface DebugStep {
+  step: string;
+  status: 'started' | 'success' | 'failed' | 'error' | 'skipped';
+  reason?: string;
+  error?: string;
+  trace?: any;
+  orderId?: string;
+  recipients?: number;
+  email?: string;
+}
+
+export interface DiagnosticTrace {
+  route: string;
+  action: string;
+  orderId?: string;
+  userId?: string;
+  steps: DebugStep[];
+  processingTime?: number;
+}
+
+interface NotificationDebuggerState {
+  isOpen: boolean;
+  isDebugMode: boolean; // Must be explicitly enabled
+  activeTrace: DiagnosticTrace | null;
+  
+  toggleDebugMode: () => void;
+  startTrace: (route: string, action: string, orderId?: string) => void;
+  updateTrace: (trace: DiagnosticTrace) => void;
+  appendStep: (step: DebugStep) => void;
+  closeOverlay: () => void;
+}
+
+export const useNotificationDebugger = create<NotificationDebuggerState>((set) => ({
+  isOpen: false,
+  isDebugMode: true, // Auto-enabled for this debug phase.
+  activeTrace: null,
+
+  toggleDebugMode: () => set((state) => ({ isDebugMode: !state.isDebugMode })),
+  
+  startTrace: (route, action, orderId) => set({
+    isOpen: true,
+    activeTrace: { route, action, orderId, steps: [{ step: 'Initiated HTTP Request', status: 'started' }] }
+  }),
+
+  updateTrace: (trace) => set({ activeTrace: trace }),
+
+  appendStep: (step) => set((state) => {
+    if (!state.activeTrace) return state;
+    return {
+      activeTrace: {
+        ...state.activeTrace,
+        steps: [...state.activeTrace.steps, step]
+      }
+    };
+  }),
+
+  closeOverlay: () => set({ isOpen: false })
+}));

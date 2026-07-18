@@ -8,6 +8,7 @@ import { Order } from "../../types/models";
 import { useAuthStore } from "../../lib/store";
 import toast from "react-hot-toast";
 import { uploadMediaToCloudinary } from "../../lib/cloudinary";
+import { useNotificationDebugger } from "../../hooks/useNotificationDebugger";
 import { MapPin, Package, Map as MapIcon, Power, Wifi, WifiOff, AlertTriangle, ShieldAlert, Clock, Navigation2, Zap, Battery, Crosshair, HelpCircle, Utensils, MessageSquare, AlertCircle, Star, PhoneCall, Navigation, PackageOpen, CheckCircle2, Camera } from "lucide-react";
 import { RESTAURANT_LOCATION } from "../../lib/config";
 
@@ -249,9 +250,7 @@ export default function DeliveryDashboard() {
         toast.error("Cannot update status while offline. Action queued.");
         return; // In full app, queue this in IndexedDB
       }
-      const updates: any = { status: newStatus };
-      if (newStatus === "out_for_delivery") updates.pickedUpAt = new Date().toISOString();
-
+      
       const currentTask = tasks.find((t) => t.id === orderId);
       if (newStatus === "out_for_delivery" && currentTask && user?.uid) {
         try {
@@ -263,32 +262,29 @@ export default function DeliveryDashboard() {
           });
         } catch (e) {}
       }
-      await updateDoc(doc(db, "orders", orderId), updates);
       
-      // Trigger Email Notification
-      if (["ready", "delivered"].includes(newStatus)) {
-        fetch("/api/email/transactional", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            event: "ORDER_STATUS_CHANGED",
-            data: { orderId, status: newStatus },
-          }),
-        }).catch(() => {});
-      }
-      
-      // Trigger Push Notification
-      try {
-        const token = await getCurrentAuthToken();
-        fetch("/api/notifications/trigger-event", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-          body: JSON.stringify({ orderId, action: newStatus })
-        }).catch(console.error);
-      } catch (e) {}
+      const token = await getCurrentAuthToken();
+      const isDebug = useNotificationDebugger.getState().isDebugMode;
+      if (isDebug) useNotificationDebugger.getState().startTrace('POST /api/notifications/action', newStatus, orderId);
+
+      const res = await fetch('/api/notifications/action', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          ...(isDebug ? { 'X-Debug-Mode': 'true' } : {})
+        },
+        body: JSON.stringify({ orderId, action: newStatus, currentStage: currentTask?.status })
+      });
+
+      const data = await res.json();
+      if (isDebug && data.trace) useNotificationDebugger.getState().updateTrace(data.trace);
+      if (!res.ok) throw new Error(data.error);
 
       toast.success(`Status updated: ${newStatus.replace(/_/g, " ").toUpperCase()}`);
-    } catch (error) { toast.error("Update failed"); }
+    } catch (error: any) { 
+      toast.error(`Update failed: ${error.message}`); 
+    }
   };
 
   const handleCompleteSubmit = async () => {
@@ -300,27 +296,28 @@ export default function DeliveryDashboard() {
         const res = await uploadMediaToCloudinary(proofImage, "olive-pizza/delivery-proofs");
         photoUrl = res.secureUrl;
       }
-      await updateDoc(doc(db, "orders", completingOrderId), { status: "delivered", deliveredAt: new Date().toISOString(), deliveryProof: { photoUrl, note: proofNote } });
       
-      // Trigger Delivery Email
-      fetch("/api/email/transactional", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          event: "ORDER_STATUS_CHANGED",
-          data: { orderId: completingOrderId, status: "delivered" },
-        }),
-      }).catch(() => {});
-      
-      // Trigger Push Notification
-      try {
-        const token = await getCurrentAuthToken();
-        fetch("/api/notifications/trigger-event", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-          body: JSON.stringify({ orderId: completingOrderId, action: "delivered" })
-        }).catch(console.error);
-      } catch (e) {}
+      const token = await getCurrentAuthToken();
+      const isDebug = useNotificationDebugger.getState().isDebugMode;
+      if (isDebug) useNotificationDebugger.getState().startTrace('POST /api/notifications/action', 'delivered', completingOrderId);
+
+      const res = await fetch('/api/notifications/action', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          ...(isDebug ? { 'X-Debug-Mode': 'true' } : {})
+        },
+        body: JSON.stringify({ 
+          orderId: completingOrderId, 
+          action: "delivered",
+          deliveryProof: { photoUrl, note: proofNote }
+        })
+      });
+
+      const data = await res.json();
+      if (isDebug && data.trace) useNotificationDebugger.getState().updateTrace(data.trace);
+      if (!res.ok) throw new Error(data.error);
       try {
         const token = await getCurrentAuthToken();
         await fetch("/api/tracking/navigation/stop", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ orderId: completingOrderId, partnerId: user?.uid }) });

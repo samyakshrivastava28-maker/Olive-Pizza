@@ -3,6 +3,7 @@ import { db, auth } from '../../lib/firebase';
 import { collection, query, orderBy, limit, onSnapshot, doc, updateDoc } from 'firebase/firestore';
 import { logActivity } from '../../lib/logger';
 import { useAuthStore } from '../../lib/store';
+import { useNotificationDebugger } from '../../hooks/useNotificationDebugger';
 
 export default function LiveOrdersTable() {
   const [orders, setOrders] = useState<any[]>([]);
@@ -18,19 +19,30 @@ export default function LiveOrdersTable() {
 
   const handleStatusChange = async (orderId: string, newStatus: string) => {
     try {
-      await updateDoc(doc(db, 'orders', orderId), { status: newStatus });
-      await logActivity('Order Status Changed', `Order #${orderId.slice(-6).toUpperCase()} changed to ${newStatus}`, user?.email || undefined);
-      
-      auth.currentUser?.getIdToken().then((token: string) => {
-        fetch("/api/notifications/trigger-event", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-          body: JSON.stringify({ orderId, action: newStatus })
-        }).catch(console.error);
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) return;
+
+      const isDebug = useNotificationDebugger.getState().isDebugMode;
+      if (isDebug) useNotificationDebugger.getState().startTrace('POST /api/notifications/action', newStatus, orderId);
+
+      const res = await fetch('/api/notifications/action', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          ...(isDebug ? { 'X-Debug-Mode': 'true' } : {})
+        },
+        body: JSON.stringify({ orderId, action: newStatus })
       });
-    } catch (e) {
+      const data = await res.json();
+      if (isDebug && data.trace) useNotificationDebugger.getState().updateTrace(data.trace);
+      
+      if (!res.ok) throw new Error(data.error);
+
+      await logActivity('Order Status Changed', `Order #${orderId.slice(-6).toUpperCase()} changed to ${newStatus}`, user?.email || undefined);
+    } catch (e: any) {
       console.error(e);
-      alert('Failed to update status');
+      alert('Failed to update status: ' + e.message);
     }
   };
 

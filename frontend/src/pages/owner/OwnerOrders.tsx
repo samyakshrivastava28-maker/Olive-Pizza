@@ -11,6 +11,7 @@ import {
 } from "firebase/firestore";
 import { Order } from "../../types/models";
 import { playNotificationSound, statusToSoundType } from "../../hooks/useNotificationSound";
+import { useNotificationDebugger } from "../../hooks/useNotificationDebugger";
 
 
 export default function OwnerOrders() {
@@ -84,36 +85,31 @@ export default function OwnerOrders() {
     partnerId?: string,
   ) => {
     try {
-      const dataToUpdate: any = { status: newStatus };
-      if (partnerId) {
-        dataToUpdate.deliveryPartnerId = partnerId;
-      }
-      await updateDoc(doc(db, "orders", order.id!), dataToUpdate);
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) return;
 
-      // Trigger Email Notification
-      if (["preparing", "cancelled"].includes(newStatus)) {
-        fetch("/api/email/transactional", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            event: "ORDER_STATUS_CHANGED",
-            data: {
-              orderId: order.id,
-              status: newStatus,
-              customerEmail: order.customerInfo?.email,
-            },
-          }),
-        }).catch((e) => console.error("Email trigger failed:", e));
-      }
-      
-      // Trigger Push Notification
-      auth.currentUser?.getIdToken().then((token: string) => {
-        fetch("/api/notifications/trigger-event", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-          body: JSON.stringify({ orderId: order.id, action: newStatus, partnerId })
-        }).catch(console.error);
+      const isDebug = useNotificationDebugger.getState().isDebugMode;
+      if (isDebug) useNotificationDebugger.getState().startTrace('POST /api/notifications/action', newStatus, order.id);
+
+      const res = await fetch('/api/notifications/action', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          ...(isDebug ? { 'X-Debug-Mode': 'true' } : {})
+        },
+        body: JSON.stringify({ 
+          orderId: order.id, 
+          action: newStatus, 
+          currentStage: order.status, 
+          partnerId 
+        })
       });
+
+      const data = await res.json();
+      if (isDebug && data.trace) useNotificationDebugger.getState().updateTrace(data.trace);
+      if (!res.ok) throw new Error(data.error);
+
     } catch (error) {
       console.error("Failed to update status", error);
     }

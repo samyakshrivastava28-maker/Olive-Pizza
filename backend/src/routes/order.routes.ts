@@ -39,8 +39,18 @@ router.get('/', verifyToken, async (req: AuthRequest, res: Response) => {
 // Create a new order securely
 router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<void> => {
   const userId = req.user?.uid;
+  const isDebug = req.headers['x-debug-mode'] === 'true';
+  const startTime = Date.now();
+  const trace: any = {
+    route: 'POST /api/orders',
+    action: 'Place Order',
+    userId,
+    steps: []
+  };
+
   try {
     const { items } = req.body;
+    trace.steps.push({ step: 'Validation', status: 'started' });
     
     if (!items || !Array.isArray(items) || items.length === 0) {
       res.status(400).json({ error: 'Cart is empty' });
@@ -114,9 +124,11 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
     `, [userData.id, deviceId]);
 
     if (lockResult.rows.length === 0) {
-      res.status(409).json({ error: 'This account is currently placing an order from another device.' });
+      if (isDebug) trace.steps.push({ step: 'Idempotency Lock', status: 'failed', reason: 'Order currently placing' });
+      res.status(409).json({ error: 'This account is currently placing an order from another device.', trace: isDebug ? trace : undefined });
       return;
     }
+    trace.steps.push({ step: 'Idempotency Lock', status: 'success' });
 
     // 3. Create order in Postgres
     const orderInsertResult = await query(
@@ -126,6 +138,9 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
       [userData.id, serverCalculatedTotal, userData.phone, userData.full_address]
     );
     const newOrder = orderInsertResult.rows[0];
+    const shortId = newOrder.id.slice(-6).toUpperCase();
+    const orderNumber = `OP-${shortId}`;
+    trace.steps.push({ step: 'Postgres Write', status: 'success', orderId: newOrder.id });
 
     // Insert order items
     for (const item of validatedItems) {
@@ -136,8 +151,7 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
       );
     }
 
-    const shortId = newOrder.id.slice(-6).toUpperCase();
-    const orderNumber = `OP-${shortId}`;
+
 
     // 4. Push Firestore document for real-time tracking
     try {
@@ -156,8 +170,10 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
         createdAt: new Date(),
         updatedAt: new Date(),
       });
-    } catch (err) {
+      trace.steps.push({ step: 'Firestore Sync', status: 'success' });
+    } catch (err: any) {
       console.warn('[Orders] Firestore sync failed (non-fatal):', err);
+      trace.steps.push({ step: 'Firestore Sync', status: 'error', error: err.message });
     }
 
     // 5. Emit canonical OrderEvent via OrderEventService
@@ -186,15 +202,17 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
 
       const ownerUids = ownerUidsRes.rows.map(r => r.firebase_uid);
       if (ownerUids.length > 0) {
-        directNotification.sendBulkPush(
+        const ownerTrace = await directNotification.sendBulkPush(
           ownerUids,
           ownerPayload,
           'high',
           { tag: `order_owner_${newOrder.id}`, orderId: newOrder.id, category: 'order', priority: 'critical', version: 1 }
-        ).catch(console.error);
+        );
+        trace.steps.push({ step: 'Owner Notifications', status: 'success', recipients: ownerUids.length, trace: ownerTrace });
+      } else {
+        trace.steps.push({ step: 'Owner Notifications', status: 'skipped', reason: 'No owners found' });
       }
 
-      // Customer push (persistent pinned tracker)
       if (userData.firebase_uid) {
         const customerPayload = CustomerTemplates.orderUpdate(newOrder.id, {
           orderNumber,
@@ -205,15 +223,17 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
           previousStatus: undefined,
           eventTimestamp,
         });
-        directNotification.sendPush(
+        const customerTrace = await directNotification.sendPush(
           userData.firebase_uid,
           customerPayload,
           'high',
           { tag: `order_customer_${newOrder.id}`, orderId: newOrder.id, category: 'order', version: 1 }
-        ).catch(console.error);
+        );
+        trace.steps.push({ step: 'Customer Notification', status: 'success', trace: customerTrace });
       }
-    } catch (pushErr) {
+    } catch (pushErr: any) {
       console.error('[Orders] Push notification failed (non-blocking):', pushErr);
+      trace.steps.push({ step: 'Notifications', status: 'error', error: pushErr.message });
     }
 
     // 6. MANDATORY TRANSACTIONAL EMAIL — Order Placed (always sent, regardless of push)
@@ -234,15 +254,20 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
         });
         await queueEmail(userData.email, subject, htmlBody, 'transactional');
         console.log(`[Orders] 📧 Order Placed email queued → ${userData.email}`);
-      } catch (emailErr) {
+        trace.steps.push({ step: 'Email Trigger', status: 'success', email: userData.email });
+      } catch (emailErr: any) {
         console.error('[Orders] Order Placed email failed (non-blocking):', emailErr);
+        trace.steps.push({ step: 'Email Trigger', status: 'error', error: emailErr.message });
       }
     }
 
-    res.status(201).json({ message: 'Order placed successfully', orderId: newOrder.id, orderNumber });
-  } catch (error) {
+    trace.processingTime = Date.now() - startTime;
+    res.status(201).json({ message: 'Order placed successfully', orderId: newOrder.id, orderNumber, trace: isDebug ? trace : undefined });
+  } catch (error: any) {
     console.error('Error creating order:', error);
-    res.status(500).json({ error: 'Failed to create order' });
+    trace.steps.push({ step: 'Fatal Error', status: 'failed', error: error.message });
+    trace.processingTime = Date.now() - startTime;
+    res.status(500).json({ error: 'Failed to create order', trace: isDebug ? trace : undefined });
   } finally {
     // Release the checkout lock regardless of success or failure
     if (userId) {

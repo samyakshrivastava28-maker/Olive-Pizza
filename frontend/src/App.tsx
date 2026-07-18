@@ -10,6 +10,7 @@ import OfflineBanner from './components/ui/OfflineBanner';
 import { useVersionCheck } from './hooks/useVersionCheck';
 import NativeAppUpdater from './components/NativeAppUpdater';
 import CartSyncManager from './components/CartSyncManager';
+import { NotificationDiagnosticsOverlay } from './components/ui/NotificationDiagnosticsOverlay';
 
 // Custom lazy loading with retry for chunk errors (prevents black screen on PWA update)
 const lazyWithRetry = <T extends ComponentType<any>>(
@@ -234,6 +235,7 @@ function AppContent() {
       <CartSyncManager />
       <PushNotificationManager />
       <AutoUpdater />
+      <NotificationDiagnosticsOverlay />
       <AnimatePresence mode="wait">
         <RouteErrorBoundary>
           <Suspense fallback={<PizzaLoader />}>

@@ -90,8 +90,12 @@ async function releaseOrderLock(orderId: string): Promise<void> {
 router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Promise<void> => {
   const { orderId, action, currentStage, partnerId } = req.body;
   const userId = req.user!.uid;
+  const isDebug = req.headers['x-debug-mode'] === 'true';
+  const startTime = Date.now();
+  const trace: any = { route: 'POST /api/notifications/action', action, orderId, userId, steps: [] };
 
   if (!orderId || !action) {
+    trace.steps.push({ step: 'Validation', status: 'failed', reason: 'Missing orderId or action' });
     res.status(400).json({ error: 'Missing orderId or action' });
     return;
   }
@@ -107,11 +111,13 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
   // ── Order Locking: prevent race conditions ──────────────────────────────
   const lockAcquired = await acquireOrderLock(orderId, userId, action);
   if (!lockAcquired) {
-    res.status(409).json({ error: 'Order is currently being processed by another request' });
+    if (isDebug) trace.steps.push({ step: 'Idempotency Lock', status: 'failed', reason: 'Already processing' });
+    res.status(409).json({ error: 'Order is currently being processed by another request', trace: isDebug ? trace : undefined });
     return;
   }
 
   const pgClient = await pgPool.connect();
+  trace.steps.push({ step: 'Idempotency Lock', status: 'success' });
   try {
     // ── Fetch order from Postgres (source of truth) ─────────────────────
     await pgClient.query('BEGIN');
@@ -140,7 +146,8 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
       await pgClient.query('ROLLBACK'); // Release lock — OrderEventService handles its own transaction
       const event = await orderEventService.emitStatusChange(orderId, 'accepted', userId, { eta: '20-30 mins' });
       if (!event) {
-        res.status(409).json({ error: 'Invalid state transition or order not found' });
+        if (isDebug) trace.steps.push({ step: 'Postgres Write', status: 'failed', reason: 'Invalid transition' });
+        res.status(409).json({ error: 'Invalid state transition or order not found', trace: isDebug ? trace : undefined });
         return;
       }
       newStatus = 'accepted';
@@ -153,7 +160,8 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
           eta: '20-30 mins', version: ev.version,
           eventId: ev.eventId, previousStatus: ev.previousStatus || undefined, eventTimestamp: ev.eventTimestamp,
         });
-        await directNotification.sendPush(ev.order.firebaseUid, payload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: ev.version });
+        const cTrace = await directNotification.sendPush(ev.order.firebaseUid, payload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: ev.version });
+        trace.steps.push({ step: 'Customer Notification', status: 'success', trace: cTrace });
       }
       // Update owner live card for ALL owners
       const ownerIds = await getOwnerUserIds();
@@ -162,11 +170,12 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
         status: 'accepted', totalAmount: ev.order.totalAmount, version: ev.version,
         eventId: ev.eventId, previousStatus: ev.previousStatus || undefined, eventTimestamp: ev.eventTimestamp,
       });
-      for (const oid of ownerIds) {
-        await directNotification.sendPush(oid, ownerPayload, 'normal', { tag: `order_owner_${orderId}`, orderId, category: 'order', version: ev.version });
-      }
+      const oTrace = await directNotification.sendBulkPush(ownerIds, ownerPayload, 'normal', { tag: `order_owner_${orderId}`, orderId, category: 'order', version: ev.version });
+      trace.steps.push({ step: 'Owner Notifications', status: 'success', recipients: ownerIds.length, trace: oTrace });
+      
       responseData = { message: 'Order accepted' };
-      res.json({ success: true, newStatus, ...responseData });
+      trace.processingTime = Date.now() - startTime;
+      res.json({ success: true, newStatus, ...responseData, trace: isDebug ? trace : undefined });
       await releaseOrderLock(orderId);
       return;
     }
@@ -275,8 +284,21 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
     }
 
     else if (action === 'delivered' && userRole === 'delivery') {
+      const { deliveryProof } = req.body;
       await pgClient.query('ROLLBACK');
       const event = await orderEventService.emitStatusChange(orderId, 'delivered', userId);
+      
+      // Save delivery proof to Firestore if provided
+      if (deliveryProof) {
+        try {
+          await db.collection('orders').doc(orderId).update({
+            deliveryProof,
+            deliveredAt: new Date().toISOString()
+          });
+        } catch (e) {
+          console.error("Failed to save delivery proof", e);
+        }
+      }
       if (!event) {
         res.status(409).json({ error: 'Invalid state transition' });
         return;
@@ -335,17 +357,32 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
 
     else {
       await pgClient.query('ROLLBACK');
-      res.status(400).json({ error: `Unknown action "${action}" for role "${userRole}" at stage "${currentStage}"` });
+      trace.steps.push({ step: 'Validation', status: 'failed', reason: `Unknown action "${action}" for role "${userRole}"` });
+      res.status(400).json({ error: `Unknown action "${action}" for role "${userRole}" at stage "${currentStage}"`, trace: isDebug ? trace : undefined });
       return;
     }
 
+    // 🔥 FIRESTORE SYNC: Force sync status to Firestore so frontend onSnapshots work!
+    if (action !== 'accept' && action !== 'delivered' && action !== 'stop_alert') {
+      try {
+        await db.collection('orders').doc(orderId).update({ status: newStatus, updatedAt: new Date() });
+        trace.steps.push({ step: 'Firestore Sync', status: 'success' });
+      } catch (fErr: any) {
+        trace.steps.push({ step: 'Firestore Sync', status: 'failed', error: fErr.message });
+      }
+    }
+
     await pgClient.query('COMMIT');
-    res.json({ success: true, newStatus, ...responseData });
+    trace.steps.push({ step: 'Postgres Commit', status: 'success' });
+    trace.processingTime = Date.now() - startTime;
+    res.json({ success: true, newStatus, ...responseData, trace: isDebug ? trace : undefined });
 
   } catch (error: any) {
     await pgClient.query('ROLLBACK').catch(() => {});
     console.error('[NotificationRoutes] Action error:', error);
-    res.status(500).json({ error: 'Internal server error', details: error.message });
+    trace.steps.push({ step: 'Fatal Error', status: 'failed', error: error.message });
+    trace.processingTime = Date.now() - startTime;
+    res.status(500).json({ error: 'Internal server error', details: error.message, trace: isDebug ? trace : undefined });
   } finally {
     pgClient.release();
     await releaseOrderLock(orderId);
@@ -709,125 +746,6 @@ router.get('/debug', verifyToken, async (req: AuthRequest, res: Response): Promi
   }
 });
 
-// =============================================================================
-// POST /notifications/trigger-event (Firebase-Native Notification Trigger)
-// =============================================================================
-router.post('/trigger-event', verifyToken, async (req: AuthRequest, res: Response): Promise<void> => {
-  try {
-    const { orderId, action, partnerId } = req.body;
-    if (!orderId || !action) {
-      res.status(400).json({ error: 'Missing orderId or action' });
-      return;
-    }
-
-    const orderDoc = await db.collection('orders').doc(orderId).get();
-    if (!orderDoc.exists) {
-      res.status(404).json({ error: 'Order not found' });
-      return;
-    }
-
-    const order = orderDoc.data()!;
-    const shortId = order.dailyOrderNumber || `#${orderId.slice(-6).toUpperCase()}`;
-    const customerFirebaseUid = order.userId;
-    const totalAmount = order.totalAmount || 0;
-    const contactPhone = order.contactPhone || '';
-    const deliveryAddress = order.deliveryAddress?.addressLine || order.address || '';
-    const status = order.status;
-
-    if (action === 'new_order') {
-      const ownerIds = await getOwnerUserIds();
-      const payload = OwnerTemplates.newOrder(orderId, {
-        customerName: order.customerName || 'Customer',
-        orderNumber: shortId,
-        totalAmount,
-        items: Array.isArray(order.items) ? order.items.map((i: any) => `${i.quantity}x ${i.name}`) : [],
-        paymentMethod: order.paymentMethod || 'COD',
-        deliveryAddress,
-        phone: contactPhone,
-        orderTime: order.createdAt || new Date().toISOString(),
-        version: 1
-      });
-      for (const ownerId of ownerIds) {
-        await directNotification.sendPush(ownerId, payload, 'high', { tag: `order_owner_${orderId}`, orderId, category: 'order', priority: 'critical', version: 1 });
-      }
-      
-      if (customerFirebaseUid) {
-        const cPayload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'pending', totalAmount, version: 1 });
-        await directNotification.sendPush(customerFirebaseUid, cPayload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 1 });
-      }
-    }
-    else if (action === 'accepted') {
-      if (customerFirebaseUid) {
-        const payload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'accepted', totalAmount, eta: '20-30 mins', version: 2 });
-        await directNotification.sendPush(customerFirebaseUid, payload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 2 });
-      }
-      // Also update owner live card
-      const ownerIds = await getOwnerUserIds();
-      const ownerPayload = OwnerTemplates.orderStatusUpdate(orderId, { orderNumber: shortId, customerName: contactPhone, status: 'accepted', totalAmount, version: 2 });
-      for (const ownerId of ownerIds) {
-        await directNotification.sendPush(ownerId, ownerPayload, 'normal', { tag: `order_owner_${orderId}`, orderId, category: 'order', version: 2 });
-      }
-    }
-    else if (action === 'cancelled') {
-      if (customerFirebaseUid) {
-        const payload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'cancelled', totalAmount, version: 2 });
-        await directNotification.sendPush(customerFirebaseUid, payload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 2 });
-      }
-    }
-    else if (action === 'preparing') {
-      if (customerFirebaseUid) {
-        const payload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'preparing', totalAmount, version: 3 });
-        await directNotification.sendPush(customerFirebaseUid, payload, 'normal', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 3 });
-      }
-    }
-    else if (action === 'ready') {
-      if (customerFirebaseUid) {
-        const payload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'ready', totalAmount, version: 4 });
-        await directNotification.sendPush(customerFirebaseUid, payload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 4 });
-      }
-    }
-    else if (action === 'partner_assigned') {
-      const realPartnerId = partnerId || order.deliveryPartnerId;
-      if (realPartnerId) {
-        const partnerDoc = await db.collection('users').doc(realPartnerId).get();
-        const partnerName = partnerDoc.data()?.name || 'Partner';
-        
-        const deliveryPayload = DeliveryTemplates.newAssignment(orderId, {
-          orderNumber: shortId, customerName: 'Customer', customerPhone: contactPhone,
-          deliveryAddress, distance: '?', eta: '15 mins', totalAmount, paymentMethod: order.paymentMethod || 'COD', version: 1
-        });
-        await directNotification.sendPush(realPartnerId, deliveryPayload, 'high', { tag: `order_delivery_${orderId}`, orderId, category: 'delivery', priority: 'critical', version: 1 });
-        
-        if (customerFirebaseUid) {
-          const cPayload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'partner_assigned', totalAmount, deliveryPartnerName: partnerName, version: 5 });
-          await directNotification.sendPush(customerFirebaseUid, cPayload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 5 });
-        }
-      }
-    }
-    else if (action === 'picked_up' || action === 'out_for_delivery') {
-      if (customerFirebaseUid) {
-        const cPayload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'out_for_delivery', totalAmount, version: 6 });
-        await directNotification.sendPush(customerFirebaseUid, cPayload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 6 });
-      }
-    }
-    else if (action === 'delivered') {
-      if (customerFirebaseUid) {
-        const cPayload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'delivered', totalAmount, version: 7 });
-        await directNotification.sendPush(customerFirebaseUid, cPayload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 7 });
-      }
-      const ownerIds = await getOwnerUserIds();
-      const oPayload = OwnerTemplates.orderStatusUpdate(orderId, { orderNumber: shortId, customerName: '', status: 'delivered', totalAmount, version: 99 });
-      for (const ownerId of ownerIds) {
-        await directNotification.sendPush(ownerId, oPayload, 'normal', { tag: `order_owner_${orderId}`, orderId, category: 'order', version: 99 });
-      }
-    }
-    
-    res.json({ success: true, action });
-  } catch (error: any) {
-    console.error('[NotificationRoutes] trigger-event error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
 
 // =============================================================================
 // POST /notifications/test-center

@@ -15,15 +15,15 @@ export class DirectNotificationService {
   /**
    * Instantly push a notification to a single user without queuing.
    */
-  public async sendPush(firebaseUserId: string, payload: any, priorityOverride?: 'normal' | 'high' | 'critical' | 'silent', options: NotificationOptions = {}): Promise<void> {
-    await this.sendBulkPush([firebaseUserId], payload, priorityOverride, options);
+  public async sendPush(firebaseUserId: string, payload: any, priorityOverride?: 'normal' | 'high' | 'critical' | 'silent', options: NotificationOptions = {}): Promise<any> {
+    return await this.sendBulkPush([firebaseUserId], payload, priorityOverride, options);
   }
 
   /**
    * Instantly push a notification to multiple users, chunking by 500 tokens.
    */
-  public async sendBulkPush(firebaseUserIds: string[], payload: any, priorityOverride?: 'normal' | 'high' | 'critical' | 'silent', options: NotificationOptions = {}): Promise<void> {
-    if (!firebaseUserIds || firebaseUserIds.length === 0) return;
+  public async sendBulkPush(firebaseUserIds: string[], payload: any, priorityOverride?: 'normal' | 'high' | 'critical' | 'silent', options: NotificationOptions = {}): Promise<any> {
+    if (!firebaseUserIds || firebaseUserIds.length === 0) return { successCount: 0, failureCount: 0, messageIds: [] };
 
     const client = await pgPool.connect();
     try {
@@ -88,8 +88,16 @@ export class DirectNotificationService {
               [failedTokens]
             ).catch(() => {});
           }
-        } catch (error) {
+          
+          return {
+            successCount: response.successCount,
+            failureCount: response.failureCount,
+            failedTokens: failedTokens.length,
+            responses: response.responses
+          };
+        } catch (error: any) {
           console.error('[DirectPush] Chunk failed:', error);
+          return { error: error.message };
         }
       });
 
@@ -120,9 +128,34 @@ export class DirectNotificationService {
       }
 
       // 6. Enforce 400 notification history limit dynamically
-      // Delete old inbox items globally if it exceeds limits (keeps database lightweight)
-      // Done async to not block the request
       this.cleanupHistory().catch(() => {});
+
+      const chunkResults = await Promise.all(sendPromises);
+      let totalSuccess = 0;
+      let totalFailure = 0;
+      let totalTokensRemoved = 0;
+      let allResponses: any[] = [];
+      let errors: any[] = [];
+
+      chunkResults.forEach(res => {
+        if (res && res.error) {
+          errors.push(res.error);
+        } else if (res) {
+          totalSuccess += res.successCount || 0;
+          totalFailure += res.failureCount || 0;
+          totalTokensRemoved += res.failedTokens || 0;
+          if (res.responses) allResponses.push(...res.responses);
+        }
+      });
+
+      return {
+        tokensFound: tokens.length,
+        successCount: totalSuccess,
+        failureCount: totalFailure,
+        tokensRemoved: totalTokensRemoved,
+        rawResponses: allResponses,
+        errors: errors.length > 0 ? errors : undefined
+      };
 
     } finally {
       client.release();
