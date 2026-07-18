@@ -1,6 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
 import { adminAuth, adminDb } from '../config/firebase.js';
-import { query } from '../lib/db.js';
 
 export async function logSecurityEventServer(params: {
   action: string;
@@ -42,16 +41,8 @@ export const verifyToken = async (req: AuthRequest, res: Response, next: NextFun
     const decodedToken = await adminAuth.verifyIdToken(token);
     const uid = decodedToken.uid;
     
-    // Get user role from PostgreSQL instead of Firestore
-    let role = 'customer';
-    try {
-      const userResult = await query('SELECT role FROM users WHERE firebase_uid = $1', [uid]);
-      if (userResult.rows.length > 0 && userResult.rows[0].role) {
-        role = userResult.rows[0].role;
-      }
-    } catch (dbErr) {
-      console.warn("Could not fetch user role from PG, defaulting to customer");
-    }
+    // Read role from custom claims, default to customer
+    const role = (decodedToken.role as string) || 'customer';
 
     req.user = {
       uid,
@@ -109,15 +100,7 @@ export const optionalAuth = async (req: AuthRequest, res: Response, next: NextFu
     const decodedToken = await adminAuth.verifyIdToken(token);
     const uid = decodedToken.uid;
     
-    let role = 'customer';
-    try {
-      const userResult = await query('SELECT role FROM users WHERE firebase_uid = $1', [uid]);
-      if (userResult.rows.length > 0 && userResult.rows[0].role) {
-        role = userResult.rows[0].role;
-      }
-    } catch (dbErr) {
-      // Ignore DB errors
-    }
+    const role = (decodedToken.role as string) || 'customer';
 
     req.user = {
       uid,

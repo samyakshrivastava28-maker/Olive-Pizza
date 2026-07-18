@@ -28,7 +28,7 @@ export class DataLifecycleService {
       await client.query(`
         DELETE FROM active_deliveries 
         WHERE order_id IN (
-          SELECT id FROM orders WHERE status = 'delivered' AND updated_at < NOW() - INTERVAL '5 minutes'
+          SELECT order_id as id FROM background_tasks WHERE status = 'completed' AND finished_at < NOW() - INTERVAL '5 minutes'
         )
       `);
 

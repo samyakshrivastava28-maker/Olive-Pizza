@@ -7,31 +7,42 @@ import { directNotification } from '../services/notification/DirectNotificationS
 import { orderEventService } from '../services/order/OrderEventService.js';
 import { queueEmail } from '../services/email.service.js';
 import { buildOrderStatusEmail } from '../services/emailTemplates.service.js';
+import crypto from 'crypto';
 
 const router = Router();
 
 // Get orders for logged in user
-router.get('/', verifyToken, async (req: AuthRequest, res: Response) => {
+router.get('/', verifyToken, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user?.uid;
-    const result = await query(`
-      SELECT o.* FROM orders o 
-      JOIN users u ON o.user_id = u.id 
-      WHERE u.firebase_uid = $1 
-      ORDER BY o.created_at DESC
-    `, [userId]);
-    res.json(result.rows.map(row => ({
-      id: row.id,
-      userId: row.user_id,
-      status: row.status,
-      totalAmount: Number(row.total_amount),
-      deliveryFee: Number(row.delivery_fee),
-      contactPhone: row.contact_phone,
-      deliveryAddress: row.delivery_address,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at
-    })));
+    if (!userId) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    const snapshot = await adminDb.collection('orders')
+      .where('userId', '==', userId)
+      .orderBy('createdAt', 'desc')
+      .get();
+      
+    const orders = snapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        userId: data.userId,
+        status: data.status,
+        totalAmount: Number(data.totalAmount),
+        deliveryFee: Number(data.deliveryFee || 0),
+        contactPhone: data.contactPhone,
+        deliveryAddress: data.deliveryAddress?.addressLine || data.deliveryAddress,
+        createdAt: data.createdAt instanceof Date ? data.createdAt : data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt),
+        updatedAt: data.updatedAt instanceof Date ? data.updatedAt : data.updatedAt?.toDate ? data.updatedAt.toDate() : new Date(data.updatedAt)
+      };
+    });
+
+    res.json(orders);
   } catch (error) {
+    console.error("Failed to fetch orders:", error);
     res.status(500).json({ error: 'Failed to fetch orders' });
   }
 });
@@ -62,11 +73,15 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
       return;
     }
 
-    // 1. Fetch user data
-    const userResult = await query('SELECT * FROM users WHERE firebase_uid = $1', [userId]);
-    const userData = userResult.rows[0];
+    // 1. Fetch user data from Firestore
+    const userDoc = await adminDb.collection('users').doc(userId).get();
+    if (!userDoc.exists) {
+      res.status(400).json({ error: 'User not found. Please complete onboarding.' });
+      return;
+    }
+    const userData = userDoc.data()!;
     
-    if (!userData || !userData.phone) {
+    if (!userData.phone) {
       res.status(400).json({ error: 'Phone number missing. Please complete onboarding.' });
       return;
     }
@@ -76,24 +91,24 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
       return;
     }
 
-    // 2. Validate prices
+    // 2. Validate prices from Firestore
     let serverCalculatedTotal = 0;
     const validatedItems = [];
 
     for (const item of items) {
-      const menuResult = await query('SELECT * FROM menu_items WHERE id = $1', [item.menuItemId]);
-      if (menuResult.rows.length === 0) {
-        res.status(400).json({ error: `Item ${item.name} no longer exists` });
+      const menuDoc = await adminDb.collection('menu_items').doc(item.menuItemId).get();
+      if (!menuDoc.exists) {
+        res.status(400).json({ error: \`Item \${item.name} no longer exists\` });
         return;
       }
-      const menuData = menuResult.rows[0];
+      const menuData = menuDoc.data()!;
       
-      if (!menuData.is_available) {
-        res.status(400).json({ error: `Item ${item.name} is currently unavailable` });
+      if (!menuData.isAvailable) {
+        res.status(400).json({ error: \`Item \${item.name} is currently unavailable\` });
         return;
       }
 
-      const itemPrice = Number(menuData.base_price);
+      const itemPrice = Number(menuData.basePrice);
       serverCalculatedTotal += itemPrice * item.quantity;
 
       validatedItems.push({
@@ -103,16 +118,14 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
         quantity: item.quantity,
         size: item.size || 'regular',
         crust: item.crust || 'normal',
-        image: menuData.image_url
+        image: menuData.image || menuData.image_url
       });
     }
 
     // 2.5 Duplicate Order Prevention (Idempotency / Distributed Lock)
-    // Prevent same user from submitting duplicate orders across multiple devices
     const deviceId = req.headers['x-device-id'] || req.ip || 'unknown';
     
-    // Attempt to acquire a lock for this user. Locks automatically expire after 3 minutes (timeout).
-    const lockResult = await query(`
+    const lockResult = await query(\`
       INSERT INTO checkout_locks (user_id, device_id, expires_at)
       VALUES ($1, $2, NOW() + INTERVAL '3 minutes')
       ON CONFLICT (user_id) DO UPDATE 
@@ -121,7 +134,7 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
           expires_at = NOW() + INTERVAL '3 minutes'
       WHERE checkout_locks.expires_at < NOW()
       RETURNING user_id;
-    `, [userData.id, deviceId]);
+    \`, [userId, deviceId]);
 
     if (lockResult.rows.length === 0) {
       if (isDebug) trace.steps.push({ step: 'Idempotency Lock', status: 'failed', reason: 'Order currently placing' });
@@ -130,33 +143,14 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
     }
     trace.steps.push({ step: 'Idempotency Lock', status: 'success' });
 
-    // 3. Create order in Postgres
-    const orderInsertResult = await query(
-      `INSERT INTO orders (user_id, status, total_amount, contact_phone, delivery_address_line, notification_version)
-       VALUES ($1, 'pending', $2, $3, $4, 1)
-       RETURNING id, created_at, updated_at`,
-      [userData.id, serverCalculatedTotal, userData.phone, userData.full_address]
-    );
-    const newOrder = orderInsertResult.rows[0];
-    const shortId = newOrder.id.slice(-6).toUpperCase();
-    const orderNumber = `OP-${shortId}`;
-    trace.steps.push({ step: 'Postgres Write', status: 'success', orderId: newOrder.id });
+    // 3 & 4. Push Firestore document for real-time tracking (Single source of truth)
+    const newOrderId = crypto.randomUUID();
+    const shortId = newOrderId.slice(-6).toUpperCase();
+    const orderNumber = \`OP-\${shortId}\`;
 
-    // Insert order items
-    for (const item of validatedItems) {
-      await query(
-        `INSERT INTO order_items (order_id, menu_item_id, quantity, size, crust, price_at_time)
-         VALUES ($1,$2,$3,$4,$5,$6)`,
-        [newOrder.id, item.menuItemId, item.quantity, item.size, item.crust, item.price]
-      );
-    }
-
-
-
-    // 4. Push Firestore document for real-time tracking
     try {
-      await adminDb.collection('orders').doc(newOrder.id).set({
-        id: newOrder.id,
+      await adminDb.collection('orders').doc(newOrderId).set({
+        id: newOrderId,
         userId,
         items: validatedItems,
         totalAmount: serverCalculatedTotal,
@@ -170,26 +164,30 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
         createdAt: new Date(),
         updatedAt: new Date(),
       });
-      trace.steps.push({ step: 'Firestore Sync', status: 'success' });
+      trace.steps.push({ step: 'Firestore Write', status: 'success', orderId: newOrderId });
     } catch (err: any) {
-      console.warn('[Orders] Firestore sync failed (non-fatal):', err);
-      trace.steps.push({ step: 'Firestore Sync', status: 'error', error: err.message });
+      console.warn('[Orders] Firestore write failed:', err);
+      trace.steps.push({ step: 'Firestore Write', status: 'error', error: err.message });
+      res.status(500).json({ error: 'Failed to save order' });
+      return; // Stop execution if DB write fails
     }
 
     // 5. Emit canonical OrderEvent via OrderEventService
     try {
-      const event = await orderEventService.emitNewOrder(newOrder.id);
+      // NOTE: OrderEventService itself needs to be refactored to read from Firestore instead of Postgres
+      const event = await orderEventService.emitNewOrder(newOrderId);
       const eventId   = event?.eventId;
       const eventTimestamp = event?.eventTimestamp;
 
       // Push notification to all owners — critical wake-up
-      const ownerUidsRes = await query('SELECT firebase_uid FROM users WHERE role = $1', ['owner']);
+      const ownerDocs = await adminDb.collection('users').where('role', '==', 'owner').get();
+      const ownerUids = ownerDocs.docs.map(doc => doc.id);
       
-      const ownerPayload = OwnerTemplates.newOrder(newOrder.id, {
+      const ownerPayload = OwnerTemplates.newOrder(newOrderId, {
         customerName: userData.name || 'Customer',
         orderNumber,
         totalAmount: serverCalculatedTotal,
-        items: validatedItems.map(item => `${item.name} x${item.quantity}`),
+        items: validatedItems.map(item => \`\${item.name} x\${item.quantity}\`),
         paymentMethod: 'COD',
         deliveryAddress: userData.full_address,
         phone: userData.phone,
@@ -200,37 +198,35 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
         eventTimestamp,
       });
 
-      const ownerUids = ownerUidsRes.rows.map(r => r.firebase_uid);
       if (ownerUids.length > 0) {
         const ownerTrace = await directNotification.sendBulkPush(
           ownerUids,
           ownerPayload,
           'high',
-          { tag: `order_owner_${newOrder.id}`, orderId: newOrder.id, category: 'order', priority: 'critical', version: 1 }
+          { tag: \`order_owner_\${newOrderId}\`, orderId: newOrderId, category: 'order', priority: 'critical', version: 1 }
         );
         trace.steps.push({ step: 'Owner Notifications', status: 'success', recipients: ownerUids.length, trace: ownerTrace });
       } else {
         trace.steps.push({ step: 'Owner Notifications', status: 'skipped', reason: 'No owners found' });
       }
 
-      if (userData.firebase_uid) {
-        const customerPayload = CustomerTemplates.orderUpdate(newOrder.id, {
-          orderNumber,
-          totalAmount: serverCalculatedTotal,
-          status: 'pending',
-          version: 1,
-          eventId,
-          previousStatus: undefined,
-          eventTimestamp,
-        });
-        const customerTrace = await directNotification.sendPush(
-          userData.firebase_uid,
-          customerPayload,
-          'high',
-          { tag: `order_customer_${newOrder.id}`, orderId: newOrder.id, category: 'order', version: 1 }
-        );
-        trace.steps.push({ step: 'Customer Notification', status: 'success', trace: customerTrace });
-      }
+      const customerPayload = CustomerTemplates.orderUpdate(newOrderId, {
+        orderNumber,
+        totalAmount: serverCalculatedTotal,
+        status: 'pending',
+        version: 1,
+        eventId,
+        previousStatus: undefined,
+        eventTimestamp,
+      });
+      const customerTrace = await directNotification.sendPush(
+        userId,
+        customerPayload,
+        'high',
+        { tag: \`order_customer_\${newOrderId}\`, orderId: newOrderId, category: 'order', version: 1 }
+      );
+      trace.steps.push({ step: 'Customer Notification', status: 'success', trace: customerTrace });
+      
     } catch (pushErr: any) {
       console.error('[Orders] Push notification failed (non-blocking):', pushErr);
       trace.steps.push({ step: 'Notifications', status: 'error', error: pushErr.message });
@@ -239,12 +235,12 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
     // 6. MANDATORY TRANSACTIONAL EMAIL — Order Placed (always sent, regardless of push)
     if (userData.email) {
       try {
-        const subject = `Order Placed — #${orderNumber}`;
+        const subject = \`Order Placed — #\${orderNumber}\`;
         const htmlBody = buildOrderStatusEmail({
           customerName: userData.name || 'Customer',
           subject,
           stage: 'pending',
-          orderId: newOrder.id,
+          orderId: newOrderId,
           data: {
             orderNumber,
             totalAmount: String(serverCalculatedTotal),
@@ -253,7 +249,7 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
           },
         });
         await queueEmail(userData.email, subject, htmlBody, 'transactional');
-        console.log(`[Orders] 📧 Order Placed email queued → ${userData.email}`);
+        console.log(\`[Orders] 📧 Order Placed email queued → \${userData.email}\`);
         trace.steps.push({ step: 'Email Trigger', status: 'success', email: userData.email });
       } catch (emailErr: any) {
         console.error('[Orders] Order Placed email failed (non-blocking):', emailErr);
@@ -262,20 +258,16 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
     }
 
     trace.processingTime = Date.now() - startTime;
-    res.status(201).json({ message: 'Order placed successfully', orderId: newOrder.id, orderNumber, trace: isDebug ? trace : undefined });
+    res.status(201).json({ message: 'Order placed successfully', orderId: newOrderId, orderNumber, trace: isDebug ? trace : undefined });
   } catch (error: any) {
     console.error('Error creating order:', error);
     trace.steps.push({ step: 'Fatal Error', status: 'failed', error: error.message });
     trace.processingTime = Date.now() - startTime;
     res.status(500).json({ error: 'Failed to create order', trace: isDebug ? trace : undefined });
   } finally {
-    // Release the checkout lock regardless of success or failure
     if (userId) {
       try {
-        const userCheck = await query('SELECT id FROM users WHERE firebase_uid = $1', [userId]);
-        if (userCheck.rows.length > 0) {
-           await query('DELETE FROM checkout_locks WHERE user_id = $1', [userCheck.rows[0].id]);
-        }
+        await query('DELETE FROM checkout_locks WHERE user_id = $1', [userId]);
       } catch(e) {
         console.error('Failed to release checkout lock:', e);
       }

@@ -192,12 +192,20 @@ export default function ComboBuilder({ onAddComboProduct }: ComboBuilderProps) {
 
     try {
       if (editingComboId) {
-        await updateDoc(doc(db, "combos", editingComboId), payload);
+        await fetch(`/api/admin/combos/${editingComboId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${await auth.currentUser?.getIdToken()}` },
+          body: JSON.stringify(payload)
+        });
         toast.success("Combo updated successfully!");
       } else {
-        await addDoc(collection(db, "combos"), {
+        await fetch('/api/admin/combos', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${await auth.currentUser?.getIdToken()}` },
+          body: JSON.stringify({
           ...payload,
           createdAt: new Date().toISOString()
+        })
         });
         toast.success("Combo created successfully!");
       }
@@ -235,7 +243,10 @@ export default function ComboBuilder({ onAddComboProduct }: ComboBuilderProps) {
 
   const deleteCombo = async (id: string) => {
     if(confirm("Are you sure you want to delete this combo?")) {
-      await deleteDoc(doc(db, "combos", id));
+      await fetch(`/api/admin/combos/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${await auth.currentUser?.getIdToken()}` }
+      });
       toast.success("Combo deleted");
     }
   };

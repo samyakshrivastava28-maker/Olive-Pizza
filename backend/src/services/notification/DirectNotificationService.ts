@@ -29,10 +29,9 @@ export class DirectNotificationService {
     try {
       // 1. Fetch active tokens for all targets
       const tokenRes = await client.query(
-        `SELECT u.firebase_uid, t.token 
-         FROM users u
-         JOIN fcm_tokens t ON u.id = t.user_id
-         WHERE u.firebase_uid = ANY($1) AND t.is_active = TRUE`,
+        `SELECT user_id as firebase_uid, token 
+         FROM fcm_tokens 
+         WHERE user_id = ANY($1) AND is_active = TRUE`,
         [firebaseUserIds]
       );
 
@@ -115,7 +114,7 @@ export class DirectNotificationService {
         const queryParams: any[] = [];
 
         for (const uid of inboxChunk) {
-          values.push(`((SELECT id FROM users WHERE firebase_uid = $${paramsCount++}), $${paramsCount++}, $${paramsCount++}, $${paramsCount++}, $${paramsCount++}, 'delivered')`);
+          values.push(`(${paramsCount++}, ${paramsCount++}, ${paramsCount++}, ${paramsCount++}, ${paramsCount++}, 'delivered')`);
           queryParams.push(uid, JSON.stringify(payload), options.category || 'general', options.orderId || null, options.tag || null);
         }
 

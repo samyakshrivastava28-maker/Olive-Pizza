@@ -1,5 +1,4 @@
 import { Router, Request, Response } from 'express';
-import { query } from '../lib/db.js';
 import { emailService } from '../lib/email.service.js';
 import { verifyToken, AuthRequest } from '../middleware/auth.middleware.js';
 import { adminAuth, adminDb } from '../config/firebase.js';
@@ -9,7 +8,7 @@ const router = Router();
 router.use(verifyToken);
 
 // Upsert user (Called after Firebase Auth signup/login)
-router.post('/sync', async (req: AuthRequest, res: Response) => {
+router.post('/sync', async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user?.uid;
     const email = req.user?.email;
@@ -20,15 +19,32 @@ router.post('/sync', async (req: AuthRequest, res: Response) => {
       return;
     }
 
-    const sql = `
-      INSERT INTO users (firebase_uid, email, name, role)
-      VALUES ($1, $2, $3, 'customer')
-      ON CONFLICT (firebase_uid) DO UPDATE 
-      SET name = COALESCE(EXCLUDED.name, users.name)
-      RETURNING *;
-    `;
-    const result = await query(sql, [userId, email, name || '']);
-    res.json(result.rows[0]);
+    const userRef = adminDb.collection('users').doc(userId);
+    const doc = await userRef.get();
+    
+    let userData: any = {
+      firebase_uid: userId,
+      email,
+      name: name || '',
+      role: 'customer',
+      updatedAt: new Date().toISOString()
+    };
+
+    if (!doc.exists) {
+      userData.createdAt = new Date().toISOString();
+      await userRef.set(userData);
+      // Set default custom claim
+      await adminAuth.setCustomUserClaims(userId, { role: 'customer' });
+    } else {
+      userData = doc.data();
+      if (name) {
+        userData.name = name;
+        userData.updatedAt = new Date().toISOString();
+        await userRef.update({ name, updatedAt: userData.updatedAt });
+      }
+    }
+
+    res.json(userData);
   } catch (error) {
     console.error("User sync error", error);
     res.status(500).json({ error: 'Failed to sync user' });
@@ -36,7 +52,7 @@ router.post('/sync', async (req: AuthRequest, res: Response) => {
 });
 
 // Setup Phone
-router.put('/phone', async (req: AuthRequest, res: Response) => {
+router.put('/phone', async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user?.uid;
     const email = req.user?.email || '';
@@ -47,20 +63,29 @@ router.put('/phone', async (req: AuthRequest, res: Response) => {
       return;
     }
 
-    const sql = `
-      INSERT INTO users (firebase_uid, email, name, phone, phone_setup_completed, role)
-      VALUES ($2, $3, 'Customer', $1, true, 'customer')
-      ON CONFLICT (firebase_uid) DO UPDATE 
-      SET phone = EXCLUDED.phone, phone_setup_completed = true
-      RETURNING *;
-    `;
-    const result = await query(sql, [phone, userId, email]);
-    
-    if (result.rows.length === 0) {
-      throw new Error('Database insertion failed');
+    const userRef = adminDb.collection('users').doc(userId!);
+    const doc = await userRef.get();
+
+    let userData: any = {
+      firebase_uid: userId,
+      email,
+      name: 'Customer',
+      phone,
+      phone_setup_completed: true,
+      role: 'customer',
+      updatedAt: new Date().toISOString()
+    };
+
+    if (!doc.exists) {
+      userData.createdAt = new Date().toISOString();
+      await userRef.set(userData);
+      await adminAuth.setCustomUserClaims(userId!, { role: 'customer' });
+    } else {
+      userData = { ...doc.data(), phone, phone_setup_completed: true, updatedAt: new Date().toISOString() };
+      await userRef.update({ phone, phone_setup_completed: true, updatedAt: userData.updatedAt });
     }
 
-    res.json(result.rows[0]);
+    res.json(userData);
   } catch (error: any) {
     console.error("Phone setup error", error);
     res.status(500).json({ error: error.message || 'Failed to save phone' });
@@ -68,35 +93,51 @@ router.put('/phone', async (req: AuthRequest, res: Response) => {
 });
 
 // Setup Location
-router.put('/location', async (req: AuthRequest, res: Response) => {
+router.put('/location', async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user?.uid;
     const email = req.user?.email;
     const { addressLine, city, state, pincode, lat, lng } = req.body;
 
-    // Ensure user exists and update location flag
-    const userSql = `
-      INSERT INTO users (firebase_uid, email, name, location_setup_completed, role, full_address, city, state, lat, lng)
-      VALUES ($1, $2, 'Customer', true, 'customer', $3, $4, $5, $6, $7)
-      ON CONFLICT (firebase_uid) DO UPDATE 
-      SET location_setup_completed = true,
-          full_address = EXCLUDED.full_address,
-          city = EXCLUDED.city,
-          state = EXCLUDED.state,
-          lat = EXCLUDED.lat,
-          lng = EXCLUDED.lng
-      RETURNING *;
-    `;
-    await query(userSql, [userId, email, addressLine, city, state, lat, lng]);
+    const userRef = adminDb.collection('users').doc(userId!);
+    const doc = await userRef.get();
+
+    let userData: any = {
+      firebase_uid: userId,
+      email,
+      name: 'Customer',
+      full_address: addressLine,
+      city,
+      state,
+      lat,
+      lng,
+      location_setup_completed: true,
+      role: 'customer',
+      updatedAt: new Date().toISOString()
+    };
+
+    if (!doc.exists) {
+      userData.createdAt = new Date().toISOString();
+      await userRef.set(userData);
+      await adminAuth.setCustomUserClaims(userId!, { role: 'customer' });
+    } else {
+      userData = { 
+        ...doc.data(), 
+        full_address: addressLine, city, state, lat, lng, location_setup_completed: true, 
+        updatedAt: new Date().toISOString() 
+      };
+      await userRef.update({ 
+        full_address: addressLine, city, state, lat, lng, location_setup_completed: true, 
+        updatedAt: userData.updatedAt 
+      });
+    }
 
     // Send Welcome Email and Notify Owner
     try {
       if (email) {
-        const userResult = await query('SELECT name FROM users WHERE firebase_uid = $1', [userId]);
-        const name = userResult.rows[0]?.name || 'Customer';
-        
+        const name = userData.name || 'Customer';
         await emailService.sendWelcomeEmail(email, name);
-        await emailService.sendOwnerNotification('New User Signup', `A new user ${name} (${email}) has joined and completed their profile!`);
+        await emailService.sendOwnerNotification('New User Signup', \`A new user \${name} (\${email}) has joined and completed their profile!\`);
       }
     } catch (emailErr) {
       console.error("Failed to send welcome emails", emailErr);
@@ -110,17 +151,18 @@ router.put('/location', async (req: AuthRequest, res: Response) => {
 });
 
 // Get User Profile
-router.get('/profile', async (req: AuthRequest, res: Response) => {
+router.get('/profile', async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user?.uid;
-    const userResult = await query('SELECT * FROM users WHERE firebase_uid = $1', [userId]);
+    const userRef = adminDb.collection('users').doc(userId!);
+    const doc = await userRef.get();
     
-    if (userResult.rows.length === 0) {
+    if (!doc.exists) {
       res.status(404).json({ error: 'User not found' });
       return;
     }
 
-    const u = userResult.rows[0];
+    const u = doc.data() as any;
     res.json({
       ...u,
       address: {
@@ -138,7 +180,7 @@ router.get('/profile', async (req: AuthRequest, res: Response) => {
 });
 
 // Revoke all sessions
-router.post('/revoke-all-sessions', async (req: AuthRequest, res: Response) => {
+router.post('/revoke-all-sessions', async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user?.uid;
     if (!userId) {

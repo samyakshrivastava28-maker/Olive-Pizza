@@ -30,7 +30,7 @@ export class DataRetentionJob {
       await client.query(`
         DELETE FROM active_deliveries
         WHERE order_id IN (
-          SELECT id FROM orders 
+          SELECT order_id as id FROM background_tasks 
           WHERE status IN ('delivered', 'cancelled') 
           AND updated_at < NOW() - INTERVAL '5 minutes'
         );
@@ -38,7 +38,7 @@ export class DataRetentionJob {
       
       // 5. Order Retention: Keep current and previous month only
       await client.query(`
-        DELETE FROM orders
+        DELETE FROM background_tasks
         WHERE created_at < date_trunc('month', CURRENT_DATE) - INTERVAL '1 month';
       `);
       

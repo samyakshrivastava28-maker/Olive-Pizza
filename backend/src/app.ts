@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import orderRoutes from './routes/order.routes.js';
 import adminRoutes from './routes/admin.routes.js';
+import { backgroundTaskWorker } from './services/background/BackgroundTaskWorker.js';
 import aiRoutes from './routes/ai.routes.js';
 import deliveryRoutes from './routes/delivery.routes.js';
 import userRoutes from './routes/user.routes.js';

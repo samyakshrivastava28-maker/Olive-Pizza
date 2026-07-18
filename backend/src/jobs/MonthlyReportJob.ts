@@ -99,7 +99,7 @@ export class MonthlyReportJob {
       // We keep ONLY current month and previous month. 
       // So delete anything older than the start of the previous month.
       const query = `
-        DELETE FROM orders 
+        DELETE FROM background_tasks 
         WHERE created_at < date_trunc('month', CURRENT_DATE - INTERVAL '1 month')
       `;
       const result = await client.query(query);

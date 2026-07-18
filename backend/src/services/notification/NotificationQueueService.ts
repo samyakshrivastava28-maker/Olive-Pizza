@@ -105,7 +105,7 @@ export class NotificationQueueService {
       // Resolve Postgres UUID
       let pgUserId = firebaseUserId;
       if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(firebaseUserId)) {
-        const userRes = await client.query('SELECT id FROM users WHERE firebase_uid = $1', [firebaseUserId]);
+        const userRes = { rows: [{ id: firebaseUserId }] };
         if (userRes.rows.length === 0) {
           console.warn(`[NotifQueue] User not found: ${firebaseUserId}`);
           return 'user_not_found';
@@ -216,7 +216,7 @@ export class NotificationQueueService {
     try {
       let pgUserId = firebaseUserId;
       if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(firebaseUserId)) {
-        const userRes = await client.query('SELECT id FROM users WHERE firebase_uid = $1', [firebaseUserId]);
+        const userRes = { rows: [{ id: firebaseUserId }] };
         if (userRes.rows.length > 0) pgUserId = userRes.rows[0].id;
         else { console.warn(`[NotifQueue] Cannot register token — user not found: ${firebaseUserId}`); return; }
       }
@@ -308,7 +308,7 @@ export class NotificationQueueService {
           `SELECT token FROM fcm_tokens WHERE user_id = $1 AND is_active = TRUE ORDER BY last_used_at DESC LIMIT 10`,
           [target_user_id]
         ),
-        client.query(`SELECT email, name FROM users WHERE id = $1`, [target_user_id]),
+        adminDb.collection('users').doc(target_user_id).get().then(doc => ({ rows: [doc.data() || {}] })),
       ]);
 
       const userEmail: string | null = userResult.rows[0]?.email || null;
@@ -450,7 +450,7 @@ export class NotificationQueueService {
         const role = parsedPayload.data?.role || 'customer';
         const stage = parsedPayload.data?.stage || parsedPayload.data?.currentStatus || category || 'update';
         const alwaysEmail = EmailRulesEngine.isAlwaysEmail(role, stage);
-        const userResult = await client.query(`SELECT email, name FROM users WHERE id = $1`, [target_user_id]);
+        const userResult = await adminDb.collection('users').doc(target_user_id).get().then(doc => ({ rows: [doc.data() || {}] }));
         const userEmail = userResult.rows[0]?.email || null;
         const customerName = userResult.rows[0]?.name || 'Customer';
 

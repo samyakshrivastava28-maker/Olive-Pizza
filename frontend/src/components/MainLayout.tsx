@@ -32,7 +32,11 @@ export default function MainLayout() {
 
   useEffect(() => {
     if (user?.email === 'olivepizzarjn@gmail.com' && role !== 'owner') {
-      updateDoc(doc(db, 'users', user.uid), { role: 'owner' })
+      fetch(`/api/admin/users/${user.uid}/role`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${await auth.currentUser?.getIdToken()}` },
+        body: JSON.stringify({ role: 'owner' })
+      })
         .then(() => {
           console.log('Successfully upgraded olivepizzarjn to owner!');
           useAuthStore.getState().setUser(user, 'owner');

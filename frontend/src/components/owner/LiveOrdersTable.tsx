@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { db, auth } from '../../lib/firebase';
-import { collection, query, orderBy, limit, onSnapshot, doc, updateDoc } from 'firebase/firestore';
+import { collection, query, orderBy, limit, onSnapshot, doc } from 'firebase/firestore';
 import { logActivity } from '../../lib/logger';
 import { useAuthStore } from '../../lib/store';
 import { useNotificationDebugger } from '../../hooks/useNotificationDebugger';

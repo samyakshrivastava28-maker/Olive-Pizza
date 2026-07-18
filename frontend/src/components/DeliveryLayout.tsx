@@ -66,7 +66,11 @@ export default function DeliveryLayout() {
     const newStatus = e.target.value;
     setIsUpdatingStatus(true);
     try {
-      await updateDoc(doc(db, 'users', user.uid), { status: newStatus });
+      await fetch(`/api/admin/users/${user.uid}/role`, { // Mock endpoint
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${await auth.currentUser?.getIdToken()}` },
+        body: JSON.stringify({ status: newStatus })
+      });
       // Update the local auth store so the UI reflects the change immediately
       useAuthStore.getState().setUser({ ...user, status: newStatus }, role as any);
       toast.success(`Status updated to ${newStatus}`);

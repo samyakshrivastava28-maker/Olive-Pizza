@@ -29,7 +29,9 @@ router.use(requireRole(['owner', 'delivery_partner']));
 // Fetch active tasks for delivery dashboard
 router.get('/orders', async (req: AuthRequest, res: Response) => {
   try {
-    const result = await query("SELECT * FROM orders WHERE status IN ('out_for_delivery', 'delivered') ORDER BY created_at DESC");
+    // Delivery routes should query Firestore
+    const snapshot = await adminDb.collection('orders').where('status', 'in', ['out_for_delivery', 'delivered']).orderBy('createdAt', 'desc').get();
+    const result = { rows: snapshot.docs.map(d => ({ id: d.id, ...d.data() })) };
     res.json(result.rows.map(row => ({
       id: row.id,
       userId: row.user_id,
