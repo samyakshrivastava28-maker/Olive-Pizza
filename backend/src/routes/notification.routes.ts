@@ -30,6 +30,14 @@ import { buildOrderStatusEmail } from '../services/emailTemplates.service.js';
 
 const router = Router();
 
+// ─── Helper: Timeout wrapper ──────────────────────────────────────────────────
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`Timeout: ${label} exceeded ${ms}ms`)), ms))
+  ]);
+}
+
 // ─── Helper: Resolve owner UIDs ───────────────────────────────────────────────
 async function getOwnerUserIds(): Promise<string[]> {
   const client = await pgPool.connect();
@@ -198,6 +206,8 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
   const transactionClient = await pgPool.connect();
   let lockReleased = false;
   trace.steps.push({ step: 'Idempotency Lock', status: 'success' });
+  const backgroundTasks: (() => Promise<void>)[] = [];
+
   try {
     // ── Fetch order from Postgres (source of truth) ─────────────────────
     await transactionClient.query('BEGIN');
@@ -219,11 +229,12 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
     const shortId = orderData.dailyOrderNumber || `#${orderId.slice(-6).toUpperCase()}`;
     let newStatus = order.status;
     let responseData: any = {};
+    let isIndependentTransaction = false;
 
     // ─── State Machine ─────────────────────────────────────────────────────
     if (action === 'accept' && currentStage === 'new_order' && userRole === 'owner') {
-      // Use OrderEventService for canonical state transition
       await transactionClient.query('ROLLBACK'); // Release lock — OrderEventService handles its own transaction
+      isIndependentTransaction = true;
       const event = await orderEventService.emitStatusChange(orderId, 'accepted', userId, { eta: '20-30 mins' });
       if (!event) {
         if (isDebug) trace.steps.push({ step: 'Postgres Write', status: 'failed', reason: 'Invalid transition' });
@@ -233,49 +244,47 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
       newStatus = 'accepted';
       const ev = event!;
 
-      // Notify customer
-      if (ev.order.firebaseUid) {
-        const payload = CustomerTemplates.orderUpdate(orderId, {
-          orderNumber: ev.order.orderNumber, status: 'accepted', totalAmount: ev.order.totalAmount,
-          eta: '20-30 mins', version: ev.version,
+      backgroundTasks.push(async () => {
+        if (ev.order.firebaseUid) {
+          const payload = CustomerTemplates.orderUpdate(orderId, {
+            orderNumber: ev.order.orderNumber, status: 'accepted', totalAmount: ev.order.totalAmount,
+            eta: '20-30 mins', version: ev.version,
+            eventId: ev.eventId, previousStatus: ev.previousStatus || undefined, eventTimestamp: ev.eventTimestamp,
+          });
+          const cTrace = await directNotification.sendPush(ev.order.firebaseUid, payload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: ev.version });
+          trace.steps.push({ step: 'Customer Notification', status: 'success', trace: cTrace });
+        }
+        const ownerIds = await getOwnerUserIds();
+        const ownerPayload = OwnerTemplates.orderStatusUpdate(orderId, {
+          orderNumber: ev.order.orderNumber, customerName: ev.order.contactPhone,
+          status: 'accepted', totalAmount: ev.order.totalAmount, version: ev.version,
           eventId: ev.eventId, previousStatus: ev.previousStatus || undefined, eventTimestamp: ev.eventTimestamp,
         });
-        const cTrace = await directNotification.sendPush(ev.order.firebaseUid, payload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: ev.version });
-        trace.steps.push({ step: 'Customer Notification', status: 'success', trace: cTrace });
-      }
-      // Update owner live card for ALL owners
-      const ownerIds = await getOwnerUserIds();
-      const ownerPayload = OwnerTemplates.orderStatusUpdate(orderId, {
-        orderNumber: ev.order.orderNumber, customerName: ev.order.contactPhone,
-        status: 'accepted', totalAmount: ev.order.totalAmount, version: ev.version,
-        eventId: ev.eventId, previousStatus: ev.previousStatus || undefined, eventTimestamp: ev.eventTimestamp,
+        const oTrace = await directNotification.sendBulkPush(ownerIds, ownerPayload, 'normal', { tag: `order_owner_${orderId}`, orderId, category: 'order', version: ev.version });
+        trace.steps.push({ step: 'Owner Notifications', status: 'success', recipients: ownerIds.length, trace: oTrace });
       });
-      const oTrace = await directNotification.sendBulkPush(ownerIds, ownerPayload, 'normal', { tag: `order_owner_${orderId}`, orderId, category: 'order', version: ev.version });
-      trace.steps.push({ step: 'Owner Notifications', status: 'success', recipients: ownerIds.length, trace: oTrace });
       
       responseData = { message: 'Order accepted' };
-      trace.processingTime = Date.now() - startTime;
-      res.json({ success: true, newStatus, ...responseData, trace: isDebug ? trace : undefined });
-      return;
     }
 
     else if (action === 'reject' && userRole === 'owner') {
       newStatus = 'cancelled';
       await transactionClient.query("UPDATE orders SET status = 'cancelled', updated_at = NOW() WHERE id = $1", [orderId]);
 
-      if (customerFirebaseUid) {
-        const payload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'cancelled', totalAmount: Number(order.total_amount), version: 2 });
-        await directNotification.sendPush(customerFirebaseUid, payload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 2 });
-      }
-
-      const ownerIds = await getOwnerUserIds();
-      const ownerPayload = OwnerTemplates.orderStatusUpdate(orderId, {
-        orderNumber: shortId, customerName: String(order.contact_phone),
-        status: 'cancelled', totalAmount: Number(order.total_amount), version: 2,
+      backgroundTasks.push(async () => {
+        if (customerFirebaseUid) {
+          const payload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'cancelled', totalAmount: Number(order.total_amount), version: 2 });
+          await directNotification.sendPush(customerFirebaseUid, payload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 2 });
+        }
+        const ownerIds = await getOwnerUserIds();
+        const ownerPayload = OwnerTemplates.orderStatusUpdate(orderId, {
+          orderNumber: shortId, customerName: String(order.contact_phone),
+          status: 'cancelled', totalAmount: Number(order.total_amount), version: 2,
+        });
+        for (const oid of ownerIds) {
+          await directNotification.sendPush(oid, ownerPayload, 'normal', { tag: `order_owner_${orderId}`, orderId, category: 'order', version: 2 });
+        }
       });
-      for (const oid of ownerIds) {
-        await directNotification.sendPush(oid, ownerPayload, 'normal', { tag: `order_owner_${orderId}`, orderId, category: 'order', version: 2 });
-      }
 
       responseData = { message: 'Order rejected' };
     }
@@ -284,10 +293,12 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
       newStatus = 'preparing';
       await transactionClient.query("UPDATE orders SET status = 'preparing', updated_at = NOW() WHERE id = $1", [orderId]);
 
-      if (customerFirebaseUid) {
-        const payload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'preparing', totalAmount: Number(order.total_amount), version: 3 });
-        await directNotification.sendPush(customerFirebaseUid, payload, 'normal', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 3 });
-      }
+      backgroundTasks.push(async () => {
+        if (customerFirebaseUid) {
+          const payload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'preparing', totalAmount: Number(order.total_amount), version: 3 });
+          await directNotification.sendPush(customerFirebaseUid, payload, 'normal', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 3 });
+        }
+      });
       responseData = { message: 'Cooking started' };
     }
 
@@ -295,15 +306,16 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
       newStatus = 'ready';
       await transactionClient.query("UPDATE orders SET status = 'ready', updated_at = NOW() WHERE id = $1", [orderId]);
 
-      if (customerFirebaseUid) {
-        const payload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'ready', totalAmount: Number(order.total_amount), version: 4 });
-        await directNotification.sendPush(customerFirebaseUid, payload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 4 });
-      }
+      backgroundTasks.push(async () => {
+        if (customerFirebaseUid) {
+          const payload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'ready', totalAmount: Number(order.total_amount), version: 4 });
+          await directNotification.sendPush(customerFirebaseUid, payload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 4 });
+        }
+      });
       responseData = { message: 'Order marked ready' };
     }
 
     else if (action === 'assign_delivery' && userRole === 'owner' && partnerId) {
-      // Verify partner exists
       const partnerResult = await transactionClient.query(
         "SELECT firebase_uid, name FROM users WHERE id = $1 AND role = 'delivery'",
         [partnerId]
@@ -321,19 +333,19 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
         [partnerId, orderId]
       );
 
-      // Notify delivery partner
-      const deliveryPayload = DeliveryTemplates.newAssignment(orderId, {
-        orderNumber: shortId, customerName: 'Customer', customerPhone: order.contact_phone,
-        deliveryAddress: order.delivery_address_line, distance: '?', eta: '15 mins',
-        totalAmount: Number(order.total_amount), paymentMethod: 'COD', version: 1
-      });
-      await directNotification.sendPush(partner.firebase_uid, deliveryPayload, 'high', { tag: `order_delivery_${orderId}`, orderId, category: 'delivery', priority: 'critical', version: 1 });
+      backgroundTasks.push(async () => {
+        const deliveryPayload = DeliveryTemplates.newAssignment(orderId, {
+          orderNumber: shortId, customerName: 'Customer', customerPhone: order.contact_phone,
+          deliveryAddress: order.delivery_address_line, distance: '?', eta: '15 mins',
+          totalAmount: Number(order.total_amount), paymentMethod: 'COD', version: 1
+        });
+        await directNotification.sendPush(partner.firebase_uid, deliveryPayload, 'high', { tag: `order_delivery_${orderId}`, orderId, category: 'delivery', priority: 'critical', version: 1 });
 
-      // Update customer
-      if (customerFirebaseUid) {
-        const cPayload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'partner_assigned', totalAmount: Number(order.total_amount), deliveryPartnerName: partner.name || 'Partner', version: 5 });
-        await directNotification.sendPush(customerFirebaseUid, cPayload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 5 });
-      }
+        if (customerFirebaseUid) {
+          const cPayload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'partner_assigned', totalAmount: Number(order.total_amount), deliveryPartnerName: partner.name || 'Partner', version: 5 });
+          await directNotification.sendPush(customerFirebaseUid, cPayload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 5 });
+        }
+      });
       responseData = { message: 'Partner assigned' };
     }
 
@@ -343,8 +355,10 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
         res.status(403).json({ error: 'You are not assigned to this order' });
         return;
       }
-      const dPayload = DeliveryTemplates.deliveryUpdate(orderId, { orderNumber: shortId, customerName: 'Customer', deliveryAddress: order.delivery_address_line, stage: 'navigate_restaurant', version: 2 });
-      await directNotification.sendPush(userId, dPayload, 'high', { tag: `order_delivery_${orderId}`, orderId, category: 'delivery', version: 2 });
+      backgroundTasks.push(async () => {
+        const dPayload = DeliveryTemplates.deliveryUpdate(orderId, { orderNumber: shortId, customerName: 'Customer', deliveryAddress: order.delivery_address_line, stage: 'navigate_restaurant', version: 2 });
+        await directNotification.sendPush(userId, dPayload, 'high', { tag: `order_delivery_${orderId}`, orderId, category: 'delivery', version: 2 });
+      });
       responseData = { message: 'Delivery accepted' };
     }
 
@@ -352,32 +366,24 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
       newStatus = 'out_for_delivery';
       await transactionClient.query("UPDATE orders SET status = 'out_for_delivery', updated_at = NOW() WHERE id = $1", [orderId]);
 
-      const dPayload = DeliveryTemplates.deliveryUpdate(orderId, { orderNumber: shortId, customerName: 'Customer', deliveryAddress: order.delivery_address_line, stage: 'out_for_delivery', version: 3 });
-      await directNotification.sendPush(userId, dPayload, 'high', { tag: `order_delivery_${orderId}`, orderId, category: 'delivery', version: 3 });
+      backgroundTasks.push(async () => {
+        const dPayload = DeliveryTemplates.deliveryUpdate(orderId, { orderNumber: shortId, customerName: 'Customer', deliveryAddress: order.delivery_address_line, stage: 'out_for_delivery', version: 3 });
+        await directNotification.sendPush(userId, dPayload, 'high', { tag: `order_delivery_${orderId}`, orderId, category: 'delivery', version: 3 });
 
-      if (customerFirebaseUid) {
-        const cPayload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'out_for_delivery', totalAmount: Number(order.total_amount), version: 6 });
-        await directNotification.sendPush(customerFirebaseUid, cPayload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 6 });
-      }
+        if (customerFirebaseUid) {
+          const cPayload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'out_for_delivery', totalAmount: Number(order.total_amount), version: 6 });
+          await directNotification.sendPush(customerFirebaseUid, cPayload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 6 });
+        }
+      });
       responseData = { message: 'Picked up — out for delivery' };
     }
 
     else if (action === 'delivered' && userRole === 'delivery') {
       const { deliveryProof } = req.body;
       await transactionClient.query('ROLLBACK');
+      isIndependentTransaction = true;
       const event = await orderEventService.emitStatusChange(orderId, 'delivered', userId);
       
-      // Save delivery proof to Firestore if provided
-      if (deliveryProof) {
-        try {
-          await db.collection('orders').doc(orderId).update({
-            deliveryProof,
-            deliveredAt: new Date().toISOString()
-          });
-        } catch (e) {
-          console.error("Failed to save delivery proof", e);
-        }
-      }
       if (!event) {
         res.status(409).json({ error: 'Invalid state transition' });
         return;
@@ -385,51 +391,60 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
       newStatus = 'delivered';
       const ev = event!;
 
-      if (ev.order.firebaseUid) {
-        const cPayload = CustomerTemplates.orderUpdate(orderId, {
-          orderNumber: ev.order.orderNumber, status: 'delivered', totalAmount: ev.order.totalAmount,
-          version: ev.version, eventId: ev.eventId, previousStatus: ev.previousStatus || undefined, eventTimestamp: ev.eventTimestamp,
-        });
-        await directNotification.sendPush(ev.order.firebaseUid, cPayload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: ev.version });
-
-        // MANDATORY Delivered email — always sent
-        const userRes2 = await pgPool.query('SELECT email, name FROM users WHERE id = $1', [ev.order.userId]).catch(() => ({ rows: [] as any[] }));
-        const userEmail = userRes2.rows[0]?.email;
-        const userName  = userRes2.rows[0]?.name || 'Customer';
-        if (userEmail) {
-          const subject = `Your order has been delivered! — #${ev.order.orderNumber}`;
-          const htmlBody = buildOrderStatusEmail({
-            customerName: userName, subject, stage: 'delivered',
-            orderId, data: { orderNumber: ev.order.orderNumber, totalAmount: String(ev.order.totalAmount) },
-          });
-          queueEmail(userEmail, subject, htmlBody, 'transactional').catch(console.error);
-          console.log(`[NotifRoutes] 📧 Delivered email queued → ${userEmail}`);
+      backgroundTasks.push(async () => {
+        if (deliveryProof) {
+          try {
+            await db.collection('orders').doc(orderId).update({
+              deliveryProof,
+              deliveredAt: new Date().toISOString()
+            });
+          } catch (e) {
+            console.error("Failed to save delivery proof", e);
+          }
         }
-      }
 
-      const ownerIds = await getOwnerUserIds();
-      for (const ownerId of ownerIds) {
-        const oPayload = OwnerTemplates.orderStatusUpdate(orderId, {
-          orderNumber: ev.order.orderNumber, customerName: ev.order.contactPhone,
-          status: 'delivered', totalAmount: ev.order.totalAmount, version: ev.version,
-          eventId: ev.eventId, previousStatus: ev.previousStatus || undefined, eventTimestamp: ev.eventTimestamp,
-        });
-        await directNotification.sendPush(ownerId, oPayload, 'normal', { tag: `order_owner_${orderId}`, orderId, category: 'order', version: ev.version });
-      }
+        if (ev.order.firebaseUid) {
+          const cPayload = CustomerTemplates.orderUpdate(orderId, {
+            orderNumber: ev.order.orderNumber, status: 'delivered', totalAmount: ev.order.totalAmount,
+            version: ev.version, eventId: ev.eventId, previousStatus: ev.previousStatus || undefined, eventTimestamp: ev.eventTimestamp,
+          });
+          await directNotification.sendPush(ev.order.firebaseUid, cPayload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: ev.version });
+
+          const userRes2 = await pgPool.query('SELECT email, name FROM users WHERE id = $1', [ev.order.userId]).catch(() => ({ rows: [] as any[] }));
+          const userEmail = userRes2.rows[0]?.email;
+          const userName  = userRes2.rows[0]?.name || 'Customer';
+          if (userEmail) {
+            const subject = `Your order has been delivered! — #${ev.order.orderNumber}`;
+            const htmlBody = buildOrderStatusEmail({
+              customerName: userName, subject, stage: 'delivered',
+              orderId, data: { orderNumber: ev.order.orderNumber, totalAmount: String(ev.order.totalAmount) },
+            });
+            queueEmail(userEmail, subject, htmlBody, 'transactional').catch(console.error);
+            console.log(`[NotifRoutes] 📧 Delivered email queued → ${userEmail}`);
+          }
+        }
+
+        const ownerIds = await getOwnerUserIds();
+        for (const ownerId of ownerIds) {
+          const oPayload = OwnerTemplates.orderStatusUpdate(orderId, {
+            orderNumber: ev.order.orderNumber, customerName: ev.order.contactPhone,
+            status: 'delivered', totalAmount: ev.order.totalAmount, version: ev.version,
+            eventId: ev.eventId, previousStatus: ev.previousStatus || undefined, eventTimestamp: ev.eventTimestamp,
+          });
+          await directNotification.sendPush(ownerId, oPayload, 'normal', { tag: `order_owner_${orderId}`, orderId, category: 'order', version: ev.version });
+        }
+      });
       responseData = { message: 'Delivered — order complete' };
-      res.json({ success: true, newStatus, ...responseData });
-      return;
     }
 
     else if (action === 'stop_alert') {
-      // Send a silent push to all devices of this user to stop the alert.
-      const stopPayload = {
-        notification: { title: '', body: '' }, // Dummy, will be ignored by SW if we use data-only, wait, FCM requires notification or data. Let's just send data-only.
-        data: { action: 'STOP_ALERT', orderId, stage: currentStage, category: 'system' }
-      };
-      // For data-only, we can just omit notification property. But NotificationPayload type requires it.
-      // So we send an empty one and handle it in SW.
-      await directNotification.sendPush(userId, { notification: { title: 'Stop Alert', body: '' }, data: stopPayload.data }, 'high', { tag: `stop_alert_${orderId}`, orderId, category: 'system' });
+      backgroundTasks.push(async () => {
+        const stopPayload = {
+          notification: { title: '', body: '' },
+          data: { action: 'STOP_ALERT', orderId, stage: currentStage, category: 'system' }
+        };
+        await directNotification.sendPush(userId, { notification: { title: 'Stop Alert', body: '' }, data: stopPayload.data }, 'high', { tag: `stop_alert_${orderId}`, orderId, category: 'system' });
+      });
       responseData = { message: 'Alert stopped' };
     }
 
@@ -440,30 +455,59 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
       return;
     }
 
-    // 🔥 FIRESTORE SYNC: Force sync status to Firestore so frontend onSnapshots work!
-    if (action !== 'accept' && action !== 'delivered' && action !== 'stop_alert') {
-      try {
-        await db.collection('orders').doc(orderId).update({ status: newStatus, updatedAt: new Date() });
-        trace.steps.push({ step: 'Firestore Sync', status: 'success' });
-      } catch (fErr: any) {
-        trace.steps.push({ step: 'Firestore Sync', status: 'failed', error: fErr.message });
-      }
+    // 🔥 Commit transaction IMMEDIATELY to free DB locks
+    if (!isIndependentTransaction) {
+      await transactionClient.query('COMMIT');
+      trace.steps.push({ step: 'Postgres Commit', status: 'success' });
     }
+    
+    // Release idempotency lock immediately
+    await releaseOrderLock(orderId);
+    lockReleased = true;
 
-    await transactionClient.query('COMMIT');
-    trace.steps.push({ step: 'Postgres Commit', status: 'success' });
+    // Send HTTP response instantly to unblock UI
     trace.processingTime = Date.now() - startTime;
     res.json({ success: true, newStatus, ...responseData, trace: isDebug ? trace : undefined });
 
+    // 🔥 Execute all background tasks with timeouts
+    if (action !== 'accept' && action !== 'delivered' && action !== 'stop_alert') {
+      backgroundTasks.unshift(async () => {
+        try {
+          await db.collection('orders').doc(orderId).update({ status: newStatus, updatedAt: new Date() });
+          trace.steps.push({ step: 'Firestore Sync', status: 'success' });
+        } catch (fErr: any) {
+          trace.steps.push({ step: 'Firestore Sync', status: 'failed', error: fErr.message });
+          console.error('[NotificationRoutes] Firestore sync failed in background:', fErr);
+        }
+      });
+    }
+
+    if (backgroundTasks.length > 0) {
+      Promise.allSettled(backgroundTasks.map(task => withTimeout(task(), 5000, 'background_task')))
+        .then(results => {
+          results.forEach(res => {
+            if (res.status === 'rejected') {
+              console.error('[NotificationRoutes] Background task rejected or timed out:', res.reason);
+            }
+          });
+        });
+    }
+
   } catch (error: any) {
-    await transactionClient.query('ROLLBACK').catch(() => {});
+    if (!lockReleased) {
+      await transactionClient.query('ROLLBACK').catch(() => {});
+    }
     console.error('[NotificationRoutes] Action error:', error);
     trace.steps.push({ step: 'Fatal Error', status: 'failed', error: error.message });
     trace.processingTime = Date.now() - startTime;
-    res.status(500).json({ error: 'Internal server error', details: error.message, trace: isDebug ? trace : undefined });
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Internal server error', details: error.message, trace: isDebug ? trace : undefined });
+    }
   } finally {
     transactionClient.release();
-    await releaseOrderLock(orderId);
+    if (!lockReleased) {
+      await releaseOrderLock(orderId);
+    }
   }
 });
 
