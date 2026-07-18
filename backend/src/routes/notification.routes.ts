@@ -53,22 +53,64 @@ async function getPostgresUserId(firebaseUid: string): Promise<string | null> {
 }
 
 // ─── Helper: Acquire order lock (prevent race conditions) ─────────────────────
-async function acquireOrderLock(orderId: string, firebaseUid: string, action: string): Promise<boolean> {
+interface LockInfo {
+  success: boolean;
+  duplicate?: boolean;
+  reason?: string;
+  locked_by_name?: string;
+  locked_at?: string;
+  action?: string;
+  age_seconds?: number;
+}
+
+async function acquireOrderLock(orderId: string, firebaseUid: string, action: string): Promise<LockInfo> {
   const client = await pgPool.connect();
   try {
     const pgUserId = await getPostgresUserId(firebaseUid);
-    if (!pgUserId) return false;
+    if (!pgUserId) return { success: false, reason: 'User not found in Postgres' };
 
+    // Attempt to acquire lock or steal it if it's older than 30 seconds
     const result = await client.query(
       `INSERT INTO order_locks (order_id, locked_by, action, locked_at)
        VALUES ($1, $2, $3, NOW())
-       ON CONFLICT (order_id) DO NOTHING
+       ON CONFLICT (order_id) DO UPDATE 
+       SET locked_by = EXCLUDED.locked_by, action = EXCLUDED.action, locked_at = EXCLUDED.locked_at
+       WHERE order_locks.locked_at < NOW() - INTERVAL '30 seconds'
        RETURNING order_id`,
       [orderId, pgUserId, action]
     );
-    return result.rows.length > 0;
-  } catch {
-    return false;
+
+    if (result.rows.length > 0) {
+      return { success: true };
+    }
+
+    // Lock failed, fetch existing lock details
+    const lockDetails = await client.query(
+      `SELECT l.action, l.locked_at, EXTRACT(EPOCH FROM (NOW() - l.locked_at)) as age_seconds, u.name as locked_by_name
+       FROM order_locks l
+       LEFT JOIN users u ON l.locked_by = u.id
+       WHERE l.order_id = $1`,
+      [orderId]
+    );
+
+    if (lockDetails.rows.length > 0) {
+      const lock = lockDetails.rows[0];
+      const isDuplicate = lock.action === action && lock.age_seconds < 5;
+      
+      return {
+        success: false,
+        duplicate: isDuplicate,
+        reason: isDuplicate ? 'Duplicate request ignored' : 'Another user is processing this order',
+        locked_by_name: lock.locked_by_name || 'Unknown',
+        locked_at: lock.locked_at,
+        action: lock.action,
+        age_seconds: Math.round(lock.age_seconds)
+      };
+    }
+
+    return { success: false, reason: 'Failed to acquire lock for unknown reason' };
+  } catch (e: any) {
+    return { success: false, reason: `Database error: ${e.message}` };
   } finally {
     client.release();
   }
@@ -108,32 +150,70 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
   }
   const userRole = userDoc.data()?.role as string;
 
-  // ── Order Locking: prevent race conditions ──────────────────────────────
-  const lockAcquired = await acquireOrderLock(orderId, userId, action);
-  if (!lockAcquired) {
-    if (isDebug) trace.steps.push({ step: 'Idempotency Lock', status: 'failed', reason: 'Already processing' });
-    res.status(409).json({ error: 'Order is currently being processed by another request', trace: isDebug ? trace : undefined });
+  // ── Pre-check: Order Status ─────────────────────────────────────────────
+  const pgClient = await pgPool.connect();
+  let orderStatusPreCheck: string | null = null;
+  try {
+    const statusResult = await pgClient.query('SELECT status FROM orders WHERE id = $1', [orderId]);
+    if (statusResult.rows.length > 0) {
+      orderStatusPreCheck = statusResult.rows[0].status;
+    }
+  } catch (e) {
+    // Ignore error, proceed to lock
+  } finally {
+    pgClient.release();
+  }
+
+  if (orderStatusPreCheck && ['delivered', 'completed', 'cancelled', 'rejected'].includes(orderStatusPreCheck)) {
+    if (isDebug) trace.steps.push({ step: 'Terminal State Check', status: 'failed', reason: `Order is already ${orderStatusPreCheck}` });
+    res.status(200).json({ success: false, message: `Order already ${orderStatusPreCheck}`, trace: isDebug ? trace : undefined });
     return;
   }
 
-  const pgClient = await pgPool.connect();
+  // ── Order Locking: prevent race conditions ──────────────────────────────
+  const lockInfo = await acquireOrderLock(orderId, userId, action);
+  if (!lockInfo.success) {
+    if (lockInfo.duplicate) {
+      // Safely ignore duplicate requests (e.g. double click)
+      if (isDebug) trace.steps.push({ step: 'Idempotency Lock', status: 'success', info: 'Duplicate request safely ignored' });
+      res.status(200).json({ success: true, duplicate: true, message: lockInfo.reason, trace: isDebug ? trace : undefined });
+      return;
+    }
+
+    if (isDebug) trace.steps.push({ 
+      step: 'Idempotency Lock', 
+      status: 'failed', 
+      reason: lockInfo.reason,
+      lockOwner: lockInfo.locked_by_name,
+      lockAge: lockInfo.age_seconds ? `${lockInfo.age_seconds}s` : undefined,
+      lockedAction: lockInfo.action
+    });
+    res.status(409).json({ 
+      error: lockInfo.reason || 'Order is currently being processed by another request', 
+      trace: isDebug ? trace : undefined 
+    });
+    return;
+  }
+
+  const transactionClient = await pgPool.connect();
+  let lockReleased = false;
   trace.steps.push({ step: 'Idempotency Lock', status: 'success' });
   try {
     // ── Fetch order from Postgres (source of truth) ─────────────────────
-    await pgClient.query('BEGIN');
+    await transactionClient.query('BEGIN');
 
-    const orderResult = await pgClient.query(
+    const orderResult = await transactionClient.query(
       'SELECT * FROM orders WHERE id = $1 FOR UPDATE',
       [orderId]
     );
     if (orderResult.rows.length === 0) {
-      await pgClient.query('ROLLBACK');
+      await transactionClient.query('ROLLBACK');
       res.status(404).json({ error: 'Order not found' });
       return;
     }
 
     const order = orderResult.rows[0];
-    const customerFirebaseUid = await getCustomerFirebaseUid(pgClient, order.user_id);
+    const customerFirebaseUid = await getCustomerFirebaseUid(transactionClient, order.user_id);
     const orderDoc = await db.collection('orders').doc(orderId).get();
     const orderData = orderDoc.data() || {};
     const shortId = orderData.dailyOrderNumber || `#${orderId.slice(-6).toUpperCase()}`;
@@ -143,7 +223,7 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
     // ─── State Machine ─────────────────────────────────────────────────────
     if (action === 'accept' && currentStage === 'new_order' && userRole === 'owner') {
       // Use OrderEventService for canonical state transition
-      await pgClient.query('ROLLBACK'); // Release lock — OrderEventService handles its own transaction
+      await transactionClient.query('ROLLBACK'); // Release lock — OrderEventService handles its own transaction
       const event = await orderEventService.emitStatusChange(orderId, 'accepted', userId, { eta: '20-30 mins' });
       if (!event) {
         if (isDebug) trace.steps.push({ step: 'Postgres Write', status: 'failed', reason: 'Invalid transition' });
@@ -176,13 +256,12 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
       responseData = { message: 'Order accepted' };
       trace.processingTime = Date.now() - startTime;
       res.json({ success: true, newStatus, ...responseData, trace: isDebug ? trace : undefined });
-      await releaseOrderLock(orderId);
       return;
     }
 
     else if (action === 'reject' && userRole === 'owner') {
       newStatus = 'cancelled';
-      await pgClient.query("UPDATE orders SET status = 'cancelled', updated_at = NOW() WHERE id = $1", [orderId]);
+      await transactionClient.query("UPDATE orders SET status = 'cancelled', updated_at = NOW() WHERE id = $1", [orderId]);
 
       if (customerFirebaseUid) {
         const payload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'cancelled', totalAmount: Number(order.total_amount), version: 2 });
@@ -203,7 +282,7 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
 
     else if (action === 'start_cooking' && userRole === 'owner') {
       newStatus = 'preparing';
-      await pgClient.query("UPDATE orders SET status = 'preparing', updated_at = NOW() WHERE id = $1", [orderId]);
+      await transactionClient.query("UPDATE orders SET status = 'preparing', updated_at = NOW() WHERE id = $1", [orderId]);
 
       if (customerFirebaseUid) {
         const payload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'preparing', totalAmount: Number(order.total_amount), version: 3 });
@@ -214,7 +293,7 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
 
     else if (action === 'ready' && userRole === 'owner') {
       newStatus = 'ready';
-      await pgClient.query("UPDATE orders SET status = 'ready', updated_at = NOW() WHERE id = $1", [orderId]);
+      await transactionClient.query("UPDATE orders SET status = 'ready', updated_at = NOW() WHERE id = $1", [orderId]);
 
       if (customerFirebaseUid) {
         const payload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'ready', totalAmount: Number(order.total_amount), version: 4 });
@@ -225,19 +304,19 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
 
     else if (action === 'assign_delivery' && userRole === 'owner' && partnerId) {
       // Verify partner exists
-      const partnerResult = await pgClient.query(
+      const partnerResult = await transactionClient.query(
         "SELECT firebase_uid, name FROM users WHERE id = $1 AND role = 'delivery'",
         [partnerId]
       );
       if (partnerResult.rows.length === 0) {
-        await pgClient.query('ROLLBACK');
+        await transactionClient.query('ROLLBACK');
         res.status(400).json({ error: 'Invalid delivery partner' });
         return;
       }
       const partner = partnerResult.rows[0];
 
       newStatus = 'partner_assigned';
-      await pgClient.query(
+      await transactionClient.query(
         "UPDATE orders SET status = 'partner_assigned', delivery_partner_id = $1, updated_at = NOW() WHERE id = $2",
         [partnerId, orderId]
       );
@@ -260,7 +339,7 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
 
     else if (action === 'accept_delivery' && userRole === 'delivery') {
       if (order.delivery_partner_id !== userId) {
-        await pgClient.query('ROLLBACK');
+        await transactionClient.query('ROLLBACK');
         res.status(403).json({ error: 'You are not assigned to this order' });
         return;
       }
@@ -271,7 +350,7 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
 
     else if (action === 'picked_up' && userRole === 'delivery') {
       newStatus = 'out_for_delivery';
-      await pgClient.query("UPDATE orders SET status = 'out_for_delivery', updated_at = NOW() WHERE id = $1", [orderId]);
+      await transactionClient.query("UPDATE orders SET status = 'out_for_delivery', updated_at = NOW() WHERE id = $1", [orderId]);
 
       const dPayload = DeliveryTemplates.deliveryUpdate(orderId, { orderNumber: shortId, customerName: 'Customer', deliveryAddress: order.delivery_address_line, stage: 'out_for_delivery', version: 3 });
       await directNotification.sendPush(userId, dPayload, 'high', { tag: `order_delivery_${orderId}`, orderId, category: 'delivery', version: 3 });
@@ -285,7 +364,7 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
 
     else if (action === 'delivered' && userRole === 'delivery') {
       const { deliveryProof } = req.body;
-      await pgClient.query('ROLLBACK');
+      await transactionClient.query('ROLLBACK');
       const event = await orderEventService.emitStatusChange(orderId, 'delivered', userId);
       
       // Save delivery proof to Firestore if provided
@@ -339,7 +418,6 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
       }
       responseData = { message: 'Delivered — order complete' };
       res.json({ success: true, newStatus, ...responseData });
-      await releaseOrderLock(orderId);
       return;
     }
 
@@ -356,7 +434,7 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
     }
 
     else {
-      await pgClient.query('ROLLBACK');
+      await transactionClient.query('ROLLBACK');
       trace.steps.push({ step: 'Validation', status: 'failed', reason: `Unknown action "${action}" for role "${userRole}"` });
       res.status(400).json({ error: `Unknown action "${action}" for role "${userRole}" at stage "${currentStage}"`, trace: isDebug ? trace : undefined });
       return;
@@ -372,19 +450,19 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
       }
     }
 
-    await pgClient.query('COMMIT');
+    await transactionClient.query('COMMIT');
     trace.steps.push({ step: 'Postgres Commit', status: 'success' });
     trace.processingTime = Date.now() - startTime;
     res.json({ success: true, newStatus, ...responseData, trace: isDebug ? trace : undefined });
 
   } catch (error: any) {
-    await pgClient.query('ROLLBACK').catch(() => {});
+    await transactionClient.query('ROLLBACK').catch(() => {});
     console.error('[NotificationRoutes] Action error:', error);
     trace.steps.push({ step: 'Fatal Error', status: 'failed', error: error.message });
     trace.processingTime = Date.now() - startTime;
     res.status(500).json({ error: 'Internal server error', details: error.message, trace: isDebug ? trace : undefined });
   } finally {
-    pgClient.release();
+    transactionClient.release();
     await releaseOrderLock(orderId);
   }
 });

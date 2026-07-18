@@ -79,28 +79,34 @@ export default function OwnerOrders() {
     return () => unsubscribe();
   }, []);
 
+  const [processingId, setProcessingId] = useState<string | null>(null);
+
   const updateStatus = async (
-    order: Order,
+    order: any,
     newStatus: string,
     partnerId?: string,
   ) => {
+    if (processingId === order.id) return;
+    setProcessingId(order.id);
     try {
+      const isDebug = localStorage.getItem('diag_mode') === 'true';
       const token = await auth.currentUser?.getIdToken();
-      if (!token) return;
-
-      const isDebug = useNotificationDebugger.getState().isDebugMode;
-      if (isDebug) useNotificationDebugger.getState().startTrace('POST /api/notifications/action', newStatus, order.id);
+      if (!token) throw new Error("Not authenticated");
 
       const res = await fetch('/api/notifications/action', {
         method: 'POST',
-        headers: {
+        headers: { 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
           ...(isDebug ? { 'X-Debug-Mode': 'true' } : {})
         },
         body: JSON.stringify({ 
           orderId: order.id, 
-          action: newStatus, 
+          action: newStatus === 'cancelled' ? 'reject' : 
+                  newStatus === 'preparing' ? 'start_cooking' : 
+                  newStatus === 'ready' ? 'ready' : 
+                  newStatus === 'partner_assigned' ? 'assign_delivery' : 
+                  'accept', 
           currentStage: order.status, 
           partnerId 
         })
@@ -108,10 +114,14 @@ export default function OwnerOrders() {
 
       const data = await res.json();
       if (isDebug && data.trace) useNotificationDebugger.getState().updateTrace(data.trace);
-      if (!res.ok) throw new Error(data.error);
+      if (!res.ok) {
+        if (!data.duplicate) throw new Error(data.error);
+      }
 
     } catch (error) {
       console.error("Failed to update status", error);
+    } finally {
+      setProcessingId(null);
     }
   };
 
@@ -219,18 +229,20 @@ export default function OwnerOrders() {
               <div className="w-full md:w-56 flex flex-col gap-3">
                 {order.status === "pending" && (
                   <button
+                    disabled={processingId === order.id}
                     onClick={() => updateStatus(order, "accepted")}
-                    className="w-full bg-green-500 hover:bg-green-600 text-white p-3 rounded-xl font-bold shadow-sm transition-transform hover:-translate-y-1"
+                    className="w-full bg-green-500 hover:bg-green-600 disabled:opacity-50 text-white p-3 rounded-xl font-bold shadow-sm transition-transform hover:-translate-y-1"
                   >
-                    Accept Order
+                    {processingId === order.id ? 'Processing...' : 'Accept Order'}
                   </button>
                 )}
                 {order.status === "accepted" && (
                   <button
+                    disabled={processingId === order.id}
                     onClick={() => updateStatus(order, "preparing")}
-                    className="w-full bg-yellow-500 hover:bg-yellow-600 text-white p-3 rounded-xl font-bold shadow-sm transition-transform hover:-translate-y-1"
+                    className="w-full bg-yellow-500 hover:bg-yellow-600 disabled:opacity-50 text-white p-3 rounded-xl font-bold shadow-sm transition-transform hover:-translate-y-1"
                   >
-                    Start Cooking
+                    {processingId === order.id ? 'Processing...' : 'Start Cooking'}
                   </button>
                 )}
                 {order.status === "preparing" && (
@@ -238,6 +250,7 @@ export default function OwnerOrders() {
                     <select
                       className="p-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-[#1E293B] dark:bg-slate-800 text-sm font-bold"
                       value={selectedPartners[order.id!] || ""}
+                      disabled={processingId === order.id}
                       onChange={(e) =>
                         setSelectedPartners({
                           ...selectedPartners,
@@ -256,6 +269,7 @@ export default function OwnerOrders() {
                         ))}
                     </select>
                     <button
+                      disabled={processingId === order.id}
                       onClick={() => {
                         const pid = selectedPartners[order.id!];
                         if (!pid)
@@ -264,15 +278,16 @@ export default function OwnerOrders() {
                           );
                         updateStatus(order, "partner_assigned", pid);
                       }}
-                      className="w-full bg-blue-500 hover:bg-blue-600 text-white p-3 rounded-xl font-bold shadow-sm transition-transform hover:-translate-y-1"
+                      className="w-full bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white p-3 rounded-xl font-bold shadow-sm transition-transform hover:-translate-y-1"
                     >
-                      Assign Partner
+                      {processingId === order.id ? 'Processing...' : 'Assign Partner'}
                     </button>
                   </div>
                 )}
                 <button
+                  disabled={processingId === order.id}
                   onClick={() => updateStatus(order, "cancelled")}
-                  className="w-full bg-slate-100 hover:bg-red-500 text-slate-300 hover:text-white p-3 rounded-xl font-bold transition-colors"
+                  className="w-full bg-slate-100 hover:bg-red-500 disabled:opacity-50 text-slate-300 hover:text-white p-3 rounded-xl font-bold transition-colors"
                 >
                   Cancel Order
                 </button>

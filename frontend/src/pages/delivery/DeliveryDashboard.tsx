@@ -244,7 +244,11 @@ export default function DeliveryDashboard() {
     return () => unsubscribe();
   }, [user?.uid]);
 
+  const [processingId, setProcessingId] = useState<string | null>(null);
+
   const updateOrderStatus = async (orderId: string, newStatus: string) => {
+    if (processingId === orderId) return;
+    setProcessingId(orderId);
     try {
       if (isOfflineMode) {
         toast.error("Cannot update status while offline. Action queued.");
@@ -279,11 +283,15 @@ export default function DeliveryDashboard() {
 
       const data = await res.json();
       if (isDebug && data.trace) useNotificationDebugger.getState().updateTrace(data.trace);
-      if (!res.ok) throw new Error(data.error);
+      if (!res.ok) {
+        if (!data.duplicate) throw new Error(data.error);
+      }
 
       toast.success(`Status updated: ${newStatus.replace(/_/g, " ").toUpperCase()}`);
     } catch (error: any) { 
       toast.error(`Update failed: ${error.message}`); 
+    } finally {
+      setProcessingId(null);
     }
   };
 
@@ -496,12 +504,12 @@ export default function DeliveryDashboard() {
 
                 {activeTask.status === "partner_assigned" && (
                   <div className="grid grid-cols-2 gap-3">
-                    <button onClick={() => updateOrderStatus(activeTask.id!, "ready")} className="w-full bg-primary-600 hover:bg-primary-500 text-white font-black py-4 rounded-2xl transition-all shadow-lg shadow-primary-500/20">Accept</button>
-                    <button onClick={() => updateOrderStatus(activeTask.id!, "pending")} className="w-full bg-red-500/10 hover:bg-red-500/20 text-red-500 font-black py-4 rounded-2xl transition-all">Reject</button>
+                    <button disabled={processingId === activeTask.id} onClick={() => updateOrderStatus(activeTask.id!, "ready")} className="w-full bg-primary-600 hover:bg-primary-500 disabled:opacity-50 text-white font-black py-4 rounded-2xl transition-all shadow-lg shadow-primary-500/20">{processingId === activeTask.id ? 'Processing...' : 'Accept'}</button>
+                    <button disabled={processingId === activeTask.id} onClick={() => updateOrderStatus(activeTask.id!, "pending")} className="w-full bg-red-500/10 hover:bg-red-500/20 disabled:opacity-50 text-red-500 font-black py-4 rounded-2xl transition-all">{processingId === activeTask.id ? 'Processing...' : 'Reject'}</button>
                   </div>
                 )}
                 {activeTask.status === "ready" && (
-                  <button onClick={() => updateOrderStatus(activeTask.id!, "out_for_delivery")} className="w-full bg-primary-600 hover:bg-primary-500 text-white font-black py-4 rounded-2xl transition-all shadow-lg shadow-primary-500/20 flex items-center justify-center gap-2"><PackageOpen size={20}/> Confirm Pickup</button>
+                  <button disabled={processingId === activeTask.id} onClick={() => updateOrderStatus(activeTask.id!, "out_for_delivery")} className="w-full bg-primary-600 hover:bg-primary-500 disabled:opacity-50 text-white font-black py-4 rounded-2xl transition-all shadow-lg shadow-primary-500/20 flex items-center justify-center gap-2"><PackageOpen size={20}/> {processingId === activeTask.id ? 'Processing...' : 'Confirm Pickup'}</button>
                 )}
                 {activeTask.status === "out_for_delivery" && (
                   <button onClick={() => { setCompletingOrderId(activeTask.id!); setShowProofModal(true); }} className="w-full bg-green-500 hover:bg-green-400 text-dark-950 font-black py-4 rounded-2xl transition-all shadow-lg shadow-green-500/20 flex items-center justify-center gap-2"><CheckCircle2 size={24}/> Mark Delivered</button>

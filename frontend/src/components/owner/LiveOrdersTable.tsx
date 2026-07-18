@@ -4,10 +4,13 @@ import { collection, query, orderBy, limit, onSnapshot, doc, updateDoc } from 'f
 import { logActivity } from '../../lib/logger';
 import { useAuthStore } from '../../lib/store';
 import { useNotificationDebugger } from '../../hooks/useNotificationDebugger';
+import { useNavigate } from 'react-router';
 
 export default function LiveOrdersTable() {
   const [orders, setOrders] = useState<any[]>([]);
   const { user } = useAuthStore();
+  const [processingId, setProcessingId] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const q = query(collection(db, 'orders'), orderBy('createdAt', 'desc'), limit(15));
@@ -18,6 +21,8 @@ export default function LiveOrdersTable() {
   }, []);
 
   const handleStatusChange = async (orderId: string, newStatus: string) => {
+    if (processingId === orderId) return;
+    setProcessingId(orderId);
     try {
       const token = await auth.currentUser?.getIdToken();
       if (!token) return;
@@ -43,6 +48,8 @@ export default function LiveOrdersTable() {
     } catch (e: any) {
       console.error(e);
       alert('Failed to update status: ' + e.message);
+    } finally {
+      setProcessingId(null);
     }
   };
 
@@ -106,11 +113,12 @@ export default function LiveOrdersTable() {
                       {order.status.replace(/_/g, ' ').toUpperCase()}
                     </span>
                   </td>
-                  <td className="p-4 text-right">
+                  <td className="p-4 text-right flex gap-2 justify-end">
                     <select 
                       value={order.status}
+                      disabled={processingId === order.id}
                       onChange={(e) => handleStatusChange(order.id, e.target.value)}
-                      className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2"
+                      className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2 disabled:opacity-50"
                     >
                       <option value="pending">Pending</option>
                       <option value="accepted">Accepted</option>
@@ -122,6 +130,12 @@ export default function LiveOrdersTable() {
                       <option value="delivered">Delivered</option>
                       <option value="cancelled">Cancelled</option>
                     </select>
+                    <button
+                      onClick={() => navigate(`/order-tracking/${order.id}`)}
+                      className="bg-primary-500 hover:bg-primary-600 text-white font-bold py-2 px-4 rounded-lg text-sm whitespace-nowrap shadow-sm transition-colors"
+                    >
+                      Track Live
+                    </button>
                   </td>
                 </tr>
               ))

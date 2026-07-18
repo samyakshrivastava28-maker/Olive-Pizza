@@ -9,6 +9,10 @@ export interface DebugStep {
   orderId?: string;
   recipients?: number;
   email?: string;
+  info?: any;
+  lockOwner?: string;
+  lockedAction?: string;
+  lockAge?: string;
 }
 
 export interface DiagnosticTrace {

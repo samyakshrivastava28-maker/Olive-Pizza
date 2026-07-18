@@ -79,10 +79,18 @@ export const NotificationDiagnosticsOverlay: React.FC = () => {
                       </div>
 
                       {/* Detailed Trace Output */}
-                      {(step.reason || step.error || step.email || step.recipients !== undefined || step.trace) && (
+                      {(step.reason || step.error || step.email || step.recipients !== undefined || step.trace || step.lockOwner || step.info) && (
                         <div className="mt-3 pl-8 text-sm">
+                          {step.info && <div className="text-gray-300">Info: {step.info}</div>}
                           {step.reason && <div className="text-gray-300">Reason: {step.reason}</div>}
                           {step.error && <div className="text-red-300 font-mono text-xs mt-1 bg-red-950/50 p-2 rounded">Error: {step.error}</div>}
+                          {step.lockOwner && (
+                            <div className="text-gray-400 text-xs mt-2 space-y-1 bg-black/20 p-2 rounded border border-white/5">
+                              <div><span className="text-gray-500">Lock Owner:</span> {step.lockOwner}</div>
+                              <div><span className="text-gray-500">Action in Progress:</span> {step.lockedAction}</div>
+                              <div><span className="text-gray-500">Lock Age:</span> {step.lockAge}</div>
+                            </div>
+                          )}
                           {step.email && <div className="text-gray-400 flex items-center gap-2 mt-1"><Mail className="w-3 h-3" /> {step.email}</div>}
                           {step.recipients !== undefined && <div className="text-gray-400 flex items-center gap-2 mt-1"><Bell className="w-3 h-3" /> Recipients: {step.recipients}</div>}
                           

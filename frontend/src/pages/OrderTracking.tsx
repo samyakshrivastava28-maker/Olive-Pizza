@@ -551,7 +551,9 @@ export default function OrderTracking() {
       });
       const data = await res.json();
       if (isDebug && data.trace) useNotificationDebugger.getState().updateTrace(data.trace);
-      if (!res.ok) throw new Error(data.error);
+      if (!res.ok) {
+        if (!data.duplicate) throw new Error(data.error);
+      }
     } catch (e) {
       console.error('Cancel failed', e);
     } finally {
