@@ -235,6 +235,16 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
     // 6. MANDATORY TRANSACTIONAL EMAIL — Order Placed (always sent, regardless of push)
     if (userData.email) {
       try {
+        const fullOrderData = {
+          items: validatedItems,
+          subtotal: serverCalculatedTotal,
+          total_amount: serverCalculatedTotal,
+          deliveryAddress: userData.full_address,
+          customerName: userData.name || 'Customer',
+          contactPhone: userData.phone,
+          paymentMethod: 'COD',
+        };
+
         const subject = `Order Placed — #${orderNumber}`;
         const htmlBody = buildOrderStatusEmail({
           customerName: userData.name || 'Customer',
@@ -247,6 +257,7 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
             paymentMethod: 'COD',
             deliveryAddress: userData.full_address,
           },
+          orderData: fullOrderData
         });
         await queueEmail(userData.email, subject, htmlBody, 'transactional');
         console.log(`[Orders] 📧 Order Placed email queued → ${userData.email}`);

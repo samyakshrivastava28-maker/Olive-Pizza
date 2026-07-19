@@ -180,19 +180,26 @@ export function buildOrderStatusEmail(params: {
 function renderOrderSummary(orderData: any): string {
   if (!orderData || !orderData.items) return '';
   
-  const itemsHtml = orderData.items.map((item: any) => `
+  const itemsHtml = orderData.items.map((item: any) => {
+    const productName = item.product_name || item.name || 'Item';
+    const itemImage = item.image_url || item.image;
+    const itemPrice = item.unit_price || item.price || 0;
+    const variantName = item.variant_name || (item.size && item.size !== 'regular' ? `${item.size} ${item.crust && item.crust !== 'normal' ? '- ' + item.crust : ''}` : '');
+    const itemTotal = item.quantity * itemPrice;
+    
+    return `
     <div style="display:flex;padding:12px 0;border-bottom:1px solid ${BRAND_BORDER};">
-      ${item.image_url ? `<img src="${item.image_url}" width="60" height="60" style="border-radius:8px;object-fit:cover;margin-right:16px;background:#1f2937;" />` : ''}
+      ${itemImage ? `<img src="${itemImage}" width="60" height="60" style="border-radius:8px;object-fit:cover;margin-right:16px;background:#1f2937;" />` : ''}
       <div style="flex-grow:1;">
-        <div style="font-weight:700;color:${TEXT_PRIMARY};font-size:15px;margin-bottom:4px;">${item.product_name}</div>
-        ${item.variant_name ? `<div style="font-size:12px;color:${TEXT_SECONDARY};margin-bottom:4px;">Variant: ${item.variant_name}</div>` : ''}
-        <div style="font-size:13px;color:${TEXT_MUTED};">Qty: ${item.quantity} × ₹${item.unit_price}</div>
+        <div style="font-weight:700;color:${TEXT_PRIMARY};font-size:15px;margin-bottom:4px;">${productName}</div>
+        ${variantName ? `<div style="font-size:12px;color:${TEXT_SECONDARY};margin-bottom:4px;">Variant: ${variantName}</div>` : ''}
+        <div style="font-size:13px;color:${TEXT_MUTED};">Qty: ${item.quantity} × ₹${itemPrice}</div>
       </div>
       <div style="font-weight:700;color:${TEXT_PRIMARY};font-size:15px;">
-        ₹${(item.quantity * item.unit_price).toFixed(2)}
+        ₹${itemTotal.toFixed(2)}
       </div>
     </div>
-  `).join('');
+  `}).join('');
 
   return `
     <div style="margin:24px 0;background:rgba(255,255,255,0.03);border:1px solid ${BRAND_BORDER};border-radius:14px;padding:20px;">
@@ -209,17 +216,17 @@ function renderOrderSummary(orderData: any): string {
         </div>
       </div>
     </div>
-    ${orderData.delivery_address ? `
+    ${orderData.deliveryAddress || orderData.delivery_address ? `
     <div style="margin:24px 0;background:rgba(255,255,255,0.03);border:1px solid ${BRAND_BORDER};border-radius:14px;padding:20px;">
       <h3 style="margin:0 0 12px 0;color:${TEXT_PRIMARY};font-size:14px;text-transform:uppercase;letter-spacing:1px;">Delivery Details</h3>
       <p style="margin:0;color:${TEXT_SECONDARY};font-size:14px;line-height:1.5;">
-        ${orderData.delivery_address.fullName || ''}<br/>
-        ${orderData.delivery_address.addressLine1 || ''}<br/>
-        ${orderData.delivery_address.addressLine2 ? orderData.delivery_address.addressLine2 + '<br/>' : ''}
-        ${orderData.delivery_address.city || ''}, ${orderData.delivery_address.state || ''} ${orderData.delivery_address.postalCode || ''}<br/>
-        📞 ${orderData.delivery_address.phone || ''}
+        ${orderData.customerName || (orderData.delivery_address && orderData.delivery_address.fullName) || 'Customer'}<br/>
+        ${orderData.deliveryAddress?.addressLine || (orderData.delivery_address && orderData.delivery_address.addressLine1) || orderData.deliveryAddress || ''}<br/>
+        ${(orderData.delivery_address && orderData.delivery_address.addressLine2) ? orderData.delivery_address.addressLine2 + '<br/>' : ''}
+        ${(orderData.delivery_address && orderData.delivery_address.city) ? orderData.delivery_address.city + ', ' : ''}${(orderData.delivery_address && orderData.delivery_address.state) ? orderData.delivery_address.state : ''} ${(orderData.delivery_address && orderData.delivery_address.postalCode) ? orderData.delivery_address.postalCode + '<br/>' : ''}
+        📞 ${orderData.contactPhone || (orderData.delivery_address && orderData.delivery_address.phone) || ''}
       </p>
-      ${orderData.payment_method ? `<p style="margin:12px 0 0 0;color:${TEXT_MUTED};font-size:13px;">Payment: <strong>${orderData.payment_method.toUpperCase()}</strong></p>` : ''}
+      ${(orderData.payment_method || orderData.paymentMethod) ? `<p style="margin:12px 0 0 0;color:${TEXT_MUTED};font-size:13px;">Payment: <strong>${(orderData.payment_method || orderData.paymentMethod).toUpperCase()}</strong></p>` : ''}
     </div>
     ` : ''}
   `;

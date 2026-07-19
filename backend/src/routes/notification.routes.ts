@@ -427,7 +427,7 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
               const userName = userRes2.name || 'Customer';
               if (userEmail) {
                 const subject = `Your order has been delivered! — ${shortId}`;
-                const htmlBody = buildOrderStatusEmail({ customerName: userName, subject, stage: 'delivered', orderId, data: { orderNumber: shortId, totalAmount: String(orderData.totalAmount || orderData.total_amount || 0) } });
+                const htmlBody = buildOrderStatusEmail({ customerName: userName, subject, stage: 'delivered', orderId, data: { orderNumber: shortId, totalAmount: String(orderData.totalAmount || orderData.total_amount || 0) }, orderData: orderData });
                 queueEmail(userEmail, subject, htmlBody, 'transactional').catch(e => console.error(`[Action][${requestId}] Email queue failed:`, e.message));
               }
             }
