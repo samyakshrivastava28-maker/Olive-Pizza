@@ -264,7 +264,7 @@ export default function DeliveryDashboard() {
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
             body: JSON.stringify({ orderId, partnerId: user.uid, customerLat: currentTask.deliveryAddress?.lat, customerLng: currentTask.deliveryAddress?.lng, restaurantLat: RESTAURANT_LOCATION.lat, restaurantLng: RESTAURANT_LOCATION.lng }),
           });
-        } catch (e) {}
+        } catch (e: any) { console.warn('[DeliveryDashboard] Navigation start failed (non-critical):', e.message); }
       }
       
       const token = await getCurrentAuthToken();
@@ -329,7 +329,7 @@ export default function DeliveryDashboard() {
       try {
         const token = await getCurrentAuthToken();
         await fetch("/api/tracking/navigation/stop", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ orderId: completingOrderId, partnerId: user?.uid }) });
-      } catch (e) {}
+      } catch (e: any) { console.warn('[DeliveryDashboard] Navigation stop failed (non-critical):', e.message); }
 
       if (watchIdRef.current !== null) { navigator.geolocation.clearWatch(watchIdRef.current); watchIdRef.current = null; }
       if (heartbeatRef.current) { clearInterval(heartbeatRef.current); heartbeatRef.current = null; }

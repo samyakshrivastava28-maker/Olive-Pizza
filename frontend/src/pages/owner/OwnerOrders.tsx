@@ -12,6 +12,7 @@ import {
 import { Order } from "../../types/models";
 import { playNotificationSound, statusToSoundType } from "../../hooks/useNotificationSound";
 import { useNotificationDebugger } from "../../hooks/useNotificationDebugger";
+import toast from "react-hot-toast";
 
 
 export default function OwnerOrders() {
@@ -88,38 +89,82 @@ export default function OwnerOrders() {
   ) => {
     if (processingId === order.id) return;
     setProcessingId(order.id);
+    const actionStartTime = Date.now();
+    const endpoint = '/api/notifications/action';
+    const actionMap: Record<string, string> = {
+      cancelled: 'reject',
+      preparing: 'start_cooking',
+      ready: 'ready',
+      partner_assigned: 'assign_delivery',
+      accepted: 'accept',
+    };
+    const action = actionMap[newStatus] || 'accept';
+
     try {
       const isDebug = localStorage.getItem('diag_mode') === 'true';
       const token = await auth.currentUser?.getIdToken();
-      if (!token) throw new Error("Not authenticated");
+      if (!token) {
+        toast.error('Authentication error: Please log in again.');
+        throw new Error('Not authenticated');
+      }
 
-      const res = await fetch('/api/notifications/action', {
+      const requestBody = {
+        orderId: order.id,
+        action,
+        currentStage: order.status,
+        partnerId,
+      };
+
+      console.log(`[OwnerOrders] → ${endpoint}`, { action, orderId: order.id, currentStage: order.status, partnerId });
+
+      const res = await fetch(endpoint, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
           ...(isDebug ? { 'X-Debug-Mode': 'true' } : {})
         },
-        body: JSON.stringify({ 
-          orderId: order.id, 
-          action: newStatus === 'cancelled' ? 'reject' : 
-                  newStatus === 'preparing' ? 'start_cooking' : 
-                  newStatus === 'ready' ? 'ready' : 
-                  newStatus === 'partner_assigned' ? 'assign_delivery' : 
-                  'accept', 
-          currentStage: order.status, 
-          partnerId 
-        })
+        body: JSON.stringify(requestBody),
+        signal: AbortSignal.timeout(15000), // 15s timeout
       });
 
+      const executionMs = Date.now() - actionStartTime;
       const data = await res.json();
+
+      console.log(`[OwnerOrders] ← ${endpoint} status=${res.status} ms=${executionMs} requestId=${data.requestId || 'N/A'}`, data);
+
       if (isDebug && data.trace) useNotificationDebugger.getState().updateTrace(data.trace);
+
       if (!res.ok) {
-        if (!data.duplicate) throw new Error(data.error);
+        if (data.duplicate) {
+          // Idempotent duplicate - treat as success
+          console.log(`[OwnerOrders] Duplicate request safely ignored for order ${order.id}`);
+          return;
+        }
+        const errorMessage = data.error || `Server error (${res.status})`;
+        console.error(`[OwnerOrders] Action failed: ${errorMessage} (requestId=${data.requestId}, ms=${executionMs})`);
+        toast.error(`Action failed: ${errorMessage}`);
+        throw new Error(errorMessage);
       }
 
-    } catch (error) {
-      console.error("Failed to update status", error);
+      if (data.success === false && data.message) {
+        // Terminal state or no-op
+        toast.error(data.message);
+        return;
+      }
+
+      console.log(`[OwnerOrders] ✅ Action '${action}' succeeded in ${executionMs}ms. newStatus=${data.newStatus}`);
+
+    } catch (error: any) {
+      const executionMs = Date.now() - actionStartTime;
+      if (error.name === 'TimeoutError' || error.name === 'AbortError') {
+        const msg = `Request timed out after 15 seconds. Please check your connection and try again.`;
+        console.error(`[OwnerOrders] TIMEOUT for action '${action}' on order ${order.id} ms=${executionMs}`);
+        toast.error(msg);
+      } else if (error.message !== 'Not authenticated') {
+        console.error(`[OwnerOrders] Error on action '${action}' for order ${order.id} ms=${executionMs}:`, error.message, error.stack);
+        toast.error(`Failed: ${error.message}`);
+      }
     } finally {
       setProcessingId(null);
     }

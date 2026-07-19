@@ -43,11 +43,9 @@ async function getOwnerUserIds(): Promise<string[]> {
   const snapshot = await db.collection('users').where('role', '==', 'owner').get();
   return snapshot.docs.map(doc => doc.id);
 }
-}
 
 // ─── Helper: Resolve user's Postgres UUID from Firebase UID ───────────────────
-}
-
+const getPostgresUserId = async (uid: string) => uid;
 // ─── Helper: Acquire order lock (prevent race conditions) ─────────────────────
 interface LockInfo {
   success: boolean;
@@ -116,367 +114,424 @@ async function releaseOrderLock(orderId: string): Promise<void> {
 
 // =============================================================================
 // POST /notifications/action
-// Service Worker quick actions — handles Accept, Reject, Start Cooking, etc.
+// Owner/Delivery quick actions — handles Accept, Reject, Start Cooking, etc.
+// CRITICAL FLOW: Firestore write is SYNCHRONOUS before HTTP 200.
+// Notifications/emails/analytics are fire-and-forget background tasks.
 // =============================================================================
 router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Promise<void> => {
   const { orderId, action, currentStage, partnerId } = req.body;
   const userId = req.user!.uid;
   const isDebug = req.headers['x-debug-mode'] === 'true';
   const startTime = Date.now();
-  const trace: any = { route: 'POST /api/notifications/action', action, orderId, userId, steps: [] };
+  const requestId = `req_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+  const trace: any = { requestId, route: 'POST /api/notifications/action', action, orderId, userId, currentStage, steps: [] };
+
+  console.log(`[Action][${requestId}] START action=${action} orderId=${orderId} userId=${userId} currentStage=${currentStage}`);
 
   if (!orderId || !action) {
-    trace.steps.push({ step: 'Validation', status: 'failed', reason: 'Missing orderId or action' });
-    res.status(400).json({ error: 'Missing orderId or action' });
+    const reason = !orderId ? 'Missing orderId' : 'Missing action';
+    trace.steps.push({ step: 'Validation', status: 'failed', reason });
+    console.warn(`[Action][${requestId}] Validation failed: ${reason}`);
+    res.status(400).json({ error: reason, requestId });
     return;
   }
 
-  // ── Security: Verify user exists and has permission ──
-  const userDoc = await db.collection('users').doc(userId).get();
-  if (!userDoc.exists) {
-    res.status(403).json({ error: 'Unauthorized' });
-    return;
-  }
-  const userRole = userDoc.data()?.role as string;
-
-  // ── Pre-check: Order Status ─────────────────────────────────────────────
-  const preCheckDoc = await db.collection('orders').doc(orderId).get();
-  const orderStatusPreCheck = preCheckDoc.exists ? preCheckDoc.data()?.status : null;
-
-  if (orderStatusPreCheck && ['delivered', 'completed', 'cancelled', 'rejected'].includes(orderStatusPreCheck)) {
-    if (isDebug) trace.steps.push({ step: 'Terminal State Check', status: 'failed', reason: `Order is already ${orderStatusPreCheck}` });
-    res.status(200).json({ success: false, message: `Order already ${orderStatusPreCheck}`, trace: isDebug ? trace : undefined });
-    return;
-  }
-
-  // ── Order Locking: prevent race conditions ──────────────────────────────
-  const lockInfo = await acquireOrderLock(orderId, userId, action);
-  if (!lockInfo.success) {
-    if (lockInfo.duplicate) {
-      // Safely ignore duplicate requests (e.g. double click)
-      if (isDebug) trace.steps.push({ step: 'Idempotency Lock', status: 'success', info: 'Duplicate request safely ignored' });
-      res.status(200).json({ success: true, duplicate: true, message: lockInfo.reason, trace: isDebug ? trace : undefined });
+  // ── Step 1: Verify user exists and has a role ──────────────────────────
+  let userRole: string;
+  try {
+    const userDoc = await db.collection('users').doc(userId).get();
+    if (!userDoc.exists) {
+      console.warn(`[Action][${requestId}] User not found in Firestore: ${userId}`);
+      res.status(403).json({ error: 'Unauthorized: user not found', requestId });
       return;
     }
-
-    if (isDebug) trace.steps.push({ 
-      step: 'Idempotency Lock', 
-      status: 'failed', 
-      reason: lockInfo.reason,
-      lockOwner: lockInfo.locked_by_name,
-      lockAge: lockInfo.age_seconds ? `${lockInfo.age_seconds}s` : undefined,
-      lockedAction: lockInfo.action
-    });
-    res.status(409).json({ 
-      error: lockInfo.reason || 'Order is currently being processed by another request', 
-      trace: isDebug ? trace : undefined 
-    });
+    userRole = userDoc.data()?.role as string;
+    trace.steps.push({ step: 'Auth Check', status: 'success', role: userRole, ms: Date.now() - startTime });
+    console.log(`[Action][${requestId}] Auth OK. role=${userRole}`);
+  } catch (authErr: any) {
+    console.error(`[Action][${requestId}] Auth check failed:`, authErr.message);
+    res.status(500).json({ error: 'Authentication check failed', details: authErr.message, requestId });
     return;
   }
 
-  
-  const orderDoc = await db.collection('orders').doc(orderId).get();
-  if (!orderDoc.exists) {
-    await releaseOrderLock(orderId);
-    res.status(404).json({ error: 'Order not found' });
+  // ── Step 2: Pre-check terminal order states ─────────────────────────────
+  try {
+    const preCheckDoc = await db.collection('orders').doc(orderId).get();
+    const orderStatusPreCheck = preCheckDoc.exists ? preCheckDoc.data()?.status : null;
+    if (!preCheckDoc.exists) {
+      console.warn(`[Action][${requestId}] Order ${orderId} not found in pre-check`);
+      res.status(404).json({ error: 'Order not found', requestId });
+      return;
+    }
+    if (['delivered', 'completed', 'cancelled', 'rejected'].includes(orderStatusPreCheck)) {
+      trace.steps.push({ step: 'Terminal State Check', status: 'blocked', reason: `Order already ${orderStatusPreCheck}` });
+      console.log(`[Action][${requestId}] Order already in terminal state: ${orderStatusPreCheck}`);
+      res.status(200).json({ success: false, message: `Order already ${orderStatusPreCheck}`, requestId, trace: isDebug ? trace : undefined });
+      return;
+    }
+    trace.steps.push({ step: 'Terminal State Check', status: 'success', currentStatus: orderStatusPreCheck, ms: Date.now() - startTime });
+  } catch (preCheckErr: any) {
+    console.error(`[Action][${requestId}] Pre-check Firestore read failed:`, preCheckErr.message);
+    res.status(500).json({ error: 'Failed to read order status', details: preCheckErr.message, requestId });
     return;
   }
-  const order = orderDoc.data()!;
-  const orderData = order;
-  const customerFirebaseUid = order.userId;
-  const backgroundTasks: (() => Promise<void>)[] = [];
-  let newStatus = order.status;
-  let responseData: any = {};
-  let isIndependentTransaction = true; // All use orderEventService now
 
+  // ── Step 3: Acquire Order Lock ──────────────────────────────────────────
+  let lockAcquired = false;
+  try {
+    const lockInfo = await acquireOrderLock(orderId, userId, action);
+    if (!lockInfo.success) {
+      if (lockInfo.duplicate) {
+        trace.steps.push({ step: 'Idempotency Lock', status: 'success', info: 'Duplicate request safely ignored' });
+        console.log(`[Action][${requestId}] Duplicate request ignored for orderId=${orderId}`);
+        res.status(200).json({ success: true, duplicate: true, message: lockInfo.reason, requestId, trace: isDebug ? trace : undefined });
+        return;
+      }
+      trace.steps.push({ step: 'Idempotency Lock', status: 'failed', reason: lockInfo.reason });
+      console.warn(`[Action][${requestId}] Lock failed: ${lockInfo.reason}`);
+      res.status(409).json({ error: lockInfo.reason || 'Order is currently being processed', requestId, trace: isDebug ? trace : undefined });
+      return;
+    }
+    lockAcquired = true;
+    trace.steps.push({ step: 'Order Lock', status: 'acquired', ms: Date.now() - startTime });
+    console.log(`[Action][${requestId}] Lock acquired for orderId=${orderId}`);
+  } catch (lockErr: any) {
+    console.error(`[Action][${requestId}] Lock acquisition error:`, lockErr.message);
+    res.status(500).json({ error: 'Failed to acquire order lock', details: lockErr.message, requestId });
+    return;
+  }
+
+  let lockReleased = false;
+
+  try {
+    // ── Step 4: Read full order from Firestore ─────────────────────────────
+    const orderDoc = await db.collection('orders').doc(orderId).get();
+    if (!orderDoc.exists) {
+      console.warn(`[Action][${requestId}] Order ${orderId} not found`);
+      await releaseOrderLock(orderId);
+      lockReleased = true;
+      res.status(404).json({ error: 'Order not found', requestId });
+      return;
+    }
+    const orderData = orderDoc.data()!;
+    const currentStatus = orderData.status as string;
+    const customerFirebaseUid = orderData.userId;
     const shortId = orderData.dailyOrderNumber || `#${orderId.slice(-6).toUpperCase()}`;
-    let newStatus = order.status;
+    trace.steps.push({ step: 'Firestore Read', status: 'success', currentStatus, ms: Date.now() - startTime });
+    console.log(`[Action][${requestId}] Order read. currentStatus=${currentStatus}`);
+
+    const backgroundTasks: (() => Promise<void>)[] = [];
+    let newStatus = currentStatus;
     let responseData: any = {};
-    let isIndependentTransaction = false;
+    let firestoreWriteRequired = false;
+    let firestoreUpdates: Record<string, any> = {};
 
-    // ─── State Machine ─────────────────────────────────────────────────────
-    if (action === 'accept' && currentStage === 'new_order' && userRole === 'owner') {
-       // Release lock — OrderEventService handles its own transaction
-      isIndependentTransaction = true;
-      const event = await orderEventService.emitStatusChange(orderId, 'accepted', userId, { eta: '20-30 mins' });
-      if (!event) {
-        if (isDebug) trace.steps.push({ step: 'Postgres Write', status: 'failed', reason: 'Invalid transition' });
-        res.status(409).json({ error: 'Invalid state transition or order not found', trace: isDebug ? trace : undefined });
+    // ── Step 5: State Machine Validation & Business Logic ─────────────────
+    // Allowed transitions per action (enforced on server, regardless of what client sends)
+    const OWNER_TRANSITIONS: Record<string, { from: string[], to: string }> = {
+      accept:          { from: ['pending', 'new_order'], to: 'accepted' },
+      reject:          { from: ['pending', 'new_order', 'accepted', 'preparing', 'ready', 'partner_assigned'], to: 'cancelled' },
+      start_cooking:   { from: ['accepted'], to: 'preparing' },
+      ready:           { from: ['preparing'], to: 'ready' },
+      assign_delivery: { from: ['ready'], to: 'partner_assigned' },
+    };
+
+    // ── OWNER ACTIONS ──────────────────────────────────────────────────────
+    if (userRole === 'owner') {
+      const actionDef = OWNER_TRANSITIONS[action];
+
+      if (!actionDef) {
+        trace.steps.push({ step: 'State Machine', status: 'failed', reason: `Unknown owner action: ${action}` });
+        console.warn(`[Action][${requestId}] Unknown owner action: ${action}`);
+        await releaseOrderLock(orderId);
+        lockReleased = true;
+        res.status(400).json({ error: `Unknown action "${action}" for role "owner"`, allowedActions: Object.keys(OWNER_TRANSITIONS), requestId });
         return;
       }
-      newStatus = 'accepted';
-      const ev = event!;
 
-      backgroundTasks.push(async () => {
-        if (ev.order.firebaseUid) {
-          const payload = CustomerTemplates.orderUpdate(orderId, {
-            orderNumber: ev.order.orderNumber, status: 'accepted', totalAmount: ev.order.totalAmount,
-            eta: '20-30 mins', version: ev.version,
-            eventId: ev.eventId, previousStatus: ev.previousStatus || undefined, eventTimestamp: ev.eventTimestamp,
-          });
-          const cTrace = await directNotification.sendPush(ev.order.firebaseUid, payload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: ev.version });
-          trace.steps.push({ step: 'Customer Notification', status: 'success', trace: cTrace });
-        }
-        const ownerIds = await getOwnerUserIds();
-        const ownerPayload = OwnerTemplates.orderStatusUpdate(orderId, {
-          orderNumber: ev.order.orderNumber, customerName: ev.order.contactPhone,
-          status: 'accepted', totalAmount: ev.order.totalAmount, version: ev.version,
-          eventId: ev.eventId, previousStatus: ev.previousStatus || undefined, eventTimestamp: ev.eventTimestamp,
-        });
-        const oTrace = await directNotification.sendBulkPush(ownerIds, ownerPayload, 'normal', { tag: `order_owner_${orderId}`, orderId, category: 'order', version: ev.version });
-        trace.steps.push({ step: 'Owner Notifications', status: 'success', recipients: ownerIds.length, trace: oTrace });
-      });
-      
-      responseData = { message: 'Order accepted' };
-    }
-
-    else if (action === 'reject' && userRole === 'owner') {
-      newStatus = 'cancelled';
-      await transactionClient.query("UPDATE orders SET status = 'cancelled', updated_at = NOW() WHERE id = $1", [orderId]);
-
-      backgroundTasks.push(async () => {
-        if (customerFirebaseUid) {
-          const payload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'cancelled', totalAmount: Number(order.total_amount), version: 2 });
-          await directNotification.sendPush(customerFirebaseUid, payload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 2 });
-        }
-        const ownerIds = await getOwnerUserIds();
-        const ownerPayload = OwnerTemplates.orderStatusUpdate(orderId, {
-          orderNumber: shortId, customerName: String(order.contact_phone),
-          status: 'cancelled', totalAmount: Number(order.total_amount), version: 2,
-        });
-        for (const oid of ownerIds) {
-          await directNotification.sendPush(oid, ownerPayload, 'normal', { tag: `order_owner_${orderId}`, orderId, category: 'order', version: 2 });
-        }
-      });
-
-      responseData = { message: 'Order rejected' };
-    }
-
-    else if (action === 'start_cooking' && userRole === 'owner') {
-      newStatus = 'preparing';
-      await transactionClient.query("UPDATE orders SET status = 'preparing', updated_at = NOW() WHERE id = $1", [orderId]);
-
-      backgroundTasks.push(async () => {
-        if (customerFirebaseUid) {
-          const payload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'preparing', totalAmount: Number(order.total_amount), version: 3 });
-          await directNotification.sendPush(customerFirebaseUid, payload, 'normal', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 3 });
-        }
-      });
-      responseData = { message: 'Cooking started' };
-    }
-
-    else if (action === 'ready' && userRole === 'owner') {
-      newStatus = 'ready';
-      await transactionClient.query("UPDATE orders SET status = 'ready', updated_at = NOW() WHERE id = $1", [orderId]);
-
-      backgroundTasks.push(async () => {
-        if (customerFirebaseUid) {
-          const payload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'ready', totalAmount: Number(order.total_amount), version: 4 });
-          await directNotification.sendPush(customerFirebaseUid, payload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 4 });
-        }
-      });
-      responseData = { message: 'Order marked ready' };
-    }
-
-    else if (action === 'assign_delivery' && userRole === 'owner' && partnerId) {
-      const partnerResult = await transactionClient.query(
-        "SELECT user_id as firebase_uid FROM fcm_tokens WHERE user_id = $1",
-        [partnerId]
-      );
-      if (partnerResult.rows.length === 0) {
-        
-        res.status(400).json({ error: 'Invalid delivery partner' });
+      if (!actionDef.from.includes(currentStatus)) {
+        const reason = `Cannot perform "${action}" when order is "${currentStatus}". Allowed from: [${actionDef.from.join(', ')}]`;
+        trace.steps.push({ step: 'State Machine', status: 'failed', reason });
+        console.warn(`[Action][${requestId}] Invalid transition: ${reason}`);
+        await releaseOrderLock(orderId);
+        lockReleased = true;
+        res.status(409).json({ error: reason, currentStatus, action, requestId, trace: isDebug ? trace : undefined });
         return;
       }
-      const partner = partnerResult.rows[0];
 
-      newStatus = 'partner_assigned';
-      await transactionClient.query(
-        "UPDATE orders SET status = 'partner_assigned', delivery_partner_id = $1, updated_at = NOW() WHERE id = $2",
-        [partnerId, orderId]
-      );
+      newStatus = actionDef.to;
+      trace.steps.push({ step: 'State Machine', status: 'success', transition: `${currentStatus} → ${newStatus}`, ms: Date.now() - startTime });
+      console.log(`[Action][${requestId}] Transition validated: ${currentStatus} → ${newStatus}`);
 
-      backgroundTasks.push(async () => {
-        const deliveryPayload = DeliveryTemplates.newAssignment(orderId, {
-          orderNumber: shortId, customerName: 'Customer', customerPhone: order.contact_phone,
-          deliveryAddress: order.delivery_address_line, distance: '?', eta: '15 mins',
-          totalAmount: Number(order.total_amount), paymentMethod: 'COD', version: 1
-        });
-        await directNotification.sendPush(partner.firebase_uid, deliveryPayload, 'high', { tag: `order_delivery_${orderId}`, orderId, category: 'delivery', priority: 'critical', version: 1 });
+      // Build Firestore updates
+      firestoreWriteRequired = true;
+      firestoreUpdates = { status: newStatus, updatedAt: new Date() };
 
-        if (customerFirebaseUid) {
-          const cPayload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'partner_assigned', totalAmount: Number(order.total_amount), deliveryPartnerName: partner.name || 'Partner', version: 5 });
-          await directNotification.sendPush(customerFirebaseUid, cPayload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 5 });
+      if (action === 'assign_delivery') {
+        if (!partnerId) {
+          await releaseOrderLock(orderId);
+          lockReleased = true;
+          res.status(400).json({ error: 'partnerId is required for assign_delivery', requestId });
+          return;
         }
-      });
-      responseData = { message: 'Partner assigned' };
-    }
+        firestoreUpdates.deliveryPartnerId = partnerId;
+        firestoreUpdates.delivery_partner_id = partnerId;
 
-    else if (action === 'accept_delivery' && userRole === 'delivery') {
-      if (order.delivery_partner_id !== userId) {
-        
-        res.status(403).json({ error: 'You are not assigned to this order' });
-        return;
-      }
-      backgroundTasks.push(async () => {
-        const dPayload = DeliveryTemplates.deliveryUpdate(orderId, { orderNumber: shortId, customerName: 'Customer', deliveryAddress: order.delivery_address_line, stage: 'navigate_restaurant', version: 2 });
-        await directNotification.sendPush(userId, dPayload, 'high', { tag: `order_delivery_${orderId}`, orderId, category: 'delivery', version: 2 });
-      });
-      responseData = { message: 'Delivery accepted' };
-    }
-
-    else if (action === 'picked_up' && userRole === 'delivery') {
-      newStatus = 'out_for_delivery';
-      await transactionClient.query("UPDATE orders SET status = 'out_for_delivery', updated_at = NOW() WHERE id = $1", [orderId]);
-
-      backgroundTasks.push(async () => {
-        const dPayload = DeliveryTemplates.deliveryUpdate(orderId, { orderNumber: shortId, customerName: 'Customer', deliveryAddress: order.delivery_address_line, stage: 'out_for_delivery', version: 3 });
-        await directNotification.sendPush(userId, dPayload, 'high', { tag: `order_delivery_${orderId}`, orderId, category: 'delivery', version: 3 });
-
-        if (customerFirebaseUid) {
-          const cPayload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'out_for_delivery', totalAmount: Number(order.total_amount), version: 6 });
-          await directNotification.sendPush(customerFirebaseUid, cPayload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 6 });
-        }
-      });
-      responseData = { message: 'Picked up — out for delivery' };
-    }
-
-    else if (action === 'delivered' && userRole === 'delivery') {
-      const { deliveryProof } = req.body;
-      
-      isIndependentTransaction = true;
-      const event = await orderEventService.emitStatusChange(orderId, 'delivered', userId);
-      
-      if (!event) {
-        res.status(409).json({ error: 'Invalid state transition' });
-        return;
-      }
-      newStatus = 'delivered';
-      const ev = event!;
-
-      backgroundTasks.push(async () => {
-        if (deliveryProof) {
+        backgroundTasks.push(async () => {
           try {
-            await db.collection('orders').doc(orderId).update({
-              deliveryProof,
-              deliveredAt: new Date().toISOString()
+            const deliveryPayload = DeliveryTemplates.newAssignment(orderId, {
+              orderNumber: shortId, customerName: 'Customer', customerPhone: orderData.contactPhone || orderData.contact_phone,
+              deliveryAddress: orderData.deliveryAddress?.addressLine || orderData.delivery_address_line || 'Address not provided',
+              distance: '?', eta: '15 mins', totalAmount: Number(orderData.totalAmount || orderData.total_amount || 0),
+              paymentMethod: orderData.paymentMethod || 'COD', version: 1
             });
-          } catch (e) {
-            console.error("Failed to save delivery proof", e);
+            await directNotification.sendPush(partnerId, deliveryPayload, 'high', { tag: `order_delivery_${orderId}`, orderId, category: 'delivery', priority: 'critical', version: 1 });
+          } catch (notifErr: any) {
+            console.error(`[Action][${requestId}] Delivery partner notification failed (non-blocking):`, notifErr.message);
           }
-        }
-
-        if (ev.order.firebaseUid) {
-          const cPayload = CustomerTemplates.orderUpdate(orderId, {
-            orderNumber: ev.order.orderNumber, status: 'delivered', totalAmount: ev.order.totalAmount,
-            version: ev.version, eventId: ev.eventId, previousStatus: ev.previousStatus || undefined, eventTimestamp: ev.eventTimestamp,
-          });
-          await directNotification.sendPush(ev.order.firebaseUid, cPayload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: ev.version });
-
-          const userDoc2 = await db.collection('users').doc(ev.order.userId).get();
-          const userRes2 = { rows: [userDoc2.data() || {}] };
-          const userEmail = userRes2.rows[0]?.email;
-          const userName  = userRes2.rows[0]?.name || 'Customer';
-          if (userEmail) {
-            const subject = `Your order has been delivered! — #${ev.order.orderNumber}`;
-            const htmlBody = buildOrderStatusEmail({
-              customerName: userName, subject, stage: 'delivered',
-              orderId, data: { orderNumber: ev.order.orderNumber, totalAmount: String(ev.order.totalAmount) },
-            });
-            queueEmail(userEmail, subject, htmlBody, 'transactional').catch(console.error);
-            console.log(`[NotifRoutes] 📧 Delivered email queued → ${userEmail}`);
+          try {
+            if (customerFirebaseUid) {
+              const cPayload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'partner_assigned', totalAmount: Number(orderData.totalAmount || orderData.total_amount || 0), deliveryPartnerName: 'Partner', version: 5 });
+              await directNotification.sendPush(customerFirebaseUid, cPayload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 5 });
+            }
+          } catch (notifErr: any) {
+            console.error(`[Action][${requestId}] Customer notification failed (non-blocking):`, notifErr.message);
           }
-        }
+        });
+      } else if (action === 'accept') {
+        firestoreUpdates.acceptedAt = new Date().toISOString();
+        firestoreUpdates.eta = '20-30 mins';
+        backgroundTasks.push(async () => {
+          try {
+            if (customerFirebaseUid) {
+              const payload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'accepted', totalAmount: Number(orderData.totalAmount || orderData.total_amount || 0), eta: '20-30 mins', version: 2 });
+              await directNotification.sendPush(customerFirebaseUid, payload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 2 });
+            }
+          } catch (notifErr: any) {
+            console.error(`[Action][${requestId}] Accept customer notification failed (non-blocking):`, notifErr.message);
+          }
+          try {
+            const ownerIds = await getOwnerUserIds();
+            const ownerPayload = OwnerTemplates.orderStatusUpdate(orderId, { orderNumber: shortId, customerName: orderData.contactPhone || '', status: 'accepted', totalAmount: Number(orderData.totalAmount || orderData.total_amount || 0), version: 2 });
+            await directNotification.sendBulkPush(ownerIds, ownerPayload, 'normal', { tag: `order_owner_${orderId}`, orderId, category: 'order', version: 2 });
+          } catch (notifErr: any) {
+            console.error(`[Action][${requestId}] Accept owner notification failed (non-blocking):`, notifErr.message);
+          }
+        });
+      } else if (action === 'reject') {
+        firestoreUpdates.cancelledAt = new Date().toISOString();
+        backgroundTasks.push(async () => {
+          try {
+            if (customerFirebaseUid) {
+              const payload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'cancelled', totalAmount: Number(orderData.totalAmount || orderData.total_amount || 0), version: 2 });
+              await directNotification.sendPush(customerFirebaseUid, payload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 2 });
+            }
+          } catch (notifErr: any) {
+            console.error(`[Action][${requestId}] Reject notification failed (non-blocking):`, notifErr.message);
+          }
+        });
+      } else if (action === 'start_cooking') {
+        firestoreUpdates.preparingAt = new Date().toISOString();
+        backgroundTasks.push(async () => {
+          try {
+            if (customerFirebaseUid) {
+              const payload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'preparing', totalAmount: Number(orderData.totalAmount || orderData.total_amount || 0), version: 3 });
+              await directNotification.sendPush(customerFirebaseUid, payload, 'normal', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 3 });
+            }
+          } catch (notifErr: any) {
+            console.error(`[Action][${requestId}] Start cooking notification failed (non-blocking):`, notifErr.message);
+          }
+        });
+      } else if (action === 'ready') {
+        firestoreUpdates.readyAt = new Date().toISOString();
+        backgroundTasks.push(async () => {
+          try {
+            if (customerFirebaseUid) {
+              const payload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'ready', totalAmount: Number(orderData.totalAmount || orderData.total_amount || 0), version: 4 });
+              await directNotification.sendPush(customerFirebaseUid, payload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 4 });
+            }
+          } catch (notifErr: any) {
+            console.error(`[Action][${requestId}] Ready notification failed (non-blocking):`, notifErr.message);
+          }
+        });
+      }
 
-        const ownerIds = await getOwnerUserIds();
-        for (const ownerId of ownerIds) {
-          const oPayload = OwnerTemplates.orderStatusUpdate(orderId, {
-            orderNumber: ev.order.orderNumber, customerName: ev.order.contactPhone,
-            status: 'delivered', totalAmount: ev.order.totalAmount, version: ev.version,
-            eventId: ev.eventId, previousStatus: ev.previousStatus || undefined, eventTimestamp: ev.eventTimestamp,
-          });
-          await directNotification.sendPush(ownerId, oPayload, 'normal', { tag: `order_owner_${orderId}`, orderId, category: 'order', version: ev.version });
-        }
-      });
-      responseData = { message: 'Delivered — order complete' };
+      responseData = { message: `Order ${action === 'reject' ? 'rejected' : action === 'accept' ? 'accepted' : action === 'assign_delivery' ? 'partner assigned' : newStatus}` };
     }
 
+    // ── DELIVERY ACTIONS ───────────────────────────────────────────────────
+    else if (userRole === 'delivery') {
+      if (action === 'accept_delivery') {
+        if (orderData.delivery_partner_id !== userId && orderData.deliveryPartnerId !== userId) {
+          await releaseOrderLock(orderId);
+          lockReleased = true;
+          console.warn(`[Action][${requestId}] Delivery partner ${userId} not assigned to order ${orderId}`);
+          res.status(403).json({ error: 'You are not assigned to this order', requestId });
+          return;
+        }
+        backgroundTasks.push(async () => {
+          try {
+            const dPayload = DeliveryTemplates.deliveryUpdate(orderId, { orderNumber: shortId, customerName: 'Customer', deliveryAddress: orderData.deliveryAddress?.addressLine || orderData.delivery_address_line || '', stage: 'navigate_restaurant', version: 2 });
+            await directNotification.sendPush(userId, dPayload, 'high', { tag: `order_delivery_${orderId}`, orderId, category: 'delivery', version: 2 });
+          } catch (notifErr: any) {
+            console.error(`[Action][${requestId}] Accept delivery notification failed (non-blocking):`, notifErr.message);
+          }
+        });
+        responseData = { message: 'Delivery accepted' };
+      } else if (action === 'picked_up') {
+        if (currentStatus !== 'partner_assigned') {
+          await releaseOrderLock(orderId);
+          lockReleased = true;
+          res.status(409).json({ error: `Cannot pick up order with status "${currentStatus}". Must be "partner_assigned".`, requestId });
+          return;
+        }
+        newStatus = 'out_for_delivery';
+        firestoreWriteRequired = true;
+        firestoreUpdates = { status: newStatus, updatedAt: new Date(), pickedUpAt: new Date().toISOString() };
+        backgroundTasks.push(async () => {
+          try {
+            const dPayload = DeliveryTemplates.deliveryUpdate(orderId, { orderNumber: shortId, customerName: 'Customer', deliveryAddress: orderData.deliveryAddress?.addressLine || orderData.delivery_address_line || '', stage: 'out_for_delivery', version: 3 });
+            await directNotification.sendPush(userId, dPayload, 'high', { tag: `order_delivery_${orderId}`, orderId, category: 'delivery', version: 3 });
+          } catch (notifErr: any) {
+            console.error(`[Action][${requestId}] Picked up delivery notification failed (non-blocking):`, notifErr.message);
+          }
+          try {
+            if (customerFirebaseUid) {
+              const cPayload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'out_for_delivery', totalAmount: Number(orderData.totalAmount || orderData.total_amount || 0), version: 6 });
+              await directNotification.sendPush(customerFirebaseUid, cPayload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 6 });
+            }
+          } catch (notifErr: any) {
+            console.error(`[Action][${requestId}] Picked up customer notification failed (non-blocking):`, notifErr.message);
+          }
+        });
+        responseData = { message: 'Picked up — out for delivery' };
+      } else if (action === 'delivered') {
+        if (currentStatus !== 'out_for_delivery') {
+          await releaseOrderLock(orderId);
+          lockReleased = true;
+          res.status(409).json({ error: `Cannot deliver order with status "${currentStatus}". Must be "out_for_delivery".`, requestId });
+          return;
+        }
+        const { deliveryProof } = req.body;
+        newStatus = 'delivered';
+        firestoreWriteRequired = true;
+        firestoreUpdates = { status: newStatus, updatedAt: new Date(), deliveredAt: new Date().toISOString(), ...(deliveryProof ? { deliveryProof } : {}) };
+        backgroundTasks.push(async () => {
+          try {
+            if (customerFirebaseUid) {
+              const cPayload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'delivered', totalAmount: Number(orderData.totalAmount || orderData.total_amount || 0), version: 7 });
+              await directNotification.sendPush(customerFirebaseUid, cPayload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 7 });
+              const userDoc2 = await db.collection('users').doc(customerFirebaseUid).get();
+              const userRes2 = userDoc2.data() || {};
+              const userEmail = userRes2.email;
+              const userName = userRes2.name || 'Customer';
+              if (userEmail) {
+                const subject = `Your order has been delivered! — ${shortId}`;
+                const htmlBody = buildOrderStatusEmail({ customerName: userName, subject, stage: 'delivered', orderId, data: { orderNumber: shortId, totalAmount: String(orderData.totalAmount || orderData.total_amount || 0) } });
+                queueEmail(userEmail, subject, htmlBody, 'transactional').catch(e => console.error(`[Action][${requestId}] Email queue failed:`, e.message));
+              }
+            }
+          } catch (notifErr: any) {
+            console.error(`[Action][${requestId}] Delivered notification failed (non-blocking):`, notifErr.message);
+          }
+        });
+        responseData = { message: 'Delivered — order complete' };
+      } else {
+        await releaseOrderLock(orderId);
+        lockReleased = true;
+        res.status(400).json({ error: `Unknown delivery action "${action}"`, allowedActions: ['accept_delivery', 'picked_up', 'delivered'], requestId });
+        return;
+      }
+    }
+
+    // ── SYSTEM ACTIONS ─────────────────────────────────────────────────────
     else if (action === 'stop_alert') {
       backgroundTasks.push(async () => {
-        const stopPayload = {
-          notification: { title: '', body: '' },
-          data: { action: 'STOP_ALERT', orderId, stage: currentStage, category: 'system' }
-        };
-        await directNotification.sendPush(userId, { notification: { title: 'Stop Alert', body: '' }, data: stopPayload.data }, 'high', { tag: `stop_alert_${orderId}`, orderId, category: 'system' });
+        try {
+          await directNotification.sendPush(userId, { notification: { title: 'Stop Alert', body: '' }, data: { action: 'STOP_ALERT', orderId, stage: currentStage, category: 'system' } }, 'high', { tag: `stop_alert_${orderId}`, orderId, category: 'system' });
+        } catch (e: any) {
+          console.error(`[Action][${requestId}] stop_alert push failed (non-blocking):`, e.message);
+        }
       });
-      responseData = { message: 'Alert stopped' };
+      await releaseOrderLock(orderId);
+      lockReleased = true;
+      res.json({ success: true, message: 'Alert stopped', requestId });
+      return;
     }
 
     else {
-      
+      await releaseOrderLock(orderId);
+      lockReleased = true;
       trace.steps.push({ step: 'Validation', status: 'failed', reason: `Unknown action "${action}" for role "${userRole}"` });
-      res.status(400).json({ error: `Unknown action "${action}" for role "${userRole}" at stage "${currentStage}"`, trace: isDebug ? trace : undefined });
+      res.status(400).json({ error: `Unknown action "${action}" for role "${userRole}"`, requestId, trace: isDebug ? trace : undefined });
       return;
     }
 
-    // 🔥 Commit transaction IMMEDIATELY to free DB locks
-    if (!isIndependentTransaction) {
-      
-      trace.steps.push({ step: 'Postgres Commit', status: 'success' });
+    // ── Step 6: SYNCHRONOUS Firestore Write (BEFORE returning HTTP 200) ────
+    if (firestoreWriteRequired) {
+      try {
+        await db.collection('orders').doc(orderId).update(firestoreUpdates);
+        trace.steps.push({ step: 'Firestore Write', status: 'success', newStatus, ms: Date.now() - startTime });
+        console.log(`[Action][${requestId}] ✅ Firestore write SUCCESS. orderId=${orderId} newStatus=${newStatus} ms=${Date.now() - startTime}`);
+      } catch (firestoreErr: any) {
+        console.error(`[Action][${requestId}] ❌ Firestore write FAILED:`, firestoreErr.message);
+        trace.steps.push({ step: 'Firestore Write', status: 'failed', error: firestoreErr.message });
+        await releaseOrderLock(orderId);
+        lockReleased = true;
+        res.status(500).json({
+          error: 'Order status update failed. Firestore write error.',
+          details: firestoreErr.message,
+          requestId,
+          trace: isDebug ? trace : undefined
+        });
+        return;
+      }
     }
-    
-    // Release idempotency lock immediately
+
+    // ── Step 7: Release Lock ───────────────────────────────────────────────
     await releaseOrderLock(orderId);
     lockReleased = true;
 
-    // Send HTTP response instantly to unblock UI
+    // ── Step 8: Return HTTP 200 ───────────────────────────────────────────
     trace.processingTime = Date.now() - startTime;
-    res.json({ success: true, newStatus, ...responseData, trace: isDebug ? trace : undefined });
+    console.log(`[Action][${requestId}] ✅ HTTP 200 sent. action=${action} newStatus=${newStatus} ms=${trace.processingTime}`);
+    res.json({ success: true, newStatus, requestId, ...responseData, trace: isDebug ? trace : undefined });
 
-    // 🔥 Execute all background tasks with timeouts
-    if (action !== 'accept' && action !== 'delivered' && action !== 'stop_alert') {
-      backgroundTasks.unshift(async () => {
-        try {
-          await db.collection('orders').doc(orderId).update({ status: newStatus, updatedAt: new Date() });
-          trace.steps.push({ step: 'Firestore Sync', status: 'success' });
-        } catch (fErr: any) {
-          trace.steps.push({ step: 'Firestore Sync', status: 'failed', error: fErr.message });
-          console.error('[NotificationRoutes] Firestore sync failed in background:', fErr);
-        }
+    // ── Step 9: Background side-effects (AFTER HTTP 200 sent) ─────────────
+    if (backgroundTasks.length > 0) {
+      Promise.allSettled(backgroundTasks.map(task =>
+        withTimeout(task(), 8000, 'background_task')
+      )).then(results => {
+        results.forEach((result, i) => {
+          if (result.status === 'rejected') {
+            console.error(`[Action][${requestId}] Background task[${i}] rejected or timed out:`, result.reason);
+          }
+        });
+        console.log(`[Action][${requestId}] Background tasks settled: ${results.filter(r => r.status === 'fulfilled').length} ok, ${results.filter(r => r.status === 'rejected').length} failed`);
+      }).catch(err => {
+        console.error(`[Action][${requestId}] Background tasks Promise.allSettled error:`, err);
       });
     }
 
-    if (backgroundTasks.length > 0) {
-      Promise.allSettled(backgroundTasks.map(task => withTimeout(task(), 5000, 'background_task')))
-        .then(results => {
-          results.forEach(res => {
-            if (res.status === 'rejected') {
-              console.error('[NotificationRoutes] Background task rejected or timed out:', res.reason);
-            }
-          });
-        });
-    }
-
   } catch (error: any) {
-    if (!lockReleased) {
-      await transactionClient.query('ROLLBACK').catch(() => {});
-    }
-    console.error('[NotificationRoutes] Action error:', error);
-    trace.steps.push({ step: 'Fatal Error', status: 'failed', error: error.message });
+    console.error(`[Action][${requestId}] ❌ Unhandled error: ${error.message}`, error.stack);
+    trace.steps.push({ step: 'Fatal Error', status: 'failed', error: error.message, stack: error.stack });
     trace.processingTime = Date.now() - startTime;
     if (!res.headersSent) {
-      res.status(500).json({ error: 'Internal server error', details: error.message, trace: isDebug ? trace : undefined });
+      res.status(500).json({ error: 'Internal server error', details: error.message, requestId, trace: isDebug ? trace : undefined });
     }
   } finally {
-    
     if (!lockReleased) {
-      await releaseOrderLock(orderId);
+      try {
+        await releaseOrderLock(orderId);
+      } catch (lockReleaseErr: any) {
+        console.error(`[Action][${requestId}] Failed to release lock in finally:`, lockReleaseErr.message);
+      }
     }
   }
 });
 
 // ─── Helper: Get customer firebase UID from order ─────────────────────────────
-}
 
 // =============================================================================
 // POST /notifications/token
@@ -703,9 +758,7 @@ router.get('/analytics', verifyToken, async (req: AuthRequest, res: Response): P
            FROM notification_queue 
            ORDER BY created_at DESC LIMIT 50`
         ),
-        client.query(
-          `SELECT COUNT(*) as count FROM orders WHERE status NOT IN ('delivered', 'completed', 'cancelled')`
-        ),
+        db.collection('orders').where('status', 'not-in', ['delivered', 'completed', 'cancelled']).count().get(),
       ]);
 
       res.json({
@@ -713,7 +766,7 @@ router.get('/analytics', verifyToken, async (req: AuthRequest, res: Response): P
         queue: queueStats.rows,
         tokens: tokenStats.rows,
         logs: deliveryLogs.rows,
-        activeOrders: parseInt(activeOrders.rows[0].count, 10) || 0,
+        activeOrders: (activeOrders as admin.firestore.AggregateQuerySnapshot<{count: admin.firestore.AggregateField<number>}>).data().count || 0,
       });
     } finally {
       client.release();
