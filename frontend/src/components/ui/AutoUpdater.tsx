@@ -91,7 +91,9 @@ export default function AutoUpdater() {
 
   const handleUpdate = async () => {
     if (downloadUrl) {
-      await Browser.open({ url: downloadUrl });
+      // Use window.open with _system to force the native device browser to handle the APK download
+      // rather than the in-app Capacitor browser which sometimes blocks file downloads
+      window.open(downloadUrl, '_system');
       setIsVisible(false);
     }
   };
