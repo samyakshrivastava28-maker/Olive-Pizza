@@ -24,6 +24,7 @@ import phoneVerificationRoutes from './routes/phoneVerification.routes.js';
 import { versionCheck } from './middleware/versionCheck.js';
 
 const app = express();
+app.set('trust proxy', 1);
 
 app.use(helmet());
 const allowedOrigins = [

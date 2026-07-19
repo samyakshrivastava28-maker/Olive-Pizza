@@ -2,12 +2,14 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNetworkStore } from '../../lib/networkQuality';
 import { getAuth } from 'firebase/auth';
 
+let hasPlayedThisSession = false;
+
 interface StartupGateProps {
   children: React.ReactNode;
 }
 
 export default function StartupGate({ children }: StartupGateProps) {
-  const [showVideo, setShowVideo] = useState(false);
+  const [showVideo, setShowVideo] = useState(!hasPlayedThisSession);
   const [videoFading, setVideoFading] = useState(false);
   const [deviceType, setDeviceType] = useState<'mobile' | 'tablet' | 'desktop'>(() => {
     if (typeof window !== 'undefined') {
@@ -30,9 +32,9 @@ export default function StartupGate({ children }: StartupGateProps) {
   };
 
   useEffect(() => {
-    // Check session storage to see if we already played it in this browser tab session
-    const hasPlayed = sessionStorage.getItem('startup_video_played');
-    if (!hasPlayed) {
+    // Use the global memory flag to prevent remounts from playing the video again during SPA navigation
+    if (!hasPlayedThisSession) {
+      hasPlayedThisSession = true; // immediately lock it for any other components
       logDiagnostic("Initializing intro video");
       setShowVideo(true);
       document.body.style.overflow = "hidden";
@@ -92,7 +94,6 @@ export default function StartupGate({ children }: StartupGateProps) {
     logDiagnostic("Ending video");
     setVideoFading(true);
     document.body.style.overflow = "";
-    sessionStorage.setItem('startup_video_played', 'true');
     
     setTimeout(() => {
       setShowVideo(false);

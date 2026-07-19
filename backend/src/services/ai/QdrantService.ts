@@ -13,8 +13,12 @@ export const QDRANT_COLLECTION = process.env.QDRANT_COLLECTION || 'olive_pizza';
 
 export class QdrantService {
   private isInitialized = false;
+  private isDisabled = false;
 
   private async fetchQdrant(endpoint: string, options: any = {}) {
+    if (this.isDisabled) {
+      throw new Error('Qdrant AI Search is disabled (offline).');
+    }
     const url = `${QDRANT_URL}${endpoint}`;
     const headers = {
       'Content-Type': 'application/json',
@@ -45,6 +49,15 @@ export class QdrantService {
   }
 
   public async initializeCollection(vectorSize: number = 768): Promise<boolean> {
+    if (this.isDisabled) return false;
+    
+    // Quick check to disable Qdrant if running localhost on production
+    if (process.env.NODE_ENV === 'production' && QDRANT_URL.includes('localhost')) {
+      console.warn('[Qdrant] AI Search disabled: Cannot connect to localhost in production.');
+      this.isDisabled = true;
+      return false;
+    }
+
     try {
       const collections: any = await this.fetchQdrant('/collections');
       const exists = collections.result.collections.some((c: any) => c.name === QDRANT_COLLECTION);
@@ -75,7 +88,8 @@ export class QdrantService {
       this.isInitialized = true;
       return true;
     } catch (error: any) {
-      console.error('[Qdrant] Failed to initialize collection:', error.message);
+      console.error('[Qdrant] Failed to initialize collection, disabling AI Search:', error.message);
+      this.isDisabled = true;
       return false;
     }
   }

@@ -1,7 +1,8 @@
 import { Router, Request, Response } from 'express';
-import { query } from '../lib/db.js';
 import { verifyToken, requireRole, AuthRequest } from '../middleware/auth.middleware.js';
 import { adminDb } from '../config/firebase.js';
+import { FieldValue } from 'firebase-admin/firestore';
+import { orderEventService } from '../services/order/OrderEventService.js';
 
 const router = Router();
 
@@ -11,45 +12,47 @@ router.use(verifyToken);
 router.get('/orders/:id/location', async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const result = await query('SELECT current_lat as "currentLat", current_lng as "currentLng", status, updated_at FROM active_deliveries WHERE order_id = $1', [id]);
+    const doc = await adminDb.collection('active_deliveries').doc(id).get();
     
-    if (result.rows.length === 0) {
+    if (!doc.exists) {
       res.status(404).json({ error: 'Delivery tracking not found' });
       return;
     }
     
-    res.json(result.rows[0]);
+    const data = doc.data()!;
+    res.json({
+      currentLat: data.current_lat,
+      currentLng: data.current_lng,
+      status: data.status,
+      updatedAt: data.updated_at
+    });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch tracking data' });
+    res.status(500).json({ error: 'Failed to fetch tracking' });
   }
 });
 
-// The remaining routes require delivery/owner roles
-router.use(requireRole(['owner', 'delivery_partner']));
-
-// Fetch active tasks for delivery dashboard
-router.get('/orders', async (req: AuthRequest, res: Response) => {
+// Delivery partner gets their active tasks
+router.get('/tasks', requireRole(['delivery']), async (req: AuthRequest, res: Response) => {
   try {
-    // Delivery routes should query Firestore
-    const snapshot = await adminDb.collection('orders').where('status', 'in', ['out_for_delivery', 'delivered']).orderBy('createdAt', 'desc').get();
-    const result = { rows: snapshot.docs.map((d: any) => ({ id: d.id, ...d.data() })) };
-    res.json(result.rows.map((row: any) => ({
-      id: row.id,
-      userId: row.user_id,
-      status: row.status,
-      totalAmount: Number(row.total_amount),
-      contactPhone: row.contact_phone,
-      deliveryAddress: row.delivery_address,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at
-    })));
+    const deliveryPartnerId = req.user?.uid;
+    const snapshot = await adminDb.collection('orders')
+      .where('deliveryPartnerId', '==', deliveryPartnerId)
+      .where('status', 'in', ['out_for_delivery', 'preparing', 'ready'])
+      .get();
+      
+    const tasks = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+    
+    res.json(tasks);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch tasks' });
   }
 });
 
 // Update order status (used by delivery dashboard)
-router.patch('/orders/:id/status', async (req: AuthRequest, res: Response) => {
+router.patch('/orders/:id/status', requireRole(['owner', 'delivery']), async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
@@ -60,7 +63,13 @@ router.patch('/orders/:id/status', async (req: AuthRequest, res: Response) => {
       return;
     }
 
-    await query('UPDATE orders SET status = $1, updated_at = NOW() WHERE id = $2', [status, id]);
+    await adminDb.collection('orders').doc(id).update({
+      status: status,
+      updatedAt: FieldValue.serverTimestamp()
+    });
+    
+    // Emit event so notifications are triggered
+    orderEventService.emitStatusChange(id, status);
     
     res.json({ message: `Order status updated to ${status}` });
   } catch (error) {
@@ -69,7 +78,7 @@ router.patch('/orders/:id/status', async (req: AuthRequest, res: Response) => {
 });
 
 // Update live delivery location
-router.post('/orders/:id/location', async (req: AuthRequest, res: Response) => {
+router.post('/orders/:id/location', requireRole(['delivery']), async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
     const { lat, lng } = req.body;
@@ -81,16 +90,14 @@ router.post('/orders/:id/location', async (req: AuthRequest, res: Response) => {
 
     const deliveryPartnerId = req.user?.uid;
 
-    // Upsert the delivery tracking row
-    const sql = `
-      INSERT INTO active_deliveries (order_id, delivery_partner_id, status, current_lat, current_lng)
-      VALUES ($1, $2, 'active', $3, $4)
-      ON CONFLICT (order_id) DO UPDATE 
-      SET current_lat = EXCLUDED.current_lat, 
-          current_lng = EXCLUDED.current_lng, 
-          updated_at = NOW()
-    `;
-    await query(sql, [id, deliveryPartnerId, lat, lng]);
+    await adminDb.collection('active_deliveries').doc(id).set({
+      order_id: id,
+      delivery_partner_id: deliveryPartnerId,
+      status: 'active',
+      current_lat: lat,
+      current_lng: lng,
+      updated_at: new Date().toISOString()
+    }, { merge: true });
 
     res.json({ success: true });
   } catch (error) {
