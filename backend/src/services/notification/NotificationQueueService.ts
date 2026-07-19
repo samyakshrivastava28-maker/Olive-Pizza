@@ -257,24 +257,42 @@ export class NotificationQueueService {
     const client = await pgPool.connect();
 
     try {
-      const result = await client.query(
-        `SELECT q.*, u.firebase_uid
-         FROM notification_queue q
-         JOIN users u ON q.target_user_id = u.id
-         WHERE q.status = 'queued'
-           AND (q.expires_at IS NULL OR q.expires_at > NOW())
-           AND (q.scheduled_at IS NULL OR q.scheduled_at <= NOW())
-         ORDER BY
-           CASE q.priority WHEN 'high' THEN 1 ELSE 2 END,
-           q.created_at ASC
-         LIMIT 20
-         FOR UPDATE OF q SKIP LOCKED`
+      // Step 1: Lock pending IDs without a JOIN (pgbouncer-safe)
+      const lockResult = await client.query(
+        `UPDATE notification_queue
+         SET status = 'sending', updated_at = NOW()
+         WHERE id IN (
+           SELECT id FROM notification_queue
+           WHERE status = 'queued'
+             AND (expires_at IS NULL OR expires_at > NOW())
+             AND (scheduled_at IS NULL OR scheduled_at <= NOW())
+           ORDER BY
+             CASE priority WHEN 'high' THEN 1 ELSE 2 END,
+             created_at ASC
+           LIMIT 20
+           FOR UPDATE SKIP LOCKED
+         )
+         RETURNING *`
       );
 
-      if (result.rows.length === 0) return;
-      for (const row of result.rows) {
-        await this.processItem(row, client);
+      if (lockResult.rows.length === 0) return;
+
+      // Step 2: For each locked row, fetch firebase_uid separately
+      for (const row of lockResult.rows) {
+        try {
+          // target_user_id IS the Firebase UID — pass it directly
+          await this.processItem({ ...row, firebase_uid: row.target_user_id }, client);
+        } catch (itemErr: any) {
+          console.error(`[NotifQueue] Failed to process item id=${row.id}:`, itemErr.message);
+          // Requeue instead of losing the item
+          await client.query(
+            `UPDATE notification_queue SET status = 'queued', updated_at = NOW() WHERE id = $1`,
+            [row.id]
+          ).catch(() => {});
+        }
       }
+    } catch (err: any) {
+      console.error('[NotifQueue] processQueue error:', err.message);
     } finally {
       this.isProcessing = false;
       client.release();

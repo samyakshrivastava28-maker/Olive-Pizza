@@ -50,17 +50,26 @@ export const queueEmail = async (
   idempotencyKey: string | null = null
 ) => {
   try {
-    const query = `
-      INSERT INTO email_queue (recipient, subject, html_content, type, campaign_id, idempotency_key, status)
-      VALUES ($1, $2, $3, $4, $5, $6, 'pending')
-      ON CONFLICT (idempotency_key) DO NOTHING
-      RETURNING id
-    `;
-    const values = [recipient, subject, htmlContent, type, campaignId, idempotencyKey];
-    const result = await pgPool.query(query, values);
-    if (result.rows.length === 0) {
-      console.log(`Email to ${recipient} with key ${idempotencyKey} already queued. (Idempotent)`);
-      return null;
+    let result;
+    if (idempotencyKey) {
+      // With idempotency key — deduplicate
+      result = await pgPool.query(`
+        INSERT INTO email_queue (recipient, subject, html_content, type, campaign_id, idempotency_key, status)
+        VALUES ($1, $2, $3, $4, $5, $6, 'pending')
+        ON CONFLICT (idempotency_key) DO NOTHING
+        RETURNING id
+      `, [recipient, subject, htmlContent, type, campaignId, idempotencyKey]);
+      if (result.rows.length === 0) {
+        console.log(`Email to ${recipient} with key ${idempotencyKey} already queued. (Idempotent)`);
+        return null;
+      }
+    } else {
+      // No idempotency key — always insert
+      result = await pgPool.query(`
+        INSERT INTO email_queue (recipient, subject, html_content, type, campaign_id, status)
+        VALUES ($1, $2, $3, $4, $5, 'pending')
+        RETURNING id
+      `, [recipient, subject, htmlContent, type, campaignId]);
     }
     return result.rows[0].id;
   } catch (error: any) {
@@ -88,6 +97,7 @@ export const queueEmail = async (
     }
   }
 };
+
 
 // Process Queue
 export const processEmailQueue = async () => {
@@ -151,7 +161,7 @@ export const processEmailQueue = async () => {
         else if (newRetryCount === 2) nextRetryMinutes = 5;
         else nextRetryMinutes = 15;
 
-        const newStatus = newRetryCount >= email.max_retries ? 'failed' : 'failed'; // kept as failed but retry_timestamp determines next pickup
+        const newStatus = newRetryCount >= email.max_retries ? 'failed' : 'pending'; // pending = will be picked up when retry_timestamp passes
 
         // If max retries reached, move to dead letter queue
         if (newRetryCount >= email.max_retries) {
@@ -169,7 +179,7 @@ export const processEmailQueue = async () => {
             await pgPool.query(`
               UPDATE email_queue 
               SET status = $1, retry_count = $2, last_error = $3, smtp_response = $4, 
-                  retry_timestamp = CURRENT_TIMESTAMP + ($5 || ' minutes')::interval
+                  retry_timestamp = CURRENT_TIMESTAMP + ($5::text || ' minutes')::interval
               WHERE id = $6
             `, [newStatus, newRetryCount, error.message, error.response || error.message, nextRetryMinutes, email.id]);
         }
