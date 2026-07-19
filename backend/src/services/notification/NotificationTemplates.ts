@@ -417,7 +417,7 @@ export class OwnerTemplates {
 
     const actions: Array<{ action: string; title: string }> =
       payload.status === 'preparing'
-        ? [{ action: 'ready', title: '🟢 Mark Ready' }, { action: 'open', title: '📊 View' }]
+        ? [{ action: 'ready', title: '🟢 Mark Ready' }, { action: 'assign_delivery', title: '🚴 Assign Partner' }, { action: 'open', title: '📊 View' }]
         : payload.status === 'ready'
         ? [{ action: 'assign_delivery', title: '🚴 Assign Partner' }, { action: 'open', title: '📊 View' }]
         : [{ action: 'open', title: '📊 Open Dashboard' }];

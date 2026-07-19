@@ -233,7 +233,7 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
       reject:          { from: ['pending', 'new_order', 'accepted', 'preparing', 'ready', 'partner_assigned'], to: 'cancelled' },
       start_cooking:   { from: ['accepted'], to: 'preparing' },
       ready:           { from: ['preparing'], to: 'ready' },
-      assign_delivery: { from: ['ready'], to: 'partner_assigned' },
+      assign_delivery: { from: ['preparing', 'ready'], to: 'partner_assigned' },
     };
 
     // ── OWNER ACTIONS ──────────────────────────────────────────────────────
