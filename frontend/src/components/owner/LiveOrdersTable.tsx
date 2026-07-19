@@ -106,7 +106,7 @@ export default function LiveOrdersTable() {
                     ₹{order.totalAmount?.toFixed(2)}
                   </td>
                   <td className="p-4 text-sm text-slate-500">
-                    {order.createdAt?.toDate ? order.createdAt.toDate().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'Just now'}
+                    {order.createdAt ? (order.createdAt.toDate ? order.createdAt.toDate() : new Date(order.createdAt)).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}) : 'Just now'}
                   </td>
                   <td className="p-4">
                     <span className={`px-3 py-1 rounded-full text-xs font-bold border ${statusColors[order.status] || 'bg-slate-100 text-slate-800'}`}>
