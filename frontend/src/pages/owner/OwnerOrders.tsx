@@ -11,6 +11,7 @@ import {
 } from "firebase/firestore";
 import { Order } from "../../types/models";
 import { playNotificationSound, statusToSoundType } from "../../hooks/useNotificationSound";
+import { logActivity } from "../../lib/logger";
 import { useNotificationDebugger } from "../../hooks/useNotificationDebugger";
 import toast from "react-hot-toast";
 
@@ -134,6 +135,13 @@ export default function OwnerOrders() {
       console.log(`[OwnerOrders] ← ${endpoint} status=${res.status} ms=${executionMs} requestId=${data.requestId || 'N/A'}`, data);
 
       if (isDebug && data.trace) useNotificationDebugger.getState().updateTrace(data.trace);
+
+      // Log the activity
+      logActivity(
+        'Order Status Changed',
+        `Order #${order.id.slice(-6).toUpperCase()} changed to ${newStatus}`,
+        auth.currentUser?.email || undefined
+      );
 
       if (!res.ok) {
         if (data.duplicate) {
