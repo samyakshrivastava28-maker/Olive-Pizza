@@ -1,6 +1,6 @@
 import { pgPool } from '../../config/postgres.js';
 import { adminDb } from '../../config/firebase.js';
-import { directNotification } from './DirectNotificationService.js';
+import { directNotification } from '../notification/DirectNotificationService.js';
 import { queueEmail } from '../email.service.js';
 
 export class BackgroundTaskWorker {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { db } from '../../lib/firebase';
+import { db, auth } from '../../lib/firebase';
 import { collection, onSnapshot, query, addDoc, updateDoc, doc, deleteDoc, orderBy } from 'firebase/firestore';
 import { Sparkles, Image as ImageIcon, CheckCircle, Trash2, Edit2, Play, Calendar, Eye, Send, PackagePlus } from 'lucide-react';
 import { uploadMediaToCloudinary } from '../../lib/cloudinary';

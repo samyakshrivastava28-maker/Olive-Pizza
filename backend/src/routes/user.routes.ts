@@ -137,7 +137,7 @@ router.put('/location', async (req: AuthRequest, res: Response): Promise<void> =
       if (email) {
         const name = userData.name || 'Customer';
         await emailService.sendWelcomeEmail(email, name);
-        await emailService.sendOwnerNotification('New User Signup', \`A new user \${name} (\${email}) has joined and completed their profile!\`);
+        await emailService.sendOwnerNotification('New User Signup', `A new user ${name} (${email}) has joined and completed their profile!`);
       }
     } catch (emailErr) {
       console.error("Failed to send welcome emails", emailErr);

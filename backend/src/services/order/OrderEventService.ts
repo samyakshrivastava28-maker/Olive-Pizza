@@ -79,7 +79,19 @@ class OrderEventServiceImpl extends EventEmitter {
       for (const [id, ts] of this.processedEventIds) {
         if (ts < cutoff) this.processedEventIds.delete(id);
       }
-    }, 5 * 60 * 1000);
+    }, 60000);
+  }
+
+  public async isStale(orderId: string, version: number, stage: string): Promise<boolean> {
+    try {
+      const orderDoc = await adminDb.collection('orders').doc(orderId).get();
+      if (!orderDoc.exists) return true;
+      const data = orderDoc.data();
+      const currentVersion = data?.notification_version || 0;
+      return currentVersion > version;
+    } catch {
+      return false;
+    }
   }
 
   async emitStatusChange(
@@ -96,7 +108,7 @@ class OrderEventServiceImpl extends EventEmitter {
       
       // Distributed idempotency lock via Postgres
       await client.query(
-        \`INSERT INTO order_locks (order_id) VALUES ($1) ON CONFLICT (order_id) DO UPDATE SET locked_at = NOW()\`,
+        `INSERT INTO order_locks (order_id) VALUES ($1) ON CONFLICT (order_id) DO UPDATE SET locked_at = NOW()`,
         [orderId]
       );
       lockAcquired = true;
@@ -107,7 +119,7 @@ class OrderEventServiceImpl extends EventEmitter {
 
       if (!orderDoc.exists) {
         await client.query('ROLLBACK');
-        console.warn(\`[OrderEventService] Order \${orderId} not found\`);
+        console.warn(`[OrderEventService] Order ${orderId} not found`);
         return null;
       }
 
@@ -123,7 +135,7 @@ class OrderEventServiceImpl extends EventEmitter {
       const allowedNext = VALID_TRANSITIONS[previousStatus] || [];
       if (!allowedNext.includes(newStatus)) {
         await client.query('ROLLBACK');
-        console.warn(\`[OrderEventService] Invalid transition \${previousStatus} → \${newStatus}\`);
+        console.warn(`[OrderEventService] Invalid transition ${previousStatus} → ${newStatus}`);
         return null;
       }
 
@@ -204,7 +216,7 @@ class OrderEventServiceImpl extends EventEmitter {
       await client.query('BEGIN');
       
       await client.query(
-        \`INSERT INTO order_locks (order_id) VALUES ($1) ON CONFLICT (order_id) DO UPDATE SET locked_at = NOW()\`,
+        `INSERT INTO order_locks (order_id) VALUES ($1) ON CONFLICT (order_id) DO UPDATE SET locked_at = NOW()`,
         [orderId]
       );
       lockAcquired = true;

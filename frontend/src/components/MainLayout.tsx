@@ -3,7 +3,7 @@ import { useAuthStore, useCartStore, useAppStore } from '../lib/store';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useEffect, useState, Suspense } from 'react';
 import { doc, updateDoc } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { db, auth } from '../lib/firebase';
 import { Home, Menu as MenuIcon, ShoppingBag, User, Search, MapPin, ReceiptText, WifiOff, Download, RefreshCw, Bot, Bell } from 'lucide-react';
 
 import PWAPrompts from './ui/PWAPrompts';
@@ -32,16 +32,21 @@ export default function MainLayout() {
 
   useEffect(() => {
     if (user?.email === 'olivepizzarjn@gmail.com' && role !== 'owner') {
-      fetch(`/api/admin/users/${user.uid}/role`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${await auth.currentUser?.getIdToken()}` },
-        body: JSON.stringify({ role: 'owner' })
-      })
-        .then(() => {
+      const upgradeToOwner = async () => {
+        try {
+          const token = await auth.currentUser?.getIdToken();
+          await fetch(`/api/admin/users/${user.uid}/role`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ role: 'owner' })
+          });
           console.log('Successfully upgraded olivepizzarjn to owner!');
           useAuthStore.getState().setUser(user, 'owner');
-        })
-        .catch(err => console.error('Failed to make owner:', err));
+        } catch (err) {
+          console.error('Failed to make owner:', err);
+        }
+      };
+      upgradeToOwner();
     }
   }, [user, role]);
 

@@ -1,6 +1,6 @@
 import { Outlet, Link, Navigate, useLocation } from 'react-router';
 import { useAuthStore } from '../lib/store';
-import { db } from '../lib/firebase';
+import { db, auth } from '../lib/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
 import { useState, Suspense } from 'react';
 import toast from 'react-hot-toast';

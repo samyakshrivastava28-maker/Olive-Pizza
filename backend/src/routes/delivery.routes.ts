@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { query } from '../lib/db.js';
 import { verifyToken, requireRole, AuthRequest } from '../middleware/auth.middleware.js';
+import { adminDb } from '../config/firebase.js';
 
 const router = Router();
 
@@ -31,8 +32,8 @@ router.get('/orders', async (req: AuthRequest, res: Response) => {
   try {
     // Delivery routes should query Firestore
     const snapshot = await adminDb.collection('orders').where('status', 'in', ['out_for_delivery', 'delivered']).orderBy('createdAt', 'desc').get();
-    const result = { rows: snapshot.docs.map(d => ({ id: d.id, ...d.data() })) };
-    res.json(result.rows.map(row => ({
+    const result = { rows: snapshot.docs.map((d: any) => ({ id: d.id, ...d.data() })) };
+    res.json(result.rows.map((row: any) => ({
       id: row.id,
       userId: row.user_id,
       status: row.status,
