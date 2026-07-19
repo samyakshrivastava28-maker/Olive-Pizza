@@ -69,7 +69,7 @@ router.patch('/orders/:id/status', requireRole(['owner', 'delivery']), async (re
     });
     
     // Emit event so notifications are triggered
-    orderEventService.emitStatusChange(id, status);
+    orderEventService.emitStatusChange(id, status, req.user?.uid || 'system');
     
     res.json({ message: `Order status updated to ${status}` });
   } catch (error) {
