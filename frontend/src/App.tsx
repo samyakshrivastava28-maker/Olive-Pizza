@@ -371,7 +371,6 @@ function App() {
                 <Suspense fallback={null}>
                   <FloatingTracker />
                 </Suspense>
-                <PizzaLoader />
               </StartupGate>
             </CartAnimationProvider>
           </SafeErrorBoundary>
