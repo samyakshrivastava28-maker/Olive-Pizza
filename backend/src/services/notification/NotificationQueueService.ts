@@ -45,9 +45,7 @@ export interface EnqueueOptions {
 // Stages where customer ALWAYS gets an email regardless of push success
 const CUSTOMER_ALWAYS_EMAIL_STAGES = new Set([
   'pending',     // Order Placed
-  'accepted',    // Order Confirmed
   'delivered',   // Order Delivered
-  'cancelled',   // Order Cancelled
 ]);
 
 // Owner and Delivery NEVER get operational emails
@@ -62,17 +60,12 @@ class EmailRulesEngine {
    * @returns true if email should be sent
    */
   static shouldSend(role: string, stage: string, fcmSuccess: boolean, isFinalFailure: boolean = false): boolean {
-    // If Push completely fails (all retries exhausted or 0 tokens), ALWAYS fallback to email
-    if (isFinalFailure) return true;
-
-    // Owner and Delivery: NEVER get operational emails UNLESS it's a hard fallback (above)
+    // Owner and Delivery: NEVER get operational emails
     if (NO_EMAIL_ROLES.has(role)) return false;
 
-    // Customer: Always send transactional emails for critical stages
+    // Customer: ONLY send transactional emails for Place Order and Delivered
+    // Per explicit instruction: do NOT send emails for intermediate buttons/stages
     if (role === 'customer' && CUSTOMER_ALWAYS_EMAIL_STAGES.has(stage)) return true;
-
-    // Customer: Send other stage emails ONLY if FCM completely failed
-    if (role === 'customer' && !fcmSuccess) return true;
 
     return false;
   }
