@@ -291,6 +291,15 @@ export default function OwnerOrders() {
                   </button>
                 )}
                 {order.status === "preparing" && (
+                  <button
+                    disabled={processingId === order.id}
+                    onClick={() => updateStatus(order, "ready")}
+                    className="w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white p-3 rounded-xl font-bold shadow-sm transition-transform hover:-translate-y-1"
+                  >
+                    {processingId === order.id ? 'Processing...' : 'Mark as Ready'}
+                  </button>
+                )}
+                {order.status === "ready" && (
                   <div className="flex flex-col gap-2">
                     <select
                       className="p-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-[#1E293B] dark:bg-slate-800 text-sm font-bold"
@@ -443,6 +452,14 @@ export default function OwnerOrders() {
                     </button>
                   )}
                   {order.status === "preparing" && (
+                  <button
+                    onClick={() => updateStatus(order, "ready")}
+                    className="w-full bg-orange-500 hover:bg-orange-600 text-white p-3 rounded-xl font-bold shadow-sm transition-transform hover:-translate-y-1"
+                  >
+                    Mark as Ready
+                  </button>
+                  )}
+                  {order.status === "ready" && (
                     <div className="flex flex-col gap-2">
                       <select
                         className="p-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-[#1E293B] dark:bg-slate-800 text-sm font-bold"
