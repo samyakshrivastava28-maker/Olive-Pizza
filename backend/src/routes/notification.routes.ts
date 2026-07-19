@@ -277,83 +277,20 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
         firestoreUpdates.deliveryPartnerId = partnerId;
         firestoreUpdates.delivery_partner_id = partnerId;
 
-        backgroundTasks.push(async () => {
-          try {
-            const deliveryPayload = DeliveryTemplates.newAssignment(orderId, {
-              orderNumber: shortId, customerName: 'Customer', customerPhone: orderData.contactPhone || orderData.contact_phone,
-              deliveryAddress: orderData.deliveryAddress?.addressLine || orderData.delivery_address_line || 'Address not provided',
-              distance: '?', eta: '15 mins', totalAmount: Number(orderData.totalAmount || orderData.total_amount || 0),
-              paymentMethod: orderData.paymentMethod || 'COD', version: 1
-            });
-            await directNotification.sendPush(partnerId, deliveryPayload, 'high', { tag: `order_delivery_${orderId}`, orderId, category: 'delivery', priority: 'critical', version: 1 });
-          } catch (notifErr: any) {
-            console.error(`[Action][${requestId}] Delivery partner notification failed (non-blocking):`, notifErr.message);
-          }
-          try {
-            if (customerFirebaseUid) {
-              const cPayload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'partner_assigned', totalAmount: Number(orderData.totalAmount || orderData.total_amount || 0), deliveryPartnerName: 'Partner', version: 5 });
-              await directNotification.sendPush(customerFirebaseUid, cPayload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 5 });
-            }
-          } catch (notifErr: any) {
-            console.error(`[Action][${requestId}] Customer notification failed (non-blocking):`, notifErr.message);
-          }
-        });
+        // Notification dispatch removed - handled by firestore.listener.ts
       } else if (action === 'accept') {
         firestoreUpdates.acceptedAt = new Date().toISOString();
         firestoreUpdates.eta = '20-30 mins';
-        backgroundTasks.push(async () => {
-          try {
-            if (customerFirebaseUid) {
-              const payload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'accepted', totalAmount: Number(orderData.totalAmount || orderData.total_amount || 0), eta: '20-30 mins', version: 2 });
-              await directNotification.sendPush(customerFirebaseUid, payload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 2 });
-            }
-          } catch (notifErr: any) {
-            console.error(`[Action][${requestId}] Accept customer notification failed (non-blocking):`, notifErr.message);
-          }
-          try {
-            const ownerIds = await getOwnerUserIds();
-            const ownerPayload = OwnerTemplates.orderStatusUpdate(orderId, { orderNumber: shortId, customerName: orderData.contactPhone || '', status: 'accepted', totalAmount: Number(orderData.totalAmount || orderData.total_amount || 0), version: 2 });
-            await directNotification.sendBulkPush(ownerIds, ownerPayload, 'normal', { tag: `order_owner_${orderId}`, orderId, category: 'order', version: 2 });
-          } catch (notifErr: any) {
-            console.error(`[Action][${requestId}] Accept owner notification failed (non-blocking):`, notifErr.message);
-          }
-        });
+        // Notification dispatch removed - handled by firestore.listener.ts
       } else if (action === 'reject') {
         firestoreUpdates.cancelledAt = new Date().toISOString();
-        backgroundTasks.push(async () => {
-          try {
-            if (customerFirebaseUid) {
-              const payload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'cancelled', totalAmount: Number(orderData.totalAmount || orderData.total_amount || 0), version: 2 });
-              await directNotification.sendPush(customerFirebaseUid, payload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 2 });
-            }
-          } catch (notifErr: any) {
-            console.error(`[Action][${requestId}] Reject notification failed (non-blocking):`, notifErr.message);
-          }
-        });
+        // Notification dispatch removed - handled by firestore.listener.ts
       } else if (action === 'start_cooking') {
         firestoreUpdates.preparingAt = new Date().toISOString();
-        backgroundTasks.push(async () => {
-          try {
-            if (customerFirebaseUid) {
-              const payload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'preparing', totalAmount: Number(orderData.totalAmount || orderData.total_amount || 0), version: 3 });
-              await directNotification.sendPush(customerFirebaseUid, payload, 'normal', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 3 });
-            }
-          } catch (notifErr: any) {
-            console.error(`[Action][${requestId}] Start cooking notification failed (non-blocking):`, notifErr.message);
-          }
-        });
+        // Notification dispatch removed - handled by firestore.listener.ts
       } else if (action === 'ready') {
         firestoreUpdates.readyAt = new Date().toISOString();
-        backgroundTasks.push(async () => {
-          try {
-            if (customerFirebaseUid) {
-              const payload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'ready', totalAmount: Number(orderData.totalAmount || orderData.total_amount || 0), version: 4 });
-              await directNotification.sendPush(customerFirebaseUid, payload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 4 });
-            }
-          } catch (notifErr: any) {
-            console.error(`[Action][${requestId}] Ready notification failed (non-blocking):`, notifErr.message);
-          }
-        });
+        // Notification dispatch removed - handled by firestore.listener.ts
       }
 
       responseData = { message: `Order ${action === 'reject' ? 'rejected' : action === 'accept' ? 'accepted' : action === 'assign_delivery' ? 'partner assigned' : newStatus}` };
@@ -369,14 +306,7 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
           res.status(403).json({ error: 'You are not assigned to this order', requestId });
           return;
         }
-        backgroundTasks.push(async () => {
-          try {
-            const dPayload = DeliveryTemplates.deliveryUpdate(orderId, { orderNumber: shortId, customerName: 'Customer', deliveryAddress: orderData.deliveryAddress?.addressLine || orderData.delivery_address_line || '', stage: 'navigate_restaurant', version: 2 });
-            await directNotification.sendPush(userId, dPayload, 'high', { tag: `order_delivery_${orderId}`, orderId, category: 'delivery', version: 2 });
-          } catch (notifErr: any) {
-            console.error(`[Action][${requestId}] Accept delivery notification failed (non-blocking):`, notifErr.message);
-          }
-        });
+        // Notification dispatch removed - handled by firestore.listener.ts
         responseData = { message: 'Delivery accepted' };
       } else if (action === 'picked_up') {
         if (currentStatus !== 'partner_assigned') {
@@ -388,22 +318,7 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
         newStatus = 'out_for_delivery';
         firestoreWriteRequired = true;
         firestoreUpdates = { status: newStatus, updatedAt: new Date(), pickedUpAt: new Date().toISOString() };
-        backgroundTasks.push(async () => {
-          try {
-            const dPayload = DeliveryTemplates.deliveryUpdate(orderId, { orderNumber: shortId, customerName: 'Customer', deliveryAddress: orderData.deliveryAddress?.addressLine || orderData.delivery_address_line || '', stage: 'out_for_delivery', version: 3 });
-            await directNotification.sendPush(userId, dPayload, 'high', { tag: `order_delivery_${orderId}`, orderId, category: 'delivery', version: 3 });
-          } catch (notifErr: any) {
-            console.error(`[Action][${requestId}] Picked up delivery notification failed (non-blocking):`, notifErr.message);
-          }
-          try {
-            if (customerFirebaseUid) {
-              const cPayload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'out_for_delivery', totalAmount: Number(orderData.totalAmount || orderData.total_amount || 0), version: 6 });
-              await directNotification.sendPush(customerFirebaseUid, cPayload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 6 });
-            }
-          } catch (notifErr: any) {
-            console.error(`[Action][${requestId}] Picked up customer notification failed (non-blocking):`, notifErr.message);
-          }
-        });
+        // Notification dispatch removed - handled by firestore.listener.ts
         responseData = { message: 'Picked up — out for delivery' };
       } else if (action === 'delivered') {
         if (currentStatus !== 'out_for_delivery') {
@@ -416,25 +331,7 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
         newStatus = 'delivered';
         firestoreWriteRequired = true;
         firestoreUpdates = { status: newStatus, updatedAt: new Date(), deliveredAt: new Date().toISOString(), ...(deliveryProof ? { deliveryProof } : {}) };
-        backgroundTasks.push(async () => {
-          try {
-            if (customerFirebaseUid) {
-              const cPayload = CustomerTemplates.orderUpdate(orderId, { orderNumber: shortId, status: 'delivered', totalAmount: Number(orderData.totalAmount || orderData.total_amount || 0), version: 7 });
-              await directNotification.sendPush(customerFirebaseUid, cPayload, 'high', { tag: `order_customer_${orderId}`, orderId, category: 'order', version: 7 });
-              const userDoc2 = await db.collection('users').doc(customerFirebaseUid).get();
-              const userRes2 = userDoc2.data() || {};
-              const userEmail = userRes2.email;
-              const userName = userRes2.name || 'Customer';
-              if (userEmail) {
-                const subject = `Your order has been delivered! — ${shortId}`;
-                const htmlBody = buildOrderStatusEmail({ customerName: userName, subject, stage: 'delivered', orderId, data: { orderNumber: shortId, totalAmount: String(orderData.totalAmount || orderData.total_amount || 0) }, orderData: orderData });
-                queueEmail(userEmail, subject, htmlBody, 'transactional').catch(e => console.error(`[Action][${requestId}] Email queue failed:`, e.message));
-              }
-            }
-          } catch (notifErr: any) {
-            console.error(`[Action][${requestId}] Delivered notification failed (non-blocking):`, notifErr.message);
-          }
-        });
+        // Notification dispatch removed - handled by firestore.listener.ts
         responseData = { message: 'Delivered — order complete' };
       } else {
         await releaseOrderLock(orderId);
@@ -446,13 +343,7 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
 
     // ── SYSTEM ACTIONS ─────────────────────────────────────────────────────
     else if (action === 'stop_alert') {
-      backgroundTasks.push(async () => {
-        try {
-          await directNotification.sendPush(userId, { notification: { title: 'Stop Alert', body: '' }, data: { action: 'STOP_ALERT', orderId, stage: currentStage, category: 'system' } }, 'high', { tag: `stop_alert_${orderId}`, orderId, category: 'system' });
-        } catch (e: any) {
-          console.error(`[Action][${requestId}] stop_alert push failed (non-blocking):`, e.message);
-        }
-      });
+      // Notification dispatch removed - handled by firestore.listener.ts
       await releaseOrderLock(orderId);
       lockReleased = true;
       res.json({ success: true, message: 'Alert stopped', requestId });

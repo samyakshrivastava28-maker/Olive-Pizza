@@ -1,6 +1,7 @@
 import * as admin from 'firebase-admin';
 import { adminMessaging } from '../../config/firebase.js';
 import { pgPool } from '../../config/postgres.js';
+import { NotificationLogger } from './NotificationLogger.js';
 
 export interface NotificationOptions {
   tag?: string;
@@ -71,17 +72,31 @@ export class DirectNotificationService {
           const response = await adminMessaging.sendEachForMulticast(message);
           
           // Cleanup invalid tokens async
-          const failedTokens: string[] = [];
-          response.responses.forEach((r, idx) => {
-            if (r.error && (
-              r.error.code === 'messaging/invalid-registration-token' ||
-              r.error.code === 'messaging/registration-token-not-registered'
-            )) {
-              failedTokens.push(chunk[idx]);
-            }
-          });
+            const failedTokens: string[] = [];
+            response.responses.forEach((r, idx) => {
+              const fcmToken = chunk[idx];
+              // Fire & forget logging
+              NotificationLogger.log({
+                timestamp: new Date().toISOString(),
+                orderId: options.orderId,
+                userId: 'bulk_target', // could be inferred, but token is unique
+                fcmToken,
+                payload,
+                firebaseResponse: r,
+                status: r.success ? 'success' : 'failure',
+                errorDetails: r.error?.message,
+                elapsedTimeMs: 0 // We could measure this if we start a timer
+              });
 
-          if (failedTokens.length > 0) {
+              if (r.error && (
+                r.error.code === 'messaging/invalid-registration-token' ||
+                r.error.code === 'messaging/registration-token-not-registered'
+              )) {
+                failedTokens.push(fcmToken);
+              }
+            });
+
+            if (failedTokens.length > 0) {
             await pgPool.query(
               `UPDATE fcm_tokens SET is_active = FALSE WHERE token = ANY($1)`,
               [failedTokens]

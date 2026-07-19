@@ -3,6 +3,7 @@ import { pgPool } from '../config/postgres.js';
 import { adminAuth, adminDb } from '../config/firebase.js';
 import cloudinary from '../config/cloudinary.js';
 import os from 'os';
+import { NotificationLogger } from '../services/notification/NotificationLogger.js';
 
 const router = Router();
 const clients = new Set<Response>();
@@ -77,6 +78,8 @@ const gatherMetrics = async () => {
   catch(e:any){m.services.cloudinary.status='down';m.services.cloudinary.error=e.message;}
 
   try { m.aiProviders = await checkAIProviders(); } catch { m.aiProviders=[]; }
+
+  m.notificationLogs = NotificationLogger.getRecentLogs(50);
 
   return m;
 };

@@ -18,12 +18,12 @@
  *   Delivery (any stage)                             → NEVER email (operational)
  */
 
-import { adminDb as db, adminAuth } from '../../config/firebase.js';
+import { adminDb as db, adminAuth, adminMessaging } from '../../config/firebase.js';
 import * as admin from 'firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { notificationDebugger } from './NotificationDebugger.js';
+import { NotificationLogger } from './NotificationLogger.js';
 import { pgPool } from '../../config/postgres.js';
-import { adminDb, adminMessaging } from '../../config/firebase.js';
 import { queueEmail } from '../email.service.js';
 import { buildOrderStatusEmail } from '../emailTemplates.service.js';
 import { orderEventService } from '../order/OrderEventService.js';
@@ -216,7 +216,7 @@ export class NotificationQueueService {
 
       if (deviceInfo.oldToken && deviceInfo.oldToken !== token) {
         await client.query('UPDATE fcm_tokens SET is_active = FALSE WHERE token = $1 AND user_id = $2', [deviceInfo.oldToken, pgUserId]);
-        adminDb.collection('users').doc(firebaseUserId).update({ fcmTokens: FieldValue.arrayRemove(deviceInfo.oldToken) }).catch(() => {});
+        db.collection('users').doc(firebaseUserId).update({ fcmTokens: FieldValue.arrayRemove(deviceInfo.oldToken) }).catch(() => {});
       }
 
       // CRITICAL FIX: Ensure 1 Device = 1 User. Deactivate this token for ANY OTHER user who might have previously logged in on this device.
@@ -232,7 +232,7 @@ export class NotificationQueueService {
         [pgUserId, token, deviceInfo.deviceName, deviceInfo.platform, deviceInfo.browser, deviceInfo.appVersion]
       );
 
-      adminDb.collection('users').doc(firebaseUserId).update({
+      db.collection('users').doc(firebaseUserId).update({
         fcmTokens: FieldValue.arrayUnion(token),
         notificationReady: true,
         lastTokenRefresh: FieldValue.serverTimestamp(),
@@ -319,7 +319,7 @@ export class NotificationQueueService {
           `SELECT token FROM fcm_tokens WHERE user_id = $1 AND is_active = TRUE ORDER BY last_used_at DESC LIMIT 10`,
           [target_user_id]
         ),
-        adminDb.collection('users').doc(target_user_id).get().then(doc => ({ rows: [doc.data() || {}] })),
+        db.collection('users').doc(target_user_id).get().then(doc => ({ rows: [doc.data() || {}] })),
       ]);
 
       const userEmail: string | null = userResult.rows[0]?.email || null;
@@ -328,7 +328,7 @@ export class NotificationQueueService {
       // Fallback to Firestore if no Postgres tokens
       let tokens: string[] = tokenResult.rows.map((r: any) => r.token);
       if (tokens.length === 0 && firebase_uid) {
-        const userDoc = await adminDb.collection('users').doc(firebase_uid).get();
+        const userDoc = await db.collection('users').doc(firebase_uid).get();
         tokens = userDoc.data()?.fcmTokens || [];
         for (const t of tokens) {
           await client.query(
@@ -406,9 +406,23 @@ export class NotificationQueueService {
       const response = await adminMessaging.sendEachForMulticast(message);
       const deliveryMs = Date.now() - startTime;
 
-      // ── Handle invalid tokens ─────────────────────────────────────────────
+      // ── Handle invalid tokens and log to Production Logger ─────────
       const failedTokens: string[] = [];
       response.responses.forEach((r, idx) => {
+        const fcmToken = tokens[idx];
+        
+        NotificationLogger.log({
+          timestamp: new Date().toISOString(),
+          orderId: order_id,
+          userId: target_user_id,
+          fcmToken,
+          payload: parsedPayload,
+          firebaseResponse: r,
+          status: r.success ? 'success' : 'failure',
+          errorDetails: r.error?.message,
+          elapsedTimeMs: deliveryMs
+        });
+
         if (r.error) {
           const code = r.error.code;
           if (
@@ -416,7 +430,7 @@ export class NotificationQueueService {
             code === 'messaging/registration-token-not-registered' ||
             code === 'messaging/invalid-argument'
           ) {
-            failedTokens.push(tokens[idx]);
+            failedTokens.push(fcmToken);
           }
           // Do NOT retry invalid tokens
         }
@@ -428,7 +442,7 @@ export class NotificationQueueService {
           [target_user_id, failedTokens]
         );
         if (firebase_uid) {
-          adminDb.collection('users').doc(firebase_uid).update({
+          db.collection('users').doc(firebase_uid).update({
             fcmTokens: FieldValue.arrayRemove(...failedTokens),
           }).catch(() => {});
         }
@@ -461,7 +475,7 @@ export class NotificationQueueService {
         const role = parsedPayload.data?.role || 'customer';
         const stage = parsedPayload.data?.stage || parsedPayload.data?.currentStatus || category || 'update';
         const alwaysEmail = EmailRulesEngine.isAlwaysEmail(role, stage);
-        const userResult = await adminDb.collection('users').doc(target_user_id).get().then(doc => ({ rows: [doc.data() || {}] }));
+        const userResult = await db.collection('users').doc(target_user_id).get().then(doc => ({ rows: [doc.data() || {}] }));
         const userEmail = userResult.rows[0]?.email || null;
         const customerName = userResult.rows[0]?.name || 'Customer';
 

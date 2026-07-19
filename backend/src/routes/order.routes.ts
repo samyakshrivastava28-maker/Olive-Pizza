@@ -172,100 +172,13 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
       return; // Stop execution if DB write fails
     }
 
-    // 5. Emit canonical OrderEvent via OrderEventService
+    // 5. Emit canonical OrderEvent via OrderEventService (Legacy trigger, can be deprecated later)
     try {
-      // NOTE: OrderEventService itself needs to be refactored to read from Firestore instead of Postgres
       const event = await orderEventService.emitNewOrder(newOrderId);
-      const eventId   = event?.eventId;
-      const eventTimestamp = event?.eventTimestamp;
-
-      // Push notification to all owners — critical wake-up
-      const ownerDocs = await adminDb.collection('users').where('role', '==', 'owner').get();
-      const ownerUids = ownerDocs.docs.map(doc => doc.id);
-      
-      const ownerPayload = OwnerTemplates.newOrder(newOrderId, {
-        customerName: userData.name || 'Customer',
-        orderNumber,
-        totalAmount: serverCalculatedTotal,
-        items: validatedItems.map(item => `${item.name} x${item.quantity}`),
-        paymentMethod: 'COD',
-        deliveryAddress: userData.full_address,
-        phone: userData.phone,
-        orderTime: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-        version: 1,
-        eventId,
-        previousStatus: undefined,
-        eventTimestamp,
-      });
-
-      if (ownerUids.length > 0) {
-        const ownerTrace = await directNotification.sendBulkPush(
-          ownerUids,
-          ownerPayload,
-          'high',
-          { tag: `order_owner_${newOrderId}`, orderId: newOrderId, category: 'order', priority: 'critical', version: 1 }
-        );
-        trace.steps.push({ step: 'Owner Notifications', status: 'success', recipients: ownerUids.length, trace: ownerTrace });
-      } else {
-        trace.steps.push({ step: 'Owner Notifications', status: 'skipped', reason: 'No owners found' });
-      }
-
-      const customerPayload = CustomerTemplates.orderUpdate(newOrderId, {
-        orderNumber,
-        totalAmount: serverCalculatedTotal,
-        status: 'pending',
-        version: 1,
-        eventId,
-        previousStatus: undefined,
-        eventTimestamp,
-      });
-      const customerTrace = await directNotification.sendPush(
-        userId,
-        customerPayload,
-        'high',
-        { tag: `order_customer_${newOrderId}`, orderId: newOrderId, category: 'order', version: 1 }
-      );
-      trace.steps.push({ step: 'Customer Notification', status: 'success', trace: customerTrace });
-      
+      trace.steps.push({ step: 'OrderEventService', status: 'success' });
     } catch (pushErr: any) {
-      console.error('[Orders] Push notification failed (non-blocking):', pushErr);
-      trace.steps.push({ step: 'Notifications', status: 'error', error: pushErr.message });
-    }
-
-    // 6. MANDATORY TRANSACTIONAL EMAIL — Order Placed (always sent, regardless of push)
-    if (userData.email) {
-      try {
-        const fullOrderData = {
-          items: validatedItems,
-          subtotal: serverCalculatedTotal,
-          total_amount: serverCalculatedTotal,
-          deliveryAddress: userData.full_address,
-          customerName: userData.name || 'Customer',
-          contactPhone: userData.phone,
-          paymentMethod: 'COD',
-        };
-
-        const subject = `Order Placed — #${orderNumber}`;
-        const htmlBody = buildOrderStatusEmail({
-          customerName: userData.name || 'Customer',
-          subject,
-          stage: 'pending',
-          orderId: newOrderId,
-          data: {
-            orderNumber,
-            totalAmount: String(serverCalculatedTotal),
-            paymentMethod: 'COD',
-            deliveryAddress: userData.full_address,
-          },
-          orderData: fullOrderData
-        });
-        await queueEmail(userData.email, subject, htmlBody, 'transactional');
-        console.log(`[Orders] 📧 Order Placed email queued → ${userData.email}`);
-        trace.steps.push({ step: 'Email Trigger', status: 'success', email: userData.email });
-      } catch (emailErr: any) {
-        console.error('[Orders] Order Placed email failed (non-blocking):', emailErr);
-        trace.steps.push({ step: 'Email Trigger', status: 'error', error: emailErr.message });
-      }
+      console.error('[Orders] OrderEventService failed (non-blocking):', pushErr);
+      trace.steps.push({ step: 'OrderEventService', status: 'error', error: pushErr.message });
     }
 
     trace.processingTime = Date.now() - startTime;

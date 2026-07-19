@@ -1,19 +1,24 @@
 /**
  * Firestore Listener — uses Firebase Admin SDK (bypasses security rules)
- * Now that we have a service account, this is the correct and most reliable approach.
+ * This is the SINGLE SOURCE OF TRUTH for all order notifications.
  */
 import { adminDb as db } from '../config/firebase.js';
 import { notificationService } from '../services/notification/notification.service.js';
 import { SlackProvider } from '../services/notification/slack.provider.js';
+import { notificationQueue } from '../services/notification/NotificationQueueService.js';
+import { OwnerTemplates, CustomerTemplates, DeliveryTemplates } from '../services/notification/NotificationTemplates.js';
+import { queueEmail } from '../services/email.service.js';
+import { buildOrderStatusEmail } from '../services/emailTemplates.service.js';
 
 export class FirestoreListener {
   private static orderStatusCache = new Map<string, string>();
+  private static processedOrderIds = new Set<string>();
 
   static init() {
     try {
       this.listenToOrders();
       this.listenToActivityLogs();
-      console.log('🎧 Firestore Listeners (Admin SDK) initialized for Slack.');
+      console.log('🎧 Firestore Listeners (Admin SDK) initialized for Unified Notifications.');
     } catch (err) {
       console.error('❌ Failed to initialize Firestore Listeners:', err);
     }
@@ -33,46 +38,68 @@ export class FirestoreListener {
 
             // Skip orders older than 10 min (server restart replay protection)
             if (Date.now() - createdAt.getTime() > 10 * 60 * 1000) continue;
+            
+            // Prevent duplicate triggers if we already processed this order creation
+            if (this.processedOrderIds.has(orderData.id)) continue;
+            this.processedOrderIds.add(orderData.id);
 
             this.orderStatusCache.set(orderData.id, orderData.status);
 
-            if (orderData.orderTiming === 'scheduled') {
-              console.log(`📅 Scheduled order: ${orderData.dailyOrderNumber || `#${orderData.id.slice(-6).toUpperCase()}`} — sending Slack alert only`);
-              const blocks = SlackProvider.generateOrderBlock(orderData);
-              const ts = await notificationService.dispatchImmediate({
-                type: 'scheduled_order_received',
-                category: 'orders',
-                title: `📅 New Scheduled Order — ${orderData.dailyOrderNumber || `#${orderData.id.slice(-6).toUpperCase()}`}`,
-                blocks
-              });
-              if (ts) {
-                try { await change.doc.ref.update({ slackThreadTs: ts }); } catch (e) {}
-              }
-              return; // Skip the kitchen alarm
-            }
-
-            console.log(`🍕 New order: ${orderData.dailyOrderNumber || `#${orderData.id.slice(-6).toUpperCase()}`} — sending Slack alert`);
-
+            const shortId = orderData.id.slice(-6).toUpperCase();
+            const orderNumber = orderData.dailyOrderNumber || orderData.daily_order_number || `OP-${shortId}`;
+            const totalAmount = Number(orderData.totalAmount || orderData.total_amount || 0);
+            
+            // 1. SLACK NOTIFICATION
+            console.log(`🍕 New order: ${orderNumber} — triggering Unified Pipeline`);
             const blocks = SlackProvider.generateOrderBlock(orderData);
-
             const ts = await notificationService.dispatchImmediate({
-              type: 'new_order',
+              type: orderData.orderTiming === 'scheduled' ? 'scheduled_order_received' : 'new_order',
               category: 'orders',
-              title: `🍕 New Order — ${orderData.dailyOrderNumber || `#${orderData.id.slice(-6).toUpperCase()}`}`,
+              title: `🍕 New Order — ${orderNumber}`,
               blocks,
             });
-
-            // Save thread ts on the order for threaded follow-up replies
             if (ts) {
-              try {
-                await change.doc.ref.update({ slackThreadTs: ts });
-              } catch (e) {
-                console.warn('Could not save slackThreadTs:', e);
-              }
+              try { await change.doc.ref.update({ slackThreadTs: ts }); } catch (e) {}
             }
+
+            if (orderData.orderTiming === 'scheduled') return; // Skip push alarms for scheduled until ready
+
+            // 2. FCM PUSH NOTIFICATION TO OWNERS
+            try {
+              const ownerDocs = await db.collection('users').where('role', '==', 'owner').get();
+              for (const doc of ownerDocs.docs) {
+                const ownerPayload = OwnerTemplates.newOrder(orderData.id, {
+                  customerName: orderData.customerName || orderData.customer_name || 'Customer',
+                  orderNumber,
+                  totalAmount,
+                  items: Array.isArray(orderData.items) ? orderData.items.map((i: any) => `${i.name} x${i.quantity}`) : [],
+                  paymentMethod: orderData.paymentMethod || 'COD',
+                  deliveryAddress: orderData.deliveryAddress?.addressLine || orderData.deliveryAddress || 'Pickup',
+                  phone: orderData.contactPhone || 'No Phone',
+                  orderTime: createdAt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+                  version: 1,
+                  eventId: `new_${orderData.id}`,
+                  previousStatus: undefined,
+                  eventTimestamp: createdAt.toISOString(),
+                });
+                
+                await notificationQueue.enqueue(doc.id, ownerPayload, 'high', {
+                  tag: `order_owner_${orderData.id}`,
+                  orderId: orderData.id,
+                  category: 'order',
+                  priority: 'critical',
+                  version: 1
+                });
+              }
+            } catch (err: any) {
+              console.error('❌ Owner Push Error:', err.message);
+            }
+
+            // 3. EMAIL TO CUSTOMER
+            this.sendOrderEmail(orderData, 'pending');
           }
 
-          // ── ORDER MODIFIED ───────────────────────────────────────────────────
+          // ── ORDER MODIFIED (STATUS TRANSITION) ────────────────────────────────
           else if (change.type === 'modified') {
             const currentStatus: string = orderData.status;
             const prevStatus = this.orderStatusCache.get(orderData.id);
@@ -81,10 +108,17 @@ export class FirestoreListener {
             if (!currentStatus || currentStatus === prevStatus) continue;
             this.orderStatusCache.set(orderData.id, currentStatus);
 
+            const shortId = orderData.id.slice(-6).toUpperCase();
+            const orderNumber = orderData.dailyOrderNumber || orderData.daily_order_number || `OP-${shortId}`;
+            const totalAmount = Number(orderData.totalAmount || orderData.total_amount || 0);
+
+            console.log(`🔄 Order ${orderNumber} Status Transition: ${prevStatus} → ${currentStatus}`);
+
             type StatusCfg = { emoji: string; label: string; category: 'orders' | 'delivery' };
             const statusConfig: Record<string, StatusCfg> = {
               accepted:         { emoji: '✅', label: 'Order Accepted',            category: 'orders' },
               preparing:        { emoji: '🍳', label: 'Preparing Your Order',      category: 'orders' },
+              ready:            { emoji: '🟢', label: 'Order Ready',               category: 'orders' },
               packed:           { emoji: '📦', label: 'Order Packed & Ready',       category: 'orders' },
               partner_assigned: { emoji: '🛵', label: 'Delivery Partner Assigned',  category: 'delivery' },
               out_for_delivery: { emoji: '🚀', label: 'Out for Delivery',           category: 'delivery' },
@@ -96,31 +130,55 @@ export class FirestoreListener {
             const cfg = statusConfig[currentStatus];
             if (!cfg) continue;
 
-            console.log(`🔄 Order ${orderData.dailyOrderNumber || `#${orderData.id.slice(-6).toUpperCase()}`}: ${prevStatus} → ${currentStatus}`);
-
-            // Delivery partner assigned or picked up — send action buttons block
+            // 1. SLACK NOTIFICATION
             if (currentStatus === 'partner_assigned' || currentStatus === 'out_for_delivery') {
-              const deliveryBlocks = SlackProvider.generateDeliveryBlock(
-                orderData,
-                orderData.deliveryPartnerName || 'Partner'
-              );
-              await notificationService.dispatch({
-                type: currentStatus,
-                category: 'delivery',
-                title: cfg.label,
-                blocks: deliveryBlocks,
-                thread_ts: slackTs,
-              });
+              const deliveryBlocks = SlackProvider.generateDeliveryBlock(orderData, orderData.deliveryPartnerName || 'Partner');
+              await notificationService.dispatch({ type: currentStatus, category: 'delivery', title: cfg.label, blocks: deliveryBlocks, thread_ts: slackTs });
             } else {
-              // Standard status update — reply in the order's original Slack thread
-              await notificationService.dispatch({
-                type: currentStatus,
-                category: cfg.category,
-                title: cfg.label,
-                details: `Order #${orderData.id.slice(-6).toUpperCase()} → ${cfg.emoji} *${cfg.label}*`,
-                thread_ts: slackTs,
-              });
+              await notificationService.dispatch({ type: currentStatus, category: cfg.category, title: cfg.label, details: `Order #${shortId} → ${cfg.emoji} *${cfg.label}*`, thread_ts: slackTs });
             }
+
+            // 2. FCM PUSH NOTIFICATIONS
+            const customerId = orderData.userId || orderData.firebaseUid;
+            const partnerId = orderData.deliveryPartnerId || orderData.delivery_partner_id;
+            
+            // Map status to payload version sequentially for deduplication
+            const versionMap: Record<string, number> = {
+              'accepted': 2, 'preparing': 3, 'ready': 4, 'packed': 5, 
+              'partner_assigned': 6, 'picked_up': 7, 'out_for_delivery': 8, 'delivered': 9, 'cancelled': 10
+            };
+            const version = versionMap[currentStatus] || 2;
+
+            if (currentStatus === 'partner_assigned' && partnerId) {
+              // Notify Partner
+              const deliveryPayload = DeliveryTemplates.newAssignment(orderData.id, {
+                orderNumber: shortId, customerName: orderData.customerName || 'Customer', customerPhone: orderData.contactPhone,
+                deliveryAddress: orderData.deliveryAddress?.addressLine || orderData.deliveryAddress || 'Address not provided',
+                distance: '?', eta: '15 mins', totalAmount, paymentMethod: orderData.paymentMethod || 'COD', version
+              });
+              await notificationQueue.enqueue(partnerId, deliveryPayload, 'high', { tag: `order_delivery_${orderData.id}`, orderId: orderData.id, category: 'delivery', priority: 'critical', version });
+            }
+
+            // Notify Customer (for almost all transitions)
+            if (customerId && ['accepted', 'preparing', 'ready', 'partner_assigned', 'out_for_delivery', 'delivered', 'cancelled'].includes(currentStatus)) {
+              const cPayload = CustomerTemplates.orderUpdate(orderData.id, {
+                orderNumber: shortId, status: currentStatus as any, totalAmount, 
+                deliveryPartnerName: orderData.deliveryPartnerName || 'Partner', version
+              });
+              await notificationQueue.enqueue(customerId, cPayload, 'high', { tag: `order_customer_${orderData.id}`, orderId: orderData.id, category: 'order', version });
+            }
+
+            // Notify Owners (for delivery lifecycle updates)
+            if (['picked_up', 'out_for_delivery', 'delivered'].includes(currentStatus)) {
+               const ownerDocs = await db.collection('users').where('role', '==', 'owner').get();
+               for (const doc of ownerDocs.docs) {
+                 const oPayload = OwnerTemplates.orderStatusUpdate(orderData.id, { orderNumber: shortId, customerName: orderData.customerName || 'Customer', status: currentStatus as any, deliveryPartnerName: orderData.deliveryPartnerName || 'Partner', totalAmount, version });
+                 await notificationQueue.enqueue(doc.id, oPayload, 'normal', { tag: `order_owner_tracking_${orderData.id}`, orderId: orderData.id, category: 'order', version });
+               }
+            }
+
+            // 3. EMAIL FALLBACK / TRANSACTIONAL EMAILS
+            this.sendOrderEmail(orderData, currentStatus);
           }
         }
       },
@@ -130,41 +188,59 @@ export class FirestoreListener {
     );
   }
 
+  private static async sendOrderEmail(orderData: any, status: string) {
+    try {
+      const customerDoc = await db.collection('users').doc(orderData.userId || orderData.firebaseUid).get();
+      const customerData = customerDoc.exists ? customerDoc.data() : null;
+      const email = customerData?.email;
+      if (!email) return;
+
+      const shortId = orderData.id.slice(-6).toUpperCase();
+      const orderNumber = orderData.dailyOrderNumber || orderData.daily_order_number || `OP-${shortId}`;
+      const totalAmount = Number(orderData.totalAmount || orderData.total_amount || 0);
+
+      let subject = '';
+      if (status === 'pending') subject = `Order Placed — #${orderNumber}`;
+      else if (status === 'accepted') subject = `Order Accepted — #${orderNumber}`;
+      else if (status === 'cancelled') subject = `Order Cancelled — #${orderNumber}`;
+      else if (status === 'delivered') subject = `Order Delivered — #${orderNumber}`;
+      else return; // Don't email for every minor step like preparing
+
+      const fullOrderData = {
+        items: Array.isArray(orderData.items) ? orderData.items : [],
+        subtotal: totalAmount, total_amount: totalAmount,
+        deliveryAddress: orderData.deliveryAddress?.addressLine || orderData.deliveryAddress || 'Pickup',
+        customerName: orderData.customerName || customerData?.name || 'Customer',
+        contactPhone: orderData.contactPhone || customerData?.phone,
+        paymentMethod: orderData.paymentMethod || 'COD',
+      };
+
+      const htmlBody = buildOrderStatusEmail({
+        customerName: fullOrderData.customerName, subject, stage: status as any, orderId: orderData.id,
+        data: { orderNumber, totalAmount: String(totalAmount), paymentMethod: fullOrderData.paymentMethod, deliveryAddress: fullOrderData.deliveryAddress },
+        orderData: fullOrderData
+      });
+
+      await queueEmail(email, subject, htmlBody, 'transactional');
+    } catch (e) {
+      console.warn('❌ Email dispatch failed:', e);
+    }
+  }
+
   private static listenToActivityLogs() {
     let initialLoad = true;
-
-    db.collection('activity_logs')
-      .orderBy('timestamp', 'desc')
-      .limit(20)
-      .onSnapshot(
-        (snapshot: any) => {
-          if (initialLoad) {
-            initialLoad = false;
-            return;
-          }
-
-          for (const change of snapshot.docChanges()) {
-            if (change.type !== 'added') continue;
-
-            const data = change.doc.data() as any;
-            const action: string = data.action || '';
-
-            let category: 'security' | 'inventory' | 'support' | 'general' = 'general';
-            if (/security|login|permission|admin/i.test(action)) category = 'security';
-            else if (/stock|inventory|product/i.test(action)) category = 'inventory';
-            else if (/customer|support|ticket/i.test(action)) category = 'support';
-
-            notificationService.dispatch({
-              type: 'activity_log',
-              category,
-              title: action,
-              details: `*User:* ${data.user || 'System'}\n${data.details || ''}`,
-            });
-          }
-        },
-        (error: any) => {
-          console.error('❌ Activity log listener error:', error.message);
-        }
-      );
+    db.collection('activity_logs').orderBy('timestamp', 'desc').limit(20).onSnapshot((snapshot: any) => {
+      if (initialLoad) { initialLoad = false; return; }
+      for (const change of snapshot.docChanges()) {
+        if (change.type !== 'added') continue;
+        const data = change.doc.data() as any;
+        const action: string = data.action || '';
+        let category: 'security' | 'inventory' | 'support' | 'general' = 'general';
+        if (/security|login|permission|admin/i.test(action)) category = 'security';
+        else if (/stock|inventory|product/i.test(action)) category = 'inventory';
+        else if (/customer|support|ticket/i.test(action)) category = 'support';
+        notificationService.dispatch({ type: 'activity_log', category, title: action, details: `*User:* ${data.user || 'System'}\n${data.details || ''}` });
+      }
+    });
   }
 }
