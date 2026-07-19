@@ -30,8 +30,6 @@ const getEnvStatus = () => {
   const vars: Record<string,string> = {
     FIREBASE_CREDENTIALS: (process.env.FIREBASE_SERVICE_ACCOUNT_BASE64 || (process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY)) ? 'configured' : 'missing',
     DATABASE_URL: process.env.DATABASE_URL ? 'configured' : 'missing',
-    SUPABASE_URL: process.env.SUPABASE_URL ? 'configured' : 'missing',
-    SUPABASE_SERVICE_KEY: process.env.SUPABASE_SERVICE_KEY ? 'configured' : 'missing',
     SMTP: (process.env.SMTP_HOST || process.env.EMAIL_HOST) ? 'configured' : 'missing',
     CLOUDINARY: (process.env.CLOUDINARY_URL || (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY)) ? 'configured' : 'missing',
     SLACK_BOT_TOKEN: process.env.SLACK_BOT_TOKEN ? 'configured' : 'missing',
