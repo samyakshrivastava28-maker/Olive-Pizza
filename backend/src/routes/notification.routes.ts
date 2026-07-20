@@ -84,7 +84,7 @@ async function acquireOrderLock(orderId: string, firebaseUid: string, action: st
     if (lockDetails.rows.length > 0) {
       const lock = lockDetails.rows[0];
       const isDuplicate = lock.action === action && lock.age_seconds < 5;
-      
+
       return {
         success: false,
         duplicate: isDuplicate,
@@ -229,10 +229,10 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
     // ── Step 5: State Machine Validation & Business Logic ─────────────────
     // Allowed transitions per action (enforced on server, regardless of what client sends)
     const OWNER_TRANSITIONS: Record<string, { from: string[], to: string }> = {
-      accept:          { from: ['pending', 'new_order'], to: 'accepted' },
-      reject:          { from: ['pending', 'new_order', 'accepted', 'preparing', 'ready', 'partner_assigned'], to: 'cancelled' },
-      start_cooking:   { from: ['accepted'], to: 'preparing' },
-      ready:           { from: ['preparing'], to: 'ready' },
+      accept: { from: ['pending', 'new_order'], to: 'accepted' },
+      reject: { from: ['pending', 'new_order', 'accepted', 'preparing', 'ready', 'partner_assigned'], to: 'cancelled' },
+      start_cooking: { from: ['accepted'], to: 'preparing' },
+      ready: { from: ['preparing'], to: 'ready' },
       assign_delivery: { from: ['preparing', 'ready'], to: 'partner_assigned' },
     };
 
@@ -447,6 +447,54 @@ router.post('/token', verifyToken, async (req: AuthRequest, res: Response): Prom
 });
 
 // =============================================================================
+// POST /notifications/token/deregister
+// Frontend removes FCM token on logout — marks it inactive in Postgres and
+// removes it from the Firestore user document. Without this route, the frontend
+// (frontend/src/lib/fcm.ts) hits a silent 404 on logout, and stale tokens remain
+// is_active=TRUE, causing FCM to keep sending to dead tokens (failureCount rises).
+// =============================================================================
+router.post('/token/deregister', verifyToken, async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { token } = req.body;
+    const userId = req.user!.uid;
+
+    if (!token) {
+      res.status(400).json({ error: 'Token is required' });
+      return;
+    }
+
+    const client = await pgPool.connect();
+    try {
+      // 1. Mark the token inactive in Postgres (canonical token store for FCM sends)
+      const result = await client.query(
+        `UPDATE fcm_tokens SET is_active = FALSE, updated_at = NOW()
+         WHERE token = $1 AND user_id = $2`,
+        [token, userId]
+      );
+      console.log(`[TokenDeregister] Deactivated ${result.rowCount} token(s) for user ${userId}`);
+
+      // 2. Remove from Firestore user document (legacy/secondary token list)
+      try {
+        const { FieldValue } = await import('firebase-admin/firestore');
+        await db.collection('users').doc(userId).update({
+          fcmTokens: FieldValue.arrayRemove(token),
+        });
+      } catch (fsErr: any) {
+        // Non-fatal — Postgres is the source of truth for FCM sends
+        console.warn('[TokenDeregister] Firestore arrayRemove failed (non-fatal):', fsErr.message);
+      }
+    } finally {
+      client.release();
+    }
+
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('[NotificationRoutes] Token deregistration error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// =============================================================================
 // POST /notifications/track
 // Service Worker and client report delivery/open/action events
 // =============================================================================
@@ -570,7 +618,7 @@ router.post('/send-custom', verifyToken, async (req: AuthRequest, res: Response)
     // Fetch targets from PostgreSQL
     let queryParams: any[] = [];
     let queryText = 'SELECT user_id as firebase_uid FROM fcm_tokens';
-    
+
     if (audience === 'customers') {
       queryText += ' WHERE role = $1';
       queryParams.push('customer');
@@ -657,7 +705,7 @@ router.get('/analytics', verifyToken, async (req: AuthRequest, res: Response): P
         queue: queueStats.rows,
         tokens: tokenStats.rows,
         logs: deliveryLogs.rows,
-        activeOrders: (activeOrders as admin.firestore.AggregateQuerySnapshot<{count: admin.firestore.AggregateField<number>}>).data().count || 0,
+        activeOrders: (activeOrders as admin.firestore.AggregateQuerySnapshot<{ count: admin.firestore.AggregateField<number> }>).data().count || 0,
       });
     } finally {
       client.release();
@@ -746,35 +794,163 @@ router.post('/cleanup', verifyToken, async (req: AuthRequest, res: Response): Pr
 // GET /notifications/debug
 // Provide comprehensive diagnostics for the Owner Dashboard
 // =============================================================================
+// GET /notifications/debug
+// Comprehensive diagnostics — exposes the FULL per-stage trace for every notification:
+//   ✓ Firestore event detected (via FirestoreListener)
+//   ✓ Queue created (notification_queue row)
+//   ✓ Queue processed (status transitions)
+//   ✓ Tokens loaded (fcm_tokens count)
+//   ✓ Payload generated (payload JSON)
+//   ✓ Firebase send called (NotificationLogger entry)
+//   ✓ Firebase response (success/failure counts)
+//   ✓ Notification delivered (status = 'sent'/'delivered')
+//   ✓ Email sent (email_queue status)
+//   ✓ Retry count + error reason
+// One page explains exactly why a notification failed.
+// =============================================================================
 router.get('/debug', verifyToken, async (req: AuthRequest, res: Response): Promise<void> => {
   const pgClient = await pgPool.connect();
   try {
-    const queueRes = await pgClient.query("SELECT COUNT(*) as count FROM notification_queue WHERE status = 'queued'");
-    const failedRes = await pgClient.query("SELECT COUNT(*) as count FROM notification_history WHERE status = 'failed'");
-    const avgRes = await pgClient.query("SELECT AVG(EXTRACT(EPOCH FROM (updated_at - created_at))) as avg_sec FROM notification_queue WHERE status = 'sent'");
+    // ── 1. Notification Queue — aggregate stats ────────────────────────────
+    const queueStatsRes = await pgClient.query(
+      `SELECT status, COUNT(*) as count FROM notification_queue GROUP BY status ORDER BY count DESC`
+    );
+    const queueSize = queueStatsRes.rows.find((r: any) => r.status === 'queued')?.count || 0;
+    const failedNotifications = queueStatsRes.rows.find((r: any) => r.status === 'failed')?.count || 0;
+    const avgRes = await pgClient.query(
+      "SELECT AVG(EXTRACT(EPOCH FROM (updated_at - created_at))) as avg_sec FROM notification_queue WHERE status = 'sent'"
+    );
 
-    // Background Tasks Diagnostics
+    // ── 2. Recent notification queue items with FULL per-stage trace ───────
+    // Each row exposes: created_at (event detected), status (queue processed),
+    // payload (payload generated), retry_count, error_message (error reason),
+    // updated_at - created_at (elapsed).
+    const recentQueueRes = await pgClient.query(
+      `SELECT id, target_user_id, status, priority, tag, order_id, version, category,
+              retry_count, error_message,
+              created_at, updated_at,
+              EXTRACT(EPOCH FROM (updated_at - created_at)) as elapsed_sec,
+              LEFT(payload::text, 2000) as payload_preview
+       FROM notification_queue
+       ORDER BY created_at DESC
+       LIMIT 20`
+    );
+
+    // ── 3. FCM Token stats by active state ─────────────────────────────────
+    const tokenStatsRes = await pgClient.query(
+      `SELECT is_active, COUNT(*) as count FROM fcm_tokens GROUP BY is_active`
+    );
+    const activeTokens = tokenStatsRes.rows.find((r: any) => r.is_active === true)?.count || 0;
+    const inactiveTokens = tokenStatsRes.rows.find((r: any) => r.is_active === false)?.count || 0;
+
+    // ── 4. Email Queue stats ────────────────────────────────────────────────
+    const emailQueueStatsRes = await pgClient.query(
+      `SELECT status, COUNT(*) as count FROM email_queue GROUP BY status ORDER BY count DESC`
+    );
+    const recentEmailsRes = await pgClient.query(
+      `SELECT id, recipient, subject, status, retry_count, last_error, created_at, sent_at
+       FROM email_queue
+       ORDER BY created_at DESC
+       LIMIT 10`
+    );
+
+    // ── 5. Background Tasks Diagnostics ─────────────────────────────────────
     const bgPendingRes = await pgClient.query("SELECT COUNT(*) as count FROM background_tasks WHERE status = 'pending'");
     const bgProcessingRes = await pgClient.query("SELECT COUNT(*) as count FROM background_tasks WHERE status = 'processing'");
     const bgFailedRes = await pgClient.query("SELECT COUNT(*) as count FROM background_tasks WHERE status = 'failed'");
     const bgCompletedRes = await pgClient.query("SELECT COUNT(*) as count FROM background_tasks WHERE status = 'completed'");
-    const bgRecentErrorsRes = await pgClient.query("SELECT order_id, task_type, last_error, retry_count, created_at FROM background_tasks WHERE status = 'failed' ORDER BY created_at DESC LIMIT 5");
+    const bgRecentErrorsRes = await pgClient.query(
+      "SELECT order_id, task_type, last_error, retry_count, created_at FROM background_tasks WHERE status = 'failed' ORDER BY created_at DESC LIMIT 5"
+    );
+
+    // ── 6. NotificationLogger — recent FCM send attempts with Firebase response ──
+    // This is the "Firebase send called" + "Firebase response" stage.
+    let recentFcmLogs: any[] = [];
+    try {
+      const { NotificationLogger } = await import('../services/notification/NotificationLogger.js');
+      recentFcmLogs = NotificationLogger.getRecentLogs(20).map((entry: any) => ({
+        timestamp: entry.timestamp,
+        orderId: entry.orderId,
+        userId: entry.userId,
+        role: entry.role,
+        fcmToken: entry.fcmToken ? (entry.fcmToken.substring(0, 12) + '...') : null, // mask token
+        status: entry.status,
+        errorDetails: entry.errorDetails,
+        elapsedTimeMs: entry.elapsedTimeMs,
+        firebaseSuccessCount: entry.firebaseResponse?.successCount,
+        firebaseFailureCount: entry.firebaseResponse?.failureCount,
+      }));
+    } catch (e) {
+      recentFcmLogs = [];
+    }
+
+    // ── 7. Per-stage health summary ────────────────────────────────────────
+    // Derives which stage each recent notification reached.
+    const stageTrace = recentQueueRes.rows.map((row: any) => {
+      const stages: Record<string, boolean | string | number | null> = {
+        eventDetected: !!row.created_at,           // FirestoreListener fired
+        queueCreated: !!row.id,                     // enqueue() inserted a row
+        queueProcessed: ['sent', 'delivered', 'failed', 'sending'].includes(row.status),
+        tokensLoaded: row.status !== 'queued',      // if it left 'queued', tokens were fetched
+        payloadGenerated: !!row.payload_preview,   // payload exists
+        fcmSendCalled: ['sent', 'delivered', 'failed'].includes(row.status),
+        delivered: ['sent', 'delivered'].includes(row.status),
+        emailSent: false,                           // email is tracked separately in email_queue
+        retryCount: row.retry_count || 0,
+        errorReason: row.error_message || null,
+        elapsedSec: row.elapsed_sec ? parseFloat(row.elapsed_sec).toFixed(2) : null,
+      };
+      return {
+        queueId: row.id,
+        targetUser: row.target_user_id,
+        orderId: row.order_id,
+        tag: row.tag,
+        category: row.category,
+        version: row.version,
+        priority: row.priority,
+        status: row.status,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+        stages,
+      };
+    });
 
     res.json({
-      queueSize: parseInt(queueRes.rows[0].count, 10),
-      failedNotifications: parseInt(failedRes.rows[0].count, 10),
+      // Aggregate stats
+      queueSize: parseInt(queueSize, 10),
+      failedNotifications: parseInt(failedNotifications, 10),
       averageDeliveryTimeSec: parseFloat(avgRes.rows[0].avg_sec || '0').toFixed(2),
+      queueStatusBreakdown: queueStatsRes.rows,
+      // FCM tokens
+      tokens: {
+        active: parseInt(activeTokens, 10),
+        inactive: parseInt(inactiveTokens, 10),
+        total: parseInt(activeTokens, 10) + parseInt(inactiveTokens, 10),
+      },
+      // Email queue
+      emailQueue: {
+        statusBreakdown: emailQueueStatsRes.rows,
+        recent: recentEmailsRes.rows,
+      },
+      // Background tasks
       backgroundTasks: {
         pending: parseInt(bgPendingRes.rows[0].count, 10),
         processing: parseInt(bgProcessingRes.rows[0].count, 10),
         failed: parseInt(bgFailedRes.rows[0].count, 10),
         completed: parseInt(bgCompletedRes.rows[0].count, 10),
-        recentErrors: bgRecentErrorsRes.rows
+        recentErrors: bgRecentErrorsRes.rows,
       },
+      // Per-stage trace (the key diagnostic — shows exactly where each notification stopped)
+      stageTrace,
+      // Recent FCM send logs (Firebase response details)
+      recentFcmLogs,
+      // Environment
       currentFrontendUrl: process.env.FRONTEND_URL || (process.env.NODE_ENV === 'production' ? 'https://olive-pizza.vercel.app' : 'http://localhost:5173'),
-      environment: process.env.NODE_ENV || 'development'
+      environment: process.env.NODE_ENV || 'development',
+      serverTime: new Date().toISOString(),
     });
   } catch (error: any) {
+    console.error('[NotificationRoutes] /debug error:', error);
     res.status(500).json({ error: error.message });
   } finally {
     pgClient.release();
@@ -828,7 +1004,7 @@ router.post('/test-center', verifyToken, async (req: AuthRequest, res: Response)
     } else if (action === 'force_email') {
       // Simulate by targeting a non-existent UID or removing tokens
       payload = buildPayload('Email Fallback Test', 'This should fail FCM and fall back to email immediately.');
-      payload.data.role = 'customer'; 
+      payload.data.role = 'customer';
       payload.data.stage = 'update'; // Non-always stage
       // Target a fake UUID to ensure 0 tokens
       targetId = '00000000-0000-0000-0000-000000000000';

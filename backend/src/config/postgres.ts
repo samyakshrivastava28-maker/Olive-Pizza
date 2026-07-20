@@ -21,7 +21,7 @@ export const pgPool = new Pool({
 export const initPostgres = async () => {
   try {
     const client = await pgPool.connect();
-    
+
     // Create delivery_locations table
     await client.query(`
       CREATE TABLE IF NOT EXISTS delivery_locations (
@@ -125,13 +125,38 @@ export const initPostgres = async () => {
         subject VARCHAR(255) NOT NULL,
         html_content TEXT NOT NULL,
         campaign_id INTEGER REFERENCES email_campaigns(id),
-        type VARCHAR(50) NOT NULL, -- 'transactional', 'marketing'
-        status VARCHAR(50) DEFAULT 'pending', -- 'pending', 'sent', 'failed'
+        type VARCHAR(50) NOT NULL, -- 'transactional', 'marketing', 'auth'
+        status VARCHAR(50) DEFAULT 'pending', -- 'pending', 'processing', 'sent', 'failed'
         retry_count INTEGER DEFAULT 0,
+        max_retries INTEGER DEFAULT 3,
         last_error TEXT,
+        smtp_response TEXT,
+        retry_timestamp TIMESTAMP WITH TIME ZONE,
+        idempotency_key VARCHAR(255) UNIQUE,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-        sent_at TIMESTAMP WITH TIME ZONE
+        sent_at TIMESTAMP WITH TIME ZONE,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
+    `);
+
+    // ── Email queue schema migration (idempotent) ─────────────────────────
+    // Older deployments created email_queue WITHOUT retry_timestamp, max_retries,
+    // smtp_response, idempotency_key, or updated_at. The email.service.ts retry
+    // logic depends on these columns — without them, "retry_timestamp column
+    // missing" errors appear in Render logs and email retry is completely broken.
+    // ADD COLUMN IF NOT EXISTS is a no-op if the column already exists.
+    await client.query(`
+      ALTER TABLE email_queue
+        ADD COLUMN IF NOT EXISTS max_retries INTEGER DEFAULT 3,
+        ADD COLUMN IF NOT EXISTS retry_timestamp TIMESTAMP WITH TIME ZONE,
+        ADD COLUMN IF NOT EXISTS smtp_response TEXT,
+        ADD COLUMN IF NOT EXISTS idempotency_key VARCHAR(255) UNIQUE,
+        ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
+    `);
+    // Index for the retry query: WHERE status='pending' OR (status='failed' AND retry_count < max_retries AND retry_timestamp <= NOW())
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_email_queue_status_retry
+        ON email_queue(status, retry_count, retry_timestamp);
     `);
 
     // Create storage_analytics table (High frequency, retained for 24h)

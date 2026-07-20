@@ -82,7 +82,33 @@ export class NotificationQueueService {
   private processingTimer: NodeJS.Timeout | null = null;
 
   constructor() {
-    // Background processors disabled. We now use DirectNotificationService for instant FCM delivery.
+    // Safety-net polling processor. enqueue() triggers processQueue() reactively,
+    // but if the server is busy, the event loop is saturated, or the process restarts
+    // with queued items left in 'queued' status, this 5s interval guarantees they drain.
+    // This mirrors the BackgroundTaskWorker pattern and prevents notifications from
+    // silently sitting in the queue forever.
+    this.processingTimer = setInterval(() => {
+      this.processQueue().catch(err => {
+        // Only log real errors, not "no work" cases
+        if (err && err.message !== 'No work') {
+          console.error('[NotifQueue] Polling processQueue error:', err.message);
+        }
+      });
+    }, 5000);
+    // Don't keep the event loop alive solely for this timer (clean shutdown support)
+    if (this.processingTimer.unref) this.processingTimer.unref();
+    console.log('[NotifQueue] Background polling processor started (5s interval).');
+  }
+
+  /**
+   * Stop the polling processor (for graceful shutdown / tests).
+   */
+  public stop(): void {
+    if (this.processingTimer) {
+      clearInterval(this.processingTimer);
+      this.processingTimer = null;
+      console.log('[NotifQueue] Background polling processor stopped.');
+    }
   }
 
   // ─── Public API ──────────────────────────────────────────────────────────────
@@ -95,24 +121,21 @@ export class NotificationQueueService {
   ): Promise<string> {
     const client = await pgPool.connect();
     try {
-      // Resolve Postgres UUID
-      let pgUserId = firebaseUserId;
-      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(firebaseUserId)) {
-        const userRes = { rows: [{ id: firebaseUserId }] };
-        if (userRes.rows.length === 0) {
-          console.warn(`[NotifQueue] User not found: ${firebaseUserId}`);
-          return 'user_not_found';
-        }
-        pgUserId = userRes.rows[0].id;
-      }
+      // ── Canonical user key: Firebase UID ──────────────────────────────────
+      // The entire infrastructure schema (fcm_tokens.user_id, notification_queue.target_user_id,
+      // notification_inbox.user_id, notification_preferences.user_id) stores the Firebase UID
+      // directly. There is no separate Postgres UUID for users — business data lives in Firestore.
+      // The previous "UUID resolver" block was a hardcoded literal (`{ rows: [{ id: firebaseUserId }] }`)
+      // that was a no-op and masked the real ID flow. We now use the Firebase UID directly everywhere.
+      const pgUserId = firebaseUserId;
 
       const priority = priorityOverride || (options.priority === 'critical' ? 'high' : options.priority || 'normal');
-      const tag      = options.tag      || payload.data?.tag      || null;
-      const orderId  = options.orderId  || payload.data?.orderId  || null;
+      const tag = options.tag || payload.data?.tag || null;
+      const orderId = options.orderId || payload.data?.orderId || null;
       const category = options.category || payload.data?.category || 'general';
-      const version  = options.version  || parseInt(payload.data?.version || '1');
-      const role     = options.role     || payload.data?.role     || 'customer';
-      const stage    = payload.data?.stage || payload.data?.currentStatus || category;
+      const version = options.version || parseInt(payload.data?.version || '1');
+      const role = options.role || payload.data?.role || 'customer';
+      const stage = payload.data?.stage || payload.data?.currentStatus || category;
       const expiresAt = options.expiresInSeconds
         ? new Date(Date.now() + options.expiresInSeconds * 1000)
         : null;
@@ -182,14 +205,14 @@ export class NotificationQueueService {
       await this.writeToInbox(client, pgUserId, payload, tag, orderId, category, options, expiresAt);
 
       // Analytics: Created
-      await this.recordAnalytic(client, category, 'sent', 0).catch(() => {});
+      await this.recordAnalytic(client, category, 'sent', 0).catch(() => { });
 
       notificationDebugger.logCreation({
         userId: pgUserId, type: 'push', category: category || 'marketing',
         title: payload.notification?.title || payload.data?.title,
         body: payload.notification?.body || payload.data?.body,
         queueId, tokensFound: 0,
-      }, queueId).then(debugId => notificationDebugger.updateStage(debugId, 'Queued', { queueId })).catch(() => {});
+      }, queueId).then(debugId => notificationDebugger.updateStage(debugId, 'Queued', { queueId })).catch(() => { });
 
       // Instantly trigger processing
       this.processQueue().catch(err => console.error('[NotifQueue] Background process failed:', err));
@@ -216,7 +239,7 @@ export class NotificationQueueService {
 
       if (deviceInfo.oldToken && deviceInfo.oldToken !== token) {
         await client.query('UPDATE fcm_tokens SET is_active = FALSE WHERE token = $1 AND user_id = $2', [deviceInfo.oldToken, pgUserId]);
-        db.collection('users').doc(firebaseUserId).update({ fcmTokens: FieldValue.arrayRemove(deviceInfo.oldToken) }).catch(() => {});
+        db.collection('users').doc(firebaseUserId).update({ fcmTokens: FieldValue.arrayRemove(deviceInfo.oldToken) }).catch(() => { });
       }
 
       // CRITICAL FIX: Ensure 1 Device = 1 User. Deactivate this token for ANY OTHER user who might have previously logged in on this device.
@@ -236,7 +259,7 @@ export class NotificationQueueService {
         fcmTokens: FieldValue.arrayUnion(token),
         notificationReady: true,
         lastTokenRefresh: FieldValue.serverTimestamp(),
-      }).catch(() => {});
+      }).catch(() => { });
     } finally {
       client.release();
     }
@@ -281,7 +304,7 @@ export class NotificationQueueService {
           await client.query(
             `UPDATE notification_queue SET status = 'queued', updated_at = NOW() WHERE id = $1`,
             [row.id]
-          ).catch(() => {});
+          ).catch(() => { });
         }
       }
     } catch (err: any) {
@@ -300,7 +323,7 @@ export class NotificationQueueService {
       await client.query(`UPDATE notification_queue SET status = 'sending', updated_at = NOW() WHERE id = $1`, [id]);
 
       const parsedPayload = typeof payload === 'string' ? JSON.parse(payload) : payload;
-      const role  = parsedPayload.data?.role  || 'customer';
+      const role = parsedPayload.data?.role || 'customer';
       const stage = parsedPayload.data?.stage || parsedPayload.data?.currentStatus || category || 'update';
 
       // ── STALE GUARD (re-check at send time) ──────────────────────────────
@@ -334,7 +357,7 @@ export class NotificationQueueService {
           await client.query(
             `INSERT INTO fcm_tokens (user_id, token, is_active) VALUES ($1,$2,TRUE) ON CONFLICT (user_id, token) DO UPDATE SET is_active=TRUE`,
             [target_user_id, t]
-          ).catch(() => {});
+          ).catch(() => { });
         }
       }
 
@@ -410,7 +433,7 @@ export class NotificationQueueService {
       const failedTokens: string[] = [];
       response.responses.forEach((r, idx) => {
         const fcmToken = tokens[idx];
-        
+
         NotificationLogger.log({
           timestamp: new Date().toISOString(),
           orderId: order_id,
@@ -444,7 +467,7 @@ export class NotificationQueueService {
         if (firebase_uid) {
           db.collection('users').doc(firebase_uid).update({
             fcmTokens: FieldValue.arrayRemove(...failedTokens),
-          }).catch(() => {});
+          }).catch(() => { });
         }
         console.log(`[NotifQueue] Deactivated ${failedTokens.length} invalid tokens for ${target_user_id}`);
       }
@@ -463,9 +486,9 @@ export class NotificationQueueService {
 
       notificationDebugger.updateStage(id, 'Firebase Response', {
         tokensFound: tokens.length, status: successCount > 0 ? 'sent' : 'failed',
-      }).catch(() => {});
+      }).catch(() => { });
 
-      console.log(`[NotifQueue] ✅ Sent id=${id} tag=${tag||'none'} to ${successCount}/${tokens.length} devices in ${deliveryMs}ms`);
+      console.log(`[NotifQueue] ✅ Sent id=${id} tag=${tag || 'none'} to ${successCount}/${tokens.length} devices in ${deliveryMs}ms`);
     } catch (error: any) {
       const newRetryCount = (retry_count || 0) + 1;
 
@@ -499,17 +522,17 @@ export class NotificationQueueService {
            SELECT target_user_id, payload->'notification'->>'title', payload->'notification'->>'body', category, 'failed'
            FROM notification_queue WHERE id = $1 ON CONFLICT DO NOTHING`,
           [id]
-        ).catch(() => {});
-        
+        ).catch(() => { });
+
         await client.query(
           `INSERT INTO dead_letter_queue (original_queue_id, recipient, subject, payload, final_error)
            VALUES ($1, $2, $3, $4, $5)`,
           [id, target_user_id, parsedPayload.data?.title || 'Push Failed', JSON.stringify(payload), error.message]
-        ).catch(() => {});
+        ).catch(() => { });
 
         await client.query(`DELETE FROM notification_queue WHERE id = $1`, [id]);
         await this.recordAnalytic(client, category || 'general', 'failed', 1);
-        notificationDebugger.updateStage(id, 'Failed', { error: error.message, status: 'failed' }).catch(() => {});
+        notificationDebugger.updateStage(id, 'Failed', { error: error.message, status: 'failed' }).catch(() => { });
         console.error(`[NotifQueue] ❌ Permanently failed id=${id}: ${error.message}`);
       } else {
         const backoffMs = 1000 * Math.pow(2, newRetryCount);
@@ -534,7 +557,7 @@ export class NotificationQueueService {
     try {
       const p = typeof payload === 'string' ? JSON.parse(payload) : payload;
       const title = p.notification?.title || p.data?.title || 'Notification';
-      const body  = p.notification?.body  || p.data?.body  || '';
+      const body = p.notification?.body || p.data?.body || '';
 
       if (tag) {
         await client.query(
@@ -549,14 +572,14 @@ export class NotificationQueueService {
             `INSERT INTO notification_inbox (user_id, tag, order_id, title, body, category, url, data, version, expires_at)
              VALUES ($1,$2,NULL,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT DO NOTHING`,
             [userId, tag, title, body, category, p.data?.url || '/', JSON.stringify(p.data), options.version || 1, expiresAt]
-          ).catch(() => {});
+          ).catch(() => { });
         });
       } else {
         await client.query(
           `INSERT INTO notification_inbox (user_id, order_id, title, body, category, url, data, version, expires_at)
            VALUES ($1,NULL,$2,$3,$4,$5,$6,$7,$8)`,
           [userId, title, body, category, p.data?.url || '/', JSON.stringify(p.data), options.version || 1, expiresAt]
-        ).catch(() => {});
+        ).catch(() => { });
       }
     } catch (err) {
       console.error('[NotifQueue] Inbox write failed (non-blocking):', err);
@@ -574,7 +597,7 @@ export class NotificationQueueService {
        ON CONFLICT (period_date, category, role)
        DO UPDATE SET ${col} = notification_analytics.${col} + EXCLUDED.${col}, updated_at = NOW()`,
       [today, category, count]
-    ).catch(() => {});
+    ).catch(() => { });
   }
 
   private async recordDeliveryTime(client: any, category: string, ms: number): Promise<void> {
@@ -585,7 +608,7 @@ export class NotificationQueueService {
        ON CONFLICT (period_date, category, role)
        DO UPDATE SET total_delivery_time_ms = notification_analytics.total_delivery_time_ms + $3, updated_at = NOW()`,
       [today, category, ms]
-    ).catch(() => {});
+    ).catch(() => { });
   }
 
   // ─── DND Check ─────────────────────────────────────────────────────────────

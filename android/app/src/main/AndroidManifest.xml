@@ -28,7 +28,22 @@
             android:excludeFromRecents="true"
             android:launchMode="singleInstance"
             android:screenOrientation="portrait"
-            android:theme="@style/Theme.AppCompat.Light.NoActionBar" />
+            android:exported="true"
+            android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+
+            <!--
+                Intent-filter for the FCM `clickAction: 'olive_alarm'`.
+                When the app is KILLED and FCM auto-displays a notification via the
+                system tray (using the notification block we now include for continuous
+                alarms), tapping that notification launches AlarmActivity directly —
+                triggering the full-screen continuous ringtone alarm without requiring
+                the app process to be alive first.
+            -->
+            <intent-filter>
+                <action android:name="olive_alarm" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
 
 
         <!--

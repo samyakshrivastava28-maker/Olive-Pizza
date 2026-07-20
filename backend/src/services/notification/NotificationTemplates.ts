@@ -47,27 +47,27 @@ export type NotificationCategory =
 
 // ─── Android Channel IDs ──────────────────────────────────────────────────────
 export const ANDROID_CHANNELS = {
-  ORDER_NEW:              'olive_order_new',
-  ORDER_STATUS:           'olive_order_status',
-  ORDER_COMPLETED:        'olive_order_completed',
-  DELIVERY_ASSIGNMENT:    'olive_delivery_assignment',
-  DELIVERY_UPDATES:       'olive_delivery_updates',
-  MARKETING:              'olive_marketing',
-  SYSTEM:                 'olive_system',
+  ORDER_NEW: 'olive_order_new',
+  ORDER_STATUS: 'olive_order_status',
+  ORDER_COMPLETED: 'olive_order_completed',
+  DELIVERY_ASSIGNMENT: 'olive_delivery_assignment',
+  DELIVERY_UPDATES: 'olive_delivery_updates',
+  MARKETING: 'olive_marketing',
+  SYSTEM: 'olive_system',
 } as const;
 
 export type AndroidChannelId = typeof ANDROID_CHANNELS[keyof typeof ANDROID_CHANNELS];
 
 // ─── Sound Mapping ────────────────────────────────────────────────────────────
 export const SOUNDS = {
-  new_order:         'order_alert',        // Owner new order — distinctive bell
+  new_order: 'order_alert',        // Owner new order — distinctive bell
   delivery_assigned: 'delivery_chime',     // Delivery partner — chime
-  delivered:         'success_ding',       // Delivered — pleasant success
-  cancelled:         'cancel_buzz',        // Cancelled — soft warning
-  confirmed:         'order_confirmed',    // Customer order confirmed
-  marketing:         'soft_pop',           // Promotions
-  system:            'system_alert',       // System alerts
-  default:           'default',
+  delivered: 'success_ding',       // Delivered — pleasant success
+  cancelled: 'cancel_buzz',        // Cancelled — soft warning
+  confirmed: 'order_confirmed',    // Customer order confirmed
+  marketing: 'soft_pop',           // Promotions
+  system: 'system_alert',       // System alerts
+  default: 'default',
 } as const;
 
 // ─── Progress Bar (Unicode block characters) ──────────────────────────────────
@@ -78,7 +78,7 @@ const PROGRESS_STEPS: Record<OrderStatus, number> = {
 };
 const TOTAL_STEPS = 8;
 const FILLED = '█';
-const EMPTY  = '░';
+const EMPTY = '░';
 
 function progressBar(status: OrderStatus): string {
   if (status === 'cancelled') return '✖ Cancelled';
@@ -89,13 +89,13 @@ function progressBar(status: OrderStatus): string {
 
 function progressSteps(status: OrderStatus): string {
   const steps: [OrderStatus, string][] = [
-    ['pending',          'Order Placed'],
-    ['accepted',         'Confirmed'],
-    ['preparing',        'Preparing'],
-    ['ready',            'Packed'],
+    ['pending', 'Order Placed'],
+    ['accepted', 'Confirmed'],
+    ['preparing', 'Preparing'],
+    ['ready', 'Packed'],
     ['partner_assigned', 'Delivery Assigned'],
     ['out_for_delivery', 'Out for Delivery'],
-    ['delivered',        'Delivered'],
+    ['delivered', 'Delivered'],
   ];
   const currentIdx = PROGRESS_STEPS[status] - 1;
   return steps.map(([s, label], i) => {
@@ -230,23 +230,23 @@ function buildPayload(title: string, body: string, opts: BuildOptions): Notifica
   };
 
   // Synchronization fields
-  if (opts.eventId)        safeData.eventId        = opts.eventId;
-  if (opts.orderId)        safeData.orderId         = opts.orderId;
-  if (opts.previousStatus) safeData.previousStatus  = opts.previousStatus;
-  if (opts.currentStatus)  safeData.currentStatus   = opts.currentStatus;
-  if (opts.eventTimestamp) safeData.eventTimestamp  = opts.eventTimestamp;
-  if (opts.serverTimestamp)safeData.serverTimestamp = opts.serverTimestamp;
+  if (opts.eventId) safeData.eventId = opts.eventId;
+  if (opts.orderId) safeData.orderId = opts.orderId;
+  if (opts.previousStatus) safeData.previousStatus = opts.previousStatus;
+  if (opts.currentStatus) safeData.currentStatus = opts.currentStatus;
+  if (opts.eventTimestamp) safeData.eventTimestamp = opts.eventTimestamp;
+  if (opts.serverTimestamp) safeData.serverTimestamp = opts.serverTimestamp;
 
   // Feature flags
-  if (opts.role)              safeData.role              = opts.role;
-  if (opts.alert)             safeData.alert             = opts.alert;
-  if (opts.stage)             safeData.stage             = opts.stage;
-  if (opts.notificationId)    safeData.notificationId    = opts.notificationId;
-  if (opts.groupKey)          safeData.groupKey          = opts.groupKey;
-  if (opts.ongoing)           safeData.ongoing           = 'true';
-  if (opts.requireInteraction)safeData.requireInteraction = 'true';
-  if (opts.actions)           safeData.actions           = JSON.stringify(opts.actions);
-  if (opts.vibrate)           safeData.vibrate           = JSON.stringify(opts.vibrate);
+  if (opts.role) safeData.role = opts.role;
+  if (opts.alert) safeData.alert = opts.alert;
+  if (opts.stage) safeData.stage = opts.stage;
+  if (opts.notificationId) safeData.notificationId = opts.notificationId;
+  if (opts.groupKey) safeData.groupKey = opts.groupKey;
+  if (opts.ongoing) safeData.ongoing = 'true';
+  if (opts.requireInteraction) safeData.requireInteraction = 'true';
+  if (opts.actions) safeData.actions = JSON.stringify(opts.actions);
+  if (opts.vibrate) safeData.vibrate = JSON.stringify(opts.vibrate);
 
   const basePayload: any = {
     data: safeData,
@@ -256,21 +256,46 @@ function buildPayload(title: string, body: string, opts: BuildOptions): Notifica
     },
   };
 
-  // CRITICAL: If alert is continuous, we MUST use a DATA-ONLY push for Android.
-  // If we include the `notification` block, Android will intercept it in the background
-  // and our native AlarmActivity will never wake up.
-  if (!opts.ongoing && opts.alert !== 'continuous') {
+  // ── NOTIFICATION BLOCK — ALWAYS INCLUDED ─────────────────────────────────
+  // Previously, continuous alarms were sent DATA-ONLY. This is unreliable when the
+  // app process is KILLED: data-only messages require onMessageReceived() to fire,
+  // which depends on high-priority delivery + Doze state. If the process is dead and
+  // Doze defers it, NOTHING is displayed.
+  //
+  // By including the `notification` block, FCM auto-displays the notification via the
+  // system tray EVEN WHEN the app is killed — using the channel created at app startup.
+  // The `data` block remains intact, so when onMessageReceived() DOES fire (foreground
+  // or background), OliveMessagingService builds the native alarm with action buttons.
+  //
+  // This gives TWO delivery paths for critical alarms:
+  //   1. System tray auto-display (works even if app is killed)
+  //   2. Native onMessageReceived → AlarmActivity (works when process is alive)
+  //
+  // The clickAction launches the full-screen AlarmActivity when the user taps the
+  // system-tray notification, so the continuous ringtone still plays.
+  if (!opts.ongoing) {
     basePayload.notification = { title, body };
+    // For continuous alarms, use a dedicated clickAction so the system-tray tap
+    // launches AlarmActivity (full-screen alarm) instead of MainActivity.
+    const clickAction =
+      opts.alert === 'continuous'
+        ? 'olive_alarm'                       // → AlarmActivity (full-screen alarm)
+        : opts.role === 'owner' ? 'owner_order_actions'
+          : opts.role === 'delivery' ? 'delivery_actions'
+            : 'customer_order_actions';
     basePayload.android.notification = {
       sound: soundFile,
       channelId: opts.channelId,
       tag: opts.tag,
       icon: ICON,
-      clickAction: opts.role === 'owner' ? 'owner_order_actions' : opts.role === 'delivery' ? 'delivery_actions' : 'customer_order_actions',
+      clickAction,
       defaultVibrateTimings: !opts.vibrate,
       vibrateTimingsMillis: opts.vibrate,
       notificationPriority: opts.priority === 'critical' ? 'PRIORITY_MAX'
         : opts.priority === 'high' ? 'PRIORITY_HIGH' : 'PRIORITY_DEFAULT',
+      // For continuous alarms, mark as high-priority so the system tray notification
+      // surfaces immediately (heads-up) even in background/killed scenarios.
+      ...(opts.alert === 'continuous' ? { notificationCount: 1 } : {}),
     };
   }
   return {
@@ -368,13 +393,13 @@ export class OwnerTemplates {
       groupKey: 'owner_orders',               // Groups multiple orders
       vibrate: [300, 200, 300, 200, 300],
       actions: [
-        { action: 'accept',     title: '✅ Accept' },
-        { action: 'reject',     title: '❌ Reject' },
+        { action: 'accept', title: '✅ Accept' },
+        { action: 'reject', title: '❌ Reject' },
         { action: 'stop_alert', title: '🔕 Stop Alert' },
       ],
-      eventId:        payload.eventId,
+      eventId: payload.eventId,
       previousStatus: payload.previousStatus,
-      currentStatus:  'pending',
+      currentStatus: 'pending',
       eventTimestamp: payload.eventTimestamp,
       serverTimestamp: new Date().toISOString(),
     });
@@ -419,14 +444,14 @@ export class OwnerTemplates {
       payload.status === 'preparing'
         ? [{ action: 'ready', title: '🟢 Mark Ready' }, { action: 'assign_delivery', title: '🚴 Assign Partner' }, { action: 'open', title: '📊 View' }]
         : payload.status === 'ready'
-        ? [{ action: 'assign_delivery', title: '🚴 Assign Partner' }, { action: 'open', title: '📊 View' }]
-        : [{ action: 'open', title: '📊 Open Dashboard' }];
+          ? [{ action: 'assign_delivery', title: '🚴 Assign Partner' }, { action: 'open', title: '📊 View' }]
+          : [{ action: 'open', title: '📊 Open Dashboard' }];
 
     return buildPayload(title, body, {
       tag: `order_owner_${orderId}`,
       channelId: isCompleted ? ANDROID_CHANNELS.ORDER_COMPLETED
-               : isCancelled ? ANDROID_CHANNELS.ORDER_COMPLETED
-               : ANDROID_CHANNELS.ORDER_STATUS,
+        : isCancelled ? ANDROID_CHANNELS.ORDER_COMPLETED
+          : ANDROID_CHANNELS.ORDER_STATUS,
       orderId,
       url: `/owner/orders`,
       sound: isCompleted ? 'delivered' : isCancelled ? 'cancelled' : undefined,
@@ -498,7 +523,7 @@ export class DeliveryTemplates {
       actions: [
         { action: 'accept_delivery', title: '✅ Accept' },
         { action: 'reject_delivery', title: '❌ Reject' },
-        { action: 'stop_alert',      title: '🔕 Stop Alert' },
+        { action: 'stop_alert', title: '🔕 Stop Alert' },
       ],
       eventId: payload.eventId,
       previousStatus: payload.previousStatus,
@@ -525,12 +550,12 @@ export class DeliveryTemplates {
     }
   ): NotificationPayload {
     const stageConfig: Record<string, { title: string; actions: Array<{ action: string; title: string }> }> = {
-      navigate_restaurant: { title: '📍 Navigate to Restaurant',        actions: [{ action: 'arrived_restaurant', title: '✅ Arrived' }] },
-      arrived_restaurant:  { title: '🍕 At Restaurant — Pick Up Order', actions: [{ action: 'picked_up', title: '📦 Picked Up' }] },
-      picked_up:           { title: '🚴 Order Picked Up',               actions: [{ action: 'call_customer', title: '📞 Call' }, { action: 'navigate_customer', title: '🗺️ Navigate' }] },
-      out_for_delivery:    { title: `🛵 Delivering to ${payload.customerName}`, actions: [{ action: 'arrived_customer', title: '📍 Arrived' }, { action: 'call_customer', title: '📞 Call' }] },
-      arrived_customer:    { title: '🏁 Arrived at Customer',           actions: [{ action: 'delivered', title: '✅ Delivered' }, { action: 'report_issue', title: '⚠️ Issue' }] },
-      delivered:           { title: '🎉 Delivery Complete',             actions: [] },
+      navigate_restaurant: { title: '📍 Navigate to Restaurant', actions: [{ action: 'arrived_restaurant', title: '✅ Arrived' }] },
+      arrived_restaurant: { title: '🍕 At Restaurant — Pick Up Order', actions: [{ action: 'picked_up', title: '📦 Picked Up' }] },
+      picked_up: { title: '🚴 Order Picked Up', actions: [{ action: 'call_customer', title: '📞 Call' }, { action: 'navigate_customer', title: '🗺️ Navigate' }] },
+      out_for_delivery: { title: `🛵 Delivering to ${payload.customerName}`, actions: [{ action: 'arrived_customer', title: '📍 Arrived' }, { action: 'call_customer', title: '📞 Call' }] },
+      arrived_customer: { title: '🏁 Arrived at Customer', actions: [{ action: 'delivered', title: '✅ Delivered' }, { action: 'report_issue', title: '⚠️ Issue' }] },
+      delivered: { title: '🎉 Delivery Complete', actions: [] },
     };
 
     const config = stageConfig[payload.stage] || stageConfig.navigate_restaurant;
@@ -664,14 +689,14 @@ export class CustomerTemplates {
       payload.status === 'out_for_delivery' || payload.status === 'partner_assigned'
         ? [{ action: 'track', title: '📍 Track Order' }, { action: 'call_partner', title: '📞 Call Partner' }]
         : isDelivered
-        ? [{ action: 'rate', title: '⭐ Rate Order' }, { action: 'reorder', title: '🔄 Reorder' }]
-        : [{ action: 'open', title: '📍 Track Order' }];
+          ? [{ action: 'rate', title: '⭐ Rate Order' }, { action: 'reorder', title: '🔄 Reorder' }]
+          : [{ action: 'open', title: '📍 Track Order' }];
 
     return buildPayload(cfg.title, cfg.body, {
       tag: `order_customer_${orderId}`,      // Same tag throughout — updates in place
       channelId: isDelivered ? ANDROID_CHANNELS.ORDER_COMPLETED
-               : isCancelled ? ANDROID_CHANNELS.ORDER_COMPLETED
-               : ANDROID_CHANNELS.ORDER_STATUS,
+        : isCancelled ? ANDROID_CHANNELS.ORDER_COMPLETED
+          : ANDROID_CHANNELS.ORDER_STATUS,
       orderId,
       url: `/order-tracking/${orderId}`,
       sound: cfg.sound,
