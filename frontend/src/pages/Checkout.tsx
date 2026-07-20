@@ -94,17 +94,22 @@ export default function Checkout() {
   const taxes = Math.round(total * 0.05);
   const finalTotal = Math.max(0, total - discountAmount) + deliveryFee + taxes;
 
-  const handleProceedToPayment = () => {
+  const handlePaymentSelect = (method: string) => {
+    setSelectedPayment(method);
+    setShowPayment(false);
+  };
+
+  const handlePlaceOrder = async () => {
     if (!address.trim() && deliveryType === 'delivery') {
       toast.error('Please enter a delivery address');
       return;
     }
-    setShowPayment(true);
-  };
-
-  const handlePlaceOrder = async (method: string) => {
-    setSelectedPayment(method);
-    setShowPayment(false);
+    if (!selectedPayment) {
+      toast.error('Please select a payment method');
+      setShowPayment(true);
+      return;
+    }
+    
     setShowProcessing(true);
     setProcessingStatus('processing');
 
@@ -126,7 +131,7 @@ export default function Checkout() {
             size: item.variant || 'regular',
             crust: item.crust || 'normal'
           })),
-          paymentMethod: method,
+          paymentMethod: selectedPayment,
           deliveryType,
           address: deliveryType === 'delivery' ? address : 'Pickup',
         })
@@ -261,20 +266,44 @@ export default function Checkout() {
           </div>
         </motion.div>
 
+        {/* Payment Method Section */}
+        <motion.div initial={{opacity:0, y:20}} animate={{opacity:1, y:0}} transition={{delay: 0.3}} className="bg-white/[0.02] border border-white/5 rounded-3xl p-5">
+           <h2 className="text-lg font-bold flex items-center gap-2 mb-4">
+             <CreditCard className="w-5 h-5 text-purple-400" /> Payment Method
+           </h2>
+           {selectedPayment ? (
+             <div className="flex justify-between items-center bg-dark-900/50 rounded-2xl p-4 border border-white/5">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-primary-500/20 rounded-xl">
+                    <CreditCard className="w-5 h-5 text-primary-400" />
+                  </div>
+                  <span className="font-semibold text-white/90 uppercase">{selectedPayment === 'card' ? 'Credit / Debit Card' : selectedPayment === 'upi' ? 'UPI' : selectedPayment === 'wallet' ? 'Wallets' : 'Cash on Delivery'}</span>
+                </div>
+                <button onClick={() => setShowPayment(true)} className="text-primary-400 text-sm font-medium hover:text-primary-300">Change</button>
+             </div>
+           ) : (
+             <button onClick={() => setShowPayment(true)} className="w-full py-4 border-2 border-dashed border-white/10 rounded-2xl text-white/60 hover:text-white hover:border-white/30 hover:bg-white/5 transition-all flex items-center justify-center gap-2 font-medium">
+                <CreditCard className="w-5 h-5" /> Add Payment Method
+             </button>
+           )}
+        </motion.div>
+
       </div>
 
       {/* Fixed Bottom Action */}
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-dark-950/80 backdrop-blur-xl border-t border-white/10 z-30">
-        <div className="max-w-xl mx-auto flex gap-4">
-           <div className="flex-1">
-             <p className="text-xs text-white/50 uppercase tracking-wider font-bold">Total to Pay</p>
-             <p className="text-xl font-black text-white">₹{finalTotal}</p>
-           </div>
+        <div className="max-w-xl mx-auto flex gap-3">
            <button 
-             onClick={handleProceedToPayment}
-             className="flex-[2] bg-gradient-to-r from-primary-600 to-primary-500 text-white font-bold rounded-2xl shadow-[0_0_20px_rgba(85,119,90,0.3)] hover:shadow-[0_0_30px_rgba(85,119,90,0.5)] transition-all active:scale-95 flex items-center justify-center gap-2"
+             onClick={() => navigate('/cart')}
+             className="flex-1 bg-white/5 text-white/70 font-bold rounded-2xl hover:bg-white/10 transition-colors py-4 flex items-center justify-center"
            >
-             Continue to Payment <ChevronLeft className="w-5 h-5 rotate-180" />
+             Cancel
+           </button>
+           <button 
+             onClick={handlePlaceOrder}
+             className="flex-[2] bg-gradient-to-r from-primary-600 to-primary-500 text-white font-bold rounded-2xl shadow-[0_0_20px_rgba(85,119,90,0.3)] hover:shadow-[0_0_30px_rgba(85,119,90,0.5)] transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 disabled:grayscale py-4"
+           >
+             Place Order • ₹{finalTotal} <ChevronLeft className="w-5 h-5 rotate-180" />
            </button>
         </div>
       </div>
@@ -284,7 +313,7 @@ export default function Checkout() {
         {showPayment && (
           <PaymentMethodOverlay 
              onClose={() => setShowPayment(false)} 
-             onSelect={handlePlaceOrder}
+             onSelect={handlePaymentSelect}
              total={finalTotal}
           />
         )}
