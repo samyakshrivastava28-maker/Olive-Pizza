@@ -54,10 +54,6 @@ export function CartAnimationProvider({ children }: { children: React.ReactNode 
         clientY = (e as any).clientY;
       }
 
-      if (window.navigator && window.navigator.vibrate) {
-        window.navigator.vibrate(50);
-      }
-
       setQueue((prev) => [
         ...prev,
         { id: newId, startX: clientX, startY: clientY, endX: target.x, endY: target.y, image },
@@ -91,233 +87,207 @@ export function CartAnimationProvider({ children }: { children: React.ReactNode 
   );
 }
 
-// ─── Premium Flying Box Component (8-Step Animation) ──────────────────────────
+// ─── Realistic 3D Pizza Box Component ─────────────────────────────────────────
 function PremiumFlyingBox({ anim, onComplete }: { anim: AnimationData; onComplete: () => void }) {
   const boxControls = useAnimation();
   const lidControls = useAnimation();
-  const imageControls = useAnimation();
-  const [showImage, setShowImage] = useState(true);
+  const flyingPizzaControls = useAnimation();
+  const insidePizzaControls = useAnimation();
 
-  // Center of screen for assembly
   const centerX = window.innerWidth / 2;
   const centerY = window.innerHeight / 3;
 
-  const BOX_SIZE = 80;
+  const BOX_SIZE = 120;
   const HALF = BOX_SIZE / 2;
+  const PIZZA_SIZE = 80; // Flying pizza size
 
   useEffect(() => {
     let isMounted = true;
 
     const sequence = async () => {
-      // Setup initial states off-screen
-      boxControls.set({ x: centerX - HALF, y: -200, scale: 0.8, rotateX: 45, rotateZ: -20, opacity: 0 });
-      lidControls.set({ rotateX: 0 });
-      imageControls.set({ 
-        x: anim.startX - 30, // 60px image
-        y: anim.startY - 30,
-        scale: 1, 
-        opacity: 1,
+      // Setup initial states
+      boxControls.set({ x: centerX - HALF, y: -400, scale: 0.5, opacity: 0 });
+      lidControls.set({ rotateY: -115 }); // Lid swung open
+      
+      flyingPizzaControls.set({ 
+        x: anim.startX - PIZZA_SIZE / 2, 
+        y: anim.startY - PIZZA_SIZE / 2,
+        scale: 1, opacity: 1, rotateZ: 0, rotateX: 0,
         boxShadow: '0 0 0px rgba(0,0,0,0)'
       });
+      insidePizzaControls.set({ opacity: 0 });
 
       if (!isMounted) return;
 
-      // Step 1: Selected pizza lifts from menu (Small scale, glow effect)
-      await imageControls.start({
-        scale: 1.3,
-        boxShadow: '0 15px 30px rgba(85, 119, 90, 0.6)',
-        transition: { type: 'spring', stiffness: 300, damping: 20 }
+      // ── Step 1: Pizza lifts & glows ──
+      await flyingPizzaControls.start({
+        scale: 1.2,
+        y: anim.startY - PIZZA_SIZE / 2 - 20,
+        boxShadow: '0 20px 40px rgba(85, 119, 90, 0.5)',
+        transition: { type: 'spring', stiffness: 400, damping: 15 }
       });
       if (!isMounted) return;
 
-      // Step 2: Realistic pizza box drops from top
+      // ── Step 2: Realistic Box drops ──
       await boxControls.start({
         y: centerY - HALF,
+        scale: 1,
         opacity: 1,
-        rotateX: 30, // isometric view
-        rotateZ: 0,
         transition: { type: 'spring', stiffness: 200, damping: 15 }
       });
       if (!isMounted) return;
 
-      // Step 3: Lid automatically opens
+      // Micro delay for realism
+      await new Promise(r => setTimeout(r, 100));
+      if (!isMounted) return;
+
+      // ── Step 3: Pizza shrinks and flies into box ──
+      await flyingPizzaControls.start({
+        x: centerX - PIZZA_SIZE / 2,
+        y: centerY - PIZZA_SIZE / 2,
+        scale: 1.2,
+        rotateZ: 45,
+        rotateX: 55, // Isometric squash match
+        boxShadow: '0 5px 15px rgba(0,0,0,0.5)',
+        transition: { duration: 0.45, x: { ease: 'linear' }, y: { ease: 'easeIn' } }
+      });
+      if (!isMounted) return;
+
+      // Swap flying pizza with inside pizza seamlessly
+      flyingPizzaControls.set({ opacity: 0 });
+      insidePizzaControls.set({ opacity: 1 });
+
+      // ── Step 4: Lid closes naturally ──
       await lidControls.start({
-        rotateX: -120,
-        transition: { type: 'spring', stiffness: 150, damping: 15 }
+        rotateY: 0,
+        transition: { type: 'spring', stiffness: 150, damping: 12 }
       });
       if (!isMounted) return;
 
-      // Step 4: Pizza shrinks and flies into box (Bezier easing)
-      await imageControls.start({
-        x: centerX - 30,
-        y: centerY - 30,
-        scale: 0.8,
-        rotateZ: 180,
-        boxShadow: '0 2px 5px rgba(0,0,0,0.5)',
-        transition: {
-          duration: 0.45,
-          x: { ease: 'linear' },
-          y: { ease: 'easeIn' }
-        }
-      });
-      if (!isMounted) return;
-      setShowImage(false);
-
-      // Step 5: Lid closes naturally
-      await lidControls.start({
-        rotateX: 0,
-        transition: { type: 'spring', stiffness: 200, damping: 12 }
-      });
-      if (!isMounted) return;
-
-      // Step 6: Pizza box jumps slightly (Small compression bounce)
+      // ── Step 5: Compression Bounce ──
       await boxControls.start({
-        scale: 0.75,
-        y: centerY - HALF + 15,
-        transition: { type: 'spring', stiffness: 500, damping: 10 }
+        scale: 0.9, y: centerY - HALF + 10, transition: { type: 'spring', stiffness: 500, damping: 10 }
       });
       if (!isMounted) return;
       await boxControls.start({
-        scale: 0.8,
-        y: centerY - HALF,
-        transition: { type: 'spring', stiffness: 400, damping: 12 }
+        scale: 1, y: centerY - HALF, transition: { type: 'spring', stiffness: 400, damping: 12 }
       });
       if (!isMounted) return;
 
-      // Step 7: Pizza box flies toward cart (Bezier path)
+      // ── Step 6: Fly to cart (Curved Bezier) ──
       const cartX = anim.endX - HALF;
       const cartY = anim.endY - HALF;
 
       await boxControls.start({
-        x: cartX,
-        y: cartY,
-        scale: 0.15,
-        opacity: 0,
-        rotateZ: 90,
-        transition: {
-          duration: 0.55,
-          x: { ease: 'linear' },
-          y: { ease: 'easeIn' },
-          scale: { ease: 'easeIn' },
-          opacity: { ease: 'easeIn' }
-        }
+        x: cartX, y: cartY, scale: 0.15, opacity: 0, rotateZ: 90,
+        transition: { duration: 0.55, x: { ease: 'linear' }, y: { ease: 'easeIn' }, scale: { ease: 'easeIn' } }
       });
       if (!isMounted) return;
 
-      // Step 8: Trigger cart events
+      // ── Step 7: Complete ──
       window.dispatchEvent(new CustomEvent('cart-item-added'));
       onComplete();
     };
 
     sequence();
-
     return () => { isMounted = false; };
-  }, [anim, centerX, centerY, boxControls, lidControls, imageControls, onComplete, HALF]);
+  }, [anim, centerX, centerY, boxControls, lidControls, flyingPizzaControls, insidePizzaControls, onComplete]);
+
+  const isoStyle = {
+    position: 'absolute' as const,
+    inset: 0,
+    transform: 'rotate(45deg) scaleY(0.577)', // Mathematically perfect isometric projection
+    borderRadius: 8,
+  };
 
   return (
     <>
-      {/* ── Realistic 3D Pizza Box ── */}
+      {/* ── Box Assembly ── */}
       <motion.div
-        className="absolute z-[10000] flex items-center justify-center pointer-events-none"
-        style={{
-          width: BOX_SIZE,
-          height: BOX_SIZE,
-          transformStyle: 'preserve-3d',
-          perspective: 1200
-        }}
+        className="absolute z-[10000] pointer-events-none"
+        style={{ width: BOX_SIZE, height: BOX_SIZE }}
         animate={boxControls}
       >
-        {/* Box Shadow on ground */}
+        {/* Box Base (Faux 3D Extrusion) */}
         <div style={{
-          position: 'absolute',
-          bottom: -20, left: '10%', right: '10%', height: 20,
-          background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0) 70%)',
-          transform: 'rotateX(70deg)',
-          zIndex: -1
-        }} />
-
-        {/* Box Base (Tray) */}
-        <div style={{
-          position: 'absolute', inset: 0,
-          backgroundColor: '#e6dfd1',
-          borderRadius: 4,
-          border: '1px solid #c9beaa',
-          boxShadow: 'inset 0 10px 20px rgba(0,0,0,0.1), 0 5px 15px rgba(0,0,0,0.2)',
-          transformStyle: 'preserve-3d'
+          ...isoStyle,
+          backgroundColor: '#D1B48C',
+          border: '2px solid #A67C52',
+          boxShadow: `
+            -1px 1px 0 #9E744A, -2px 2px 0 #9E744A, -3px 3px 0 #9E744A, -4px 4px 0 #9E744A,
+            -5px 5px 0 #9E744A, -6px 6px 0 #9E744A, -7px 7px 0 #9E744A, -8px 8px 0 #9E744A,
+            -9px 9px 0 #9E744A, -10px 10px 0 #9E744A, -15px 15px 25px rgba(0,0,0,0.5)
+          `,
+          zIndex: 1
         }}>
-          {/* Cardboard Texture Overlay */}
-          <div style={{
-            position: 'absolute', inset: 0, opacity: 0.4,
-            backgroundImage: 'url("https://www.transparenttextures.com/patterns/cardboard-flat.png")'
-          }} />
+          {/* Cardboard Texture */}
+          <div style={{ position: 'absolute', inset: 0, opacity: 0.3, backgroundImage: 'url("https://www.transparenttextures.com/patterns/cardboard-flat.png")' }} />
+          {/* Inner grease/shadow tray */}
+          <div style={{ position: 'absolute', inset: 0, boxShadow: 'inset 0 0 30px rgba(139,69,19,0.3)', borderRadius: 6 }} />
         </div>
 
-        {/* Lid (Hinged Top) */}
-        <motion.div 
+        {/* Inside Pizza (Rendered after swap) */}
+        <motion.img 
+          src={anim.image}
+          animate={insidePizzaControls}
           style={{
-            position: 'absolute',
-            inset: 0,
-            transformOrigin: 'top',
-            transformStyle: 'preserve-3d',
-            zIndex: 10
+            ...isoStyle,
+            width: '80%', height: '80%',
+            left: '10%', top: '10%',
+            objectFit: 'cover', borderRadius: '50%',
+            zIndex: 2,
+            boxShadow: '0 5px 15px rgba(0,0,0,0.4)'
           }}
-          animate={lidControls}
-        >
-          {/* Front Face (Outside Logo) */}
-          <div style={{
-            position: 'absolute', inset: 0,
-            backgroundColor: '#f6f2e9',
-            borderRadius: 4,
-            border: '1px solid #d4c5b0',
-            backfaceVisibility: 'hidden',
-            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center'
-          }}>
-            <div style={{
-              position: 'absolute', inset: 0, opacity: 0.3,
-              backgroundImage: 'url("https://www.transparenttextures.com/patterns/cardboard-flat.png")'
-            }} />
-            <div style={{
-              width: 30, height: 30,
-              backgroundColor: '#55775a',
-              borderRadius: '50%',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              marginBottom: 4, zIndex: 2
-            }}>
-              <span style={{ color: 'white', fontWeight: 900, fontSize: '10px' }}>OP</span>
-            </div>
-            <span style={{ color: '#55775a', fontWeight: 900, fontSize: '10px', zIndex: 2, letterSpacing: '-0.5px' }}>Olive Pizza</span>
-          </div>
+        />
 
-          {/* Back Face (Inside Lid) */}
-          <div style={{
-            position: 'absolute', inset: 0,
-            backgroundColor: '#e2d5c1',
-            borderRadius: 4,
-            border: '1px solid #cbbda5',
-            backfaceVisibility: 'hidden',
-            transform: 'rotateX(180deg)'
-          }}>
+        {/* Lid (Hinged at local left edge) */}
+        <div style={{ ...isoStyle, zIndex: 3, perspective: 1000 }}>
+          <motion.div
+            animate={lidControls}
+            style={{
+              position: 'absolute', inset: 0,
+              transformOrigin: 'left',
+              transformStyle: 'preserve-3d',
+            }}
+          >
+            {/* Inside Face of Lid */}
             <div style={{
-              position: 'absolute', inset: 0, opacity: 0.2,
-              backgroundImage: 'url("https://www.transparenttextures.com/patterns/cardboard-flat.png")'
-            }} />
-          </div>
-        </motion.div>
+              position: 'absolute', inset: 0,
+              backgroundColor: '#C5A57A', border: '2px solid #A67C52', borderRadius: 8,
+              boxShadow: 'inset 0 0 20px rgba(0,0,0,0.1)'
+            }}>
+              <div style={{ position: 'absolute', inset: 0, opacity: 0.3, backgroundImage: 'url("https://www.transparenttextures.com/patterns/cardboard-flat.png")' }} />
+            </div>
+
+            {/* Outside Face of Lid (Branded) */}
+            <div style={{
+              position: 'absolute', inset: 0,
+              backgroundColor: '#E8CC9A', border: '2px solid #A67C52', borderRadius: 8,
+              backfaceVisibility: 'hidden',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center'
+            }}>
+              <div style={{ position: 'absolute', inset: 0, opacity: 0.2, backgroundImage: 'url("https://www.transparenttextures.com/patterns/cardboard-flat.png")' }} />
+              <div style={{ 
+                width: 48, height: 48, backgroundColor: '#55775a', borderRadius: '50%', 
+                display: 'flex', alignItems: 'center', justifyContent: 'center', 
+                marginBottom: 4, boxShadow: '0 2px 10px rgba(0,0,0,0.2)', zIndex: 2
+              }}>
+                <span style={{ color: 'white', fontWeight: 900, fontSize: '18px' }}>OP</span>
+              </div>
+              <span style={{ color: '#55775a', fontWeight: 900, fontSize: '15px', letterSpacing: '-0.5px', zIndex: 2 }}>Olive Pizza</span>
+            </div>
+          </motion.div>
+        </div>
       </motion.div>
 
-      {/* ── Flowing Pizza Image ── */}
-      <AnimatePresence>
-        {showImage && (
-          <motion.img
-            src={anim.image}
-            alt="Pizza"
-            className="absolute object-cover rounded-full z-[10001] pointer-events-none"
-            style={{ width: 60, height: 60 }}
-            animate={imageControls}
-            exit={{ opacity: 0 }}
-          />
-        )}
-      </AnimatePresence>
+      {/* ── Flying Pizza (External to Box) ── */}
+      <motion.img
+        src={anim.image}
+        alt="Pizza"
+        className="absolute object-cover rounded-full pointer-events-none z-[10001]"
+        style={{ width: PIZZA_SIZE, height: PIZZA_SIZE }}
+        animate={flyingPizzaControls}
+      />
     </>
   );
 }
