@@ -119,29 +119,24 @@ function PremiumFlyingBox({ anim, onComplete }: { anim: AnimationData; onComplet
 
       if (!isMounted) return;
 
-      // ── Step 1: Pizza lifts & glows ──
-      await flyingPizzaControls.start({
-        scale: 1.2,
-        y: anim.startY - PIZZA_SIZE / 2 - 20,
-        boxShadow: '0 20px 40px rgba(85, 119, 90, 0.5)',
-        transition: { type: 'spring', stiffness: 400, damping: 15 }
-      });
+      // ── Step 1: Pizza lifts & Box drops IN PARALLEL ──
+      await Promise.all([
+        flyingPizzaControls.start({
+          scale: 1.2,
+          y: anim.startY - PIZZA_SIZE / 2 - 20,
+          boxShadow: '0 20px 40px rgba(85, 119, 90, 0.5)',
+          transition: { type: 'spring', stiffness: 600, damping: 20 }
+        }),
+        boxControls.start({
+          y: centerY - HALF,
+          scale: 1,
+          opacity: 1,
+          transition: { type: 'spring', stiffness: 400, damping: 20 }
+        })
+      ]);
       if (!isMounted) return;
 
-      // ── Step 2: Realistic Box drops ──
-      await boxControls.start({
-        y: centerY - HALF,
-        scale: 1,
-        opacity: 1,
-        transition: { type: 'spring', stiffness: 200, damping: 15 }
-      });
-      if (!isMounted) return;
-
-      // Micro delay for realism
-      await new Promise(r => setTimeout(r, 100));
-      if (!isMounted) return;
-
-      // ── Step 3: Pizza shrinks and flies into box ──
+      // ── Step 2: Pizza shrinks and flies into box ──
       await flyingPizzaControls.start({
         x: centerX - PIZZA_SIZE / 2,
         y: centerY - PIZZA_SIZE / 2,
@@ -149,7 +144,7 @@ function PremiumFlyingBox({ anim, onComplete }: { anim: AnimationData; onComplet
         rotateZ: 45,
         rotateX: 55, // Isometric squash match
         boxShadow: '0 5px 15px rgba(0,0,0,0.5)',
-        transition: { duration: 0.45, x: { ease: 'linear' }, y: { ease: 'easeIn' } }
+        transition: { duration: 0.25, x: { ease: 'linear' }, y: { ease: 'easeIn' } }
       });
       if (!isMounted) return;
 
@@ -157,34 +152,23 @@ function PremiumFlyingBox({ anim, onComplete }: { anim: AnimationData; onComplet
       flyingPizzaControls.set({ opacity: 0 });
       insidePizzaControls.set({ opacity: 1 });
 
-      // ── Step 4: Lid closes naturally ──
-      await lidControls.start({
-        rotateY: 0,
-        transition: { type: 'spring', stiffness: 150, damping: 12 }
-      });
-      if (!isMounted) return;
-
-      // ── Step 5: Compression Bounce ──
-      await boxControls.start({
-        scale: 0.9, y: centerY - HALF + 10, transition: { type: 'spring', stiffness: 500, damping: 10 }
-      });
-      if (!isMounted) return;
-      await boxControls.start({
-        scale: 1, y: centerY - HALF, transition: { type: 'spring', stiffness: 400, damping: 12 }
-      });
-      if (!isMounted) return;
-
-      // ── Step 6: Fly to cart (Curved Bezier) ──
+      // ── Step 3: Lid closes & Box flies to cart IN PARALLEL ──
       const cartX = anim.endX - HALF;
       const cartY = anim.endY - HALF;
 
-      await boxControls.start({
-        x: cartX, y: cartY, scale: 0.15, opacity: 0, rotateZ: 90,
-        transition: { duration: 0.55, x: { ease: 'linear' }, y: { ease: 'easeIn' }, scale: { ease: 'easeIn' } }
-      });
+      await Promise.all([
+        lidControls.start({
+          rotateY: 0,
+          transition: { type: 'spring', stiffness: 600, damping: 25 }
+        }),
+        boxControls.start({
+          x: cartX, y: cartY, scale: 0.15, opacity: 0, rotateZ: 90,
+          transition: { duration: 0.45, x: { ease: 'linear' }, y: { ease: 'easeIn' }, scale: { ease: 'easeIn' }, delay: 0.05 }
+        })
+      ]);
       if (!isMounted) return;
 
-      // ── Step 7: Complete ──
+      // ── Step 4: Complete ──
       window.dispatchEvent(new CustomEvent('cart-item-added'));
       onComplete();
     };
@@ -267,14 +251,11 @@ function PremiumFlyingBox({ anim, onComplete }: { anim: AnimationData; onComplet
               display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center'
             }}>
               <div style={{ position: 'absolute', inset: 0, opacity: 0.2, backgroundImage: 'url("https://www.transparenttextures.com/patterns/cardboard-flat.png")' }} />
-              <div style={{ 
-                width: 48, height: 48, backgroundColor: '#55775a', borderRadius: '50%', 
-                display: 'flex', alignItems: 'center', justifyContent: 'center', 
-                marginBottom: 4, boxShadow: '0 2px 10px rgba(0,0,0,0.2)', zIndex: 2
-              }}>
-                <span style={{ color: 'white', fontWeight: 900, fontSize: '18px' }}>OP</span>
-              </div>
-              <span style={{ color: '#55775a', fontWeight: 900, fontSize: '15px', letterSpacing: '-0.5px', zIndex: 2 }}>Olive Pizza</span>
+              <img 
+                src="https://res.cloudinary.com/ditkqli2i/image/upload/v1782113833/olive-pizza-logo_nsoh49.webp" 
+                alt="Olive Pizza"
+                style={{ width: 60, zIndex: 2, filter: 'drop-shadow(0 2px 5px rgba(0,0,0,0.2))' }}
+              />
             </div>
           </motion.div>
         </div>

@@ -14,6 +14,8 @@ import NotificationCenter from './ui/NotificationCenter';
 import FloatingCart from './layout/FloatingCart';
 import FloatingWaitingCard from './layout/FloatingWaitingCard';
 import FloatingOrderTracker from './layout/FloatingOrderTracker';
+import PizzaLoader from './ui/PizzaLoader';
+
 export default function MainLayout() {
   const isAuthenticated = useAuthStore(state => state.isAuthenticated);
   const role = useAuthStore(state => state.role);
@@ -305,9 +307,7 @@ export default function MainLayout() {
       
       <main className={`flex-1 w-full ${location.pathname === '/' ? '' : 'max-w-7xl mx-auto pt-24 md:pt-24 py-2 md:py-8'}`}>
         <Suspense fallback={
-          <div className="w-full h-[60vh] flex flex-col items-center justify-center">
-            <div className="w-10 h-10 border-4 border-dark-800 border-t-orange-500 rounded-full animate-spin" />
-          </div>
+          <PizzaLoader />
         }>
           <Outlet />
         </Suspense>
