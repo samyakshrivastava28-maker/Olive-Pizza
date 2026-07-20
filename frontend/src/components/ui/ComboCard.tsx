@@ -5,6 +5,7 @@ import { useCartStore } from '../../lib/store';
 import { trackEvent } from '../../lib/analytics';
 import WishlistButton from './WishlistButton';
 import toast from 'react-hot-toast';
+import { useCartAnimation } from './CartAnimationProvider';
 
 interface ComboCardProps {
   combo: {
@@ -24,11 +25,13 @@ interface ComboCardProps {
 
 export default memo(function ComboCard({ combo, wishlistIds = [], index = 0 }: ComboCardProps) {
   const addItem = useCartStore((s) => s.addItem);
+  const { triggerAnimation } = useCartAnimation();
   const savings = combo.originalTotal - combo.price;
   const savingsPct = Math.round((savings / combo.originalTotal) * 100);
 
-  const handleAddToCart = () => {
+  const handleAddToCart = (e: React.MouseEvent) => {
     if (!combo.isAvailable) return;
+    triggerAnimation(e, combo.image || '');
     addItem({
       id: `combo_${combo.id}`,
       productId: combo.id,

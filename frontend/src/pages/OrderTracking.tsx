@@ -46,6 +46,7 @@ import {
 import "leaflet/dist/leaflet.css";
 
 import { GlassCard, GlassButton } from "../components/ui/glass/GlassSystem";
+import { OwnerAcceptedOverlay, DeliveredOverlay } from "../components/tracking/OrderEventsOverlay";
 import { toast } from "react-hot-toast";
 import { playNotificationSound, statusToSoundType } from "../hooks/useNotificationSound";
 import OrderTimeline from "../components/ui/OrderTimeline";
@@ -399,6 +400,7 @@ export default function OrderTracking() {
 
   // Bottom Sheet State
   const [sheetState, setSheetState] = useState<"collapsed" | "half" | "expanded">("half");
+  const [showAccepted, setShowAccepted] = useState(false);
   const controls = useAnimation();
 
   // Refs
@@ -439,6 +441,9 @@ export default function OrderTracking() {
         if (prevOrderStatusRef.current && prevOrderStatusRef.current !== data.status) {
           const soundType = statusToSoundType(data.status);
           if (soundType) playNotificationSound(soundType);
+        }
+        if (prevOrderStatusRef.current === 'pending' && data.status === 'accepted') {
+          setShowAccepted(true);
         }
         prevOrderStatusRef.current = data.status;
         setOrder(data);
@@ -859,6 +864,8 @@ export default function OrderTracking() {
         </div>
       </motion.div>
 
+      <OwnerAcceptedOverlay show={showAccepted} onClose={() => setShowAccepted(false)} />
+      <DeliveredOverlay show={order?.status === 'delivered'} order={order} />
     </div>
   );
 }

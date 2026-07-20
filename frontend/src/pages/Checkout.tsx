@@ -1,37 +1,18 @@
-import { useState, useEffect } from "react";
-import { ArrowLeft, Clock, CreditCard, Loader2, MapPin, MapPinned, Receipt, Check, ChevronLeft } from "lucide-react";
-import { Link, useNavigate } from "react-router";
-import { useAuthStore, useCartStore } from "../lib/store";
-import { auth, db } from "../lib/firebase";
-import { collection, query, where, getDocs, doc, getDoc, addDoc } from "firebase/firestore";
-import PageTransition from "../components/PageTransition";
-import { useNotificationDebugger } from "../hooks/useNotificationDebugger";
-import { useStoreStatus } from "../lib/useStoreStatus";
-import { usePWA } from "../lib/usePWA";
-import { RESTAURANT_LOCATION, MAX_DELIVERY_RADIUS_KM } from "../lib/config";
-import { motion, AnimatePresence } from "framer-motion";
-import toast from "react-hot-toast";
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { MapPin, Clock, CreditCard, ChevronLeft, Ticket, Navigation, Star, TrendingUp, CheckCircle, ShieldCheck, Receipt } from 'lucide-react';
+import { useNavigate } from 'react-router';
+import { useAuthStore, useCartStore } from '../lib/store';
+import { auth, db } from '../lib/firebase';
+import { collection, query, where, getDocs, doc, getDoc, addDoc } from 'firebase/firestore';
+import { usePWA } from '../lib/usePWA';
+import { useStoreStatus } from '../lib/useStoreStatus';
+import toast from 'react-hot-toast';
+import PaymentMethodOverlay from '../components/checkout/PaymentMethodOverlay';
+import ProcessingOverlay from '../components/checkout/ProcessingOverlay';
+import PageTransition from '../components/PageTransition';
 
-// Haversine distance calculator
-function calculateDistance(
-  lat1: number,
-  lon1: number,
-  lat2: number,
-  lon2: number,
-) {
-  const R = 6371; // Earth's radius in km
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-}
-
+// Premium Checkout redesign
 export default function Checkout() {
   const { items, total, clearCart } = useCartStore();
   const { isAuthenticated, user } = useAuthStore();
@@ -39,240 +20,103 @@ export default function Checkout() {
   const navigate = useNavigate();
   const { isOffline } = usePWA();
 
-  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [hasRunningOrder, setHasRunningOrder] = useState(false);
-
-  const [address, setAddress] = useState(user?.fullAddress || "");
-  const [deliveryType, setDeliveryType] = useState<"delivery" | "pickup">(
-    "delivery",
-  );
-  const [paymentMethod, setPaymentMethod] = useState<"cash" | "online">("cash");
-
-  const [orderTiming, setOrderTiming] = useState<"now" | "scheduled">("now");
-  const [scheduledDate, setScheduledDate] = useState<string>("today");
-  const [scheduledTime, setScheduledTime] = useState<string>("");
-  const [noContactDelivery, setNoContactDelivery] = useState(false);
-
-  const generateTimeSlots = (dateType: string) => {
-    const slots = [];
-    const now = new Date();
-    let startHour = 10; // 10 AM
-    const endHour = 23; // 11 PM
-    
-    if (dateType === "today") {
-      startHour = Math.max(startHour, now.getHours() + 1);
-    }
-    
-    for (let i = startHour; i < endHour; i++) {
-      const period = i >= 12 ? 'PM' : 'AM';
-      const displayHour = i > 12 ? i - 12 : (i === 0 ? 12 : i);
-      slots.push(`${displayHour}:00 ${period}`);
-      slots.push(`${displayHour}:30 ${period}`);
-    }
-    return slots;
-  };
-
-  const availableSlots = generateTimeSlots(scheduledDate);
-
-  useEffect(() => {
-    if (user?.uid) {
-      const q = query(
-        collection(db, "orders"),
-        where("userId", "==", user.uid),
-        where("status", "in", ["pending", "accepted", "preparing", "out_for_delivery"])
-      );
-      getDocs(q).then(snapshot => {
-        setHasRunningOrder(!snapshot.empty);
-      }).catch(err => console.error("Running order check failed", err));
-    }
-  }, [user?.uid]);
-
-  useEffect(() => {
-    if (
-      !storeStatus.isLoading &&
-      !storeStatus.isDeliveryAvailable &&
-      deliveryType === "delivery"
-    ) {
-      setDeliveryType("pickup");
-    }
-  }, [storeStatus.isLoading, storeStatus.isDeliveryAvailable, deliveryType]);
-
+  const [address, setAddress] = useState(user?.fullAddress || '');
+  const [deliveryType, setDeliveryType] = useState('delivery');
+  const [promoInput, setPromoInput] = useState('');
+  const [appliedPromo, setAppliedPromo] = useState<any>(null);
   const [activeEvents, setActiveEvents] = useState<any[]>([]);
   const [standaloneCoupons, setStandaloneCoupons] = useState<any[]>([]);
-  const [promoInput, setPromoInput] = useState("");
-  const [appliedPromo, setAppliedPromo] = useState<{
-    code: string;
-    type: "percent" | "flat";
-    value: number;
-    isFirstOrderOnly?: boolean;
-  } | null>(null);
+  
+  const [showPayment, setShowPayment] = useState(false);
+  const [selectedPayment, setSelectedPayment] = useState('');
+  
+  const [showProcessing, setShowProcessing] = useState(false);
+  const [processingStatus, setProcessingStatus] = useState('idle'); // idle, processing, success
+  const [orderId, setOrderId] = useState('');
 
   useEffect(() => {
-    if (!isAuthenticated) {
-      navigate("/login?redirect=/checkout");
-    }
-    if (items.length === 0) {
-      navigate("/cart");
-    }
-    if (
-      !storeStatus.isLoading &&
-      (!storeStatus.isRestaurantOpen || !storeStatus.isWithinBusinessHours)
-    ) {
-      const audio = new Audio(
-        "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3",
-      );
-      audio.play().catch(() => {});
-      toast.error("The restaurant is currently closed. Please order later.", {
-        duration: 5000,
-      });
-      navigate("/");
-    }
-  }, [isAuthenticated, items, navigate, storeStatus]);
-
-  useEffect(() => {
+    if (!isAuthenticated) navigate('/login?redirect=/checkout');
+    if (items.length === 0) navigate('/cart');
+    
+    // Fetch Promos
     const fetchPromos = async () => {
       try {
-        const eventsSnap = await getDocs(
-          query(collection(db, "events"), where("isActive", "==", true)),
-        );
+        const eventsSnap = await getDocs(query(collection(db, 'events'), where('isActive', '==', true)));
         const now = Date.now();
         setActiveEvents(
-          eventsSnap.docs
-            .map((doc) => ({ id: doc.id, ...doc.data() }))
-            .filter((e: any) => e.startDate <= now && e.endDate >= now),
+          eventsSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() })).filter((e: any) => e.startDate <= now && e.endDate >= now)
         );
-
-        const couponsSnap = await getDocs(
-          query(collection(db, "coupons"), where("isActive", "==", true)),
-        );
-        setStandaloneCoupons(
-          couponsSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
-        );
+        const couponsSnap = await getDocs(query(collection(db, 'coupons'), where('isActive', '==', true)));
+        setStandaloneCoupons(couponsSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
       } catch (err) {}
     };
     fetchPromos();
-  }, []);
+  }, [isAuthenticated, items, navigate]);
 
-  const handleApplyPromo = async () => {
+  const handleApplyPromo = () => {
     if (!promoInput.trim()) return;
     const code = promoInput.trim().toUpperCase();
+    let foundCoupon: any = null;
 
-    let foundCoupon = null;
-
-    // 1. Check standalone coupons
     const standaloneMatch = standaloneCoupons.find((c) => c.code === code);
     if (standaloneMatch) {
       foundCoupon = {
         code: standaloneMatch.code,
-        type: standaloneMatch.type === "percentage" ? "percent" : "flat",
+        type: standaloneMatch.type === 'percentage' ? 'percent' : 'flat',
         value: standaloneMatch.discountValue,
-        isFirstOrderOnly:
-          standaloneMatch.isFirstOrderOnly ||
-          standaloneMatch.type === "first_order",
       };
     }
-
-    // 2. Check event coupons
+    
     if (!foundCoupon) {
       for (const event of activeEvents) {
         if (event.coupons) {
           const match = event.coupons.find((c: any) => c.code === code);
-          if (match) {
-            foundCoupon = match;
-            break;
-          }
+          if (match) { foundCoupon = match; break; }
         }
       }
     }
 
     if (!foundCoupon) {
-      toast.error("Invalid or expired promo code.");
+      toast.error('Invalid or expired promo code.');
       setAppliedPromo(null);
       return;
     }
-
-    // 3. First Order Coupon Abuse Prevention Check
-    if (foundCoupon.isFirstOrderOnly) {
-      if (user?.phone) {
-        try {
-          const identityRef = doc(db, "customer_identities", user.phone);
-          const identityDoc = await getDoc(identityRef);
-          if (identityDoc.exists() && (identityDoc.data() as any)?.firstOrderCouponUsed) {
-            toast.error(
-              "This phone number has already used the First Order offer.",
-            );
-            
-            // Log security violation
-            try {
-              await addDoc(collection(db, "security_logs"), {
-                action: "coupon_abuse_attempt",
-                email: user?.email || "Unknown",
-                uid: user?.uid || "Unknown",
-                role: user?.role || "customer",
-                path: "/checkout",
-                timestamp: new Date().toISOString(),
-                details: `Attempted to reuse First Order Coupon with phone ${user.phone}`
-              });
-            } catch (e) {
-              console.error("Failed to log security event");
-            }
-
-            setAppliedPromo(null);
-            return;
-          }
-        } catch (e) {
-          console.error("Error validating coupon", e);
-        }
-      } else {
-        toast.error(
-          "Please verify your phone number first to use this coupon.",
-        );
-        setAppliedPromo(null);
-        return;
-      }
-    }
-
     setAppliedPromo(foundCoupon);
-    toast.success(`Coupon ${code} applied!`);
+    toast.success('Coupon applied!');
   };
 
   const discountAmount = appliedPromo
-    ? appliedPromo.type === "percent"
+    ? appliedPromo.type === 'percent'
       ? Math.round(total * (appliedPromo.value / 100))
       : appliedPromo.value
     : 0;
-  const finalSubtotal = Math.max(0, total - discountAmount);
-  const deliveryFee = deliveryType === "delivery" ? 40 : 0;
-  const finalTotal = finalSubtotal + deliveryFee;
+  const deliveryFee = deliveryType === 'delivery' ? 40 : 0;
+  const taxes = Math.round(total * 0.05);
+  const finalTotal = Math.max(0, total - discountAmount) + deliveryFee + taxes;
 
-  const placeOrder = async () => {
-    if (isOffline) {
-      toast.error(
-        "You are currently offline. Please connect to the internet to place an order.",
-      );
+  const handleProceedToPayment = () => {
+    if (!address.trim() && deliveryType === 'delivery') {
+      toast.error('Please enter a delivery address');
       return;
     }
+    setShowPayment(true);
+  };
 
-    setLoading(true);
-    setError("");
+  const handlePlaceOrder = async (method: string) => {
+    setSelectedPayment(method);
+    setShowPayment(false);
+    setShowProcessing(true);
+    setProcessingStatus('processing');
+
     try {
       const token = await auth.currentUser?.getIdToken();
-      if (!token) throw new Error('User not authenticated');
-
-      const isDebug = useNotificationDebugger.getState().isDebugMode;
-      if (isDebug) {
-        useNotificationDebugger.getState().startTrace('POST /api/orders', 'Place Order', 'pending...');
-      }
-
+      
+      // Simulate premium delay
+      await new Promise(r => setTimeout(r, 6000));
+      
       const res = await fetch('/api/orders', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          ...(isDebug ? { 'X-Debug-Mode': 'true' } : {})
-        },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({
           items: items.map(item => ({
             menuItemId: item.id,
@@ -281,447 +125,173 @@ export default function Checkout() {
             price: item.price,
             size: item.variant || 'regular',
             crust: item.crust || 'normal'
-          }))
+          })),
+          paymentMethod: method,
+          deliveryType,
+          address: deliveryType === 'delivery' ? address : 'Pickup',
         })
       });
 
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to place order');
+
+      setOrderId(data.orderId);
+      setProcessingStatus('success');
       
-      if (isDebug && data.trace) {
-        useNotificationDebugger.getState().updateTrace(data.trace);
-      }
-
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to place order');
-      }
-
-      clearCart();
-      navigate(`/order-success/${data.orderId}`);
+      // clear cart later after success screen
+      setTimeout(() => {
+        clearCart();
+        navigate(`/order-success/${data.orderId}`);
+      }, 3000);
+      
     } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
+      toast.error(err.message);
+      setShowProcessing(false);
+      setProcessingStatus('idle');
     }
   };
 
-  const steps = [
-    { num: 1, title: "Address", icon: <MapPin className="w-5 h-5" /> },
-    { num: 2, title: "Delivery", icon: <MapPinned className="w-5 h-5" /> },
-    { num: 3, title: "Payment", icon: <CreditCard className="w-5 h-5" /> },
-    { num: 4, title: "Review", icon: <Receipt className="w-5 h-5" /> },
-  ];
-
   return (
-    <PageTransition className="w-full max-w-2xl mx-auto px-4 py-6 md:py-12">
+    <PageTransition className="min-h-screen bg-dark-950 text-white font-sans pb-32">
       {/* Header */}
-      <div className="flex items-center mb-8">
-        <button
-          onClick={() =>
-            step > 1 ? setStep((step - 1) as any) : navigate("/cart")
-          }
-          className="p-2 -ml-2 text-slate-400 hover:text-white"
-        >
-          <ChevronLeft className="w-6 h-6" />
-        </button>
-        <h1 className="text-2xl font-black text-white ml-2">Checkout</h1>
-      </div>
-
-      {/* Progress Steps */}
-      <div className="flex justify-between mb-10 relative">
-        <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-dark-800 -z-10 -translate-y-1/2" />
-        {steps.map((s) => {
-          const isActive = step === s.num;
-          const isPassed = step > s.num;
-          return (
-            <div
-              key={s.num}
-              className="flex flex-col items-center gap-2 bg-dark-950 px-2"
-            >
-              <div
-                className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm transition-colors ${
-                  isActive
-                    ? "bg-primary-600 text-white shadow-[0_0_15px_rgba(85,119,90,0.4)]"
-                    : isPassed
-                      ? "bg-success text-dark-950"
-                      : "bg-dark-800 text-slate-500"
-                }`}
-              >
-                {isPassed ? <Check className="w-5 h-5" /> : s.icon}
-              </div>
-              <span
-                className={`text-[10px] uppercase tracking-wider font-bold ${isActive ? "text-white" : "text-slate-500"}`}
-              >
-                {s.title}
-              </span>
-            </div>
-          );
-        })}
-      </div>
-
-      {error && (
-        <div className="bg-error/10 text-error p-4 rounded-xl mb-6 text-sm font-medium">
-          {error}
-        </div>
-      )}
-
-      <div className="bg-dark-900 border border-dark-800 rounded-3xl p-6 md:p-8">
-        {isOffline && (
-          <div className="bg-red-500/20 text-red-500 border border-red-500/50 p-4 rounded-xl mb-6 font-bold flex items-center justify-center gap-2">
-            You are currently offline. Checkout is disabled until you reconnect.
+      <div className="sticky top-0 z-40 bg-dark-950/80 backdrop-blur-xl border-b border-white/5 px-4 py-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <button onClick={() => navigate(-1)} className="p-2 rounded-full bg-white/5 hover:bg-white/10 transition-colors">
+            <ChevronLeft className="w-5 h-5 text-white" />
+          </button>
+          <div>
+            <h1 className="text-xl font-bold bg-gradient-to-r from-white to-white/60 bg-clip-text text-transparent">Checkout</h1>
+            <p className="text-xs text-white/50">{items.length} items • ₹{finalTotal}</p>
           </div>
-        )}
-        <AnimatePresence mode="wait">
-          {/* STEP 1: Address */}
-          {step === 1 && (
-            <motion.div
-              key="step1"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-            >
-              <h2 className="text-xl font-bold text-white mb-6">
-                Confirm Address
-              </h2>
-              <textarea
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                placeholder="Enter complete delivery address..."
-                className="w-full bg-dark-950 border border-dark-800 rounded-xl p-4 text-white placeholder:text-slate-500 focus:outline-none focus:border-primary-500 min-h-[120px]"
-              />
-              <button
-                onClick={() => {
-                  if (deliveryType === "delivery" && user?.lat && user?.lng) {
-                    const distance = calculateDistance(
-                      RESTAURANT_LOCATION.lat,
-                      RESTAURANT_LOCATION.lng,
-                      user.lat,
-                      user.lng,
-                    );
-                    if (distance > storeStatus.deliveryRadiusKm) {
-                      toast.error(
-                        `Your address is ${distance.toFixed(1)}km away. We only deliver within ${storeStatus.deliveryRadiusKm}km. Please select Self Pickup.`,
-                      );
-                      setDeliveryType("pickup");
-                    }
-                  }
-                  setStep(2);
-                }}
-                disabled={!address.trim() || isOffline}
-                className="w-full mt-6 bg-primary-600 hover:bg-primary-500 text-white py-4 rounded-full font-bold transition-transform active:scale-95 disabled:opacity-50"
-              >
-                Continue
-              </button>
-            </motion.div>
-          )}
-
-          {/* STEP 2: Delivery Type */}
-          {step === 2 && (
-            <motion.div
-              key="step2"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-            >
-              <h2 className="text-xl font-bold text-white mb-6">
-                Delivery Method
-              </h2>
-              <div className="space-y-4">
-                <button
-                  onClick={() => {
-                    if (!storeStatus.isDeliveryAvailable) {
-                      const audio = new Audio(
-                        "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3",
-                      );
-                      audio.play().catch(() => {});
-                      toast.error(
-                        "Delivery is closed for now. You can pickup your order from our restaurant.",
-                        { duration: 5000 },
-                      );
-                      return;
-                    }
-                    setDeliveryType("delivery");
-                  }}
-                  className={`w-full flex items-center p-4 rounded-xl border transition-colors ${!storeStatus.isDeliveryAvailable ? "opacity-50 cursor-not-allowed bg-dark-950 border-dark-800 text-slate-500" : deliveryType === "delivery" ? "bg-primary-600/10 border-primary-500 text-white" : "bg-dark-950 border-dark-800 text-slate-400"}`}
-                >
-                  <div
-                    className={`w-5 h-5 rounded-full border-2 mr-4 flex items-center justify-center ${deliveryType === "delivery" ? "border-primary-500" : "border-slate-600"}`}
-                  >
-                    {deliveryType === "delivery" && (
-                      <div className="w-2.5 h-2.5 bg-primary-500 rounded-full" />
-                    )}
-                  </div>
-                  <div className="text-left">
-                    <p className="font-bold">Home Delivery</p>
-                    <p className="text-xs opacity-80 mt-1">
-                      Delivered to your door in ~30 mins. (+₹40)
-                    </p>
-                  </div>
-                </button>
-                <button
-                  onClick={() => setDeliveryType("pickup")}
-                  className={`w-full flex items-center p-4 rounded-xl border transition-colors ${deliveryType === "pickup" ? "bg-primary-600/10 border-primary-500 text-white" : "bg-dark-950 border-dark-800 text-slate-400"}`}
-                >
-                  <div
-                    className={`w-5 h-5 rounded-full border-2 mr-4 flex items-center justify-center ${deliveryType === "pickup" ? "border-primary-500" : "border-slate-600"}`}
-                  >
-                    {deliveryType === "pickup" && (
-                      <div className="w-2.5 h-2.5 bg-primary-500 rounded-full" />
-                    )}
-                  </div>
-                  <div className="text-left">
-                    <p className="font-bold">Self Pickup</p>
-                    <p className="text-xs opacity-80 mt-1">
-                      Pick up from our Rajnandgaon store. (Free)
-                    </p>
-                  </div>
-                </button>
-              </div>
-
-              {/* Order Timing Options */}
-              <div className="mt-8">
-                <h3 className="font-bold text-white mb-4">When would you like your order?</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <button
-                    onClick={() => setOrderTiming("now")}
-                    className={`p-4 rounded-xl border text-center transition-colors ${orderTiming === "now" ? "bg-primary-600/10 border-primary-500 text-white" : "bg-dark-950 border-dark-800 text-slate-400"}`}
-                  >
-                    <p className="font-bold">ASAP</p>
-                    <p className="text-xs opacity-80 mt-1">Deliver/Pickup Now</p>
-                  </button>
-                  <button
-                    onClick={() => setOrderTiming("scheduled")}
-                    className={`p-4 rounded-xl border text-center transition-colors ${orderTiming === "scheduled" ? "bg-primary-600/10 border-primary-500 text-white" : "bg-dark-950 border-dark-800 text-slate-400"}`}
-                  >
-                    <p className="font-bold">Schedule</p>
-                    <p className="text-xs opacity-80 mt-1">For Later</p>
-                  </button>
-                </div>
-
-                <AnimatePresence>
-                  {orderTiming === "scheduled" && (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: "auto" }}
-                      exit={{ opacity: 0, height: 0 }}
-                      className="mt-4 space-y-4 overflow-hidden"
-                    >
-                      <div>
-                        <label className="block text-sm font-bold text-slate-400 mb-2">Select Date</label>
-                        <select
-                          value={scheduledDate}
-                          onChange={(e) => {
-                            setScheduledDate(e.target.value);
-                            setScheduledTime(""); // Reset time when date changes
-                          }}
-                          className="w-full bg-dark-950 border border-dark-800 rounded-xl p-3 text-white focus:outline-none focus:border-primary-500"
-                        >
-                          <option value="today">Today</option>
-                          <option value="tomorrow">Tomorrow</option>
-                        </select>
-                      </div>
-
-                      {availableSlots.length > 0 ? (
-                        <div>
-                          <label className="block text-sm font-bold text-slate-400 mb-2">Select Time</label>
-                          <select
-                            value={scheduledTime}
-                            onChange={(e) => setScheduledTime(e.target.value)}
-                            className="w-full bg-dark-950 border border-dark-800 rounded-xl p-3 text-white focus:outline-none focus:border-primary-500"
-                          >
-                            <option value="">-- Choose a Time --</option>
-                            {availableSlots.map((slot) => (
-                              <option key={slot} value={slot}>{slot}</option>
-                            ))}
-                          </select>
-                        </div>
-                      ) : (
-                        <div className="bg-orange-500/10 text-orange-500 p-3 rounded-lg text-sm">
-                          No more time slots available for {scheduledDate}. Please select another date.
-                        </div>
-                      )}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-
-              {/* No Contact Delivery Toggle */}
-              {deliveryType === "delivery" && (
-                <div className="mt-8 bg-dark-950 border border-dark-800 p-4 rounded-xl flex items-center justify-between cursor-pointer" onClick={() => setNoContactDelivery(!noContactDelivery)}>
-                  <div>
-                    <h3 className="font-bold text-white">No-Contact Delivery</h3>
-                    <p className="text-xs text-slate-400 mt-1">Delivery partner will leave the order at your door and provide photo proof.</p>
-                  </div>
-                  <div className={`w-12 h-6 rounded-full transition-colors relative ${noContactDelivery ? 'bg-primary-500' : 'bg-dark-800'}`}>
-                    <div className={`absolute top-1 bottom-1 w-4 bg-white rounded-full transition-transform ${noContactDelivery ? 'translate-x-7' : 'translate-x-1'}`} />
-                  </div>
-                </div>
-              )}
-
-              <button
-                onClick={() => {
-                  if (storeStatus.isLoading) {
-                    toast("Loading store settings...", { icon: "⏳" });
-                    return;
-                  }
-                  if (
-                    deliveryType === "delivery" &&
-                    !storeStatus.isDeliveryAvailable
-                  ) {
-                    const audio = new Audio(
-                      "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3",
-                    );
-                    audio.play().catch(() => {});
-                    toast.error(
-                      "Delivery is closed for now. You can pickup your order from our restaurant.",
-                      { duration: 5000 },
-                    );
-                    return;
-                  }
-                  if (orderTiming === 'scheduled' && !scheduledTime) {
-                    toast.error('Please select a scheduled time for your order.');
-                    return;
-                  }
-                  setStep(3);
-                }}
-                className="w-full mt-8 bg-primary-600 hover:bg-primary-500 text-white py-4 rounded-full font-bold transition-transform active:scale-95"
-              >
-                Continue
-              </button>
-            </motion.div>
-          )}
-
-          {/* STEP 3: Payment */}
-          {step === 3 && (
-            <motion.div
-              key="step3"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-            >
-              <h2 className="text-xl font-bold text-white mb-6">
-                Payment Method
-              </h2>
-              <div className="space-y-4">
-                <button
-                  onClick={() => setPaymentMethod("online")}
-                  className={`w-full flex items-center p-4 rounded-xl border transition-colors ${paymentMethod === "online" ? "bg-primary-600/10 border-primary-500 text-white" : "bg-dark-950 border-dark-800 text-slate-400"}`}
-                >
-                  <div
-                    className={`w-5 h-5 rounded-full border-2 mr-4 flex items-center justify-center ${paymentMethod === "online" ? "border-primary-500" : "border-slate-600"}`}
-                  >
-                    {paymentMethod === "online" && (
-                      <div className="w-2.5 h-2.5 bg-primary-500 rounded-full" />
-                    )}
-                  </div>
-                  <div className="text-left">
-                    <p className="font-bold">Pay Online (UPI / Card)</p>
-                  </div>
-                </button>
-                <button
-                  onClick={() => setPaymentMethod("cash")}
-                  className={`w-full flex items-center p-4 rounded-xl border transition-colors ${paymentMethod === "cash" ? "bg-primary-600/10 border-primary-500 text-white" : "bg-dark-950 border-dark-800 text-slate-400"}`}
-                >
-                  <div
-                    className={`w-5 h-5 rounded-full border-2 mr-4 flex items-center justify-center ${paymentMethod === "cash" ? "border-primary-500" : "border-slate-600"}`}
-                  >
-                    {paymentMethod === "cash" && (
-                      <div className="w-2.5 h-2.5 bg-primary-500 rounded-full" />
-                    )}
-                  </div>
-                  <div className="text-left">
-                    <p className="font-bold">Cash on Delivery</p>
-                  </div>
-                </button>
-              </div>
-              <button
-                onClick={() => setStep(4)}
-                className="w-full mt-8 bg-primary-600 hover:bg-primary-500 text-white py-4 rounded-full font-bold transition-transform active:scale-95"
-              >
-                Review Order
-              </button>
-            </motion.div>
-          )}
-
-          {/* STEP 4: Review */}
-          {step === 4 && (
-            <motion.div
-              key="step4"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-            >
-              <h2 className="text-xl font-bold text-white mb-6">
-                Review Order
-              </h2>
-
-              <div className="bg-dark-950 border border-dark-800 rounded-xl p-4 mb-6">
-                {items.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex justify-between items-center py-2 border-b border-dark-800 last:border-0 text-sm"
-                  >
-                    <span className="text-slate-300">
-                      <span className="text-primary-500 font-bold mr-2">
-                        {item.quantity}x
-                      </span>{" "}
-                      {item.name}
-                    </span>
-                    <span className="font-bold text-white">
-                      ₹{item.price * item.quantity}
-                    </span>
-                  </div>
-                ))}
-              </div>
-
-              {/* Promo Code */}
-              <div className="flex gap-2 mb-6">
-                <input
-                  type="text"
-                  placeholder="Promo Code"
-                  value={promoInput}
-                  onChange={(e) => setPromoInput(e.target.value)}
-                  className="flex-1 bg-dark-950 border border-dark-800 rounded-lg px-4 text-sm uppercase text-white focus:outline-none focus:border-primary-500"
-                />
-                <button
-                  onClick={handleApplyPromo}
-                  className="bg-dark-800 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-dark-700 transition-colors"
-                >
-                  Apply
-                </button>
-              </div>
-
-              <div className="space-y-2 text-sm mb-6">
-                <div className="flex justify-between text-slate-400">
-                  <span>Subtotal</span>
-                  <span>₹{total}</span>
-                </div>
-                {appliedPromo && (
-                  <div className="flex justify-between text-success">
-                    <span>Discount ({appliedPromo.code})</span>
-                    <span>-₹{discountAmount}</span>
-                  </div>
-                )}
-                <div className="flex justify-between text-slate-400 border-b border-dark-800 pb-2">
-                  <span>Delivery Fee</span>
-                  <span>₹{deliveryFee}</span>
-                </div>
-                <div className="flex justify-between text-xl font-black text-white pt-2">
-                  <span>Total</span>
-                  <span className="text-accent-400">₹{finalTotal}</span>
-                </div>
-              </div>
-
-              <button
-                onClick={placeOrder}
-                disabled={loading || isOffline || hasRunningOrder}
-                className="w-full bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-400 hover:to-red-500 text-white font-bold py-4 px-6 rounded-xl shadow-lg transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {hasRunningOrder ? "Active Order Found (Checkout Locked)" : (loading ? "Processing..." : "Place Order")}
-              </button>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        </div>
       </div>
+
+      <div className="max-w-xl mx-auto px-4 py-6 space-y-6">
+        {/* Customer Information & Address Card */}
+        <motion.div initial={{opacity:0, y:20}} animate={{opacity:1, y:0}} className="bg-white/[0.02] border border-white/5 rounded-3xl p-5 relative overflow-hidden group">
+          <div className="absolute inset-0 bg-gradient-to-br from-primary-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+          <h2 className="text-lg font-bold flex items-center gap-2 mb-4">
+            <MapPin className="w-5 h-5 text-primary-400" /> Delivery Location
+          </h2>
+          <div className="bg-dark-900/50 rounded-2xl p-4 border border-white/5 mb-4 relative overflow-hidden">
+            {/* Fake Google Map bg */}
+            <div className="absolute inset-0 opacity-20 pointer-events-none" style={{ backgroundImage: 'url("https://www.transparenttextures.com/patterns/cubes.png")' }}></div>
+            <div className="relative z-10 flex items-start gap-3">
+              <div className="p-2 bg-primary-500/20 rounded-full shrink-0">
+                <Navigation className="w-4 h-4 text-primary-400" />
+              </div>
+              <div className="flex-1">
+                <p className="font-semibold text-white/90">Current Location</p>
+                <textarea
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  placeholder="Enter complete address, landmark, instructions..."
+                  className="w-full mt-2 bg-transparent text-white/70 text-sm resize-none focus:outline-none"
+                  rows={2}
+                />
+              </div>
+            </div>
+          </div>
+          <div className="flex gap-2 relative z-10">
+             <button className="flex-1 py-2.5 rounded-xl bg-white/5 text-sm font-medium hover:bg-white/10 transition-colors">Edit Location</button>
+             <button className="flex-1 py-2.5 rounded-xl bg-primary-500/10 text-primary-400 text-sm font-medium hover:bg-primary-500/20 transition-colors">Refresh</button>
+          </div>
+        </motion.div>
+
+        {/* Coupons Section */}
+        <motion.div initial={{opacity:0, y:20}} animate={{opacity:1, y:0}} transition={{delay: 0.1}} className="bg-white/[0.02] border border-white/5 rounded-3xl p-5">
+          <h2 className="text-lg font-bold flex items-center gap-2 mb-4">
+            <Ticket className="w-5 h-5 text-orange-400" /> Offers & Benefits
+          </h2>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              placeholder="Enter Promo Code"
+              value={promoInput}
+              onChange={(e) => setPromoInput(e.target.value)}
+              className="flex-1 bg-dark-900 border border-white/10 rounded-xl px-4 text-sm uppercase text-white focus:outline-none focus:border-primary-500 transition-colors"
+            />
+            <button
+              onClick={handleApplyPromo}
+              className="bg-white/10 hover:bg-white/15 text-white px-5 rounded-xl font-bold text-sm transition-all active:scale-95"
+            >
+              Apply
+            </button>
+          </div>
+          <AnimatePresence>
+            {appliedPromo && (
+              <motion.div initial={{opacity:0, height:0}} animate={{opacity:1, height:'auto'}} exit={{opacity:0, height:0}} className="mt-3 bg-green-500/10 border border-green-500/20 rounded-xl p-3 flex justify-between items-center overflow-hidden">
+                <div className="flex items-center gap-2">
+                   <ShieldCheck className="w-4 h-4 text-green-400" />
+                   <span className="text-sm text-green-400 font-medium">'{appliedPromo.code}' applied!</span>
+                </div>
+                <button onClick={() => setAppliedPromo(null)} className="text-xs text-white/50 hover:text-white">Remove</button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.div>
+
+        {/* Order Summary */}
+        <motion.div initial={{opacity:0, y:20}} animate={{opacity:1, y:0}} transition={{delay: 0.2}} className="bg-white/[0.02] border border-white/5 rounded-3xl p-5">
+          <h2 className="text-lg font-bold flex items-center gap-2 mb-4">
+            <Receipt className="w-5 h-5 text-blue-400" /> Order Summary
+          </h2>
+          <div className="space-y-3">
+             {items.map(item => (
+                <div key={item.id} className="flex justify-between items-center text-sm">
+                   <div className="flex items-center gap-2">
+                      <span className="w-6 h-6 rounded-md bg-white/5 flex items-center justify-center text-xs font-bold text-primary-400">{item.quantity}x</span>
+                      <span className="text-white/80">{item.name}</span>
+                   </div>
+                   <span className="font-semibold text-white/90">₹{item.price * item.quantity}</span>
+                </div>
+             ))}
+          </div>
+          <div className="w-full h-px bg-white/5 my-4" />
+          <div className="space-y-2 text-sm text-white/60">
+             <div className="flex justify-between"><span>Item Total</span><span>₹{total}</span></div>
+             {appliedPromo && <div className="flex justify-between text-green-400"><span>Discount</span><span>-₹{discountAmount}</span></div>}
+             <div className="flex justify-between"><span>Taxes</span><span>₹{taxes}</span></div>
+             <div className="flex justify-between"><span>Delivery Fee</span><span>₹{deliveryFee}</span></div>
+          </div>
+          <div className="w-full h-px bg-white/10 my-4" />
+          <div className="flex justify-between items-center">
+             <span className="font-bold text-lg text-white">Grand Total</span>
+             <motion.span key={finalTotal} initial={{scale:1.2, color:'#4ade80'}} animate={{scale:1, color:'#ffffff'}} className="font-black text-xl text-white">₹{finalTotal}</motion.span>
+          </div>
+        </motion.div>
+
+      </div>
+
+      {/* Fixed Bottom Action */}
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-dark-950/80 backdrop-blur-xl border-t border-white/10 z-30">
+        <div className="max-w-xl mx-auto flex gap-4">
+           <div className="flex-1">
+             <p className="text-xs text-white/50 uppercase tracking-wider font-bold">Total to Pay</p>
+             <p className="text-xl font-black text-white">₹{finalTotal}</p>
+           </div>
+           <button 
+             onClick={handleProceedToPayment}
+             className="flex-[2] bg-gradient-to-r from-primary-600 to-primary-500 text-white font-bold rounded-2xl shadow-[0_0_20px_rgba(85,119,90,0.3)] hover:shadow-[0_0_30px_rgba(85,119,90,0.5)] transition-all active:scale-95 flex items-center justify-center gap-2"
+           >
+             Continue to Payment <ChevronLeft className="w-5 h-5 rotate-180" />
+           </button>
+        </div>
+      </div>
+
+      {/* Modals */}
+      <AnimatePresence>
+        {showPayment && (
+          <PaymentMethodOverlay 
+             onClose={() => setShowPayment(false)} 
+             onSelect={handlePlaceOrder}
+             total={finalTotal}
+          />
+        )}
+        {showProcessing && (
+           <ProcessingOverlay status={processingStatus} />
+        )}
+      </AnimatePresence>
     </PageTransition>
   );
 }

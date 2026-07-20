@@ -2,14 +2,15 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNetworkStore } from '../../lib/networkQuality';
 import { getAuth } from 'firebase/auth';
 
-let hasPlayedThisSession = false;
 
 interface StartupGateProps {
   children: React.ReactNode;
 }
 
 export default function StartupGate({ children }: StartupGateProps) {
-  const [showVideo, setShowVideo] = useState(!hasPlayedThisSession);
+  const [showVideo, setShowVideo] = useState(() => {
+    return typeof window !== 'undefined' && sessionStorage.getItem('hasSeenIntro') !== 'true';
+  });
   const [videoFading, setVideoFading] = useState(false);
   const [deviceType, setDeviceType] = useState<'mobile' | 'tablet' | 'desktop'>(() => {
     if (typeof window !== 'undefined') {
@@ -32,9 +33,9 @@ export default function StartupGate({ children }: StartupGateProps) {
   };
 
   useEffect(() => {
-    // Use the global memory flag to prevent remounts from playing the video again during SPA navigation
-    if (!hasPlayedThisSession) {
-      hasPlayedThisSession = true; // immediately lock it for any other components
+    // Prevent remounts from playing the video again during SPA navigation and hard refreshes
+    if (showVideo) {
+      sessionStorage.setItem('hasSeenIntro', 'true');
       logDiagnostic("Initializing intro video");
       setShowVideo(true);
       document.body.style.overflow = "hidden";

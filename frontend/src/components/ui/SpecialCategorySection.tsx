@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronRight } from 'lucide-react';
 import { trackEvent } from '../../lib/analytics';
 import CountdownTimer from './CountdownTimer';
+import { useCartAnimation } from './CartAnimationProvider';
 import ComboCard from './ComboCard';
 import WishlistButton from './WishlistButton';
 import { useCartStore } from '../../lib/store';
@@ -61,6 +62,7 @@ export default function SpecialCategorySection({
   index = 0,
 }: SpecialCategorySectionProps) {
   const addItem = useCartStore((s) => s.addItem);
+  const { triggerAnimation } = useCartAnimation();
   const sectionRef = useRef<HTMLDivElement>(null);
   const [expired, setExpired] = useState(false);
 
@@ -199,7 +201,8 @@ export default function SpecialCategorySection({
                   <WishlistButton productId={fp.id} wishlistIds={wishlistIds} size="sm" />
                 </div>
                 <button
-                  onClick={() => {
+                  onClick={(e) => {
+                    triggerAnimation(e, fp.imageUrl || '');
                     addItem({ id: fp.id, productId: fp.id, productName: fp.productName, price: fp.promoPrice ?? fp.basePrice, quantity: 1, imageUrl: fp.imageUrl || '' } as any);
                     trackEvent({ type: 'category_product_click', categoryId: category.id, productId: fp.id });
                     toast.success(`${fp.productName} added!`);
@@ -260,7 +263,8 @@ export default function SpecialCategorySection({
                       )}
                     </div>
                     <button
-                      onClick={() => {
+                      onClick={(e) => {
+                        triggerAnimation(e, p.imageUrl || '');
                         addItem({ id: p.id, productId: p.id, productName: p.productName, price: p.promoPrice ?? p.basePrice, quantity: 1, imageUrl: p.imageUrl || '' } as any);
                         trackEvent({ type: 'category_product_click', categoryId: category.id, productId: p.id });
                         toast.success(`${p.productName} added!`);

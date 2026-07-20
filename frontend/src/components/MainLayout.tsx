@@ -11,7 +11,9 @@ import { usePWA } from '../lib/usePWA';
 import Aurora from './ui/Aurora';
 import { prefetchRoute } from '../lib/prefetch';
 import NotificationCenter from './ui/NotificationCenter';
-
+import FloatingCart from './layout/FloatingCart';
+import FloatingWaitingCard from './layout/FloatingWaitingCard';
+import FloatingOrderTracker from './layout/FloatingOrderTracker';
 export default function MainLayout() {
   const isAuthenticated = useAuthStore(state => state.isAuthenticated);
   const role = useAuthStore(state => state.role);
@@ -70,6 +72,15 @@ export default function MainLayout() {
         />
       </div>
       <PWAPrompts />
+      
+      {/* Premium Floating Components */}
+      {location.pathname !== '/checkout' && location.pathname !== '/cart' && (
+         <>
+           <FloatingCart />
+           <FloatingWaitingCard />
+           <FloatingOrderTracker />
+         </>
+      )}
       
       <AnimatePresence>
         {isOffline && (

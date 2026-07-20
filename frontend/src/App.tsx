@@ -81,7 +81,6 @@ import AutoUpdater from "./components/ui/AutoUpdater";
 import ClickSpark from './components/ui/ClickSpark';
 import { CartAnimationProvider } from './components/ui/CartAnimationProvider';
 import { OwnerGuard, DeliveryGuard, CustomerGuard, AuthGuard } from './components/auth/RouteGuards';
-import FloatingCart from './components/ui/FloatingCart';
 import LocationPrompt from './components/ui/LocationPrompt';
 import PushNotificationManager from './components/PushNotificationManager';
 import PizzaLoader from './components/ui/PizzaLoader';
@@ -367,10 +366,6 @@ function App() {
                   <AIAssistant />
                 </Suspense>
                 <LocationPrompt />
-                <FloatingCart />
-                <Suspense fallback={null}>
-                  <FloatingTracker />
-                </Suspense>
               </StartupGate>
             </CartAnimationProvider>
           </SafeErrorBoundary>

@@ -6,6 +6,7 @@ import { useCartStore } from "../../lib/store";
 import { trackEvent } from "../../lib/analytics";
 import WishlistButton from "./WishlistButton";
 import toast from "react-hot-toast";
+import { useCartAnimation } from "./CartAnimationProvider";
 
 interface LuxuryProductCardProps {
   product: any;
@@ -16,6 +17,7 @@ interface LuxuryProductCardProps {
 export default function LuxuryProductCard({ product, wishlistIds, index }: LuxuryProductCardProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   const addItem = useCartStore((s) => s.addItem);
+  const { triggerAnimation } = useCartAnimation();
 
   // 3D tilt motion values
   const rotateX = useMotionValue(0);
@@ -53,6 +55,7 @@ export default function LuxuryProductCard({ product, wishlistIds, index }: Luxur
     (e: React.MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
+      triggerAnimation(e, product.imageUrl || "");
       addItem({
         id: product.id,
         productId: product.id,
