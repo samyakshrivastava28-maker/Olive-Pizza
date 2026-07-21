@@ -291,7 +291,7 @@ export default function Checkout() {
       </div>
 
       {/* Fixed Bottom Action */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-dark-950/80 backdrop-blur-xl border-t border-white/10 z-30">
+      <div className="fixed bottom-0 left-0 right-0 px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] bg-dark-950/80 backdrop-blur-xl border-t border-white/10 z-30">
         <div className="max-w-xl mx-auto flex gap-3">
            <button 
              onClick={() => navigate('/cart')}

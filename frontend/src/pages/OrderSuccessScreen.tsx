@@ -111,7 +111,7 @@ export default function OrderSuccessScreen() {
         </Canvas>
       </div>
 
-      <div className="absolute bottom-0 left-0 right-0 h-[50vh] bg-gradient-to-t from-dark-950 via-dark-950/90 to-transparent flex flex-col items-center justify-end pb-12 px-6 success-text-container">
+      <div className="absolute bottom-0 left-0 right-0 h-[50vh] bg-gradient-to-t from-dark-950 via-dark-950/90 to-transparent flex flex-col items-center justify-end pb-[max(3rem,env(safe-area-inset-bottom))] px-6 success-text-container">
         <div className="w-20 h-20 bg-success/20 rounded-full flex items-center justify-center mb-6">
           <motion.div
             initial={{ scale: 0 }}

@@ -17,7 +17,7 @@ export default function PaymentMethodOverlay({ onClose, onSelect, total }: any) 
     >
       <motion.div 
         initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-        className="w-full max-w-md bg-dark-900 border border-white/10 rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl"
+        className="w-full max-w-md bg-dark-900 border border-white/10 rounded-t-3xl sm:rounded-3xl px-6 pt-6 pb-safe sm:pb-6 shadow-2xl"
       >
         <div className="flex justify-between items-center mb-6">
           <div>
