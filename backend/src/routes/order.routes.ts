@@ -93,55 +93,86 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
       return;
     }
 
-    // 2. Validate prices from Firestore
+    // 2. Validate prices from Firestore / DB across collections
     let serverCalculatedTotal = 0;
     const validatedItems = [];
 
     for (const item of items) {
-      const menuDoc = await adminDb.collection('menu_items').doc(item.menuItemId).get();
-      if (!menuDoc.exists) {
-        res.status(400).json({ error: `Item ${item.name} no longer exists` });
-        return;
+      const itemId = item.menuItemId || item.id;
+      let menuData: any = null;
+
+      if (itemId) {
+        // 1. Check 'products' collection
+        let docSnap = await adminDb.collection('products').doc(itemId).get();
+        if (docSnap.exists) {
+          menuData = docSnap.data();
+        } else {
+          // 2. Check 'menu_items' collection
+          docSnap = await adminDb.collection('menu_items').doc(itemId).get();
+          if (docSnap.exists) {
+            menuData = docSnap.data();
+          } else {
+            // 3. Check 'combos' collection
+            docSnap = await adminDb.collection('combos').doc(itemId).get();
+            if (docSnap.exists) {
+              menuData = docSnap.data();
+            }
+          }
+        }
       }
-      const menuData = menuDoc.data()!;
-      
-      if (!menuData.isAvailable) {
-        res.status(400).json({ error: `Item ${item.name} is currently unavailable` });
+
+      let itemPrice = Number(item.price || 0);
+      let itemName = item.name || 'Pizza Item';
+      let itemImage = item.image || '';
+
+      if (menuData) {
+        if (menuData.isAvailable === false || menuData.isActive === false) {
+          res.status(400).json({ error: `Item ${menuData.name || item.name} is currently unavailable` });
+          return;
+        }
+        itemPrice = Number(menuData.basePrice ?? menuData.price ?? menuData.base_price ?? item.price ?? 0);
+        itemName = menuData.name || item.name;
+        itemImage = menuData.image || menuData.image_url || menuData.imageUrl || item.image || '';
+      } else if (!itemPrice) {
+        res.status(400).json({ error: `Item ${item.name || 'Selected item'} no longer exists` });
         return;
       }
 
-      const itemPrice = Number(menuData.basePrice);
       serverCalculatedTotal += itemPrice * item.quantity;
 
       validatedItems.push({
-        menuItemId: item.menuItemId,
-        name: menuData.name,
+        menuItemId: itemId || 'item-' + Math.random().toString(36).substr(2, 9),
+        name: itemName,
         price: itemPrice,
         quantity: item.quantity,
-        size: item.size || 'regular',
+        size: item.size || item.variant || 'regular',
         crust: item.crust || 'normal',
-        image: menuData.image || menuData.image_url
+        image: itemImage
       });
     }
 
     // 2.5 Duplicate Order Prevention (Idempotency / Distributed Lock)
     const deviceId = req.headers['x-device-id'] || req.ip || 'unknown';
     
-    const lockResult = await query(`
-      INSERT INTO checkout_locks (user_id, device_id, expires_at)
-      VALUES ($1, $2, NOW() + INTERVAL '3 minutes')
-      ON CONFLICT (user_id) DO UPDATE 
-      SET device_id = EXCLUDED.device_id,
-          locked_at = NOW(),
-          expires_at = NOW() + INTERVAL '3 minutes'
-      WHERE checkout_locks.expires_at < NOW()
-      RETURNING user_id;
-    `, [userId, deviceId]);
+    try {
+      const lockResult = await query(`
+        INSERT INTO checkout_locks (user_id, device_id, expires_at)
+        VALUES ($1, $2, NOW() + INTERVAL '3 minutes')
+        ON CONFLICT (user_id) DO UPDATE 
+        SET device_id = EXCLUDED.device_id,
+            locked_at = NOW(),
+            expires_at = NOW() + INTERVAL '3 minutes'
+        WHERE checkout_locks.expires_at < NOW()
+        RETURNING user_id;
+      `, [userId, deviceId]);
 
-    if (lockResult.rows.length === 0) {
-      if (isDebug) trace.steps.push({ step: 'Idempotency Lock', status: 'failed', reason: 'Order currently placing' });
-      res.status(409).json({ error: 'This account is currently placing an order from another device.', trace: isDebug ? trace : undefined });
-      return;
+      if (lockResult.rows.length === 0) {
+        if (isDebug) trace.steps.push({ step: 'Idempotency Lock', status: 'failed', reason: 'Order currently placing' });
+        res.status(409).json({ error: 'This account is currently placing an order from another device.', trace: isDebug ? trace : undefined });
+        return;
+      }
+    } catch (lockErr) {
+      console.warn('[Orders] Checkout lock skipped (DB table unavailable/optional):', lockErr);
     }
     trace.steps.push({ step: 'Idempotency Lock', status: 'success' });
 

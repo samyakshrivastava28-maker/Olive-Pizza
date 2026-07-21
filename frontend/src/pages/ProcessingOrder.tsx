@@ -37,7 +37,7 @@ export default function ProcessingOrder() {
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
           body: JSON.stringify({
             items: items.map((item: any) => ({
-              menuItemId: item.id,
+              menuItemId: item.menuItemId || item.id || item._id || 'item-' + Math.random().toString(36).substr(2, 9),
               name: item.name,
               quantity: item.quantity,
               price: item.price,
