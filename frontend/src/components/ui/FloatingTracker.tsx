@@ -20,6 +20,8 @@ import { db, auth } from '../../lib/firebase';
 import { useNavigate, useLocation } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MapPin, ChefHat, Package, Truck, Clock, CheckCircle2, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import OwnerAcceptedOverlay from './OwnerAcceptedOverlay';
+import DeliveredOverlay from './DeliveredOverlay';
 
 interface ActiveOrder {
   id: string;
@@ -84,6 +86,10 @@ export default function FloatingTracker() {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   const [eta, setEta] = useState<number | null>(null);
+  const [showAcceptedOverlay, setShowAcceptedOverlay] = useState(false);
+  const [showDeliveredOverlay, setShowDeliveredOverlay] = useState(false);
+  const [completedOrderId, setCompletedOrderId] = useState<string | null>(null);
+  const [lastKnownStatus, setLastKnownStatus] = useState<Record<string, string>>({});
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -98,6 +104,23 @@ export default function FloatingTracker() {
     );
     return onSnapshot(q, snap => {
       const items = snap.docs.map(d => ({ id: d.id, ...d.data() } as ActiveOrder));
+      
+      // Detect transitions for overlays
+      setLastKnownStatus(prev => {
+        const next = { ...prev };
+        items.forEach(order => {
+          if (prev[order.id] === 'pending' && order.status === 'accepted') {
+            setShowAcceptedOverlay(true);
+          }
+          if (prev[order.id] && prev[order.id] !== 'delivered' && order.status === 'delivered') {
+            setCompletedOrderId(order.id);
+            setShowDeliveredOverlay(true);
+          }
+          next[order.id] = order.status;
+        });
+        return next;
+      });
+
       setOrders(items);
       setCurrentIdx(idx => Math.min(idx, Math.max(0, items.length - 1)));
     }, () => setOrders([]));
@@ -161,7 +184,22 @@ export default function FloatingTracker() {
   const isPending = activeOrder.status === 'pending';
 
   return (
-    <AnimatePresence>
+    <>
+      <AnimatePresence>
+        {showAcceptedOverlay && (
+          <OwnerAcceptedOverlay 
+            orderId={activeOrder.id} 
+            onClose={() => setShowAcceptedOverlay(false)} 
+          />
+        )}
+        {showDeliveredOverlay && completedOrderId && (
+          <DeliveredOverlay 
+            orderId={completedOrderId} 
+            onClose={() => setShowDeliveredOverlay(false)} 
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
       <motion.div
         key={activeOrder.id + activeOrder.status}
         initial={{ y: 100, opacity: 0, scale: 0.9 }}
@@ -292,5 +330,6 @@ export default function FloatingTracker() {
         </div>
       </motion.div>
     </AnimatePresence>
+    </>
   );
 }

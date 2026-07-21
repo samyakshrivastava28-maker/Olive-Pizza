@@ -103,6 +103,8 @@ const Cart = lazyWithRetry(() => import('./pages/Cart'));
 const Checkout = lazyWithRetry(() => import('./pages/Checkout'));
 const ProductDetail = lazyWithRetry(() => import('./pages/ProductDetail'));
 const OrderTracking = lazyWithRetry(() => import('./pages/OrderTracking'));
+const RecheckOrder = lazyWithRetry(() => import('./pages/RecheckOrder'));
+const ProcessingOrder = lazyWithRetry(() => import('./pages/ProcessingOrder'));
 
 // Lazy loaded Info & Legal pages
 const Contact = lazyWithRetry(() => import('./pages/Contact'));
@@ -246,6 +248,8 @@ function AppContent() {
                 <Route path="/product/:productId" element={<ProductDetail />} />
                 <Route path="/cart" element={<Cart />} />
                 <Route path="/checkout" element={<Checkout />} />
+                <Route path="/recheck-order" element={<RecheckOrder />} />
+                <Route path="/processing-order" element={<ProcessingOrder />} />
                 <Route path="/order-success/:orderId" element={<OrderSuccessScreen />} />
                 <Route path="/tracking/:orderId" element={<OrderTracking />} />
                 <Route path="/contact" element={<Contact />} />

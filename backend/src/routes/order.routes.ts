@@ -86,7 +86,9 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
       return;
     }
 
-    if (!userData.full_address) {
+    console.log("Order attempt:", { hasFullAddress: !!userData.full_address, hasCamelAddress: !!userData.fullAddress, payloadAddress: address });
+    
+    if (!userData.full_address && !userData.fullAddress && !address) {
       res.status(400).json({ error: 'Delivery address missing. Please complete onboarding.' });
       return;
     }

@@ -167,6 +167,14 @@ export default function Login() {
   const handleGoogleSignIn = async () => {
     setError("");
     setLoading(true);
+    
+    const isLocalNetworkIP = window.location.hostname.match(/^(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/);
+    if (isLocalNetworkIP && !Capacitor.isNativePlatform()) {
+      toast.error("Google Login blocks local network IPs (e.g., 192.168.x.x). Please test using 'localhost' or your Vercel deployment.");
+      setLoading(false);
+      return;
+    }
+
     try {
       const provider = new GoogleAuthProvider();
       let result;
@@ -248,7 +256,17 @@ export default function Login() {
         else navigate("/");
       }
     } catch (err: any) {
-      setError(translateError(err));
+      logDetailedError(err, { context: "Google Login" });
+      const errMsg = err.message || translateError(err);
+      
+      // Specifically check for Varnish 503 or network errors
+      if (errMsg.includes('503') || errMsg.includes('network') || errMsg.includes('backend read error') || errMsg.includes('Varnish')) {
+        const customMsg = "Google's authentication servers are temporarily unavailable in your region. Please log in with Email & Password.";
+        setError(customMsg);
+        toast.error(customMsg, { duration: 6000 });
+      } else {
+        setError(errMsg);
+      }
       setLoading(false);
     }
   };

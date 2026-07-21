@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { auth, db } from '../../lib/firebase';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MapPin, Plus, Trash2, Home, Briefcase, Map, Loader2, X, Star } from 'lucide-react';
+import { MapPin, Plus, Edit2, Trash2, Home, Briefcase, Navigation, Check, Map, X, Star } from 'lucide-react';
+import PizzaLoader from '../ui/PizzaLoader';
 import toast from 'react-hot-toast';
 import { LocationManager, LocationData } from '../../lib/permissions';
 import { useAuthStore } from '../../lib/store';
@@ -207,7 +208,7 @@ export default function AddressBook() {
     window.dispatchEvent(new Event('olive:location:updated'));
   };
 
-  if (loading) return <div className="p-8 text-center"><Loader2 className="w-8 h-8 animate-spin mx-auto text-primary-500" /></div>;
+  if (loading) return <div className="p-8 text-center"><PizzaLoader size="small" text="" /></div>;
 
   return (
     <div className="bg-white dark:bg-slate-800 p-4 md:p-8 rounded-3xl shadow-lg border border-slate-200 dark:border-slate-700">
@@ -248,7 +249,7 @@ export default function AddressBook() {
                     disabled={gettingGps}
                     className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 mb-4 transition-colors"
                   >
-                    {gettingGps ? <Loader2 className="w-5 h-5 animate-spin" /> : '📍 Use Current GPS Location'}
+                    {gettingGps ? <PizzaLoader size="inline" /> : '📍 Use Current GPS Location'}
                   </button>
                   <div className="h-[250px] rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 relative z-0">
                     <MapContainer center={[markerPos.lat, markerPos.lng]} zoom={15} style={{ width: "100%", height: "100%" }}>
@@ -319,7 +320,7 @@ export default function AddressBook() {
                       disabled={saveLoading}
                       className="w-full bg-primary-600 hover:bg-primary-500 text-white font-black py-4 rounded-xl shadow-lg transition-transform active:scale-95 disabled:opacity-70 flex items-center justify-center"
                     >
-                      {saveLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Save Address'}
+                      {saveLoading ? <PizzaLoader size="inline" /> : 'Save Address'}
                     </button>
                   </div>
                 </form>

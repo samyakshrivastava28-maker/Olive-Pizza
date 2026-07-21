@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react';
 import { auth, db } from '../../../lib/firebase';
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, ShieldCheck, Loader2, MessageSquare } from 'lucide-react';
+import { X, ShieldCheck, MessageSquare } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { parsePhoneNumber } from "libphonenumber-js";
 import { Truecaller } from '../../../plugins/Truecaller';
+import PizzaLoader from "../../../components/ui/PizzaLoader";
 
 interface PhoneUpdateModalProps {
   isOpen: boolean;
@@ -193,7 +194,7 @@ export default function PhoneUpdateModal({ isOpen, onClose, currentPhone, onSucc
                 
                 {step === 'detect' && (
                   <div className="flex flex-col items-center justify-center py-8">
-                    <Loader2 className="w-8 h-8 animate-spin text-orange-500 mb-4" />
+                    <PizzaLoader size="small" />
                     <p className="text-slate-500 dark:text-slate-400 animate-pulse">Detecting secure verification methods...</p>
                   </div>
                 )}
@@ -210,7 +211,7 @@ export default function PhoneUpdateModal({ isOpen, onClose, currentPhone, onSucc
                         disabled={loading}
                         className="w-full flex justify-center py-3 px-4 border border-transparent rounded-xl shadow-sm text-sm font-bold text-white bg-[#0052CC] hover:bg-[#0040A8] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition-colors"
                     >
-                        {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Verify with Truecaller"}
+                        {loading ? <PizzaLoader size="inline" /> : "Verify with Truecaller"}
                     </button>
                     
                     <button onClick={() => setStep('phone_input')} className="text-sm text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">
@@ -243,7 +244,7 @@ export default function PhoneUpdateModal({ isOpen, onClose, currentPhone, onSucc
                       disabled={loading || newPhone.length < 10}
                       className="w-full flex justify-center py-3 px-4 border border-transparent rounded-xl shadow-sm text-sm font-bold text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 disabled:opacity-50 transition-colors"
                     >
-                      {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Send OTP"}
+                      {loading ? <PizzaLoader size="inline" /> : "Send OTP"}
                     </button>
                   </form>
                 )}
@@ -273,7 +274,7 @@ export default function PhoneUpdateModal({ isOpen, onClose, currentPhone, onSucc
                       disabled={loading || otp.length < 6}
                       className="w-full flex justify-center py-3 px-4 border border-transparent rounded-xl shadow-sm text-sm font-bold text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 disabled:opacity-50 transition-colors"
                     >
-                      {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Verify OTP"}
+                      {loading ? <PizzaLoader size="inline" /> : "Verify OTP"}
                     </button>
                   </form>
                 )}

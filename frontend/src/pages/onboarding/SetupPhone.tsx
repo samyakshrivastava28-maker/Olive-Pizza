@@ -20,6 +20,8 @@ export default function SetupPhone() {
   const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
   const [countdown, setCountdown] = useState(0);
   const navigate = useNavigate();
+  const searchParams = new URLSearchParams(window.location.search);
+  const redirectPath = searchParams.get('redirect') || "/dashboard";
   const { setUser, user, role } = useAuthStore();
 
   const fetchUserProfile = async (uid: string) => {
@@ -118,7 +120,7 @@ export default function SetupPhone() {
       if (data.success) {
         toast.success("Phone verified securely!");
         await fetchUserProfile(auth.currentUser?.uid!);
-        navigate("/dashboard");
+        navigate(redirectPath);
       } else {
         throw new Error(data.error || 'Verification failed');
       }
@@ -189,7 +191,7 @@ export default function SetupPhone() {
 
       toast.success("Phone verified successfully!");
       await fetchUserProfile(auth.currentUser.uid);
-      navigate("/dashboard");
+      navigate(redirectPath);
     } catch (err: any) {
       console.error(err);
       if (err.code === 'auth/credential-already-in-use') {
@@ -242,7 +244,7 @@ export default function SetupPhone() {
                   disabled={loading}
                   className="w-full flex justify-center py-3 px-4 border border-transparent rounded-xl shadow-sm text-sm font-bold text-white bg-[#0052CC] hover:bg-[#0040A8] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition-colors"
                >
-                  {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Verify with Truecaller"}
+                  {loading ? <PizzaLoader size="inline" /> : "Verify with Truecaller"}
                </button>
                
                <button onClick={() => setStep('phone_input')} className="text-sm text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">
@@ -286,7 +288,7 @@ export default function SetupPhone() {
                 disabled={loading || phone.length < 10}
                 className="w-full flex justify-center py-3 px-4 border border-transparent rounded-xl shadow-sm text-sm font-bold text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 disabled:opacity-50 transition-colors"
               >
-                {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Send OTP"}
+                {loading ? <PizzaLoader size="inline" /> : "Send OTP"}
               </button>
             </form>
           )}
@@ -323,7 +325,7 @@ export default function SetupPhone() {
                 disabled={loading || otp.length < 6}
                 className="w-full flex justify-center py-3 px-4 border border-transparent rounded-xl shadow-sm text-sm font-bold text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 disabled:opacity-50 transition-colors"
               >
-                {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Verify OTP"}
+                {loading ? <PizzaLoader size="inline" /> : "Verify OTP"}
               </button>
               
               <div className="text-center mt-4">
