@@ -36,19 +36,27 @@ export default function PhoneUpdateModal({ isOpen, onClose, currentPhone, onSucc
   const checkTruecaller = async () => {
     try {
       const result = await Truecaller.isSupported();
-      if (result.isSupported) {
-        setStep('truecaller');
-      } else {
-        setStep('phone_input');
-      }
+      setStep('truecaller');
     } catch (err) {
-      setStep('phone_input');
+      setStep('truecaller');
     }
   };
 
   const handleTruecallerVerify = async () => {
     setLoading(true);
     try {
+      let isNativeSupported = false;
+      try {
+        const check = await Truecaller.isSupported();
+        isNativeSupported = check.isSupported;
+      } catch(e) {}
+
+      if (!isNativeSupported) {
+        toast('Truecaller 1-Tap verification is active on Android APK. Switching to fast SMS OTP verification.', { icon: '⚡' });
+        setStep('phone_input');
+        return;
+      }
+
       const response = await Truecaller.verify();
       
       const token = await auth.currentUser?.getIdToken();
@@ -63,7 +71,7 @@ export default function PhoneUpdateModal({ isOpen, onClose, currentPhone, onSucc
       const data = await res.json();
 
       if (data.success) {
-        toast.success("Phone verified securely!");
+        toast.success("Phone verified securely via Truecaller!");
         onSuccess(data.phone);
         onClose();
       } else {

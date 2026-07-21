@@ -89,13 +89,9 @@ export default function SetupPhone() {
   const checkTruecaller = async () => {
     try {
       const result = await Truecaller.isSupported();
-      if (result.isSupported) {
-        setStep('truecaller');
-      } else {
-        setStep('phone_input');
-      }
+      setStep('truecaller');
     } catch (err) {
-      setStep('phone_input');
+      setStep('truecaller');
     }
   };
 
@@ -103,6 +99,18 @@ export default function SetupPhone() {
     setLoading(true);
     setError("");
     try {
+      let isNativeSupported = false;
+      try {
+        const check = await Truecaller.isSupported();
+        isNativeSupported = check.isSupported;
+      } catch(e) {}
+
+      if (!isNativeSupported) {
+        toast('Truecaller 1-Tap verification is active on Android APK. Switching to fast SMS OTP verification.', { icon: '⚡' });
+        setStep('phone_input');
+        return;
+      }
+
       const response = await Truecaller.verify();
       
       // Send payload to backend
@@ -118,7 +126,7 @@ export default function SetupPhone() {
       const data = await res.json();
 
       if (data.success) {
-        toast.success("Phone verified securely!");
+        toast.success("Phone verified securely via Truecaller!");
         await fetchUserProfile(auth.currentUser?.uid!);
         navigate(redirectPath);
       } else {
@@ -140,7 +148,7 @@ export default function SetupPhone() {
     try {
       const phoneNumber = parsePhoneNumber(phone, "IN");
       if (!phoneNumber || !phoneNumber.isValid() || phoneNumber.country !== "IN") {
-        setError("Please enter a valid Indian mobile number");
+        setError("Please enter a valid 10-digit Indian mobile number");
         return;
       }
       
@@ -149,21 +157,27 @@ export default function SetupPhone() {
       setLoading(true);
       setError("");
 
-      setupRecaptcha();
-      const appVerifier = (window as any).recaptchaVerifier;
+      const token = await auth.currentUser.getIdToken();
+      const res = await fetch('/api/phone/send-otp', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ phone: formattedPhone })
+      });
 
-      const result = await signInWithPhoneNumber(auth, formattedPhone, appVerifier);
-      setConfirmationResult(result);
-      toast.success("OTP Sent!");
-      setStep('otp_input');
-      setCountdown(60);
+      const data = await res.json();
+      if (data.success) {
+        toast.success(data.message || "OTP Sent!");
+        setStep('otp_input');
+        setCountdown(60);
+      } else {
+        throw new Error(data.error || "Failed to send OTP.");
+      }
     } catch (err: any) {
       console.error(err);
       setError(err.message || "Failed to send OTP.");
-      if ((window as any).recaptchaVerifier) {
-        (window as any).recaptchaVerifier.clear();
-        (window as any).recaptchaVerifier = null;
-      }
     } finally {
       setLoading(false);
     }
@@ -171,36 +185,34 @@ export default function SetupPhone() {
 
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!auth.currentUser || !confirmationResult) return;
+    if (!auth.currentUser) return;
     
     setLoading(true);
     setError("");
 
     try {
-      const credential = PhoneAuthProvider.credential(confirmationResult.verificationId, otp);
-      await linkWithCredential(auth.currentUser, credential);
-      
       const formattedPhone = parsePhoneNumber(phone, "IN")!.format("E.164");
-      const userRef = doc(db, 'users', auth.currentUser.uid);
-      await setDoc(userRef, {
-        phone: formattedPhone,
-        phoneVerified: true,
-        phoneSetupCompleted: true,
-        verificationMethod: 'firebase'
-      }, { merge: true });
+      const token = await auth.currentUser.getIdToken();
+      const res = await fetch('/api/phone/verify-otp', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ phone: formattedPhone, code: otp })
+      });
 
-      toast.success("Phone verified successfully!");
-      await fetchUserProfile(auth.currentUser.uid);
-      navigate(redirectPath);
+      const data = await res.json();
+      if (data.success) {
+        toast.success("Phone verified successfully!");
+        await fetchUserProfile(auth.currentUser.uid);
+        navigate(redirectPath);
+      } else {
+        throw new Error(data.error || "Invalid OTP code.");
+      }
     } catch (err: any) {
       console.error(err);
-      if (err.code === 'auth/credential-already-in-use') {
-         setError("This phone number is already linked to another account.");
-      } else if (err.code === 'auth/invalid-verification-code') {
-         setError("Invalid OTP. Please try again.");
-      } else {
-         setError(err.message || "An error occurred");
-      }
+      setError(err.message || "An error occurred during verification");
     } finally {
       setLoading(false);
     }
