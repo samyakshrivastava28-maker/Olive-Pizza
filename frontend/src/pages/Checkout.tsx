@@ -11,6 +11,26 @@ import toast from 'react-hot-toast';
 import PaymentMethodOverlay from '../components/checkout/PaymentMethodOverlay';
 import ProcessingOverlay from '../components/checkout/ProcessingOverlay';
 import PageTransition from '../components/PageTransition';
+import { MapContainer, TileLayer, useMapEvents } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+
+function MapController({ center, setCenter, setAddress }: any) {
+  const map = useMapEvents({
+    dragend: async () => {
+      const c = map.getCenter();
+      setCenter([c.lat, c.lng]);
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${c.lat}&lon=${c.lng}`);
+        const data = await res.json();
+        if (data && data.display_name) setAddress(data.display_name);
+      } catch (err) {}
+    }
+  });
+  useEffect(() => {
+    map.setView(center, map.getZoom());
+  }, [center]);
+  return null;
+}
 
 // Premium Checkout redesign
 export default function Checkout() {
@@ -33,6 +53,25 @@ export default function Checkout() {
   const [showProcessing, setShowProcessing] = useState(false);
   const [processingStatus, setProcessingStatus] = useState('idle'); // idle, processing, success
   const [orderId, setOrderId] = useState('');
+  const [mapCenter, setMapCenter] = useState<[number, number]>([19.0760, 72.8777]);
+
+  // Auto-fetch location if empty
+  useEffect(() => {
+    if (!address && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const { latitude, longitude } = position.coords;
+          setMapCenter([latitude, longitude]);
+          try {
+            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
+            const data = await res.json();
+            if (data && data.display_name) setAddress(data.display_name);
+          } catch (err) {}
+        },
+        () => {}
+      );
+    }
+  }, []);
 
   useEffect(() => {
     if (!isAuthenticated) navigate('/login?redirect=/checkout');
@@ -178,28 +217,54 @@ export default function Checkout() {
           <h2 className="text-lg font-bold flex items-center gap-2 mb-4">
             <MapPin className="w-5 h-5 text-primary-400" /> Delivery Location
           </h2>
-          <div className="bg-dark-900/50 rounded-2xl p-4 border border-white/5 mb-4 relative overflow-hidden">
-            {/* Fake Google Map bg */}
-            <div className="absolute inset-0 opacity-20 pointer-events-none" style={{ backgroundImage: 'url("https://www.transparenttextures.com/patterns/cubes.png")' }}></div>
+          <div className="bg-dark-900/50 rounded-2xl p-4 border border-white/5 mb-4 relative overflow-hidden h-64 flex flex-col">
+            <div className="absolute inset-0 z-0 opacity-80">
+               <MapContainer center={mapCenter} zoom={16} className="w-full h-full" zoomControl={false} attributionControl={false}>
+                 <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
+                 <MapController center={mapCenter} setCenter={setMapCenter} setAddress={setAddress} />
+               </MapContainer>
+               {/* Center Pin Overlay */}
+               <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[1000] pointer-events-none drop-shadow-2xl">
+                 <div className="w-10 h-10 bg-primary-500 rounded-full flex items-center justify-center border-4 border-white/20 shadow-[0_0_20px_rgba(249,115,22,0.6)]">
+                   <div className="w-3 h-3 bg-white rounded-full animate-pulse" />
+                 </div>
+               </div>
+            </div>
             <div className="relative z-10 flex items-start gap-3">
               <div className="p-2 bg-primary-500/20 rounded-full shrink-0">
                 <Navigation className="w-4 h-4 text-primary-400" />
               </div>
-              <div className="flex-1">
-                <p className="font-semibold text-white/90">Current Location</p>
+              <div className="flex-1 bg-dark-950/80 backdrop-blur-md p-3 rounded-xl border border-white/10 shadow-lg">
+                <p className="font-semibold text-white/90 text-sm mb-1 flex items-center gap-2">
+                  <MapPin className="w-4 h-4 text-primary-400" /> Current Location
+                </p>
                 <textarea
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
-                  placeholder="Enter complete address, landmark, instructions..."
-                  className="w-full mt-2 bg-transparent text-white/70 text-sm resize-none focus:outline-none"
+                  placeholder="Drag map or enter complete address..."
+                  className="w-full bg-transparent text-white/80 text-sm resize-none focus:outline-none"
                   rows={2}
                 />
               </div>
             </div>
           </div>
           <div className="flex gap-2 relative z-10">
-             <button className="flex-1 py-2.5 rounded-xl bg-white/5 text-sm font-medium hover:bg-white/10 transition-colors">Edit Location</button>
-             <button className="flex-1 py-2.5 rounded-xl bg-primary-500/10 text-primary-400 text-sm font-medium hover:bg-primary-500/20 transition-colors">Refresh</button>
+             <button onClick={() => {
+                toast('Drag the map to set your exact location', { icon: '🗺️' });
+             }} className="flex-1 py-2.5 rounded-xl bg-white/5 text-sm font-medium hover:bg-white/10 transition-colors">Edit on Map</button>
+             <button onClick={() => {
+               if (navigator.geolocation) {
+                 const t = toast.loading('Locating...');
+                 navigator.geolocation.getCurrentPosition(
+                   async (pos) => {
+                     const { latitude, longitude } = pos.coords;
+                     setMapCenter([latitude, longitude]);
+                     toast.success('Location found!', { id: t });
+                   },
+                   () => toast.error('Location access denied', { id: t })
+                 );
+               }
+             }} className="flex-1 py-2.5 rounded-xl bg-primary-500/10 text-primary-400 text-sm font-medium hover:bg-primary-500/20 transition-colors">Use My GPS</button>
           </div>
         </motion.div>
 
