@@ -8,6 +8,8 @@ import { Phone, ShieldCheck, MessageSquare, Loader2 } from "lucide-react";
 import PizzaLoader from "../../components/ui/PizzaLoader";
 import toast from "react-hot-toast";
 import { useAuthStore } from "../../lib/store";
+import { RecaptchaVerifier, PhoneAuthProvider, linkWithCredential, signInWithPhoneNumber, ConfirmationResult } from "firebase/auth";
+import { setDoc } from "firebase/firestore";
 
 export default function SetupPhone() {
   const [phone, setPhone] = useState("");
@@ -15,6 +17,8 @@ export default function SetupPhone() {
   const [step, setStep] = useState<'detect' | 'truecaller' | 'phone_input' | 'otp_input'>('detect');
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
+  const [countdown, setCountdown] = useState(0);
   const navigate = useNavigate();
   const { setUser, user, role } = useAuthStore();
 
@@ -57,6 +61,28 @@ export default function SetupPhone() {
   useEffect(() => {
     checkTruecaller();
   }, []);
+
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (countdown > 0 && step === 'otp_input') {
+      timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+    }
+    return () => clearTimeout(timer);
+  }, [countdown, step]);
+
+  const setupRecaptcha = () => {
+    if (!(window as any).recaptchaVerifier) {
+      (window as any).recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+        size: 'invisible',
+        callback: () => {},
+        'expired-callback': () => {
+          toast.error("Verification expired. Please try again.");
+          (window as any).recaptchaVerifier.clear();
+          (window as any).recaptchaVerifier = null;
+        }
+      });
+    }
+  };
 
   const checkTruecaller = async () => {
     try {
@@ -105,8 +131,8 @@ export default function SetupPhone() {
     }
   };
 
-  const handleSendOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSendOtp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!auth.currentUser) return;
 
     try {
@@ -121,25 +147,21 @@ export default function SetupPhone() {
       setLoading(true);
       setError("");
 
-      const token = await auth.currentUser.getIdToken();
-      const res = await fetch('/api/phone/send-otp', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ phone: formattedPhone })
-      });
-      const data = await res.json();
+      setupRecaptcha();
+      const appVerifier = (window as any).recaptchaVerifier;
 
-      if (data.success) {
-        toast.success("OTP Sent!");
-        setStep('otp_input');
-      } else {
-        setError(data.error || "Failed to send OTP.");
-      }
+      const result = await signInWithPhoneNumber(auth, formattedPhone, appVerifier);
+      setConfirmationResult(result);
+      toast.success("OTP Sent!");
+      setStep('otp_input');
+      setCountdown(60);
     } catch (err: any) {
-      setError(err.response?.data?.error || err.message || "An error occurred");
+      console.error(err);
+      setError(err.message || "Failed to send OTP.");
+      if ((window as any).recaptchaVerifier) {
+        (window as any).recaptchaVerifier.clear();
+        (window as any).recaptchaVerifier = null;
+      }
     } finally {
       setLoading(false);
     }
@@ -147,34 +169,36 @@ export default function SetupPhone() {
 
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!auth.currentUser) return;
+    if (!auth.currentUser || !confirmationResult) return;
     
     setLoading(true);
     setError("");
 
     try {
-      const phoneNumber = parsePhoneNumber(phone, "IN")!.format("E.164");
-      const token = await auth.currentUser.getIdToken();
+      const credential = PhoneAuthProvider.credential(confirmationResult.verificationId, otp);
+      await linkWithCredential(auth.currentUser, credential);
       
-      const res = await fetch('/api/phone/verify-otp', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ phone: phoneNumber, code: otp })
-      });
-      const data = await res.json();
+      const formattedPhone = parsePhoneNumber(phone, "IN")!.format("E.164");
+      const userRef = doc(db, 'users', auth.currentUser.uid);
+      await setDoc(userRef, {
+        phone: formattedPhone,
+        phoneVerified: true,
+        phoneSetupCompleted: true,
+        verificationMethod: 'firebase'
+      }, { merge: true });
 
-      if (data.success) {
-        toast.success("Phone verified successfully!");
-        await fetchUserProfile(auth.currentUser.uid);
-        navigate("/dashboard");
-      } else {
-        setError(data.error || "Invalid OTP");
-      }
+      toast.success("Phone verified successfully!");
+      await fetchUserProfile(auth.currentUser.uid);
+      navigate("/dashboard");
     } catch (err: any) {
-      setError(err.response?.data?.error || err.message || "An error occurred");
+      console.error(err);
+      if (err.code === 'auth/credential-already-in-use') {
+         setError("This phone number is already linked to another account.");
+      } else if (err.code === 'auth/invalid-verification-code') {
+         setError("Invalid OTP. Please try again.");
+      } else {
+         setError(err.message || "An error occurred");
+      }
     } finally {
       setLoading(false);
     }
@@ -229,6 +253,7 @@ export default function SetupPhone() {
 
           {step === 'phone_input' && (
             <form onSubmit={handleSendOtp} className="space-y-6">
+              <div id="recaptcha-container"></div>
               <div>
                 <label htmlFor="phone" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
                   Mobile Number
@@ -300,6 +325,21 @@ export default function SetupPhone() {
               >
                 {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Verify OTP"}
               </button>
+              
+              <div className="text-center mt-4">
+                 {countdown > 0 ? (
+                   <p className="text-sm text-slate-500">Resend OTP in {countdown}s</p>
+                 ) : (
+                   <button
+                     type="button"
+                     onClick={() => handleSendOtp()}
+                     disabled={loading}
+                     className="text-sm text-orange-600 font-semibold hover:text-orange-500"
+                   >
+                     Resend OTP
+                   </button>
+                 )}
+              </div>
             </form>
           )}
 

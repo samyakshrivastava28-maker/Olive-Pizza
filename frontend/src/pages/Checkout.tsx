@@ -41,6 +41,11 @@ export default function Checkout() {
   const { isOffline } = usePWA();
 
   const [address, setAddress] = useState(user?.fullAddress || '');
+  const [houseNumber, setHouseNumber] = useState('');
+  const [apartment, setApartment] = useState('');
+  const [landmark, setLandmark] = useState('');
+  const [instructions, setInstructions] = useState('');
+  
   const [deliveryType, setDeliveryType] = useState('delivery');
   const [promoInput, setPromoInput] = useState('');
   const [appliedPromo, setAppliedPromo] = useState<any>(null);
@@ -173,6 +178,12 @@ export default function Checkout() {
           paymentMethod: selectedPayment,
           deliveryType,
           address: deliveryType === 'delivery' ? address : 'Pickup',
+          addressDetails: {
+            houseNumber,
+            apartment,
+            landmark,
+            instructions
+          }
         })
       });
 
@@ -230,41 +241,81 @@ export default function Checkout() {
                  </div>
                </div>
             </div>
-            <div className="relative z-10 flex items-start gap-3">
-              <div className="p-2 bg-primary-500/20 rounded-full shrink-0">
-                <Navigation className="w-4 h-4 text-primary-400" />
-              </div>
-              <div className="flex-1 bg-dark-950/80 backdrop-blur-md p-3 rounded-xl border border-white/10 shadow-lg">
-                <p className="font-semibold text-white/90 text-sm mb-1 flex items-center gap-2">
-                  <MapPin className="w-4 h-4 text-primary-400" /> Current Location
-                </p>
-                <textarea
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  placeholder="Drag map or enter complete address..."
-                  className="w-full bg-transparent text-white/80 text-sm resize-none focus:outline-none"
-                  rows={2}
-                />
+            <div className="relative z-10 flex flex-col gap-3">
+              <div className="flex items-start gap-3">
+                <div className="p-2 bg-primary-500/20 rounded-full shrink-0">
+                  <Navigation className="w-4 h-4 text-primary-400" />
+                </div>
+                <div className="flex-1 bg-dark-950/80 backdrop-blur-md p-3 rounded-xl border border-white/10 shadow-lg">
+                  <p className="font-semibold text-white/90 text-sm mb-1 flex items-center gap-2">
+                    <MapPin className="w-4 h-4 text-primary-400" /> Current Location
+                  </p>
+                  <textarea
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    placeholder="Drag map or enter complete address..."
+                    className="w-full bg-transparent text-white/80 text-sm resize-none focus:outline-none"
+                    rows={2}
+                  />
+                </div>
               </div>
             </div>
           </div>
-          <div className="flex gap-2 relative z-10">
+          <div className="flex gap-2 relative z-10 mb-6">
              <button onClick={() => {
                 toast('Drag the map to set your exact location', { icon: '🗺️' });
              }} className="flex-1 py-2.5 rounded-xl bg-white/5 text-sm font-medium hover:bg-white/10 transition-colors">Edit on Map</button>
              <button onClick={() => {
-               if (navigator.geolocation) {
-                 const t = toast.loading('Locating...');
-                 navigator.geolocation.getCurrentPosition(
-                   async (pos) => {
-                     const { latitude, longitude } = pos.coords;
-                     setMapCenter([latitude, longitude]);
-                     toast.success('Location found!', { id: t });
-                   },
-                   () => toast.error('Location access denied', { id: t })
-                 );
-               }
-             }} className="flex-1 py-2.5 rounded-xl bg-primary-500/10 text-primary-400 text-sm font-medium hover:bg-primary-500/20 transition-colors">Use My GPS</button>
+                 if (navigator.geolocation) {
+                   const t = toast.loading('Locating...');
+                   navigator.geolocation.getCurrentPosition(
+                     async (pos) => {
+                       const { latitude, longitude } = pos.coords;
+                       setMapCenter([latitude, longitude]);
+                       toast.success('Location found!', { id: t });
+                     },
+                     () => toast.error('Location access denied', { id: t })
+                   );
+                } else {
+                  toast.error('Geolocation not supported');
+                }
+             }} className="flex-1 py-2.5 rounded-xl bg-primary-600/20 text-primary-400 text-sm font-medium hover:bg-primary-600/30 transition-colors flex items-center justify-center gap-2">
+               <Navigation className="w-4 h-4" /> Use My GPS
+             </button>
+          </div>
+
+          <div className="space-y-4 relative z-10 border-t border-white/5 pt-6 mt-2">
+            <h3 className="text-sm font-semibold text-white/80">Additional Delivery Details</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <input 
+                type="text" 
+                placeholder="House No." 
+                value={houseNumber}
+                onChange={e => setHouseNumber(e.target.value)}
+                className="bg-dark-900/50 border border-white/5 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary-500 transition-colors"
+              />
+              <input 
+                type="text" 
+                placeholder="Apartment / Floor" 
+                value={apartment}
+                onChange={e => setApartment(e.target.value)}
+                className="bg-dark-900/50 border border-white/5 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary-500 transition-colors"
+              />
+            </div>
+            <input 
+              type="text" 
+              placeholder="Landmark / Neighbourhood" 
+              value={landmark}
+              onChange={e => setLandmark(e.target.value)}
+              className="w-full bg-dark-900/50 border border-white/5 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary-500 transition-colors"
+            />
+            <textarea 
+              placeholder="Delivery Instructions (e.g., Leave at door)" 
+              value={instructions}
+              onChange={e => setInstructions(e.target.value)}
+              rows={2}
+              className="w-full bg-dark-900/50 border border-white/5 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary-500 transition-colors resize-none"
+            />
           </div>
         </motion.div>
 
@@ -356,7 +407,7 @@ export default function Checkout() {
       </div>
 
       {/* Fixed Bottom Action */}
-      <div className="fixed bottom-0 left-0 right-0 px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] bg-dark-950/80 backdrop-blur-xl border-t border-white/10 z-30">
+      <div className="fixed bottom-0 left-0 right-0 px-4 pt-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] bg-dark-950/80 backdrop-blur-2xl border-t border-white/10 z-[100] shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
         <div className="max-w-xl mx-auto flex gap-3">
            <button 
              onClick={() => navigate('/cart')}

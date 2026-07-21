@@ -220,20 +220,20 @@ export default function Cart() {
       </div>
 
       {/* Mobile Sticky Checkout Bar */}
-      <div className="lg:hidden fixed bottom-[60px] left-0 right-0 p-4 bg-gradient-to-t from-dark-950 via-dark-950 to-transparent z-40 pointer-events-none">
-        <div className="pointer-events-auto bg-dark-800 border border-dark-700 rounded-full p-2 flex items-center justify-between shadow-2xl backdrop-blur-md">
-          <div className="pl-4">
-            <p className="text-xs text-slate-400 font-medium">Total to pay</p>
-            <p className="text-xl font-black text-accent-400 leading-none mt-0.5">
+      <div className="lg:hidden fixed bottom-[85px] left-3 right-3 z-[60] pointer-events-none">
+        <div className="pointer-events-auto bg-dark-900/90 backdrop-blur-2xl border border-white/10 rounded-2xl p-3 flex items-center justify-between shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
+          <div className="pl-3">
+            <p className="text-[11px] text-slate-400 font-medium uppercase tracking-wider">Total to pay</p>
+            <p className="text-xl font-black text-white leading-none mt-1">
               ₹{total}
             </p>
           </div>
           <button
             onClick={handleProceed}
-            className="bg-primary-600 text-white px-6 py-3 rounded-full font-bold flex items-center gap-2 active:scale-95 transition-transform"
+            className="bg-gradient-to-r from-primary-600 to-primary-500 text-white px-6 py-3.5 rounded-xl font-bold flex items-center gap-2 shadow-[0_0_20px_rgba(85,119,90,0.3)] hover:shadow-[0_0_30px_rgba(85,119,90,0.5)] active:scale-95 transition-all"
           >
             Checkout
-            <ArrowRight className="w-4 h-4" />
+            <ArrowRight className="w-5 h-5" />
           </button>
         </div>
       </div>

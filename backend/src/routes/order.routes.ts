@@ -60,7 +60,7 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
   };
 
   try {
-    const { items } = req.body;
+    const { items, addressDetails, address } = req.body;
     trace.steps.push({ step: 'Validation', status: 'started' });
     
     if (!items || !Array.isArray(items) || items.length === 0) {
@@ -156,7 +156,15 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
         totalAmount: serverCalculatedTotal,
         status: 'pending',
         notification_version: 1,
-        deliveryAddress: { addressLine: userData.full_address, lat: userData.lat, lng: userData.lng },
+        deliveryAddress: { 
+          addressLine: address || userData.full_address, 
+          lat: userData.lat, 
+          lng: userData.lng,
+          houseNumber: addressDetails?.houseNumber || '',
+          apartment: addressDetails?.apartment || '',
+          landmark: addressDetails?.landmark || '',
+          instructions: addressDetails?.instructions || ''
+        },
         contactPhone: userData.phone,
         customerName: userData.name || 'Customer',
         daily_order_number: orderNumber,
