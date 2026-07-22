@@ -69,14 +69,18 @@ export default function OwnerNotificationCenter() {
     return true;
   });
 
+  const [selectedAudience, setSelectedAudience] = useState<string>('all');
+
   const handleSendBroadcast = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const form = e.target as HTMLFormElement;
     const title = (form.elements.namedItem('title') as HTMLInputElement).value;
     const body = (form.elements.namedItem('body') as HTMLTextAreaElement).value;
     const audience = (form.elements.namedItem('audience') as HTMLSelectElement).value;
+    const targetUser = (form.elements.namedItem('targetUser') as HTMLInputElement)?.value;
 
     if (!title || !body) return toast.error('Title and body required');
+    if (audience === 'specific' && !targetUser) return toast.error('Target UID or Email is required');
     
     setIsSending(true);
     try {
@@ -85,12 +89,13 @@ export default function OwnerNotificationCenter() {
       const res = await fetch('/api/notifications/send-custom', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ title, body, audience, category: 'broadcast' })
+        body: JSON.stringify({ title, body, audience, targetUser, category: 'broadcast' })
       });
       const data = await res.json();
       if (res.ok && data.success) {
         toast.success(data.message);
         form.reset();
+        setSelectedAudience('all');
       } else {
         toast.error(`Failed: ${data.error}`);
       }
@@ -205,14 +210,28 @@ export default function OwnerNotificationCenter() {
             </div>
             <div>
               <label className="block text-sm font-bold text-slate-400 mb-1">Target Audience</label>
-              <select name="audience" className="w-full bg-dark-900 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary-500">
+              <select
+                name="audience"
+                value={selectedAudience}
+                onChange={(e) => setSelectedAudience(e.target.value)}
+                className="w-full bg-dark-900 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary-500"
+              >
                 <option value="all">All Users</option>
-                <option value="customers">All Customers</option>
-                <option value="premium">Premium Customers (VIP)</option>
-                <option value="delivery">Delivery Partners</option>
+                <option value="customers">Only Customers</option>
+                <option value="delivery">Only Delivery Partners</option>
+                <option value="owners">Only Owners / Admins</option>
+                <option value="specific">Specific User (by UID or Email)</option>
               </select>
             </div>
           </div>
+
+          {selectedAudience === 'specific' && (
+            <div>
+              <label className="block text-sm font-bold text-slate-400 mb-1">Target User (UID or Email)</label>
+              <input name="targetUser" required placeholder="e.g. customer@gmail.com or UID..." className="w-full bg-dark-900 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary-500" />
+            </div>
+          )}
+
           <div>
             <label className="block text-sm font-bold text-slate-400 mb-1">Message Body</label>
             <textarea name="body" required placeholder="Enter the push notification text here..." className="w-full bg-dark-900 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary-500 min-h-[100px]"></textarea>

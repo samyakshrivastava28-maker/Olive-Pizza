@@ -1,12 +1,19 @@
 /**
  * EmbeddingService — Multi-Provider Embedding Generator
  *
- * Provider priority:
- *  1. Google Gemini (text-embedding-004, 768-dim) — primary
+ * Provider priority (per user request):
+ *  1. NVIDIA (nv-embed-v1, 1024-dim) — primary
  *  2. OpenRouter (openai/text-embedding-3-small, 1536-dim) — fallback
+ *  3. Google Gemini (gemini-embedding-001, 768-dim) — last resort fallback
  *
- * Qdrant collection is created with 768 dimensions (Gemini model).
- * If only OpenRouter is available, we truncate/pad to 768 dims.
+ * All vectors are normalized to a single canonical dimension (1024) so that the
+ * Qdrant collection always receives a consistent vector size regardless of which
+ * provider answered the request. The Qdrant collection is created/rebuilt to
+ * match this canonical dimension at startup (see QdrantService.initializeCollection).
+ *
+ * If a provider returns a vector of a different length, we truncate or zero-pad
+ * to the canonical dimension. This keeps semantic search functional even when
+ * switching providers mid-stream.
  */
 
 import dotenv from 'dotenv';
@@ -14,22 +21,40 @@ import fetch from 'node-fetch';
 
 dotenv.config();
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
+const NVIDIA_API_KEY = process.env.NVIDIA_API_KEY || '';
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 
-const GEMINI_EMBED_URL = `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${GEMINI_API_KEY}`;
-const GEMINI_BATCH_URL = `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:batchEmbedContents?key=${GEMINI_API_KEY}`;
+// Canonical dimension used for the Qdrant collection.
+// NVIDIA nv-embed-v1 = 1024 dims (chosen as canonical so no padding needed for primary provider).
+export const CANONICAL_EMBEDDING_DIM = 1024;
+
+// NVIDIA Integrate endpoint (OpenAI-compatible)
+const NVIDIA_EMBED_URL = 'https://integrate.api.nvidia.com/v1/embeddings';
+const NVIDIA_EMBED_MODEL = 'nvidia/nv-embed-v1';
+
+// OpenRouter embeddings endpoint (OpenAI-compatible)
+const OPENROUTER_EMBED_URL = 'https://openrouter.ai/api/v1/embeddings';
+const OPENROUTER_EMBED_MODEL = 'openai/text-embedding-3-small';
+
+// Gemini embedding (current model name; text-embedding-004 is deprecated/404)
+const GEMINI_EMBED_MODEL = 'gemini-embedding-001';
+const GEMINI_EMBED_URL = (key: string) =>
+  `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_EMBED_MODEL}:batchEmbedContents?key=${key}`;
 
 export class EmbeddingService {
-  public dimension: number = 768; // Gemini text-embedding-004 = 768 dims
+  public dimension: number = CANONICAL_EMBEDDING_DIM;
 
   constructor() {
-    if (!GEMINI_API_KEY && !OPENROUTER_API_KEY) {
-      console.warn('[EmbeddingService] Warning: No embedding API keys found (GEMINI_API_KEY or OPENROUTER_API_KEY).');
-    } else if (GEMINI_API_KEY) {
-      console.log('[EmbeddingService] Using Google Gemini text-embedding-004 (768 dims)');
+    const providers: string[] = [];
+    if (NVIDIA_API_KEY) providers.push('NVIDIA nv-embed-v1 (1024 dims)');
+    if (OPENROUTER_API_KEY) providers.push('OpenRouter text-embedding-3-small (1536 dims)');
+    if (GEMINI_API_KEY) providers.push(`Gemini ${GEMINI_EMBED_MODEL} (768 dims)`);
+
+    if (providers.length === 0) {
+      console.warn('[EmbeddingService] Warning: No embedding API keys found (NVIDIA_API_KEY, OPENROUTER_API_KEY, GEMINI_API_KEY).');
     } else {
-      console.log('[EmbeddingService] Using OpenRouter text-embedding-3-small (will pad/truncate to 768 dims)');
+      console.log(`[EmbeddingService] Providers available: ${providers.join(' → ')} (canonical dim: ${CANONICAL_EMBEDDING_DIM})`);
     }
   }
 
@@ -41,65 +66,94 @@ export class EmbeddingService {
   public async generateEmbeddings(texts: string[]): Promise<number[][]> {
     if (texts.length === 0) return [];
 
-    // Try Gemini first (primary)
-    if (GEMINI_API_KEY) {
+    let embeddings: number[][] | null = null;
+    let lastError: any = null;
+
+    // 1. NVIDIA (primary)
+    if (NVIDIA_API_KEY) {
       try {
-        return await this.embedWithGemini(texts);
+        embeddings = await this.embedWithNvidia(texts);
       } catch (err: any) {
-        console.warn('[EmbeddingService] Gemini embedding failed, falling back to OpenRouter:', err.message);
+        lastError = err;
+        console.warn('[EmbeddingService] NVIDIA embedding failed, falling back to OpenRouter:', err.message);
       }
     }
 
-    // Fallback to OpenRouter
-    if (OPENROUTER_API_KEY) {
-      const embeddings = await this.embedWithOpenRouter(texts);
-      // Pad/truncate to 768 dims to match Qdrant collection
-      return embeddings.map(vec => this.normalizeToSize(vec, 768));
+    // 2. OpenRouter (fallback)
+    if (!embeddings && OPENROUTER_API_KEY) {
+      try {
+        embeddings = await this.embedWithOpenRouter(texts);
+      } catch (err: any) {
+        lastError = err;
+        console.warn('[EmbeddingService] OpenRouter embedding failed, falling back to Gemini:', err.message);
+      }
     }
 
-    throw new Error('[EmbeddingService] No embedding provider available. Set GEMINI_API_KEY or OPENROUTER_API_KEY.');
+    // 3. Gemini (last resort)
+    if (!embeddings && GEMINI_API_KEY) {
+      try {
+        embeddings = await this.embedWithGemini(texts);
+      } catch (err: any) {
+        lastError = err;
+        console.warn('[EmbeddingService] Gemini embedding also failed:', err.message);
+      }
+    }
+
+    if (!embeddings) {
+      throw new Error(
+        `[EmbeddingService] All embedding providers failed. Last error: ${lastError?.message || 'No provider available'}. ` +
+        `Set NVIDIA_API_KEY, OPENROUTER_API_KEY, or GEMINI_API_KEY.`
+      );
+    }
+
+    // Normalize every vector to the canonical dimension so Qdrant always
+    // receives a consistent size regardless of which provider answered.
+    return embeddings.map(vec => this.normalizeToSize(vec, CANONICAL_EMBEDDING_DIM));
   }
 
-  // ── Gemini Batch Embedding ────────────────────────────────────────────────────
+  // ── NVIDIA Embedding (OpenAI-compatible /v1/embeddings) ────────────────────────
 
-  private async embedWithGemini(texts: string[]): Promise<number[][]> {
-    // Gemini batchEmbedContents API
-    const requests = texts.map(text => ({
-      model: 'models/text-embedding-004',
-      content: { parts: [{ text }] },
-    }));
-
-    const response = await fetch(GEMINI_BATCH_URL, {
+  private async embedWithNvidia(texts: string[]): Promise<number[][]> {
+    const response = await fetch(NVIDIA_EMBED_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ requests }),
+      headers: {
+        'Authorization': `Bearer ${NVIDIA_API_KEY}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify({
+        model: NVIDIA_EMBED_MODEL,
+        input: texts,
+        input_type: 'query',
+        truncate: 'END',
+      }),
     });
 
     if (!response.ok) {
       const err = await response.text();
-      throw new Error(`Gemini Embedding API error: ${response.status} - ${err}`);
+      throw new Error(`NVIDIA Embedding API error: ${response.status} - ${err}`);
     }
 
     const data: any = await response.json();
-
-    if (!data.embeddings || !Array.isArray(data.embeddings)) {
-      throw new Error('Invalid Gemini batch embedding response');
+    if (!data.data || !Array.isArray(data.data)) {
+      throw new Error('Invalid NVIDIA embedding response');
     }
 
-    return data.embeddings.map((e: any) => e.values as number[]);
+    data.data.sort((a: any, b: any) => (a.index ?? 0) - (b.index ?? 0));
+    return data.data.map((item: any) => item.embedding as number[]);
   }
 
-  // ── OpenRouter Embedding ──────────────────────────────────────────────────────
+  // ── OpenRouter Embedding (OpenAI-compatible) ───────────────────────────────────
 
   private async embedWithOpenRouter(texts: string[]): Promise<number[][]> {
-    const response = await fetch('https://openrouter.ai/api/v1/embeddings', {
+    const response = await fetch(OPENROUTER_EMBED_URL, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'openai/text-embedding-3-small',
+        model: OPENROUTER_EMBED_MODEL,
         input: texts,
       }),
     });
@@ -111,11 +165,38 @@ export class EmbeddingService {
 
     const data: any = await response.json();
     if (!data.data || !Array.isArray(data.data)) {
-      throw new Error('Invalid embeddings response from OpenRouter');
+      throw new Error('Invalid OpenRouter embedding response');
     }
 
-    data.data.sort((a: any, b: any) => a.index - b.index);
+    data.data.sort((a: any, b: any) => (a.index ?? 0) - (b.index ?? 0));
     return data.data.map((item: any) => item.embedding as number[]);
+  }
+
+  // ── Gemini Batch Embedding ────────────────────────────────────────────────────
+
+  private async embedWithGemini(texts: string[]): Promise<number[][]> {
+    const requests = texts.map(text => ({
+      model: `models/${GEMINI_EMBED_MODEL}`,
+      content: { parts: [{ text }] },
+    }));
+
+    const response = await fetch(GEMINI_EMBED_URL(GEMINI_API_KEY), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requests }),
+    });
+
+    if (!response.ok) {
+      const err = await response.text();
+      throw new Error(`Gemini Embedding API error: ${response.status} - ${err}`);
+    }
+
+    const data: any = await response.json();
+    if (!data.embeddings || !Array.isArray(data.embeddings)) {
+      throw new Error('Invalid Gemini batch embedding response');
+    }
+
+    return data.embeddings.map((e: any) => e.values as number[]);
   }
 
   // ── Utility ───────────────────────────────────────────────────────────────────

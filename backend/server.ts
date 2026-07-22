@@ -74,7 +74,7 @@ async function setupVite() {
   await initPostgres();
   initScheduler();
   DataRetentionJob.schedule();
-  
+
   // Auto-sync all Firestore FCM tokens into PostgreSQL fcm_tokens on boot
   (async () => {
     try {
@@ -91,7 +91,7 @@ async function setupVite() {
                VALUES ($1, $2, TRUE, NOW())
                ON CONFLICT (user_id, token) DO UPDATE SET is_active = TRUE, last_used_at = NOW()`,
               [doc.id, t]
-            ).catch(() => {});
+            ).catch(() => { });
             syncedCount++;
           }
         }
@@ -101,13 +101,14 @@ async function setupVite() {
       console.warn('[FCM] Boot sync warning:', err.message);
     }
   })();
-  
+
   // Initialize AI Knowledge Base (auto-syncs with Firestore in real-time)
   kb.initialize().catch(err => console.warn('[KB] Non-fatal init error:', err.message));
-  
-  // Initialize Qdrant DB (768 dims = Gemini text-embedding-004)
+
+  // Initialize Qdrant DB (canonical dim = 1024, NVIDIA nv-embed-v1 primary)
+  // initializeCollection auto-detects & rebuilds if the existing collection has a mismatched dimension.
   // Then auto-sync KB data into Qdrant after a short delay (KB needs time to load Firestore)
-  qdrantService.initializeCollection(768).then(async (ok) => {
+  qdrantService.initializeCollection().then(async (ok) => {
     if (ok) {
       console.log('[Qdrant] ✅ Collection ready — scheduling KB sync in 30s...');
       setTimeout(async () => {
@@ -155,7 +156,7 @@ async function setupVite() {
         }
       }
     }
-    
+
     // Initialize Keep Alive Scheduler after server starts
     initKeepAlive();
 

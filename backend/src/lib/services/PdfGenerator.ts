@@ -1,5 +1,65 @@
 import PDFDocument from 'pdfkit';
 
+// ── Monthly Report Metrics (used by MonthlyReportService) ─────────────────────
+export interface MonthlyReportMetrics {
+  month: string;              // e.g. "July 2026"
+  year: number;
+  monthNumber: number;
+
+  // Orders
+  totalOrders: number;
+  completedOrders: number;
+  cancelledOrders: number;
+  failedOrders: number;
+
+  // Revenue
+  totalRevenue: number;
+  netRevenue: number;
+  taxes: number;
+  discounts: number;
+  averageOrderValue: number;
+
+  // Payment
+  paymentBreakdown: {
+    cod: { amount: number; count: number; percent: number };
+    upi: { amount: number; count: number; percent: number };
+    card: { amount: number; count: number; percent: number };
+  };
+
+  // Coupons
+  couponsUsed: { code: string; count: number; discountTotal: number }[];
+
+  // Delivery
+  avgDeliveryTimeMinutes: number;
+  avgPreparationTimeMinutes: number;
+  onTimeDeliveryRate: number;
+  activeDeliveryPartners: number;
+  deliveryPartnerStats: { name: string; completedCount: number; rating: number }[];
+
+  // Products
+  topSellingProducts: { name: string; quantity: number; revenue: number }[];
+  worstSellingProducts: { name: string; quantity: number; revenue: number }[];
+
+  // Customers
+  newCustomers: number;
+  returningCustomers: number;
+  totalActiveCustomers: number;
+
+  // Reviews
+  totalReviews: number;
+  averageRating: number;
+
+  // Infrastructure
+  notificationsSent: number;
+  emailsSent: number;
+  emailSuccessRate: number;
+
+  // Trends
+  dailySales: { date: string; revenue: number; orders: number }[];
+  weeklySales: { date: string; revenue: number; orders: number }[];
+  peakHours: { hour: string; count: number }[];
+}
+
 export interface WeeklyReportMetrics {
   weekLabel: string;             // e.g. "Week 29, 2026"
   weekNumber: number;            // e.g. 29
@@ -99,7 +159,7 @@ export class PdfGenerator {
         const mutedColor = '#64748b';   // Muted Slate
 
         // ── PAGE 1: EXECUTIVE SALES & ORDERS SUMMARY ────────────────────────
-        
+
         // Header Banner
         doc.rect(0, 0, 595.28, 80).fill(darkColor);
         doc.fillColor('#ffffff').fontSize(22).font('Helvetica-Bold').text('OLIVE PIZZA', 40, 22);
@@ -356,6 +416,284 @@ export class PdfGenerator {
         reject(error);
       }
     });
+  }
+
+  /**
+   * Generates a premium monthly business report PDF.
+   * Used by MonthlyReportService for the automated monthly report pipeline.
+   */
+  public async generateMonthlyReport(metrics: MonthlyReportMetrics): Promise<Buffer> {
+    return new Promise((resolve, reject) => {
+      try {
+        const doc = new PDFDocument({ margin: 40, size: 'A4', autoFirstPage: true });
+        const buffers: Buffer[] = [];
+
+        doc.on('data', buffers.push.bind(buffers));
+        doc.on('end', () => resolve(Buffer.concat(buffers)));
+        doc.on('error', reject);
+
+        const primaryColor = '#f97316'; // Olive Pizza Orange
+        const darkColor = '#1e293b';    // Dark Slate
+        const greenColor = '#16a34a';   // Success Green
+        const mutedColor = '#64748b';   // Muted Slate
+
+        // ── PAGE 1: EXECUTIVE SUMMARY ────────────────────────────────────────
+        doc.rect(0, 0, 595.28, 80).fill(darkColor);
+        doc.fillColor('#ffffff').fontSize(22).font('Helvetica-Bold').text('OLIVE PIZZA', 40, 22);
+        doc.fontSize(12).font('Helvetica').fillColor('#f97316').text('MONTHLY BUSINESS PERFORMANCE REPORT', 40, 48);
+
+        doc.fillColor('#ffffff').fontSize(12).font('Helvetica-Bold').text(metrics.month, 410, 25, { align: 'right' });
+        doc.fontSize(9).font('Helvetica').fillColor('#94a3b8').text(`Generated: ${new Date().toLocaleDateString('en-IN')}`, 410, 45, { align: 'right' });
+
+        doc.y = 95;
+
+        // Financial Summary
+        doc.fillColor(darkColor).fontSize(13).font('Helvetica-Bold').text('Monthly Financial & Order Summary');
+        doc.strokeColor(primaryColor).lineWidth(2).moveTo(40, doc.y + 4).lineTo(555, doc.y + 4).stroke();
+        doc.moveDown(1);
+
+        const c1Y = doc.y;
+        this.drawMetricCard(doc, 40, c1Y, 160, 60, 'Total Revenue', `₹${metrics.totalRevenue.toLocaleString('en-IN')}`, greenColor);
+        this.drawMetricCard(doc, 215, c1Y, 160, 60, 'Net Revenue', `₹${metrics.netRevenue.toLocaleString('en-IN')}`, primaryColor);
+        this.drawMetricCard(doc, 390, c1Y, 165, 60, 'Avg Order Value', `₹${Math.round(metrics.averageOrderValue)}`, darkColor);
+
+        doc.y = c1Y + 70;
+        const c2Y = doc.y;
+        this.drawMetricCard(doc, 40, c2Y, 160, 60, 'Total Orders', `${metrics.totalOrders}`, darkColor);
+        this.drawMetricCard(doc, 215, c2Y, 160, 60, 'Completed Orders', `${metrics.completedOrders}`, greenColor);
+        this.drawMetricCard(doc, 390, c2Y, 165, 60, 'Cancelled / Failed', `${metrics.cancelledOrders} / ${metrics.failedOrders}`, '#dc2626');
+
+        doc.y = c2Y + 80;
+
+        // Taxes & Discounts
+        const c3Y = doc.y;
+        this.drawMetricCard(doc, 40, c3Y, 160, 60, 'Taxes (GST)', `₹${metrics.taxes.toLocaleString('en-IN')}`, darkColor);
+        this.drawMetricCard(doc, 215, c3Y, 160, 60, 'Total Discounts', `₹${metrics.discounts.toLocaleString('en-IN')}`, '#dc2626');
+        this.drawMetricCard(doc, 390, c3Y, 165, 60, 'Active Customers', `${metrics.totalActiveCustomers}`, primaryColor);
+
+        doc.y = c3Y + 80;
+
+        // Payment Method Breakdown
+        doc.fillColor(darkColor).fontSize(12).font('Helvetica-Bold').text('Payment Method Breakdown (Cash vs UPI vs Card)');
+        doc.moveDown(0.4);
+
+        const pmY = doc.y;
+        this.drawProgressBar(doc, 40, pmY, 515, 16, [
+          { label: 'UPI', percent: metrics.paymentBreakdown.upi.percent, color: '#8b5cf6' },
+          { label: 'Cards', percent: metrics.paymentBreakdown.card.percent, color: '#3b82f6' },
+          { label: 'Cash', percent: metrics.paymentBreakdown.cod.percent, color: '#10b981' },
+        ]);
+
+        doc.y = pmY + 24;
+        doc.fontSize(8.5).font('Helvetica').fillColor(mutedColor);
+        doc.text(
+          `UPI: ₹${metrics.paymentBreakdown.upi.amount.toLocaleString()} (${metrics.paymentBreakdown.upi.percent}%)  |  Card: ₹${metrics.paymentBreakdown.card.amount.toLocaleString()} (${metrics.paymentBreakdown.card.percent}%)  |  Cash: ₹${metrics.paymentBreakdown.cod.amount.toLocaleString()} (${metrics.paymentBreakdown.cod.percent}%)`,
+          40, doc.y
+        );
+
+        this.drawMonthlyFooter(doc, 1, 4);
+
+        // ── PAGE 2: PRODUCTS, COUPONS & CUSTOMERS ─────────────────────────────
+        doc.addPage();
+
+        doc.fillColor(darkColor).fontSize(15).font('Helvetica-Bold').text('Product Rankings, Coupons & Customer Growth');
+        doc.strokeColor(primaryColor).lineWidth(2).moveTo(40, doc.y + 4).lineTo(555, doc.y + 4).stroke();
+        doc.moveDown(1.2);
+
+        // Top & Worst Selling
+        const pColY = doc.y;
+        doc.fillColor(darkColor).fontSize(11).font('Helvetica-Bold').text('Top 5 Best Selling Products', 40, pColY);
+        doc.text('Worst Selling Products', 300, pColY);
+
+        doc.moveDown(0.8);
+        let pRowY = doc.y;
+        metrics.topSellingProducts.slice(0, 5).forEach((item, idx) => {
+          doc.fontSize(8.5).font('Helvetica').fillColor(darkColor);
+          doc.text(`${idx + 1}. ${item.name} (${item.quantity} sold - ₹${item.revenue})`, 40, pRowY);
+          pRowY += 15;
+        });
+
+        let pRowY2 = doc.y;
+        metrics.worstSellingProducts.slice(0, 5).forEach((item, idx) => {
+          doc.fontSize(8.5).font('Helvetica').fillColor(mutedColor);
+          doc.text(`${idx + 1}. ${item.name} (${item.quantity} sold)`, 300, pRowY2);
+          pRowY2 += 15;
+        });
+
+        doc.y = Math.max(pRowY, pRowY2) + 15;
+
+        // Coupons Used
+        doc.fillColor(darkColor).fontSize(11).font('Helvetica-Bold').text('Coupons Used This Month');
+        doc.moveDown(0.4);
+        let coupY = doc.y;
+        doc.fontSize(8.5).font('Helvetica-Bold').fillColor(mutedColor);
+        doc.text('Code', 50, coupY);
+        doc.text('Times Used', 220, coupY);
+        doc.text('Total Discount', 360, coupY);
+        doc.strokeColor('#e2e8f0').lineWidth(1).moveTo(40, coupY + 14).lineTo(555, coupY + 14).stroke();
+        coupY += 20;
+        metrics.couponsUsed.slice(0, 8).forEach((c) => {
+          doc.fontSize(8.5).font('Helvetica').fillColor(darkColor);
+          doc.text(c.code, 50, coupY);
+          doc.text(`${c.count}x`, 220, coupY);
+          doc.text(`₹${c.discountTotal.toLocaleString('en-IN')}`, 360, coupY);
+          coupY += 15;
+        });
+
+        doc.y = coupY + 15;
+
+        // Customer Growth
+        doc.fillColor(darkColor).fontSize(11).font('Helvetica-Bold').text('Customer Acquisition & Loyalty');
+        doc.moveDown(0.5);
+        const custBoxY = doc.y;
+        doc.rect(40, custBoxY, 515, 65).fillAndStroke('#f8fafc', '#cbd5e1');
+        doc.fillColor(darkColor).fontSize(9.5).font('Helvetica-Bold').text(`New Customers: ${metrics.newCustomers}`, 55, custBoxY + 12);
+        doc.fontSize(9.5).font('Helvetica-Bold').text(`Returning Customers: ${metrics.returningCustomers}`, 200, custBoxY + 12);
+        doc.fontSize(9.5).font('Helvetica-Bold').text(`Total Active Buyers: ${metrics.totalActiveCustomers}`, 380, custBoxY + 12);
+        doc.fontSize(8.5).font('Helvetica').fillColor(mutedColor).text(
+          `Average Rating: ⭐ ${metrics.averageRating.toFixed(1)} / 5.0 (based on ${metrics.totalReviews} reviews)`,
+          55, custBoxY + 38
+        );
+
+        this.drawMonthlyFooter(doc, 2, 4);
+
+        // ── PAGE 3: DELIVERY, NOTIFICATIONS & DAILY SALES ──────────────────────
+        doc.addPage();
+
+        doc.fillColor(darkColor).fontSize(15).font('Helvetica-Bold').text('Operations, Communications & Daily Sales Trends');
+        doc.strokeColor(primaryColor).lineWidth(2).moveTo(40, doc.y + 4).lineTo(555, doc.y + 4).stroke();
+        doc.moveDown(1.2);
+
+        // Delivery Stats
+        const dStatY = doc.y;
+        this.drawMetricCard(doc, 40, dStatY, 160, 60, 'Avg Delivery Time', `${metrics.avgDeliveryTimeMinutes} mins`, darkColor);
+        this.drawMetricCard(doc, 215, dStatY, 160, 60, 'Avg Prep Time', `${metrics.avgPreparationTimeMinutes} mins`, primaryColor);
+        this.drawMetricCard(doc, 390, dStatY, 165, 60, 'On-Time Rate', `${metrics.onTimeDeliveryRate}%`, greenColor);
+
+        doc.y = dStatY + 75;
+
+        // Delivery Partner Table
+        doc.fillColor(darkColor).fontSize(11).font('Helvetica-Bold').text('Delivery Partner Performance');
+        doc.moveDown(0.4);
+        let dpY = doc.y;
+        doc.fontSize(8.5).font('Helvetica-Bold').fillColor(mutedColor);
+        doc.text('Partner Name', 50, dpY);
+        doc.text('Deliveries Completed', 220, dpY);
+        doc.text('Rating', 480, dpY);
+        doc.strokeColor('#e2e8f0').lineWidth(1).moveTo(40, dpY + 14).lineTo(555, dpY + 14).stroke();
+        dpY += 20;
+        metrics.deliveryPartnerStats.slice(0, 5).forEach((dp) => {
+          doc.fontSize(8.5).font('Helvetica').fillColor(darkColor);
+          doc.text(dp.name, 50, dpY);
+          doc.text(`${dp.completedCount} orders`, 220, dpY);
+          doc.text(`⭐ ${dp.rating.toFixed(1)}`, 480, dpY);
+          dpY += 15;
+        });
+
+        doc.y = dpY + 15;
+
+        // Notifications & Emails
+        const infraY = doc.y;
+        this.drawMetricCard(doc, 40, infraY, 245, 60, 'Push Notifications Sent', `${metrics.notificationsSent}`, darkColor);
+        this.drawMetricCard(doc, 305, infraY, 250, 60, 'Emails Sent', `${metrics.emailsSent} (${metrics.emailSuccessRate}% success)`, darkColor);
+
+        doc.y = infraY + 75;
+
+        // Daily Sales Table
+        doc.fillColor(darkColor).fontSize(11).font('Helvetica-Bold').text('Daily Sales Breakdown');
+        doc.moveDown(0.4);
+        let dsY = doc.y;
+        doc.fontSize(8.5).font('Helvetica-Bold').fillColor(mutedColor);
+        doc.text('Date', 50, dsY);
+        doc.text('Orders', 180, dsY);
+        doc.text('Revenue', 300, dsY);
+        doc.text('Volume', 400, dsY);
+        doc.strokeColor('#e2e8f0').lineWidth(1).moveTo(40, dsY + 14).lineTo(555, dsY + 14).stroke();
+        dsY += 20;
+
+        const maxDailyRev = Math.max(...metrics.dailySales.map(d => d.revenue), 1);
+        metrics.dailySales.slice(0, 20).forEach((d) => {
+          doc.fontSize(8.5).font('Helvetica').fillColor(darkColor);
+          doc.text(d.date, 50, dsY);
+          doc.text(`${d.orders}`, 180, dsY);
+          doc.text(`₹${d.revenue.toLocaleString('en-IN')}`, 300, dsY);
+          const barW = Math.min(130, (d.revenue / maxDailyRev) * 130);
+          doc.rect(400, dsY + 1, Math.max(barW, 3), 7).fill(primaryColor);
+          dsY += 14;
+        });
+
+        this.drawMonthlyFooter(doc, 3, 4);
+
+        // ── PAGE 4: PEAK HOURS & REVIEW SUMMARY ───────────────────────────────
+        doc.addPage();
+
+        doc.fillColor(darkColor).fontSize(15).font('Helvetica-Bold').text('Peak Hours, Reviews & Executive Summary');
+        doc.strokeColor(primaryColor).lineWidth(2).moveTo(40, doc.y + 4).lineTo(555, doc.y + 4).stroke();
+        doc.moveDown(1.2);
+
+        // Peak Hours
+        doc.fillColor(darkColor).fontSize(11).font('Helvetica-Bold').text('Peak Ordering Hours');
+        doc.moveDown(0.4);
+        let phY = doc.y;
+        doc.fontSize(8.5).font('Helvetica-Bold').fillColor(mutedColor);
+        doc.text('Hour', 50, phY);
+        doc.text('Order Count', 220, phY);
+        doc.text('Activity', 360, phY);
+        doc.strokeColor('#e2e8f0').lineWidth(1).moveTo(40, phY + 14).lineTo(555, phY + 14).stroke();
+        phY += 20;
+        const maxHourCount = Math.max(...metrics.peakHours.map(h => h.count), 1);
+        metrics.peakHours.slice(0, 12).forEach((h) => {
+          doc.fontSize(8.5).font('Helvetica').fillColor(darkColor);
+          doc.text(h.hour, 50, phY);
+          doc.text(`${h.count} orders`, 220, phY);
+          const barW = Math.min(150, (h.count / maxHourCount) * 150);
+          doc.rect(360, phY + 1, Math.max(barW, 3), 7).fill(primaryColor);
+          phY += 15;
+        });
+
+        doc.y = phY + 15;
+
+        // Review Summary Box
+        doc.fillColor(darkColor).fontSize(11).font('Helvetica-Bold').text('Customer Review Summary');
+        doc.moveDown(0.5);
+        const revBoxY = doc.y;
+        doc.rect(40, revBoxY, 515, 80).fillAndStroke('#fff7ed', '#ffedd5');
+        doc.fillColor(primaryColor).fontSize(22).font('Helvetica-Bold').text(`⭐ ${metrics.averageRating.toFixed(1)} / 5.0`, 55, revBoxY + 15);
+        doc.fillColor(darkColor).fontSize(9).font('Helvetica').text(`Based on ${metrics.totalReviews} customer reviews this month`, 55, revBoxY + 50);
+
+        doc.y = revBoxY + 95;
+
+        // Executive Summary
+        doc.fillColor(primaryColor).fontSize(11).font('Helvetica-Bold').text('Monthly Executive Summary');
+        doc.moveDown(0.5);
+        doc.fontSize(9).font('Helvetica').fillColor('#334155').text(
+          `In ${metrics.month}, Olive Pizza processed ${metrics.totalOrders} total orders (${metrics.completedOrders} completed, ${metrics.cancelledOrders} cancelled). ` +
+          `Total revenue was ₹${metrics.totalRevenue.toLocaleString('en-IN')} with an average order value of ₹${Math.round(metrics.averageOrderValue)}. ` +
+          `${metrics.newCustomers} new customers joined and ${metrics.returningCustomers} returning customers ordered again. ` +
+          `Average delivery time was ${metrics.avgDeliveryTimeMinutes} minutes with a ${metrics.onTimeDeliveryRate}% on-time delivery rate. ` +
+          `Customer satisfaction averaged ⭐ ${metrics.averageRating.toFixed(1)}/5.0 across ${metrics.totalReviews} reviews.`,
+          40, doc.y, { width: 515 }
+        );
+
+        doc.moveDown(1);
+        doc.rect(40, doc.y, 515, 40).fillAndStroke('#f1f5f9', '#cbd5e1');
+        doc.fillColor(darkColor).fontSize(8.5).font('Helvetica-Bold').text('SYSTEM COMPLIANCE NOTICE', 55, doc.y + 10);
+        doc.fontSize(7.5).font('Helvetica').fillColor(mutedColor).text('Generated autonomously by Olive Pizza Monthly Reporting Engine. Primary business database: Firestore.', 55, doc.y + 22);
+
+        this.drawMonthlyFooter(doc, 4, 4);
+
+        doc.end();
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
+
+  private drawMonthlyFooter(doc: PDFKit.PDFDocument, currentPage: number, totalPages: number) {
+    const bottomY = 780;
+    doc.strokeColor('#e2e8f0').lineWidth(0.5).moveTo(40, bottomY - 10).lineTo(555, bottomY - 10).stroke();
+    doc.fillColor('#94a3b8').fontSize(8).font('Helvetica').text('Olive Pizza Inc. • Monthly Business Intelligence', 40, bottomY);
+    doc.text(`Page ${currentPage} of ${totalPages}`, 40, bottomY, { align: 'right' });
   }
 
   private drawMetricCard(doc: PDFKit.PDFDocument, x: number, y: number, width: number, height: number, title: string, value: string, valueColor: string) {

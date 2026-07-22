@@ -612,36 +612,57 @@ router.post('/send-custom', verifyToken, async (req: AuthRequest, res: Response)
       return;
     }
 
-    const { title, body, audience, category, url, couponCode, expiryDate } = req.body;
+    const { title, body, audience, targetUser, category, url, couponCode, expiryDate } = req.body;
     if (!title || !body) {
       res.status(400).json({ error: 'Title and body are required' });
       return;
     }
 
-    // Fetch targets from PostgreSQL
-    let queryParams: any[] = [];
-    let queryText = 'SELECT user_id as firebase_uid FROM fcm_tokens';
-
-    if (audience === 'customers') {
-      queryText += ' WHERE role = $1';
-      queryParams.push('customer');
-    } else if (audience === 'delivery') {
-      queryText += ' WHERE role = $1';
-      queryParams.push('delivery');
-    }
-    // audience === 'all' fetches everyone without a WHERE clause
-
     const client = await pgPool.connect();
-    let pgUsers = [];
+    let targetUids: string[] = [];
+
     try {
-      const res = await client.query(queryText, queryParams);
-      pgUsers = res.rows;
+      if (audience === 'customers') {
+        const res = await client.query("SELECT DISTINCT user_id as firebase_uid FROM fcm_tokens WHERE role = 'customer' OR role IS NULL");
+        targetUids = res.rows.map(r => r.firebase_uid);
+        if (targetUids.length === 0) {
+          const custDocs = await db.collection('users').where('role', '==', 'customer').get();
+          targetUids = custDocs.docs.map(d => d.id);
+        }
+      } else if (audience === 'delivery') {
+        const res = await client.query("SELECT DISTINCT user_id as firebase_uid FROM fcm_tokens WHERE role = 'delivery' OR role = 'delivery_partner'");
+        targetUids = res.rows.map(r => r.firebase_uid);
+        if (targetUids.length === 0) {
+          const dpDocs = await db.collection('users').where('role', '==', 'delivery_partner').get();
+          targetUids = dpDocs.docs.map(d => d.id);
+        }
+      } else if (audience === 'owners') {
+        const res = await client.query("SELECT DISTINCT user_id as firebase_uid FROM fcm_tokens WHERE role = 'owner' OR role = 'admin'");
+        targetUids = res.rows.map(r => r.firebase_uid);
+        if (targetUids.length === 0) {
+          const ownerDocs = await db.collection('users').where('role', '==', 'owner').get();
+          targetUids = ownerDocs.docs.map(d => d.id);
+        }
+      } else if (audience === 'specific' && targetUser) {
+        const queryStr = String(targetUser).trim();
+        if (queryStr.includes('@')) {
+          const userSnap = await db.collection('users').where('email', '==', queryStr).limit(1).get();
+          if (!userSnap.empty) targetUids = [userSnap.docs[0].id];
+        } else {
+          targetUids = [queryStr];
+        }
+      } else {
+        // audience === 'all'
+        const res = await client.query("SELECT DISTINCT user_id as firebase_uid FROM fcm_tokens");
+        targetUids = res.rows.map(r => r.firebase_uid);
+        if (targetUids.length === 0) {
+          const allUsersSnap = await db.collection('users').get();
+          targetUids = allUsersSnap.docs.map(d => d.id);
+        }
+      }
     } finally {
       client.release();
     }
-
-    // Extract an array of firebase UIDs
-    const targetUids = pgUsers.map(row => row.firebase_uid);
 
     // Build common payload
     let payload: any;
