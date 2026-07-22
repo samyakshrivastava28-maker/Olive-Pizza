@@ -7,24 +7,27 @@ const router = express.Router();
 const fast2sms = new Fast2SMSProvider();
 const truecaller = new TruecallerProvider();
 
-// Authentication Middleware
+// Optional Authentication Middleware (supports logged-in users & unauthenticated phone auth)
 const authenticateUser = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
   const token = req.headers.authorization?.split('Bearer ')[1];
-  if (!token) return res.status(401).json({ success: false, error: 'Unauthorized. No token provided.' });
-  try {
-    const decoded = await adminAuth.verifyIdToken(token);
-    (req as any).user = decoded;
-    next();
-  } catch (error) {
-    return res.status(401).json({ success: false, error: 'Unauthorized. Invalid token.' });
+  if (token) {
+    try {
+      const decoded = await adminAuth.verifyIdToken(token);
+      (req as any).user = decoded;
+    } catch (error) {
+      (req as any).user = { uid: `anon_${Date.now()}` };
+    }
+  } else {
+    (req as any).user = { uid: `anon_${Date.now()}` };
   }
+  next();
 };
 
 router.use(authenticateUser);
 
 router.post('/send-otp', async (req, res) => {
   const { phone } = req.body;
-  const uid = (req as any).user.uid;
+  const uid = (req as any).user?.uid || `anon_${Date.now()}`;
   if (!phone) return res.status(400).json({ success: false, error: 'Phone number is required.' });
 
   const result = await fast2sms.sendOtp!(phone, uid);

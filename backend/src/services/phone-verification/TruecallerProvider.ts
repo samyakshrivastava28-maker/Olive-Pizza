@@ -55,7 +55,11 @@ export class TruecallerProvider implements PhoneVerificationProvider {
       }
 
       // 4. Verify Signature
-      const algo = signatureAlgorithm || 'SHA512withRSA';
+      const rawAlgo = signatureAlgorithm || 'SHA512withRSA';
+      let nodeAlgo = 'SHA512';
+      if (/sha256/i.test(rawAlgo)) nodeAlgo = 'SHA256';
+      else if (/sha1/i.test(rawAlgo)) nodeAlgo = 'SHA1';
+
       const signatureBuffer = Buffer.from(signature, 'base64');
       
       let verified = false;
@@ -68,7 +72,7 @@ export class TruecallerProvider implements PhoneVerificationProvider {
         }
         
         try {
-          const verifier = crypto.createVerify(algo);
+          const verifier = crypto.createVerify(nodeAlgo);
           verifier.update(payloadBase64);
           
           if (verifier.verify(pem, signatureBuffer)) {

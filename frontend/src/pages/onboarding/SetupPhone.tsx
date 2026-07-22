@@ -147,7 +147,6 @@ export default function SetupPhone() {
 
   const handleSendOtp = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!auth.currentUser) return;
 
     try {
       const phoneNumber = parsePhoneNumber(phone, "IN");
@@ -161,13 +160,13 @@ export default function SetupPhone() {
       setLoading(true);
       setError("");
 
-      const token = await auth.currentUser.getIdToken();
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : '';
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
       const res = await fetch('/api/phone/send-otp', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
+        headers,
         body: JSON.stringify({ phone: formattedPhone })
       });
 
@@ -189,27 +188,28 @@ export default function SetupPhone() {
 
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!auth.currentUser) return;
     
     setLoading(true);
     setError("");
 
     try {
       const formattedPhone = parsePhoneNumber(phone, "IN")!.format("E.164");
-      const token = await auth.currentUser.getIdToken();
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : '';
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
       const res = await fetch('/api/phone/verify-otp', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
+        headers,
         body: JSON.stringify({ phone: formattedPhone, code: otp })
       });
 
       const data = await res.json();
       if (data.success) {
         toast.success("Phone verified successfully!");
-        await fetchUserProfile(auth.currentUser.uid);
+        if (auth.currentUser) {
+          await fetchUserProfile(auth.currentUser.uid);
+        }
         navigate(redirectPath);
       } else {
         throw new Error(data.error || "Invalid OTP code.");

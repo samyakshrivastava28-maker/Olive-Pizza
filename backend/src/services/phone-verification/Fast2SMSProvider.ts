@@ -20,20 +20,21 @@ export class Fast2SMSProvider implements PhoneVerificationProvider {
 
       // Rate limit check
       const otpsRef = adminDb.collection('phone_verifications').where('phone', '==', phone);
-      const snapshot = await otpsRef.orderBy('createdAt', 'desc').limit(5).get();
+      const snapshot = await otpsRef.get();
       
       const now = Date.now();
       let attemptsInHour = 0;
       
       if (!snapshot.empty) {
-        const lastOtp = snapshot.docs[0].data();
+        const sortedDocs = snapshot.docs.sort((a, b) => (b.data().createdAt || 0) - (a.data().createdAt || 0));
+        const lastOtp = sortedDocs[0].data();
         // 60-second cooldown
         if (now - lastOtp.createdAt < 60000) {
           return { success: false, error: 'Please wait 60 seconds before requesting another OTP.' };
         }
         
         // 5 requests per hour
-        snapshot.docs.forEach(doc => {
+        sortedDocs.forEach(doc => {
           if (now - doc.data().createdAt < 3600000) {
             attemptsInHour++;
           }
@@ -126,10 +127,7 @@ export class Fast2SMSProvider implements PhoneVerificationProvider {
 
       // Get the latest OTP for this phone
       const otpsRef = adminDb.collection('phone_verifications')
-        .where('phone', '==', phone)
-        .where('type', '==', 'fast2sms')
-        .orderBy('createdAt', 'desc')
-        .limit(1);
+        .where('phone', '==', phone);
         
       const snapshot = await otpsRef.get();
       
@@ -137,7 +135,8 @@ export class Fast2SMSProvider implements PhoneVerificationProvider {
         return { success: false, error: 'No OTP found for this number.' };
       }
 
-      const otpDoc = snapshot.docs[0];
+      const sortedDocs = snapshot.docs.sort((a, b) => (b.data().createdAt || 0) - (a.data().createdAt || 0));
+      const otpDoc = sortedDocs[0];
       const otpData = otpDoc.data();
       const now = Date.now();
 

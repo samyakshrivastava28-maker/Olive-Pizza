@@ -92,7 +92,6 @@ export default function PhoneUpdateModal({ isOpen, onClose, currentPhone, onSucc
 
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!auth.currentUser) return;
     setLoading(true);
 
     try {
@@ -111,13 +110,13 @@ export default function PhoneUpdateModal({ isOpen, onClose, currentPhone, onSucc
         return;
       }
 
-      const token = await auth.currentUser.getIdToken();
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : '';
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
       const res = await fetch('/api/phone/send-otp', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
+        headers,
         body: JSON.stringify({ phone: formattedPhone })
       });
       const data = await res.json();
@@ -137,20 +136,17 @@ export default function PhoneUpdateModal({ isOpen, onClose, currentPhone, onSucc
 
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!auth.currentUser) return;
-    
     setLoading(true);
 
     try {
       const phoneNumber = parsePhoneNumber(newPhone, "IN")!.format("E.164");
-      const token = await auth.currentUser.getIdToken();
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : '';
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
       
       const res = await fetch('/api/phone/verify-otp', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
+        headers,
         body: JSON.stringify({ phone: phoneNumber, code: otp })
       });
       const data = await res.json();
@@ -160,7 +156,7 @@ export default function PhoneUpdateModal({ isOpen, onClose, currentPhone, onSucc
         onSuccess(phoneNumber);
         onClose();
       } else {
-        toast.error(data.error || "Invalid OTP");
+        toast.error(data.error || "Invalid OTP code.");
       }
     } catch (err: any) {
       toast.error(err.response?.data?.error || err.message || "An error occurred");
