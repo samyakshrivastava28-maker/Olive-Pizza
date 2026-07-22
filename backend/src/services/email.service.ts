@@ -47,24 +47,26 @@ export const queueEmail = async (
   htmlContent: string,
   type: 'transactional' | 'marketing' | 'auth' = 'transactional',
   campaignId: number | null = null,
-  idempotencyKey: string | null = null
+  idempotencyKey: string | null = null,
+  attachments?: any[]
 ) => {
   try {
     let result;
+    const attachmentsJson = attachments ? JSON.stringify(attachments) : null;
+
     if (idempotencyKey) {
       try {
         result = await pgPool.query(`
-          INSERT INTO email_queue (recipient, subject, html_content, type, campaign_id, idempotency_key, status)
-          VALUES ($1, $2, $3, $4, $5, $6, 'pending')
+          INSERT INTO email_queue (recipient, subject, html_content, type, campaign_id, idempotency_key, attachments, status)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending')
           ON CONFLICT (idempotency_key) DO NOTHING
           RETURNING id
-        `, [recipient, subject, htmlContent, type, campaignId, idempotencyKey]);
+        `, [recipient, subject, htmlContent, type, campaignId, idempotencyKey, attachmentsJson]);
         if (result.rows.length === 0) {
           console.log(`Email to ${recipient} with key ${idempotencyKey} already queued. (Idempotent)`);
           return null;
         }
       } catch (conflictErr: any) {
-        console.warn('[queueEmail] ON CONFLICT fallback used:', conflictErr.message);
         result = await pgPool.query(`
           INSERT INTO email_queue (recipient, subject, html_content, type, campaign_id, status)
           VALUES ($1, $2, $3, $4, $5, 'pending')
@@ -72,14 +74,31 @@ export const queueEmail = async (
         `, [recipient, subject, htmlContent, type, campaignId]);
       }
     } else {
-      // No idempotency key — always insert
-      result = await pgPool.query(`
-        INSERT INTO email_queue (recipient, subject, html_content, type, campaign_id, status)
-        VALUES ($1, $2, $3, $4, $5, 'pending')
-        RETURNING id
-      `, [recipient, subject, htmlContent, type, campaignId]);
+      // No idempotency key — insert with fallback if attachments column is missing
+      try {
+        result = await pgPool.query(`
+          INSERT INTO email_queue (recipient, subject, html_content, type, campaign_id, attachments, status)
+          VALUES ($1, $2, $3, $4, $5, $6, 'pending')
+          RETURNING id
+        `, [recipient, subject, htmlContent, type, campaignId, attachmentsJson]);
+      } catch (attErr: any) {
+        result = await pgPool.query(`
+          INSERT INTO email_queue (recipient, subject, html_content, type, campaign_id, status)
+          VALUES ($1, $2, $3, $4, $5, 'pending')
+          RETURNING id
+        `, [recipient, subject, htmlContent, type, campaignId]);
+      }
     }
-    return result.rows[0].id;
+
+    const queueId = result.rows[0].id;
+    console.log(`[EmailQueue] Queued email ID ${queueId} for ${recipient}`);
+
+    // Trigger instant background drain
+    setImmediate(() => {
+      processEmailQueue().catch(err => console.warn('[EmailQueue] Instant process warning:', err.message));
+    });
+
+    return queueId;
 
   } catch (error: any) {
     console.error('==========================================');
@@ -97,6 +116,7 @@ export const queueEmail = async (
         to: recipient,
         subject: subject,
         html: htmlContent,
+        attachments: attachments,
       });
       console.log('Direct fallback send successful:', info.messageId);
       return -1;
@@ -107,9 +127,13 @@ export const queueEmail = async (
   }
 };
 
+let isProcessingEmailQueue = false;
 
 // Process Queue
 export const processEmailQueue = async () => {
+  if (isProcessingEmailQueue) return;
+  isProcessingEmailQueue = true;
+
   try {
     // Grab up to 20 pending emails or emails that failed and need retrying (exponential backoff)
     // Retry backoff logic: retry_count = 1 -> wait 1 min, retry_count = 2 -> wait 5 min, retry_count = 3 -> wait 15 min
@@ -124,26 +148,35 @@ export const processEmailQueue = async () => {
 
     if (emails.length === 0) return;
 
-    console.log(`Processing ${emails.length} emails from queue...`);
+    console.log(`[EmailQueue] Processing ${emails.length} emails from queue...`);
 
     for (const email of emails) {
       try {
         // Mark as processing
         await pgPool.query(`UPDATE email_queue SET status = 'processing' WHERE id = $1`, [email.id]);
 
+        let parsedAttachments;
+        if (email.attachments) {
+          parsedAttachments = typeof email.attachments === 'string' ? JSON.parse(email.attachments) : email.attachments;
+        }
+
         const info = await transporter.sendMail({
           from: process.env.SMTP_FROM || '"Olive Pizza" <noreply@olivepizza.app>',
           to: email.recipient,
           subject: email.subject,
           html: email.html_content,
+          attachments: parsedAttachments,
         });
+
+        console.log(`[EmailQueue] ✅ Sent email ID ${email.id} to ${email.recipient} (${info.messageId})`);
 
         // Mark as sent
         await pgPool.query(`
           UPDATE email_queue 
           SET status = 'sent', sent_at = CURRENT_TIMESTAMP, smtp_response = $2
           WHERE id = $1
-        `, [email.id, info.response]);
+        `, [email.id, info.response || info.messageId]);
+
 
         // If it belongs to a campaign, increment sent_count
         if (email.campaign_id) {
@@ -199,5 +232,20 @@ export const processEmailQueue = async () => {
     console.error('ERROR in processEmailQueue Loop:', error.message);
     console.error(error.stack);
     console.error('==========================================');
+  } finally {
+    isProcessingEmailQueue = false;
   }
 };
+
+// Safety-net polling timer: Drains queued and retrying emails every 5 seconds
+const emailPollingTimer = setInterval(() => {
+  processEmailQueue().catch(err => {
+    if (err && err.message !== 'No work') {
+      console.warn('[EmailQueue] Polling warning:', err.message);
+    }
+  });
+}, 5000);
+
+if (emailPollingTimer.unref) emailPollingTimer.unref();
+console.log('📧 [EmailQueue] Background polling processor initialized (5s interval).');
+

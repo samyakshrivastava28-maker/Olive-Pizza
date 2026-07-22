@@ -151,6 +151,7 @@ export const initPostgres = async () => {
         ADD COLUMN IF NOT EXISTS retry_timestamp TIMESTAMP WITH TIME ZONE,
         ADD COLUMN IF NOT EXISTS smtp_response TEXT,
         ADD COLUMN IF NOT EXISTS idempotency_key VARCHAR(255),
+        ADD COLUMN IF NOT EXISTS attachments JSONB,
         ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
     `);
 
