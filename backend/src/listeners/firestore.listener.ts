@@ -6,6 +6,7 @@ import { adminDb as db } from '../config/firebase.js';
 import { notificationService } from '../services/notification/notification.service.js';
 import { SlackProvider } from '../services/notification/slack.provider.js';
 import { notificationQueue } from '../services/notification/NotificationQueueService.js';
+import { directNotification } from '../services/notification/DirectNotificationService.js';
 import { OwnerTemplates, CustomerTemplates, DeliveryTemplates } from '../services/notification/NotificationTemplates.js';
 import { queueEmail } from '../services/email.service.js';
 import { buildOrderStatusEmail } from '../services/emailTemplates.service.js';
@@ -65,10 +66,11 @@ export class FirestoreListener {
 
             if (orderData.orderTiming === 'scheduled') return; // Skip push alarms for scheduled until ready
 
-            // 2. FCM PUSH NOTIFICATION TO OWNERS
+            // 2. FCM PUSH NOTIFICATION TO OWNERS (INSTANT DIRECT PUSH + QUEUE BACKUP)
             try {
               const ownerDocs = await db.collection('users').where('role', '==', 'owner').get();
-              for (const doc of ownerDocs.docs) {
+              const ownerUids = ownerDocs.docs.map(d => d.id);
+              if (ownerUids.length > 0) {
                 const ownerPayload = OwnerTemplates.newOrder(orderData.id, {
                   customerName: orderData.customerName || orderData.customer_name || 'Customer',
                   orderNumber,
@@ -83,14 +85,25 @@ export class FirestoreListener {
                   previousStatus: undefined,
                   eventTimestamp: createdAt.toISOString(),
                 });
-                
-                await notificationQueue.enqueue(doc.id, ownerPayload, 'high', {
+
+                // Fast Direct Push (same pipeline as owner manual broadcast)
+                await directNotification.sendBulkPush(ownerUids, ownerPayload, 'high', {
                   tag: `order_owner_${orderData.id}`,
                   orderId: orderData.id,
                   category: 'order',
                   priority: 'critical',
                   version: 1
-                });
+                }).catch(e => console.warn('Direct owner push warning:', e.message));
+
+                for (const uid of ownerUids) {
+                  await notificationQueue.enqueue(uid, ownerPayload, 'high', {
+                    tag: `order_owner_${orderData.id}`,
+                    orderId: orderData.id,
+                    category: 'order',
+                    priority: 'critical',
+                    version: 1
+                  }).catch(() => {});
+                }
               }
             } catch (err: any) {
               console.error('❌ Owner Push Error:', err.message);
@@ -167,30 +180,36 @@ export class FirestoreListener {
             const version = versionMap[currentStatus] || 2;
 
             if (currentStatus === 'partner_assigned' && partnerId) {
-              // Notify Partner
+              // Notify Partner (Fast Direct Push)
               const deliveryPayload = DeliveryTemplates.newAssignment(orderData.id, {
                 orderNumber: shortId, customerName: orderData.customerName || 'Customer', customerPhone: orderData.contactPhone,
                 deliveryAddress: orderData.deliveryAddress?.addressLine || orderData.deliveryAddress || 'Address not provided',
                 distance: '?', eta: '15 mins', totalAmount, paymentMethod: orderData.paymentMethod || 'COD', version
               });
-              await notificationQueue.enqueue(partnerId, deliveryPayload, 'high', { tag: `order_delivery_${orderData.id}`, orderId: orderData.id, category: 'delivery', priority: 'critical', version });
+              await directNotification.sendPush(partnerId, deliveryPayload, 'high', { tag: `order_delivery_${orderData.id}`, orderId: orderData.id, category: 'delivery', priority: 'critical', version }).catch(e => console.warn('Direct partner push warning:', e.message));
+              await notificationQueue.enqueue(partnerId, deliveryPayload, 'high', { tag: `order_delivery_${orderData.id}`, orderId: orderData.id, category: 'delivery', priority: 'critical', version }).catch(() => {});
             }
 
-            // Notify Customer (for almost all transitions)
+            // Notify Customer (Fast Direct Push)
             if (customerId && ['accepted', 'preparing', 'ready', 'partner_assigned', 'out_for_delivery', 'delivered', 'cancelled'].includes(currentStatus)) {
               const cPayload = CustomerTemplates.orderUpdate(orderData.id, {
                 orderNumber: shortId, status: currentStatus as any, totalAmount, 
                 deliveryPartnerName: orderData.deliveryPartnerName || 'Partner', version
               });
-              await notificationQueue.enqueue(customerId, cPayload, 'high', { tag: `order_customer_${orderData.id}`, orderId: orderData.id, category: 'order', version });
+              await directNotification.sendPush(customerId, cPayload, 'high', { tag: `order_customer_${orderData.id}`, orderId: orderData.id, category: 'order', version }).catch(e => console.warn('Direct customer push warning:', e.message));
+              await notificationQueue.enqueue(customerId, cPayload, 'high', { tag: `order_customer_${orderData.id}`, orderId: orderData.id, category: 'order', version }).catch(() => {});
             }
 
-            // Notify Owners (for delivery lifecycle updates)
+            // Notify Owners (Fast Direct Push)
             if (['picked_up', 'out_for_delivery', 'delivered'].includes(currentStatus)) {
                const ownerDocs = await db.collection('users').where('role', '==', 'owner').get();
-               for (const doc of ownerDocs.docs) {
+               const ownerUids = ownerDocs.docs.map(d => d.id);
+               if (ownerUids.length > 0) {
                  const oPayload = OwnerTemplates.orderStatusUpdate(orderData.id, { orderNumber: shortId, customerName: orderData.customerName || 'Customer', status: currentStatus as any, deliveryPartnerName: orderData.deliveryPartnerName || 'Partner', totalAmount, version });
-                 await notificationQueue.enqueue(doc.id, oPayload, 'normal', { tag: `order_owner_tracking_${orderData.id}`, orderId: orderData.id, category: 'order', version });
+                 await directNotification.sendBulkPush(ownerUids, oPayload, 'normal', { tag: `order_owner_tracking_${orderData.id}`, orderId: orderData.id, category: 'order', version }).catch(e => console.warn('Direct owner tracking push warning:', e.message));
+                 for (const ownerUid of ownerUids) {
+                   await notificationQueue.enqueue(ownerUid, oPayload, 'normal', { tag: `order_owner_tracking_${orderData.id}`, orderId: orderData.id, category: 'order', version }).catch(() => {});
+                 }
                }
             }
 

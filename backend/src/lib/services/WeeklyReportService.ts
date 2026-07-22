@@ -205,11 +205,13 @@ export class WeeklyReportService {
       await adminDb.collection('reports').doc(weekInfo.docId).set({ emailed: true, emailSentAt }, { merge: true });
       console.log(`[WeeklyReportService] Report email queued for ${ownerEmail} (Queue ID: ${queueId}).`);
 
-      // Enqueue Owner Push Notification via unified NotificationQueueService
+      // Enqueue Owner Push Notification via fast directNotification pipeline
       try {
+        const { directNotification } = await import('../../services/notification/DirectNotificationService.js');
         const { notificationQueue } = await import('../../services/notification/NotificationQueueService.js');
         const ownerDocs = await adminDb.collection('users').where('role', '==', 'owner').get();
-        for (const doc of ownerDocs.docs) {
+        const ownerUids = ownerDocs.docs.map(d => d.id);
+        if (ownerUids.length > 0) {
           const ownerPushPayload = {
             notification: {
               title: `📊 Weekly Report Ready — ${weekInfo.weekLabel}`,
@@ -223,11 +225,20 @@ export class WeeklyReportService {
               driveLink: driveLink || ''
             }
           };
-          await notificationQueue.enqueue(doc.id, ownerPushPayload, 'high', {
+
+          await directNotification.sendBulkPush(ownerUids, ownerPushPayload, 'high', {
             tag: `weekly_report_${weekInfo.docId}`,
             category: 'system',
             priority: 'high'
-          });
+          }).catch(e => console.warn('Weekly report direct push warning:', e.message));
+
+          for (const ownerUid of ownerUids) {
+            await notificationQueue.enqueue(ownerUid, ownerPushPayload, 'high', {
+              tag: `weekly_report_${weekInfo.docId}`,
+              category: 'system',
+              priority: 'high'
+            }).catch(() => {});
+          }
         }
       } catch (pushErr: any) {
         console.warn('[WeeklyReportService] Owner FCM push notification skipped:', pushErr.message);
