@@ -204,9 +204,38 @@ export class WeeklyReportService {
 
       await adminDb.collection('reports').doc(weekInfo.docId).set({ emailed: true, emailSentAt }, { merge: true });
       console.log(`[WeeklyReportService] Report email queued for ${ownerEmail} (Queue ID: ${queueId}).`);
+
+      // Enqueue Owner Push Notification via unified NotificationQueueService
+      try {
+        const { notificationQueue } = await import('../../services/notification/NotificationQueueService.js');
+        const ownerDocs = await adminDb.collection('users').where('role', '==', 'owner').get();
+        for (const doc of ownerDocs.docs) {
+          const ownerPushPayload = {
+            notification: {
+              title: `📊 Weekly Report Ready — ${weekInfo.weekLabel}`,
+              body: `Revenue: ₹${metrics.totalRevenue.toLocaleString('en-IN')} (${metrics.completedOrders} orders). PDF backed up in Google Drive.`
+            },
+            data: {
+              url: '/owner/reports',
+              category: 'system',
+              role: 'owner',
+              docId: weekInfo.docId,
+              driveLink: driveLink || ''
+            }
+          };
+          await notificationQueue.enqueue(doc.id, ownerPushPayload, 'high', {
+            tag: `weekly_report_${weekInfo.docId}`,
+            category: 'system',
+            priority: 'high'
+          });
+        }
+      } catch (pushErr: any) {
+        console.warn('[WeeklyReportService] Owner FCM push notification skipped:', pushErr.message);
+      }
     } catch (emailErr: any) {
       console.error('[WeeklyReportService] Email queuing failed:', emailErr.message);
     }
+
 
     return {
       docId: weekInfo.docId,
