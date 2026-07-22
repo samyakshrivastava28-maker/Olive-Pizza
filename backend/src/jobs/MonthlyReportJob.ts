@@ -1,118 +1,26 @@
 import cron from 'node-cron';
-import { pgPool } from '../config/postgres';
-import { adminDb } from '../config/firebase';
-import { googleDriveService } from '../services/googleDrive.service';
-import { transporter } from '../services/email.service';
-import PDFDocument from 'pdfkit';
-import fs from 'fs';
-import path from 'path';
+import { monthlyReportService } from '../lib/services/MonthlyReportService.js';
 
 export class MonthlyReportJob {
-  constructor() {
-    this.initCronJob();
-  }
+  private static isScheduled = false;
 
-  private initCronJob() {
-    // Run at 23:50 on the last day of the month
-    cron.schedule('50 23 28-31 * *', async () => {
-      const today = new Date();
-      const tomorrow = new Date(today);
-      tomorrow.setDate(today.getDate() + 1);
-      
-      // Check if tomorrow is the 1st day of the new month
-      if (tomorrow.getDate() === 1) {
-        await this.runMonthlyJob();
-      }
-    });
-  }
+  public static initCronJob() {
+    if (this.isScheduled) return;
+    this.isScheduled = true;
 
-  public async runMonthlyJob() {
-    console.log('[MonthlyReportJob] Starting end-of-month processing...');
-    
-    try {
-      const reportBuffer = await this.generatePdfReport();
-      const filename = `OlivePizza_Report_${new Date().getFullYear()}_${new Date().getMonth() + 1}.pdf`;
-
-      // 1. Upload to Google Drive
-      if (process.env.GOOGLE_DRIVE_ENABLED === 'true') {
-        try {
-          await googleDriveService.uploadBuffer(filename, reportBuffer, 'application/pdf');
-          console.log('[MonthlyReportJob] Uploaded to Google Drive successfully.');
-        } catch (e) {
-          console.error('[MonthlyReportJob] Google Drive upload failed:', e);
-        }
-      }
-
-      // 2. Email to Owner
+    // Run at 00:05 AM on the 1st day of every month
+    cron.schedule('5 0 1 * *', async () => {
+      console.log('[MonthlyReportJob] Automated 1st of month cron triggered.');
       try {
-        const ownerEmail = process.env.OWNER_EMAIL || 'olivepizzarjn@gmail.com';
-        await transporter.sendMail({
-          from: process.env.SMTP_FROM || 'Olive Pizza <noreply@olivepizza.app>',
-          to: ownerEmail,
-          subject: `Monthly Sales & Operations Report - ${new Date().toLocaleString('default', { month: 'long' })} ${new Date().getFullYear()}`,
-          text: `Please find attached the Monthly Sales & Operations Report.`,
-          attachments: [
-            {
-              filename,
-              content: reportBuffer,
-            }
-          ]
-        });
-        console.log(`[MonthlyReportJob] Emailed monthly report to ${ownerEmail}.`);
-      } catch (e) {
-        console.error('[MonthlyReportJob] Email sending failed:', e);
+        await monthlyReportService.generateAndProcessReport();
+        console.log('[MonthlyReportJob] Automated monthly report completed successfully.');
+      } catch (err: any) {
+        console.error('[MonthlyReportJob] Automated cron report generation failed:', err.message);
       }
-
-      // 3. Purge Old Data
-      await this.deleteOldOrders();
-
-    } catch (error) {
-      console.error('[MonthlyReportJob] Critical failure in monthly job:', error);
-    }
-  }
-
-  private async generatePdfReport(): Promise<Buffer> {
-    return new Promise((resolve, reject) => {
-      const doc = new PDFDocument();
-      const buffers: Buffer[] = [];
-      
-      doc.on('data', buffers.push.bind(buffers));
-      doc.on('end', () => resolve(Buffer.concat(buffers)));
-      doc.on('error', reject);
-
-      doc.fontSize(25).text('Olive Pizza - Monthly Report', { align: 'center' });
-      doc.moveDown();
-      doc.fontSize(16).text(`Date Generated: ${new Date().toLocaleDateString()}`);
-      doc.moveDown();
-      
-      doc.fontSize(12).text('This is an automatically generated report containing aggregate analytics for the past month. (Detailed data has been purged from the system to preserve storage capacity).');
-      
-      // In a real scenario, we'd query pgPool for aggregates here.
-      
-      doc.end();
     });
-  }
 
-  private async deleteOldOrders() {
-    const client = await pgPool.connect();
-    try {
-      // We keep ONLY current month and previous month. 
-      // So delete anything older than the start of the previous month.
-      const query = `
-        DELETE FROM background_tasks 
-        WHERE created_at < date_trunc('month', CURRENT_DATE - INTERVAL '1 month')
-      `;
-      const result = await client.query(query);
-      console.log(`[MonthlyReportJob] Purged ${result.rowCount} old orders from Postgres.`);
-      
-      // We would also purge from Firestore if we replicated them there.
-      // But orders are primarily in Postgres now.
-    } catch (error) {
-      console.error('[MonthlyReportJob] Error deleting old orders:', error);
-    } finally {
-      client.release();
-    }
+    console.log('⏰ [MonthlyReportJob] Scheduled for 00:05 AM on the 1st of every month.');
   }
 }
 
-export const monthlyReportJob = new MonthlyReportJob();
+export const monthlyReportJob = MonthlyReportJob;

@@ -52,16 +52,24 @@ export const queueEmail = async (
   try {
     let result;
     if (idempotencyKey) {
-      // With idempotency key — deduplicate
-      result = await pgPool.query(`
-        INSERT INTO email_queue (recipient, subject, html_content, type, campaign_id, idempotency_key, status)
-        VALUES ($1, $2, $3, $4, $5, $6, 'pending')
-        ON CONFLICT (idempotency_key) DO NOTHING
-        RETURNING id
-      `, [recipient, subject, htmlContent, type, campaignId, idempotencyKey]);
-      if (result.rows.length === 0) {
-        console.log(`Email to ${recipient} with key ${idempotencyKey} already queued. (Idempotent)`);
-        return null;
+      try {
+        result = await pgPool.query(`
+          INSERT INTO email_queue (recipient, subject, html_content, type, campaign_id, idempotency_key, status)
+          VALUES ($1, $2, $3, $4, $5, $6, 'pending')
+          ON CONFLICT (idempotency_key) DO NOTHING
+          RETURNING id
+        `, [recipient, subject, htmlContent, type, campaignId, idempotencyKey]);
+        if (result.rows.length === 0) {
+          console.log(`Email to ${recipient} with key ${idempotencyKey} already queued. (Idempotent)`);
+          return null;
+        }
+      } catch (conflictErr: any) {
+        console.warn('[queueEmail] ON CONFLICT fallback used:', conflictErr.message);
+        result = await pgPool.query(`
+          INSERT INTO email_queue (recipient, subject, html_content, type, campaign_id, status)
+          VALUES ($1, $2, $3, $4, $5, 'pending')
+          RETURNING id
+        `, [recipient, subject, htmlContent, type, campaignId]);
       }
     } else {
       // No idempotency key — always insert
@@ -72,6 +80,7 @@ export const queueEmail = async (
       `, [recipient, subject, htmlContent, type, campaignId]);
     }
     return result.rows[0].id;
+
   } catch (error: any) {
     console.error('==========================================');
     console.error('FATAL QUEUE ERROR: Failed to insert email into DB!');

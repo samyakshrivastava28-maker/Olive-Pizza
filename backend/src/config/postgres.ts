@@ -150,9 +150,26 @@ export const initPostgres = async () => {
         ADD COLUMN IF NOT EXISTS max_retries INTEGER DEFAULT 3,
         ADD COLUMN IF NOT EXISTS retry_timestamp TIMESTAMP WITH TIME ZONE,
         ADD COLUMN IF NOT EXISTS smtp_response TEXT,
-        ADD COLUMN IF NOT EXISTS idempotency_key VARCHAR(255) UNIQUE,
+        ADD COLUMN IF NOT EXISTS idempotency_key VARCHAR(255),
         ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
     `);
+
+    // Ensure UNIQUE constraint on idempotency_key safely
+    try {
+      await client.query(`
+        DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_constraint WHERE conname = 'email_queue_idempotency_key_key'
+          ) THEN
+            ALTER TABLE email_queue ADD CONSTRAINT email_queue_idempotency_key_key UNIQUE (idempotency_key);
+          END IF;
+        END $$;
+      `);
+    } catch (e: any) {
+      console.warn('[Postgres Init] idempotency_key constraint notice:', e.message);
+    }
+
     // Index for the retry query: WHERE status='pending' OR (status='failed' AND retry_count < max_retries AND retry_timestamp <= NOW())
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_email_queue_status_retry
