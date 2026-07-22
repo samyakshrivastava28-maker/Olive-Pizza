@@ -28,7 +28,7 @@ export class DirectNotificationService {
 
     const client = await pgPool.connect();
     try {
-      // 1. Fetch active tokens for all targets
+      // 1. Fetch active tokens for all targets from PostgreSQL
       const tokenRes = await client.query(
         `SELECT user_id as firebase_uid, token 
          FROM fcm_tokens 
@@ -36,7 +36,37 @@ export class DirectNotificationService {
         [firebaseUserIds]
       );
 
-      const tokens = tokenRes.rows.map(r => r.token);
+      const foundUserIds = new Set(tokenRes.rows.map(r => r.firebase_uid));
+      let tokens: string[] = tokenRes.rows.map(r => r.token);
+
+      // Fallback: Fetch missing user tokens from Firestore users collection & auto-sync to Postgres
+      const missingUserIds = firebaseUserIds.filter(uid => !foundUserIds.has(uid) || tokens.length === 0);
+      if (missingUserIds.length > 0) {
+        const { adminDb: db } = await import('../../config/firebase.js');
+        for (const missingUid of missingUserIds) {
+          try {
+            const userDoc = await db.collection('users').doc(missingUid).get();
+            const firestoreTokens: string[] = userDoc.data()?.fcmTokens || [];
+            for (const t of firestoreTokens) {
+              if (t && typeof t === 'string') {
+                tokens.push(t);
+                await client.query(
+                  `INSERT INTO fcm_tokens (user_id, token, is_active, last_used_at)
+                   VALUES ($1, $2, TRUE, NOW())
+                   ON CONFLICT (user_id, token)
+                   DO UPDATE SET is_active = TRUE, last_used_at = NOW()`,
+                  [missingUid, t]
+                ).catch(() => {});
+              }
+            }
+          } catch (e: any) {
+            console.warn(`[DirectPush] Firestore token fetch failed for ${missingUid}:`, e.message);
+          }
+        }
+      }
+
+      // Deduplicate token array
+      tokens = Array.from(new Set(tokens));
       
       // 2. Ensure Android payload triggers immediately. FCM only supports 'normal' or 'high'.
       // If priority is 'critical' (our internal abstraction), map it to 'high' for Android.

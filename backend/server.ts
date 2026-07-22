@@ -75,6 +75,33 @@ async function setupVite() {
   initScheduler();
   DataRetentionJob.schedule();
   
+  // Auto-sync all Firestore FCM tokens into PostgreSQL fcm_tokens on boot
+  (async () => {
+    try {
+      const { adminDb: db } = await import('./src/config/firebase.js');
+      const { pgPool } = await import('./src/config/postgres.js');
+      const usersSnap = await db.collection('users').get();
+      let syncedCount = 0;
+      for (const doc of usersSnap.docs) {
+        const tokens: string[] = doc.data().fcmTokens || [];
+        for (const t of tokens) {
+          if (t && typeof t === 'string') {
+            await pgPool.query(
+              `INSERT INTO fcm_tokens (user_id, token, is_active, last_used_at)
+               VALUES ($1, $2, TRUE, NOW())
+               ON CONFLICT (user_id, token) DO UPDATE SET is_active = TRUE, last_used_at = NOW()`,
+              [doc.id, t]
+            ).catch(() => {});
+            syncedCount++;
+          }
+        }
+      }
+      console.log(`[FCM] ✅ Boot sync complete — ${syncedCount} tokens active in Postgres.`);
+    } catch (err: any) {
+      console.warn('[FCM] Boot sync warning:', err.message);
+    }
+  })();
+  
   // Initialize AI Knowledge Base (auto-syncs with Firestore in real-time)
   kb.initialize().catch(err => console.warn('[KB] Non-fatal init error:', err.message));
   
