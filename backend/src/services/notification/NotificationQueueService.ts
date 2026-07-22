@@ -27,6 +27,7 @@ import { pgPool } from '../../config/postgres.js';
 import { queueEmail } from '../email.service.js';
 import { buildOrderStatusEmail } from '../emailTemplates.service.js';
 import { orderEventService } from '../order/OrderEventService.js';
+import { fcmTokenCache } from './FCMTokenCache.js';
 
 export interface EnqueueOptions {
   tag?: string;
@@ -260,10 +261,14 @@ export class NotificationQueueService {
         notificationReady: true,
         lastTokenRefresh: FieldValue.serverTimestamp(),
       }).catch(() => { });
+
+      // Evict stale cache so next notification picks up the new token immediately
+      fcmTokenCache.evict(pgUserId);
     } finally {
       client.release();
     }
   }
+
 
   // ─── Queue Processor ─────────────────────────────────────────────────────────
 
@@ -337,29 +342,34 @@ export class NotificationQueueService {
       }
 
       // ── Fetch tokens + user info ──────────────────────────────────────────
-      const [tokenResult, userResult] = await Promise.all([
-        client.query(
-          `SELECT token FROM fcm_tokens WHERE user_id = $1 AND is_active = TRUE ORDER BY last_used_at DESC LIMIT 10`,
-          [target_user_id]
-        ),
+      // Use FCMTokenCache (5-min TTL) to eliminate repeated DB reads per notification
+      const [{ tokens: cachedTokens, source: tokenSource }, userResult] = await Promise.all([
+        fcmTokenCache.get(target_user_id),
         db.collection('users').doc(target_user_id).get().then(doc => ({ rows: [doc.data() || {}] })),
       ]);
 
       const userEmail: string | null = userResult.rows[0]?.email || null;
       const customerName: string = userResult.rows[0]?.name || 'Customer';
 
-      // Fallback to Firestore if no Postgres tokens
-      let tokens: string[] = tokenResult.rows.map((r: any) => r.token);
+      // Fallback to Firestore if cache+DB found no tokens
+      let tokens: string[] = cachedTokens;
       if (tokens.length === 0 && firebase_uid) {
         const userDoc = await db.collection('users').doc(firebase_uid).get();
         tokens = userDoc.data()?.fcmTokens || [];
+        // Sync Firestore tokens back to Postgres + cache
         for (const t of tokens) {
           await client.query(
             `INSERT INTO fcm_tokens (user_id, token, is_active) VALUES ($1,$2,TRUE) ON CONFLICT (user_id, token) DO UPDATE SET is_active=TRUE`,
             [target_user_id, t]
           ).catch(() => { });
         }
+        if (tokens.length > 0) {
+          await fcmTokenCache.refresh(target_user_id);
+        }
       }
+
+      console.log(`[NotifQueue] Tokens for ${target_user_id}: ${tokens.length} (source=${tokenSource})`,);
+
 
       // ── Always-send transactional emails ─────────────────────────────────
       // These fire regardless of push success/failure
@@ -460,10 +470,9 @@ export class NotificationQueueService {
       });
 
       if (failedTokens.length > 0) {
-        await client.query(
-          `UPDATE fcm_tokens SET is_active = FALSE WHERE user_id = $1 AND token = ANY($2)`,
-          [target_user_id, failedTokens]
-        );
+        // Invalidate in cache + DB atomically
+        await fcmTokenCache.invalidate(target_user_id, failedTokens);
+        // Also clean up Firestore token list
         if (firebase_uid) {
           db.collection('users').doc(firebase_uid).update({
             fcmTokens: FieldValue.arrayRemove(...failedTokens),

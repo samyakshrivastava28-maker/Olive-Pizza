@@ -189,6 +189,41 @@ export const initPostgres = async () => {
       );
     `);
 
+    // ── PostgreSQL LISTEN / NOTIFY for instant notification queue wakeup ─────
+    // Instead of relying solely on polling every 5 seconds, workers now receive
+    // an instant NOTIFY signal the moment a row is inserted into notification_queue.
+    // This DDL is idempotent (CREATE OR REPLACE + IF NOT EXISTS trigger).
+    try {
+      await client.query(`
+        CREATE OR REPLACE FUNCTION notify_notification_queue_insert()
+        RETURNS trigger AS $$
+        BEGIN
+          PERFORM pg_notify('notification_queue_channel', NEW.id::text);
+          RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+      `);
+
+      // Drop old trigger if it exists with a different definition (idempotent)
+      await client.query(`
+        DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_trigger
+            WHERE tgname = 'trg_notify_notification_queue'
+          ) THEN
+            CREATE TRIGGER trg_notify_notification_queue
+              AFTER INSERT ON notification_queue
+              FOR EACH ROW EXECUTE FUNCTION notify_notification_queue_insert();
+          END IF;
+        END $$;
+      `);
+      console.log('[PostgreSQL] LISTEN/NOTIFY trigger registered on notification_queue');
+    } catch (e: any) {
+      // notification_queue may not exist yet on first boot; listener will retry when table is ready
+      console.warn('[PostgreSQL] LISTEN/NOTIFY setup skipped (table may not exist yet):', e.message);
+    }
+
     client.release();
     console.log('PostgreSQL initialized successfully');
   } catch (error: any) {
@@ -198,3 +233,4 @@ export const initPostgres = async () => {
     }
   }
 };
+

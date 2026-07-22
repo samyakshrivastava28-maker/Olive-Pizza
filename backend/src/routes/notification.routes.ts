@@ -13,6 +13,7 @@
  * GET  /notifications/preferences    — Get DND preferences
  * POST /notifications/retry-failed   — Owner: retry failed notifications
  * POST /notifications/cleanup        — Owner: trigger manual cleanup
+ * GET  /notifications/diagnostics    — System diagnostics (cache, WS, queue health)
  */
 
 import { Router, Request, Response } from 'express';
@@ -27,6 +28,8 @@ import { verifyToken, AuthRequest } from '../middleware/auth.middleware.js';
 import { orderEventService } from '../services/order/OrderEventService.js';
 import { queueEmail } from '../services/email.service.js';
 import { buildOrderStatusEmail } from '../services/emailTemplates.service.js';
+import { fcmTokenCache } from '../services/notification/FCMTokenCache.js';
+import { webSocketServer } from '../services/websocket/WebSocketServer.js';
 
 const router = Router();
 
@@ -1024,6 +1027,56 @@ router.post('/test-center', verifyToken, async (req: AuthRequest, res: Response)
     }
   } catch (error: any) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// ─── Diagnostics ─────────────────────────────────────────────────────────────
+
+router.get('/diagnostics', verifyToken, async (req: AuthRequest, res: Response) => {
+  try {
+    // Queue health
+    const queueStats = await pgPool.query(`
+      SELECT status, COUNT(*) as count
+      FROM notification_queue
+      GROUP BY status
+      ORDER BY status
+    `).catch(() => ({ rows: [] }));
+
+    // FCM token cache
+    const cacheStats = fcmTokenCache.stats();
+
+    // WebSocket connections
+    const wsStats = webSocketServer.stats();
+
+    // Recent failures (last 10)
+    const recentFailed = await pgPool.query(`
+      SELECT id, target_user_id, category, retry_count, created_at, updated_at
+      FROM notification_queue
+      WHERE status = 'failed' OR retry_count > 0
+      ORDER BY updated_at DESC
+      LIMIT 10
+    `).catch(() => ({ rows: [] }));
+
+    res.json({
+      timestamp: new Date().toISOString(),
+      queue: {
+        statusBreakdown: queueStats.rows,
+        recentFailed: recentFailed.rows,
+      },
+      fcmTokenCache: {
+        cachedUsers: cacheStats.size,
+        ttlMs: 5 * 60 * 1000,
+        entries: cacheStats.entries.map(e => ({
+          userId: e.userId.slice(0, 8) + '...', // Truncate for security
+          tokenCount: e.tokenCount,
+          ageMs: e.ageMs,
+        })),
+      },
+      webSocket: wsStats,
+      health: 'ok',
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
 });
 

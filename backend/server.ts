@@ -67,6 +67,7 @@ import { initPostgres } from './src/config/postgres.js';
 import { FirestoreListener } from './src/listeners/firestore.listener.js';
 import { initKeepAlive } from './src/scripts/keepAlive.js';
 import { dynamicHtmlInjector } from './src/middleware/dynamicHtml.js';
+import { webSocketServer } from './src/services/websocket/WebSocketServer.js';
 
 // Setup Vite in development or static files in production
 async function setupVite() {
@@ -77,8 +78,27 @@ async function setupVite() {
   // Initialize AI Knowledge Base (auto-syncs with Firestore in real-time)
   kb.initialize().catch(err => console.warn('[KB] Non-fatal init error:', err.message));
   
-  // Initialize Qdrant DB
-  qdrantService.initializeCollection(1536).catch(err => console.warn('[Qdrant] Non-fatal init error:', err.message));
+  // Initialize Qdrant DB (768 dims = Gemini text-embedding-004)
+  // Then auto-sync KB data into Qdrant after a short delay (KB needs time to load Firestore)
+  qdrantService.initializeCollection(768).then(async (ok) => {
+    if (ok) {
+      console.log('[Qdrant] ✅ Collection ready — scheduling KB sync in 30s...');
+      setTimeout(async () => {
+        try {
+          const { knowledgeSync } = await import('./src/services/ai/KnowledgeSync.js');
+          const result = await knowledgeSync.syncAll();
+          if (result.success) {
+            console.log(`[Qdrant] ✅ KB auto-sync complete — ${result.stats?.syncedRecords ?? 0} records indexed`);
+          } else {
+            console.warn('[Qdrant] ⚠️ KB auto-sync completed with errors');
+          }
+        } catch (e: any) {
+          console.warn('[Qdrant] ⚠️ KB auto-sync failed (non-fatal):', e.message);
+        }
+      }, 30_000);
+    }
+  }).catch(err => console.warn('[Qdrant] Non-fatal init error:', err.message));
+
 
   // Initialize Slack Notification Listeners
   FirestoreListener.init();
@@ -98,7 +118,7 @@ async function setupVite() {
     app.get('*', dynamicHtmlInjector);
   }
 
-  app.listen(PORT as number, '0.0.0.0', () => {
+  const server = app.listen(PORT as number, '0.0.0.0', () => {
     console.log(`Server running on http://localhost:${PORT}`);
     const interfaces = os.networkInterfaces();
     for (const name of Object.keys(interfaces)) {
@@ -111,6 +131,10 @@ async function setupVite() {
     
     // Initialize Keep Alive Scheduler after server starts
     initKeepAlive();
+
+    // Attach WebSocketServer for real-time in-app updates (order tracker, live dashboard)
+    webSocketServer.attach(server);
+    console.log('[WebSocketServer] Attached on path /ws');
   });
 }
 

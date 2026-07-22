@@ -9,6 +9,7 @@ import { notificationQueue } from '../services/notification/NotificationQueueSer
 import { OwnerTemplates, CustomerTemplates, DeliveryTemplates } from '../services/notification/NotificationTemplates.js';
 import { queueEmail } from '../services/email.service.js';
 import { buildOrderStatusEmail } from '../services/emailTemplates.service.js';
+import { appEventBus } from '../services/eventBus/AppEventBus.js';
 
 export class FirestoreListener {
   private static orderStatusCache = new Map<string, string>();
@@ -97,6 +98,22 @@ export class FirestoreListener {
 
             // 3. EMAIL TO CUSTOMER
             this.sendOrderEmail(orderData, 'pending');
+
+            // 4. Emit AppEventBus domain event for WebSocket live updates
+            appEventBus.emitTyped('order.created', {
+              orderId: orderData.id,
+              orderNumber,
+              userId: orderData.userId || orderData.firebaseUid || '',
+              customerName: orderData.customerName || orderData.customer_name || 'Customer',
+              totalAmount,
+              items: Array.isArray(orderData.items) ? orderData.items : [],
+              paymentMethod: orderData.paymentMethod || 'COD',
+              deliveryAddress: orderData.deliveryAddress?.addressLine || orderData.deliveryAddress || 'Pickup',
+              contactPhone: orderData.contactPhone || '',
+              orderTiming: orderData.orderTiming,
+              timestamp: new Date().toISOString(),
+              rawOrderData: orderData,
+            });
           }
 
           // ── ORDER MODIFIED (STATUS TRANSITION) ────────────────────────────────
@@ -179,6 +196,22 @@ export class FirestoreListener {
 
             // 3. EMAIL FALLBACK / TRANSACTIONAL EMAILS
             this.sendOrderEmail(orderData, currentStatus);
+
+            // 4. Emit AppEventBus domain event for WebSocket live updates
+            appEventBus.emitTyped('order.status_changed', {
+              orderId: orderData.id,
+              orderNumber,
+              userId: orderData.userId || orderData.firebaseUid || '',
+              customerName: orderData.customerName || orderData.customer_name || 'Customer',
+              previousStatus: prevStatus || '',
+              currentStatus,
+              totalAmount,
+              deliveryPartnerId: orderData.deliveryPartnerId || orderData.delivery_partner_id,
+              deliveryPartnerName: orderData.deliveryPartnerName,
+              slackThreadTs: orderData.slackThreadTs,
+              timestamp: new Date().toISOString(),
+              rawOrderData: orderData,
+            });
           }
         }
       },

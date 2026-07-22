@@ -3,13 +3,16 @@ import fetch from 'node-fetch';
 
 dotenv.config();
 
-// Default to port 6333 if no port specified in URL
-let QDRANT_URL = process.env.QDRANT_URL || 'http://localhost:6333';
-if (QDRANT_URL && !QDRANT_URL.includes(':6333') && !QDRANT_URL.includes(':443')) {
-  QDRANT_URL = QDRANT_URL + ':6333';
-}
+// Only append :6333 if the URL has no port at all (i.e., no ":\d{4,5}" pattern)
+const rawUrl = process.env.QDRANT_URL || 'http://localhost:6333';
+const hasPort = /:\d{2,5}$/.test(rawUrl.replace(/^https?:\/\//, '').split('/')[0]);
+let QDRANT_URL = hasPort ? rawUrl : rawUrl + ':6333';
+
 const QDRANT_API_KEY = process.env.QDRANT_API_KEY || '';
 export const QDRANT_COLLECTION = process.env.QDRANT_COLLECTION || 'olive_pizza';
+
+console.log(`[Qdrant] URL configured: ${QDRANT_URL.replace(/\/\/[^:]+:[^@]+@/, '//***:***@')} | Collection: ${QDRANT_COLLECTION} | API Key: ${QDRANT_API_KEY ? '✅ Set' : '❌ Missing'}`);
+
 
 export class QdrantService {
   private isInitialized = false;
@@ -51,8 +54,8 @@ export class QdrantService {
   public async initializeCollection(vectorSize: number = 768): Promise<boolean> {
     if (this.isDisabled) return false;
     
-    // Quick check to disable Qdrant if running localhost on production
-    if (process.env.NODE_ENV === 'production' && QDRANT_URL.includes('localhost')) {
+    // Disable only if pointing to localhost in production (cloud URLs are always fine)
+    if (process.env.NODE_ENV === 'production' && (QDRANT_URL.includes('localhost') || QDRANT_URL.includes('127.0.0.1'))) {
       console.warn('[Qdrant] AI Search disabled: Cannot connect to localhost in production.');
       this.isDisabled = true;
       return false;
