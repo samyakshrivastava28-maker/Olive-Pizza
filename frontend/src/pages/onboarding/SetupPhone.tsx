@@ -89,9 +89,13 @@ export default function SetupPhone() {
   const checkTruecaller = async () => {
     try {
       const result = await Truecaller.isSupported();
-      setStep('truecaller');
+      if (result && result.isSupported) {
+        setStep('truecaller');
+      } else {
+        setStep('phone_input');
+      }
     } catch (err) {
-      setStep('truecaller');
+      setStep('phone_input');
     }
   };
 
