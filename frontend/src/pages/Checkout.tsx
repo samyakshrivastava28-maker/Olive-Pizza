@@ -83,7 +83,7 @@ export default function Checkout() {
       navigate('/login?redirect=/checkout');
       return;
     }
-    if (user && !user.phoneSetupCompleted) {
+    if (user && !user.phoneSetupCompleted && !user.phone) {
       navigate('/onboarding/phone?redirect=/checkout');
       return;
     }

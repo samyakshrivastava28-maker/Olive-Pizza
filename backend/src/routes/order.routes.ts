@@ -75,23 +75,32 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
 
     // 1. Fetch user data from Firestore
     const userDoc = await adminDb.collection('users').doc(userId).get();
-    if (!userDoc.exists) {
-      res.status(400).json({ error: 'User not found. Please complete onboarding.' });
-      return;
-    }
-    const userData = userDoc.data()!;
+    let userData = userDoc.exists ? userDoc.data()! : {};
     
-    if (!userData.phone) {
+    const userPhone = userData.phone || userData.contactPhone || req.body.contactPhone;
+    if (!userPhone) {
       res.status(400).json({ error: 'Phone number missing. Please complete onboarding.' });
       return;
     }
 
-    console.log("Order attempt:", { hasFullAddress: !!userData.full_address, hasCamelAddress: !!userData.fullAddress, payloadAddress: address });
-    
-    if (!userData.full_address && !userData.fullAddress && !address) {
+    const userAddress = address || userData.full_address || userData.fullAddress;
+    if (!userAddress && req.body.deliveryType !== 'pickup') {
       res.status(400).json({ error: 'Delivery address missing. Please complete onboarding.' });
       return;
     }
+
+    // Auto-sync missing profile fields to Firestore user doc if provided during checkout
+    if (!userData.phone || (!userData.fullAddress && !userData.full_address)) {
+      adminDb.collection('users').doc(userId).set({
+        phone: userPhone,
+        phoneSetupCompleted: true,
+        fullAddress: userAddress || 'Pickup',
+        full_address: userAddress || 'Pickup',
+        locationSetupCompleted: true,
+      }, { merge: true }).catch(err => console.warn('[Orders] User profile sync warning:', err));
+    }
+
+    console.log("Order attempt:", { phone: userPhone, address: userAddress, itemsCount: items.length });
 
     // 2. Validate prices from Firestore / DB across collections
     let serverCalculatedTotal = 0;
@@ -101,7 +110,7 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
       const itemId = item.menuItemId || item.id;
       let menuData: any = null;
 
-      if (itemId) {
+      if (itemId && typeof itemId === 'string' && !itemId.startsWith('item-')) {
         // 1. Check 'products' collection
         let docSnap = await adminDb.collection('products').doc(itemId).get();
         if (docSnap.exists) {
@@ -133,18 +142,18 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
         itemPrice = Number(menuData.basePrice ?? menuData.price ?? menuData.base_price ?? item.price ?? 0);
         itemName = menuData.name || item.name;
         itemImage = menuData.image || menuData.image_url || menuData.imageUrl || item.image || '';
-      } else if (!itemPrice) {
+      } else if (!itemPrice || itemPrice <= 0) {
         res.status(400).json({ error: `Item ${item.name || 'Selected item'} no longer exists` });
         return;
       }
 
-      serverCalculatedTotal += itemPrice * item.quantity;
+      serverCalculatedTotal += itemPrice * Number(item.quantity || 1);
 
       validatedItems.push({
         menuItemId: itemId || 'item-' + Math.random().toString(36).substr(2, 9),
         name: itemName,
         price: itemPrice,
-        quantity: item.quantity,
+        quantity: Number(item.quantity || 1),
         size: item.size || item.variant || 'regular',
         crust: item.crust || 'normal',
         image: itemImage
@@ -190,18 +199,19 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
         status: 'pending',
         notification_version: 1,
         deliveryAddress: { 
-          addressLine: address || userData.full_address, 
-          lat: userData.lat, 
-          lng: userData.lng,
+          addressLine: userAddress || 'Pickup', 
+          lat: userData.lat || 0, 
+          lng: userData.lng || 0,
           houseNumber: addressDetails?.houseNumber || '',
           apartment: addressDetails?.apartment || '',
           landmark: addressDetails?.landmark || '',
           instructions: addressDetails?.instructions || ''
         },
-        contactPhone: userData.phone,
+        contactPhone: userPhone,
         customerName: userData.name || 'Customer',
         daily_order_number: orderNumber,
-        paymentMethod: 'COD',
+        paymentMethod: req.body.paymentMethod || 'COD',
+        deliveryType: req.body.deliveryType || 'delivery',
         createdAt: new Date(),
         updatedAt: new Date(),
       });
@@ -212,6 +222,7 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
       res.status(500).json({ error: 'Failed to save order' });
       return; // Stop execution if DB write fails
     }
+
 
     // 5. Emit canonical OrderEvent via OrderEventService (Legacy trigger, can be deprecated later)
     try {
