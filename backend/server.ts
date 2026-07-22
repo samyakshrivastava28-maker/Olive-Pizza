@@ -7,7 +7,7 @@ import apiApp from './src/app.js';
 import { DataRetentionJob } from './src/jobs/DataRetentionJob.js';
 import './src/services/DataLifecycleService.js';
 import './src/services/notification/NotificationQueueService.js';
-import './src/jobs/MonthlyReportJob.js';
+import './src/jobs/WeeklyReportJob.js';
 import { kb } from './src/services/KnowledgeBaseService.js';
 import { qdrantService } from './src/services/ai/QdrantService.js';
 import { storageAnalyzer } from './src/services/storageAnalyzer.service.js';

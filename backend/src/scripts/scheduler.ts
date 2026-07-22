@@ -1,26 +1,10 @@
 import cron from 'node-cron';
-import { monthlyReportService } from '../lib/services/MonthlyReportService.js';
-import { MonthlyReportJob } from '../jobs/MonthlyReportJob.js';
+import { weeklyReportService } from '../lib/services/WeeklyReportService.js';
+import { WeeklyReportJob } from '../jobs/WeeklyReportJob.js';
 
 export function initScheduler() {
-  // Initialize monthly report cron (00:05 AM on 1st of month)
-  MonthlyReportJob.initCronJob();
-
-  // Also check at 23:59 on days 28-31 for end of month
-  cron.schedule('59 23 28-31 * *', async () => {
-    const today = new Date();
-    const tomorrow = new Date(today);
-    tomorrow.setDate(today.getDate() + 1);
-
-    if (tomorrow.getMonth() !== today.getMonth()) {
-      console.log('[Scheduler] Detected end of month. Generating report...');
-      try {
-        await monthlyReportService.generateAndProcessReport(today);
-      } catch (error: any) {
-        console.error('[Scheduler] Monthly report generation error:', error.message);
-      }
-    }
-  });
+  // Initialize weekly report cron (Runs every Monday at 00:05 AM)
+  WeeklyReportJob.initCronJob();
 
   // Daily cleanup of old GPS tracking data (older than 24 hours) at 3:00 AM
   cron.schedule('0 3 * * *', async () => {
@@ -37,5 +21,5 @@ export function initScheduler() {
     }
   });
 
-  console.log('🗓️ [Scheduler] Automated background schedulers initialized.');
+  console.log('🗓️ [Scheduler] Automated weekly background schedulers initialized.');
 }

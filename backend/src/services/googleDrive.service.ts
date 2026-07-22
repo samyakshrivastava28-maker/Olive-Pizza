@@ -188,9 +188,9 @@ class GoogleDriveService {
 
   /**
    * Ensures the nested folder structure:
-   * Olive Pizza Reports / {Year} / {MonthName}
+   * Olive Pizza Reports / {Year} / {SubfolderName} (e.g. Week 29 or July)
    */
-  public async getReportFolderId(year: number, monthName: string): Promise<string> {
+  public async getReportFolderId(year: number, subfolderName: string): Promise<string> {
     let yearFolderId = '';
     const configuredFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
 
@@ -198,7 +198,7 @@ class GoogleDriveService {
       try {
         yearFolderId = await this.ensureFolder(year.toString(), configuredFolderId);
       } catch (err: any) {
-        console.warn(`[Google Drive] Configured GOOGLE_DRIVE_FOLDER_ID (${configuredFolderId}) not found or unaccessible. Creating root "Olive Pizza Reports" folder.`);
+        console.warn(`[Google Drive] Configured GOOGLE_DRIVE_FOLDER_ID (${configuredFolderId}) not found or inaccessible. Creating root "Olive Pizza Reports" folder.`);
       }
     }
 
@@ -207,10 +207,9 @@ class GoogleDriveService {
       yearFolderId = await this.ensureFolder(year.toString(), rootFolderId);
     }
 
-    const monthFolderId = await this.ensureFolder(monthName, yearFolderId);
-    return monthFolderId;
+    const targetFolderId = await this.ensureFolder(subfolderName, yearFolderId);
+    return targetFolderId;
   }
-
 
   /**
    * Uploads a Buffer as a file to Google Drive under the nested folder structure.
@@ -220,10 +219,9 @@ class GoogleDriveService {
     fileName: string,
     buffer: Buffer,
     year: number,
-    monthName: string
+    subfolderName: string
   ): Promise<DriveUploadResult> {
     this.metrics.totalUploads++;
-    const startTime = Date.now();
 
     if (!this.isEnabled || !this.drive) {
       this.metrics.failedUploads++;
@@ -233,7 +231,8 @@ class GoogleDriveService {
 
     try {
       // 1. Get destination folder ID
-      const folderId = await this.getReportFolderId(year, monthName);
+      const folderId = await this.getReportFolderId(year, subfolderName);
+
 
       // 2. Check if file already exists in folder (duplicate prevention / overwrite)
       const query = `name = '${fileName}' and '${folderId}' in parents and trashed = false`;
