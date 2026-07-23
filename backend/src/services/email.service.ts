@@ -51,79 +51,49 @@ export const queueEmail = async (
   attachments?: any[]
 ) => {
   try {
-    let result;
     const attachmentsJson = attachments ? JSON.stringify(attachments) : null;
-
-    if (idempotencyKey) {
-      try {
-        result = await pgPool.query(`
-          INSERT INTO email_queue (recipient, subject, html_content, type, campaign_id, idempotency_key, attachments, status)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending')
-          ON CONFLICT (idempotency_key) DO NOTHING
-          RETURNING id
-        `, [recipient, subject, htmlContent, type, campaignId, idempotencyKey, attachmentsJson]);
-        if (result.rows.length === 0) {
-          console.log(`Email to ${recipient} with key ${idempotencyKey} already queued. (Idempotent)`);
-          return null;
-        }
-      } catch (conflictErr: any) {
-        result = await pgPool.query(`
-          INSERT INTO email_queue (recipient, subject, html_content, type, campaign_id, status)
-          VALUES ($1, $2, $3, $4, $5, 'pending')
-          RETURNING id
-        `, [recipient, subject, htmlContent, type, campaignId]);
-      }
-    } else {
-      // No idempotency key — insert with fallback if attachments column is missing
-      try {
-        result = await pgPool.query(`
-          INSERT INTO email_queue (recipient, subject, html_content, type, campaign_id, attachments, status)
-          VALUES ($1, $2, $3, $4, $5, $6, 'pending')
-          RETURNING id
-        `, [recipient, subject, htmlContent, type, campaignId, attachmentsJson]);
-      } catch (attErr: any) {
-        result = await pgPool.query(`
-          INSERT INTO email_queue (recipient, subject, html_content, type, campaign_id, status)
-          VALUES ($1, $2, $3, $4, $5, 'pending')
-          RETURNING id
-        `, [recipient, subject, htmlContent, type, campaignId]);
-      }
-    }
-
-    const queueId = result.rows[0].id;
-    console.log(`[EmailQueue] Queued email ID ${queueId} for ${recipient}`);
-
-    // Trigger instant background drain
-    setImmediate(() => {
-      processEmailQueue().catch(err => console.warn('[EmailQueue] Instant process warning:', err.message));
+    
+    // 🚨 DEVELOPMENT BYPASS: The user requested that system emails use the EXACT SAME 
+    // direct-send mechanism as manual emails because the background queue was failing to dispatch.
+    // We send instantly and synchronously FIRST.
+    console.log(`[EmailDirect] Instantly sending email to ${recipient}...`);
+    const info = await transporter.sendMail({
+      from: process.env.SMTP_FROM || '"Olive Pizza" <noreply@olivepizza.app>',
+      to: recipient,
+      subject: subject,
+      html: htmlContent,
+      attachments: attachments,
     });
+    console.log(`[EmailDirect] ✅ Sent successfully: ${info.messageId}`);
 
-    return queueId;
+    // Now insert it into the DB purely for tracking purposes, marked as 'sent' immediately.
+    try {
+      if (idempotencyKey) {
+        await pgPool.query(`
+          INSERT INTO email_queue (recipient, subject, html_content, type, campaign_id, idempotency_key, attachments, status, sent_at, smtp_response)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, 'sent', CURRENT_TIMESTAMP, $8)
+          ON CONFLICT (idempotency_key) DO NOTHING
+        `, [recipient, subject, htmlContent, type, campaignId, idempotencyKey, attachmentsJson, info.response || info.messageId]);
+      } else {
+        await pgPool.query(`
+          INSERT INTO email_queue (recipient, subject, html_content, type, campaign_id, attachments, status, sent_at, smtp_response)
+          VALUES ($1, $2, $3, $4, $5, $6, 'sent', CURRENT_TIMESTAMP, $7)
+        `, [recipient, subject, htmlContent, type, campaignId, attachmentsJson, info.response || info.messageId]);
+      }
+    } catch (dbErr: any) {
+      console.warn('[EmailDirect] Sent successfully, but failed to log to DB tracking:', dbErr.message);
+    }
+    
+    return -1; // Indicate direct send complete
 
   } catch (error: any) {
     console.error('==========================================');
-    console.error('FATAL QUEUE ERROR: Failed to insert email into DB!');
+    console.error('FATAL EMAIL ERROR: Direct send failed!');
     console.error(`Recipient: ${recipient} | Type: ${type}`);
     console.error('Error Details:', error.message);
     console.error('Stack Trace:', error.stack);
     console.error('==========================================');
-    
-    // Fallback: Direct send if DB is completely down but we still need transactional emails
-    console.warn('Attempting immediate direct send due to queue failure...');
-    try {
-      const info = await transporter.sendMail({
-        from: process.env.SMTP_FROM || '"Olive Pizza" <noreply@olivepizza.app>',
-        to: recipient,
-        subject: subject,
-        html: htmlContent,
-        attachments: attachments,
-      });
-      console.log('Direct fallback send successful:', info.messageId);
-      return -1;
-    } catch (directError: any) {
-      console.error('Direct fallback send also failed:', directError.message);
-      throw directError; // Let caller handle it (e.g., API 500)
-    }
+    throw error;
   }
 };
 
