@@ -346,7 +346,16 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
 
     // ── SYSTEM ACTIONS ─────────────────────────────────────────────────────
     else if (action === 'stop_alert') {
-      // Notification dispatch removed - handled by firestore.listener.ts
+      try {
+        const ownerDocs = await db.collection('users').where('role', '==', 'owner').get();
+        const ownerUids = ownerDocs.docs.map(d => d.id);
+        if (ownerUids.length > 0) {
+          const stopPayload = { data: { action: 'stop_alert', orderId: orderId } };
+          await directNotification.sendBulkPush(ownerUids, stopPayload, 'high', { tag: `order_owner_stop_${orderId}`, orderId });
+        }
+      } catch (e: any) {
+        console.error(`[ManualAction] Failed to send stop_alert for ${orderId}:`, e.message);
+      }
       await releaseOrderLock(orderId);
       lockReleased = true;
       res.json({ success: true, message: 'Alert stopped', requestId });

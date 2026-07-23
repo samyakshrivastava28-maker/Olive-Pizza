@@ -143,7 +143,35 @@ export class FirestoreListener {
               console.error(`[AutoNotif] ❌ Owner push pipeline FAILED for order ${orderData.id}:`, err.message);
             }
 
-            // 3. EMAIL TO CUSTOMER
+            // 3. PUSH NOTIFICATION TO CUSTOMER (Initial Pinned Tracker)
+            const customerId = orderData.userId || orderData.firebaseUid;
+            if (customerId) {
+              try {
+                const cPayload = CustomerTemplates.orderUpdate(orderData.id, {
+                  orderNumber,
+                  status: 'pending',
+                  totalAmount,
+                  version: 1
+                });
+                await directNotification.sendPush(customerId, cPayload, 'high', {
+                  tag: `order_customer_${orderData.id}`,
+                  orderId: orderData.id,
+                  category: 'order',
+                  version: 1
+                }).catch(e => console.error(`[AutoNotif] ❌ Customer initial push FAILED uid=${customerId}:`, e.message));
+                
+                await notificationQueue.enqueue(customerId, cPayload, 'high', {
+                  tag: `order_customer_${orderData.id}`,
+                  orderId: orderData.id,
+                  category: 'order',
+                  version: 1
+                }).catch(e => console.error(`[AutoNotif] ❌ Customer initial queue FAILED uid=${customerId}:`, e.message));
+              } catch (e: any) {
+                console.error(`[AutoNotif] ❌ Failed to dispatch initial customer push for ${orderData.id}:`, e.message);
+              }
+            }
+
+            // 4. EMAIL TO CUSTOMER
             this.sendOrderEmail(orderData, 'pending');
 
             // 4. Emit AppEventBus domain event for WebSocket live updates
@@ -245,6 +273,16 @@ export class FirestoreListener {
                   for (const ownerUid of ownerUids) {
                     await notificationQueue.enqueue(ownerUid, oPayload, 'normal', { tag: `order_owner_tracking_${orderData.id}`, orderId: orderData.id, category: 'order', version }).catch((e: any) => console.error(`[AutoNotif] ❌ Owner tracking queue FAILED uid=${ownerUid}: ${e.message}`));
                   }
+               }
+            }
+
+            // Kill Owner Alarms (Stop Alert)
+            if (prevStatus === 'pending' && currentStatus !== 'pending') {
+               const ownerDocs = await db.collection('users').where('role', '==', 'owner').get();
+               const ownerUids = ownerDocs.docs.map(d => d.id);
+               if (ownerUids.length > 0) {
+                 const stopPayload = { data: { action: 'stop_alert', orderId: orderData.id } };
+                 await directNotification.sendBulkPush(ownerUids, stopPayload, 'high', { tag: `order_owner_stop_${orderData.id}`, orderId: orderData.id, category: 'order', version }).catch((e: any) => console.error(`[AutoNotif] ❌ Owner stop_alert push FAILED: ${e.message}`));
                }
             }
 
