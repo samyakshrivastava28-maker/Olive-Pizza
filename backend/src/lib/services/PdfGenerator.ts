@@ -35,6 +35,7 @@ export interface MonthlyReportMetrics {
   emailsSent: number;
   emailSuccessRate: number;
   dailySales: { date: string; revenue: number; orders: number }[];
+  weeklySales: { date: string; revenue: number; orders: number }[];
   peakHours: { hour: string; count: number }[];
 }
 
