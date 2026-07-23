@@ -95,14 +95,11 @@ export default function PhoneUpdateModal({ isOpen, onClose, currentPhone, onSucc
     setLoading(true);
 
     try {
-      const phoneNumber = parsePhoneNumber(newPhone, "IN");
-      if (!phoneNumber || !phoneNumber.isValid() || phoneNumber.country !== "IN") {
-        toast.error("Please enter a valid Indian mobile number");
-        setLoading(false);
-        return;
+      // 🚨 DEVELOPMENT BYPASS: Allow any string/number format
+      let formattedPhone = newPhone;
+      if (!newPhone.startsWith('+')) {
+        formattedPhone = `+91${newPhone}`;
       }
-      
-      const formattedPhone = phoneNumber.format("E.164");
 
       if (formattedPhone === currentPhone) {
         toast.error('You are already using this phone number.');
@@ -117,7 +114,7 @@ export default function PhoneUpdateModal({ isOpen, onClose, currentPhone, onSucc
       const res = await fetch('/api/phone/send-otp', {
         method: 'POST',
         headers,
-        body: JSON.stringify({ phone: formattedPhone })
+        body: JSON.stringify({ phoneNumber: formattedPhone })
       });
       const data = await res.json();
 
@@ -139,7 +136,11 @@ export default function PhoneUpdateModal({ isOpen, onClose, currentPhone, onSucc
     setLoading(true);
 
     try {
-      const phoneNumber = parsePhoneNumber(newPhone, "IN")!.format("E.164");
+      // 🚨 DEVELOPMENT BYPASS: Allow any string/number format
+      let phoneNumber = newPhone;
+      if (!newPhone.startsWith('+')) {
+        phoneNumber = `+91${newPhone}`;
+      }
       const token = auth.currentUser ? await auth.currentUser.getIdToken() : '';
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (token) headers['Authorization'] = `Bearer ${token}`;
@@ -147,7 +148,7 @@ export default function PhoneUpdateModal({ isOpen, onClose, currentPhone, onSucc
       const res = await fetch('/api/phone/verify-otp', {
         method: 'POST',
         headers,
-        body: JSON.stringify({ phone: phoneNumber, code: otp })
+        body: JSON.stringify({ phoneNumber: phoneNumber, otp })
       });
       const data = await res.json();
 

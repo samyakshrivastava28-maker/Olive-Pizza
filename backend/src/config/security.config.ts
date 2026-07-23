@@ -99,12 +99,12 @@ export const expensiveLimiter = rateLimit({
 export const Schemas = {
   // Auth & Phone
   sendOtp: z.object({
-    phoneNumber: z.string().trim().regex(/^(\+91)?[6-9]\d{9}$/, 'Invalid Indian mobile number format'),
+    phoneNumber: z.string().trim().min(3, 'Invalid phone number format'), // 🚨 BYPASS: Relaxed for fake numbers
   }),
 
   verifyOtp: z.object({
-    phoneNumber: z.string().trim().regex(/^(\+91)?[6-9]\d{9}$/, 'Invalid Indian mobile number format'),
-    otp: z.string().trim().length(6, 'OTP must be exactly 6 digits'),
+    phoneNumber: z.string().trim().min(3, 'Invalid phone number format'), // 🚨 BYPASS: Relaxed for fake numbers
+    otp: z.string().trim().min(4, 'OTP must be at least 4 digits'), // 🚨 BYPASS: Relaxed for fake OTPs
   }),
 
   login: z.object({

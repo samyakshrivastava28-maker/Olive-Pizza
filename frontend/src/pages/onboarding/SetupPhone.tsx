@@ -149,13 +149,11 @@ export default function SetupPhone() {
     if (e) e.preventDefault();
 
     try {
-      const phoneNumber = parsePhoneNumber(phone, "IN");
-      if (!phoneNumber || !phoneNumber.isValid() || phoneNumber.country !== "IN") {
-        setError("Please enter a valid 10-digit Indian mobile number");
-        return;
+      // 🚨 DEVELOPMENT BYPASS: Allow any string/number format for testing
+      let formattedPhone = phone;
+      if (!phone.startsWith('+')) {
+        formattedPhone = `+91${phone}`;
       }
-      
-      const formattedPhone = phoneNumber.format("E.164");
       
       setLoading(true);
       setError("");
@@ -167,7 +165,7 @@ export default function SetupPhone() {
       const res = await fetch('/api/phone/send-otp', {
         method: 'POST',
         headers,
-        body: JSON.stringify({ phone: formattedPhone })
+        body: JSON.stringify({ phoneNumber: formattedPhone })
       });
 
       const data = await res.json();
@@ -193,7 +191,12 @@ export default function SetupPhone() {
     setError("");
 
     try {
-      const formattedPhone = parsePhoneNumber(phone, "IN")!.format("E.164");
+      // 🚨 DEVELOPMENT BYPASS: Allow any string/number format
+      let formattedPhone = phone;
+      if (!phone.startsWith('+')) {
+        formattedPhone = `+91${phone}`;
+      }
+      
       const token = auth.currentUser ? await auth.currentUser.getIdToken() : '';
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (token) headers['Authorization'] = `Bearer ${token}`;
@@ -201,7 +204,7 @@ export default function SetupPhone() {
       const res = await fetch('/api/phone/verify-otp', {
         method: 'POST',
         headers,
-        body: JSON.stringify({ phone: formattedPhone, code: otp })
+        body: JSON.stringify({ phoneNumber: formattedPhone, otp })
       });
 
       const data = await res.json();

@@ -138,11 +138,11 @@ export default function Register() {
 
       if (phone.trim() !== "") {
         try {
-          const phoneNumber = parsePhoneNumber(phone, "IN");
-          if (!phoneNumber || !phoneNumber.isValid() || phoneNumber.country !== "IN") {
-            throw new Error("Invalid phone");
+          // 🚨 DEVELOPMENT BYPASS: Allow any string/number format
+          formattedPhone = phone.trim();
+          if (!formattedPhone.startsWith('+')) {
+            formattedPhone = `+91${formattedPhone}`;
           }
-          formattedPhone = phoneNumber.format("E.164");
         } catch (err) {
           setError("Please enter a valid Indian mobile number");
           setLoading(false);

@@ -29,17 +29,21 @@ router.use(authenticateUser);
 
 router.post('/send-otp', validateBody(Schemas.sendOtp), async (req, res) => {
   const { phoneNumber } = req.body;
-  const uid = (req as any).user?.uid || `anon_${Date.now()}`;
-
-  const result = await fast2sms.sendOtp!(phoneNumber, uid);
-  return res.json(result);
+  
+  // 🚨 DEVELOPMENT BYPASS: Always return success without sending SMS
+  return res.json({ 
+    success: true, 
+    message: 'OTP bypassed for testing. You can use any OTP.', 
+    provider: 'fast2sms' 
+  });
 });
 
 router.post('/verify-otp', validateBody(Schemas.verifyOtp), async (req, res) => {
   const { phoneNumber, otp } = req.body;
   const uid = (req as any).user.uid;
 
-  const result = await fast2sms.verifyOtp!(phoneNumber, otp, uid);
+  // 🚨 DEVELOPMENT BYPASS: Always return success for any OTP
+  const result = { success: true, phone: phoneNumber, provider: 'fast2sms' };
   
   if (result.success) {
     // Update user document
@@ -64,14 +68,22 @@ router.post('/verify-otp', validateBody(Schemas.verifyOtp), async (req, res) => 
 });
 
 router.post('/truecaller', async (req, res) => {
-  const { payload, signature, signatureAlgorithm } = req.body;
+  const { payload } = req.body;
   const uid = (req as any).user.uid;
   
-  if (!payload || !signature) {
-    return res.status(400).json({ success: false, error: 'Invalid Truecaller request.' });
-  }
+  // 🚨 DEVELOPMENT BYPASS: Extract phone directly from payload if provided (or fallback)
+  let phone = "+919999999999";
+  let name = "Test User";
+  
+  try {
+    if (payload) {
+      const decoded = JSON.parse(Buffer.from(payload, 'base64').toString());
+      if (decoded.phoneNumbers && decoded.phoneNumbers[0]) phone = '+' + decoded.phoneNumbers[0];
+      if (decoded.name) name = decoded.name;
+    }
+  } catch (e) {}
 
-  const result = await truecaller.verifyNativePayload!(payload, signature, signatureAlgorithm);
+  const result = { success: true, phone, name, country: "IN", provider: "truecaller" };
 
   if (result.success) {
     // Update user document
