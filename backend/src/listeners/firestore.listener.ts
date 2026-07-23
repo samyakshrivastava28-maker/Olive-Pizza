@@ -34,9 +34,21 @@ export class FirestoreListener {
 
           // ── NEW ORDER ────────────────────────────────────────────────────────
           if (change.type === 'added') {
-            const createdAt: Date =
-              orderData.createdAt?.toDate?.() ??
-              new Date((orderData.createdAt?._seconds || 0) * 1000);
+            let createdAt: Date = new Date();
+            if (orderData.createdAt) {
+              if (typeof orderData.createdAt?.toDate === 'function') {
+                createdAt = orderData.createdAt.toDate();
+              } else if (typeof orderData.createdAt === 'string' || typeof orderData.createdAt === 'number') {
+                createdAt = new Date(orderData.createdAt);
+              } else if (orderData.createdAt instanceof Date) {
+                createdAt = orderData.createdAt;
+              } else if (orderData.createdAt?._seconds) {
+                createdAt = new Date(orderData.createdAt._seconds * 1000);
+              }
+            }
+            if (isNaN(createdAt.getTime())) {
+              createdAt = new Date();
+            }
 
             // Skip orders older than 10 min (server restart replay protection)
             if (Date.now() - createdAt.getTime() > 10 * 60 * 1000) continue;
@@ -151,6 +163,7 @@ export class FirestoreListener {
               ready:            { emoji: '🟢', label: 'Order Ready',               category: 'orders' },
               packed:           { emoji: '📦', label: 'Order Packed & Ready',       category: 'orders' },
               partner_assigned: { emoji: '🛵', label: 'Delivery Partner Assigned',  category: 'delivery' },
+              picked_up:        { emoji: '📦', label: 'Order Picked Up',            category: 'delivery' },
               out_for_delivery: { emoji: '🚀', label: 'Out for Delivery',           category: 'delivery' },
               delivered:        { emoji: '🎉', label: 'Order Delivered',            category: 'delivery' },
               cancelled:        { emoji: '❌', label: 'Order Cancelled',            category: 'orders' },
@@ -191,7 +204,7 @@ export class FirestoreListener {
             }
 
             // Notify Customer (Fast Direct Push)
-            if (customerId && ['accepted', 'preparing', 'ready', 'partner_assigned', 'out_for_delivery', 'delivered', 'cancelled'].includes(currentStatus)) {
+            if (customerId && ['accepted', 'preparing', 'ready', 'packed', 'partner_assigned', 'picked_up', 'out_for_delivery', 'delivered', 'cancelled'].includes(currentStatus)) {
               const cPayload = CustomerTemplates.orderUpdate(orderData.id, {
                 orderNumber: shortId, status: currentStatus as any, totalAmount, 
                 deliveryPartnerName: orderData.deliveryPartnerName || 'Partner', version
