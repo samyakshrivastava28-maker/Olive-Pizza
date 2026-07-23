@@ -3,6 +3,8 @@ import { adminDb, adminAuth } from '../config/firebase.js';
 import { Fast2SMSProvider } from '../services/phone-verification/Fast2SMSProvider.js';
 import { TruecallerProvider } from '../services/phone-verification/TruecallerProvider.js';
 
+import { validateBody, Schemas } from '../config/security.config.js';
+
 const router = express.Router();
 const fast2sms = new Fast2SMSProvider();
 const truecaller = new TruecallerProvider();
@@ -12,7 +14,7 @@ const authenticateUser = async (req: express.Request, res: express.Response, nex
   const token = req.headers.authorization?.split('Bearer ')[1];
   if (token) {
     try {
-      const decoded = await adminAuth.verifyIdToken(token);
+      const decoded = await adminAuth.verifyIdToken(token, true); // checkRevoked = true
       (req as any).user = decoded;
     } catch (error) {
       (req as any).user = { uid: `anon_${Date.now()}` };
@@ -25,21 +27,19 @@ const authenticateUser = async (req: express.Request, res: express.Response, nex
 
 router.use(authenticateUser);
 
-router.post('/send-otp', async (req, res) => {
-  const { phone } = req.body;
+router.post('/send-otp', validateBody(Schemas.sendOtp), async (req, res) => {
+  const { phoneNumber } = req.body;
   const uid = (req as any).user?.uid || `anon_${Date.now()}`;
-  if (!phone) return res.status(400).json({ success: false, error: 'Phone number is required.' });
 
-  const result = await fast2sms.sendOtp!(phone, uid);
+  const result = await fast2sms.sendOtp!(phoneNumber, uid);
   return res.json(result);
 });
 
-router.post('/verify-otp', async (req, res) => {
-  const { phone, code } = req.body;
+router.post('/verify-otp', validateBody(Schemas.verifyOtp), async (req, res) => {
+  const { phoneNumber, otp } = req.body;
   const uid = (req as any).user.uid;
-  if (!phone || !code) return res.status(400).json({ success: false, error: 'Phone and code are required.' });
 
-  const result = await fast2sms.verifyOtp!(phone, code, uid);
+  const result = await fast2sms.verifyOtp!(phoneNumber, otp, uid);
   
   if (result.success) {
     // Update user document

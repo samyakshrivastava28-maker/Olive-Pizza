@@ -1,7 +1,6 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
 import orderRoutes from './routes/order.routes.js';
 import adminRoutes from './routes/admin.routes.js';
 import { backgroundTaskWorker } from './services/background/BackgroundTaskWorker.js';
@@ -22,11 +21,42 @@ import versionRoutes from './routes/version.routes.js';
 import githubRoutes from './routes/github.routes.js';
 import phoneVerificationRoutes from './routes/phoneVerification.routes.js';
 import { versionCheck } from './middleware/versionCheck.js';
+import { 
+  authLimiter, 
+  otpLimiter, 
+  publicLimiter, 
+  userLimiter, 
+  adminLimiter, 
+  expensiveLimiter 
+} from './config/security.config.js';
 
 const app = express();
 app.set('trust proxy', 1);
 
-app.use(helmet());
+// ── PRODUCTION SECURITY HEADERS (HELMET HARDENING) ───────────────────────────
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "https://apis.google.com"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      imgSrc: ["'self'", "data:", "blob:", "https://res.cloudinary.com", "https://*.googleusercontent.com"],
+      connectSrc: ["'self'", "https://*.firebaseio.com", "https://*.googleapis.com", "https://*.supabase.co", "wss://*.supabase.co"],
+    },
+  },
+  hsts: {
+    maxAge: 31536000, // 1 year
+    includeSubDomains: true,
+    preload: true,
+  },
+  frameguard: { action: 'deny' }, // X-Frame-Options: DENY
+  noSniff: true,                 // X-Content-Type-Options: nosniff
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+  crossOriginOpenerPolicy: { policy: 'same-origin' },
+}));
+
+// ── STRICT CORS CONFIGURATION ────────────────────────────────────────────────
 const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:3000',
@@ -45,7 +75,10 @@ app.use(cors({
   },
   credentials: true
 }));
-app.use(express.json());
+
+// Restrict JSON Body Payload to 1MB to prevent memory exhaustion / DoS
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 // API Performance Tracker
 app.use((req, res, next) => {
@@ -67,24 +100,32 @@ app.use(versionCheck);
 import healthRoutes from './routes/health.routes.js';
 import healthStreamRoutes from './routes/health.stream.routes.js';
 
-// Exclude health streams from global rate limit
+// Exclude health streams from rate limiters
 app.use('/health', healthStreamRoutes); // Must go before healthRoutes to catch /health/stream
 app.use('/health', healthRoutes);
 
-const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
-});
-app.use('/', apiLimiter);
+// ── RATE LIMITING TIER ATTACHMENTS ───────────────────────────────────────────
+app.use('/auth', authLimiter);
+app.use('/phone', authLimiter);
+app.use('/phone/send-otp', otpLimiter);
 
-// Strict Rate Limiting
-const authLimiter = rateLimit({ windowMs: 60 * 1000, max: 5 }); // 5 requests per minute
-const aiLimiter = rateLimit({ windowMs: 60 * 1000, max: 20 }); // 20 requests per minute
-const couponLimiter = rateLimit({ windowMs: 60 * 1000, max: 30 }); // 30 requests per minute
+app.use('/menu', publicLimiter);
+app.use('/seo', publicLimiter);
 
-app.use('/users/login', authLimiter);
-app.use('/ai', aiLimiter);
-app.use('/coupons/validate', couponLimiter);
+app.use('/orders', userLimiter);
+app.use('/users', userLimiter);
+app.use('/tracking', userLimiter);
+
+app.use('/admin', adminLimiter);
+app.use('/delivery', adminLimiter);
+app.use('/data-manager', adminLimiter);
+
+app.use('/ai', expensiveLimiter);
+app.use('/api/ai', expensiveLimiter);
+app.use('/reports', expensiveLimiter);
+app.use('/google-drive', expensiveLimiter);
+app.use('/notifications/send-custom', expensiveLimiter);
+
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -117,23 +158,26 @@ app.use('/github', githubRoutes);
 app.use('/phone', phoneVerificationRoutes);
 app.use('/data-manager', dataManagerRoutes);
 
-// SEO Routes (mounted at root via app in server.ts, but we map them here)
+// SEO Routes
 app.use('/', seoRoutes);
 
 // 404 Handler - MUST return JSON to prevent HTML fallback for API routes
 app.use((req: express.Request, res: express.Response) => {
-  res.status(404).json({ success: false, error: 'Route not found' });
+  res.status(404).json({ success: false, error: 'Route not found', code: 'NOT_FOUND' });
 });
 
-// Global Error Handler
+// Global Error Handler - SANITIZES 500 INTERNAL ERRORS IN PRODUCTION
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error('[Global Error]', err.message);
-  // Do not expose stack traces in production
   const isProd = process.env.NODE_ENV === 'production';
-  res.status(err.status || 500).json({
+  console.error(`[Global Error][${new Date().toISOString()}][${req.method} ${req.url}]`, err.message || err);
+
+  const statusCode = typeof err.status === 'number' && err.status >= 400 && err.status < 600 ? err.status : 500;
+
+  res.status(statusCode).json({
     success: false,
-    error: isProd ? 'Internal Server Error' : err.message,
-    details: isProd ? undefined : err.stack
+    error: isProd && statusCode === 500 ? 'An unexpected error occurred. Please try again later.' : (err.message || 'Internal Server Error'),
+    code: err.code || 'INTERNAL_ERROR',
+    ...(isProd ? {} : { stack: err.stack })
   });
 });
 

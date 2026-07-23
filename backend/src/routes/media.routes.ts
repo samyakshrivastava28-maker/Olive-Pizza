@@ -4,19 +4,32 @@ import cloudinary from '../config/cloudinary.js';
 
 const router = Router();
 
-// Middleware to verify admin/owner (simplified, adjust according to your auth schema)
+// Middleware to verify admin/owner with checkRevoked
 const verifyAdminOrOwner = async (req: Request, res: Response, next: Function) => {
   const token = req.headers.authorization?.split('Bearer ')[1];
-  if (!token) return res.status(401).json({ error: 'Unauthorized' });
+  if (!token) return res.status(401).json({ success: false, error: 'Unauthorized', code: 'UNAUTHORIZED' });
   try {
-    // Basic verification; in a real app, you'd check custom claims or a user document
-    await adminAuth.verifyIdToken(token);
+    const decoded = await adminAuth.verifyIdToken(token, true); // checkRevoked = true
+    const isOwner = decoded.role === 'owner' || decoded.role === 'admin';
+    if (!isOwner) {
+      return res.status(403).json({ success: false, error: 'Forbidden: Admin or Owner role required', code: 'FORBIDDEN' });
+    }
+    (req as any).user = decoded;
     next();
   } catch (error) {
     console.error("Auth Verification Error:", error);
-    res.status(401).json({ error: 'Unauthorized' });
+    res.status(401).json({ success: false, error: 'Invalid or revoked token', code: 'UNAUTHORIZED' });
   }
 };
+
+const ALLOWED_FOLDERS = [
+  'olive-pizza/menu',
+  'olive-pizza/ai-generated',
+  'olive-pizza/ai-product-images',
+  'olive-pizza/avatars',
+  'olive-pizza/promotions',
+  'olive-pizza/media'
+];
 
 router.get('/test', async (req: Request, res: Response) => {
   try {
@@ -34,12 +47,10 @@ router.get('/test', async (req: Request, res: Response) => {
 router.get('/sign-upload', verifyAdminOrOwner, (req: Request, res: Response) => {
   try {
     const timestamp = Math.round((new Date).getTime() / 1000);
-    const folder = req.query.folder as string | undefined;
+    const requestedFolder = req.query.folder as string | undefined;
+    const folder = requestedFolder && ALLOWED_FOLDERS.includes(requestedFolder) ? requestedFolder : 'olive-pizza/media';
     
-    const paramsToSign: any = { timestamp };
-    if (folder) {
-      paramsToSign.folder = folder;
-    }
+    const paramsToSign: any = { timestamp, folder };
 
     const signature = cloudinary.utils.api_sign_request(
       paramsToSign, 
@@ -50,7 +61,8 @@ router.get('/sign-upload', verifyAdminOrOwner, (req: Request, res: Response) => 
       timestamp,
       signature,
       cloudName: cloudinary.config().cloud_name,
-      apiKey: cloudinary.config().api_key
+      apiKey: cloudinary.config().api_key,
+      folder
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
