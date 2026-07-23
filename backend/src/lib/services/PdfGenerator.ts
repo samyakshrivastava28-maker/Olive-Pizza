@@ -27,6 +27,7 @@ export interface MonthlyReportMetrics {
   newCustomers: number;
   returningCustomers: number;
   totalActiveCustomers: number;
+  activeDeliveryPartners: number;
   deliveryPartnerStats: { name: string; completedCount: number; rating: number }[];
   totalReviews: number;
   averageRating: number;
