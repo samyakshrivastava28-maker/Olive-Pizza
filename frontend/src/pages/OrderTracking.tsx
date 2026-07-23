@@ -397,7 +397,7 @@ export default function OrderTracking() {
   // Bottom Sheet State
   const [sheetState, setSheetState] = useState<"collapsed" | "half" | "expanded">("half");
   const [showAccepted, setShowAccepted] = useState(false);
-  const controls = useAnimation();
+
 
   // Refs
   const channelRef = useRef<RealtimeChannel | null>(null);
