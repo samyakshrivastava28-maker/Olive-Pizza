@@ -80,7 +80,8 @@ import AuthProvider from './components/AuthProvider';
 import AutoUpdater from "./components/ui/AutoUpdater";
 import ClickSpark from './components/ui/ClickSpark';
 import { CartAnimationProvider } from './components/ui/CartAnimationProvider';
-import { OwnerGuard, DeliveryGuard, CustomerGuard, AuthGuard } from './components/auth/RouteGuards';
+import { OwnerGuard, DeliveryGuard, CustomerGuard, AuthGuard, DeveloperGuard } from './components/auth/RouteGuards';
+
 import LocationPrompt from './components/ui/LocationPrompt';
 import PushNotificationManager from './components/PushNotificationManager';
 import PizzaLoader from './components/ui/PizzaLoader';
@@ -154,6 +155,8 @@ const OwnerNotificationCenter = lazyWithRetry(() => import('./pages/owner/OwnerN
 const AIHealthMonitor = lazyWithRetry(() => import('./pages/owner/AIHealthMonitor'));
 const OwnerNotificationDiagnostics = lazyWithRetry(() => import('./pages/owner/OwnerNotificationDiagnostics'));
 const OwnerDataManager = lazyWithRetry(() => import('./pages/owner/DataManager'));
+const DeveloperDashboard = lazyWithRetry(() => import('./pages/owner/DeveloperDashboard'));
+
 
 // Lazy loaded delivery pages
 const CustomerDashboard = lazyWithRetry(() => import('./pages/CustomerDashboard'));
@@ -318,7 +321,12 @@ function AppContent() {
                   <Route path="data-manager/*" element={<OwnerDataManager />} />
                 </Route>
               </Route>
-    
+
+              {/* Developer Routes */}
+              <Route element={<DeveloperGuard />}>
+                <Route path="/developer/devops" element={<DeveloperDashboard />} />
+              </Route>
+
               {/* Delivery Routes */}
               <Route element={<DeliveryGuard />}>
                 <Route path="/delivery" element={<DeliveryLayout />}>

@@ -16,6 +16,16 @@ export class FirestoreListener {
   private static orderStatusCache = new Map<string, string>();
   private static processedOrderIds = new Set<string>();
 
+  // Cleanup processedOrderIds every 30 min to prevent unbounded memory growth.
+  // On Render, server rarely runs >24h without a deploy, but belt-and-suspenders.
+  private static cleanupTimer = setInterval(() => {
+    const beforeSize = FirestoreListener.processedOrderIds.size;
+    FirestoreListener.processedOrderIds.clear();
+    if (beforeSize > 0) {
+      console.log(`[FirestoreListener] Cleared ${beforeSize} processed order IDs from dedup cache`);
+    }
+  }, 30 * 60 * 1000);
+
   static init() {
     try {
       this.listenToOrders();
@@ -76,7 +86,7 @@ export class FirestoreListener {
               try { await change.doc.ref.update({ slackThreadTs: ts }); } catch (e) {}
             }
 
-            if (orderData.orderTiming === 'scheduled') return; // Skip push alarms for scheduled until ready
+            if (orderData.orderTiming === 'scheduled') continue; // Skip push alarms for scheduled until ready (use continue, not return — return exits the entire snapshot callback)
 
             // 2. FCM PUSH NOTIFICATION TO OWNERS (INSTANT DIRECT PUSH + QUEUE BACKUP)
             try {
@@ -99,26 +109,38 @@ export class FirestoreListener {
                 });
 
                 // Fast Direct Push (same pipeline as owner manual broadcast)
-                await directNotification.sendBulkPush(ownerUids, ownerPayload, 'high', {
+                const pushResult = await directNotification.sendBulkPush(ownerUids, ownerPayload, 'high', {
                   tag: `order_owner_${orderData.id}`,
                   orderId: orderData.id,
                   category: 'order',
                   priority: 'critical',
                   version: 1
-                }).catch(e => console.warn('Direct owner push warning:', e.message));
+                }).catch((e: any) => {
+                  console.error(`[AutoNotif] ❌ Direct owner push FAILED for order ${orderData.id}: ${e.message}`);
+                  return null;
+                });
+                if (pushResult) {
+                  console.log(`[AutoNotif] ✅ Direct owner push: ${pushResult.successCount}/${pushResult.tokensFound} tokens, order=${orderData.id}`);
+                }
 
                 for (const uid of ownerUids) {
-                  await notificationQueue.enqueue(uid, ownerPayload, 'high', {
+                  const queueId = await notificationQueue.enqueue(uid, ownerPayload, 'high', {
                     tag: `order_owner_${orderData.id}`,
                     orderId: orderData.id,
                     category: 'order',
                     priority: 'critical',
                     version: 1
-                  }).catch(() => {});
+                  }).catch((e: any) => {
+                    console.error(`[AutoNotif] ❌ Owner queue enqueue FAILED uid=${uid}: ${e.message}`);
+                    return null;
+                  });
+                  if (queueId) {
+                    console.log(`[AutoNotif] 📬 Owner queued id=${queueId} uid=${uid}`);
+                  }
                 }
               }
             } catch (err: any) {
-              console.error('❌ Owner Push Error:', err.message);
+              console.error(`[AutoNotif] ❌ Owner push pipeline FAILED for order ${orderData.id}:`, err.message);
             }
 
             // 3. EMAIL TO CUSTOMER
@@ -199,8 +221,8 @@ export class FirestoreListener {
                 deliveryAddress: orderData.deliveryAddress?.addressLine || orderData.deliveryAddress || 'Address not provided',
                 distance: '?', eta: '15 mins', totalAmount, paymentMethod: orderData.paymentMethod || 'COD', version
               });
-              await directNotification.sendPush(partnerId, deliveryPayload, 'high', { tag: `order_delivery_${orderData.id}`, orderId: orderData.id, category: 'delivery', priority: 'critical', version }).catch(e => console.warn('Direct partner push warning:', e.message));
-              await notificationQueue.enqueue(partnerId, deliveryPayload, 'high', { tag: `order_delivery_${orderData.id}`, orderId: orderData.id, category: 'delivery', priority: 'critical', version }).catch(() => {});
+              await directNotification.sendPush(partnerId, deliveryPayload, 'high', { tag: `order_delivery_${orderData.id}`, orderId: orderData.id, category: 'delivery', priority: 'critical', version }).catch((e: any) => console.error(`[AutoNotif] ❌ Partner push FAILED uid=${partnerId}: ${e.message}`));
+              await notificationQueue.enqueue(partnerId, deliveryPayload, 'high', { tag: `order_delivery_${orderData.id}`, orderId: orderData.id, category: 'delivery', priority: 'critical', version }).catch((e: any) => console.error(`[AutoNotif] ❌ Partner queue FAILED uid=${partnerId}: ${e.message}`));
             }
 
             // Notify Customer (Fast Direct Push)
@@ -209,8 +231,8 @@ export class FirestoreListener {
                 orderNumber: shortId, status: currentStatus as any, totalAmount, 
                 deliveryPartnerName: orderData.deliveryPartnerName || 'Partner', version
               });
-              await directNotification.sendPush(customerId, cPayload, 'high', { tag: `order_customer_${orderData.id}`, orderId: orderData.id, category: 'order', version }).catch(e => console.warn('Direct customer push warning:', e.message));
-              await notificationQueue.enqueue(customerId, cPayload, 'high', { tag: `order_customer_${orderData.id}`, orderId: orderData.id, category: 'order', version }).catch(() => {});
+              await directNotification.sendPush(customerId, cPayload, 'high', { tag: `order_customer_${orderData.id}`, orderId: orderData.id, category: 'order', version }).catch((e: any) => console.error(`[AutoNotif] ❌ Customer push FAILED uid=${customerId}: ${e.message}`));
+              await notificationQueue.enqueue(customerId, cPayload, 'high', { tag: `order_customer_${orderData.id}`, orderId: orderData.id, category: 'order', version }).catch((e: any) => console.error(`[AutoNotif] ❌ Customer queue FAILED uid=${customerId}: ${e.message}`));
             }
 
             // Notify Owners (Fast Direct Push)
@@ -219,10 +241,10 @@ export class FirestoreListener {
                const ownerUids = ownerDocs.docs.map(d => d.id);
                if (ownerUids.length > 0) {
                  const oPayload = OwnerTemplates.orderStatusUpdate(orderData.id, { orderNumber: shortId, customerName: orderData.customerName || 'Customer', status: currentStatus as any, deliveryPartnerName: orderData.deliveryPartnerName || 'Partner', totalAmount, version });
-                 await directNotification.sendBulkPush(ownerUids, oPayload, 'normal', { tag: `order_owner_tracking_${orderData.id}`, orderId: orderData.id, category: 'order', version }).catch(e => console.warn('Direct owner tracking push warning:', e.message));
-                 for (const ownerUid of ownerUids) {
-                   await notificationQueue.enqueue(ownerUid, oPayload, 'normal', { tag: `order_owner_tracking_${orderData.id}`, orderId: orderData.id, category: 'order', version }).catch(() => {});
-                 }
+                  await directNotification.sendBulkPush(ownerUids, oPayload, 'normal', { tag: `order_owner_tracking_${orderData.id}`, orderId: orderData.id, category: 'order', version }).catch((e: any) => console.error(`[AutoNotif] ❌ Owner tracking push FAILED: ${e.message}`));
+                  for (const ownerUid of ownerUids) {
+                    await notificationQueue.enqueue(ownerUid, oPayload, 'normal', { tag: `order_owner_tracking_${orderData.id}`, orderId: orderData.id, category: 'order', version }).catch((e: any) => console.error(`[AutoNotif] ❌ Owner tracking queue FAILED uid=${ownerUid}: ${e.message}`));
+                  }
                }
             }
 

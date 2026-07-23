@@ -167,18 +167,34 @@ export class DirectNotificationService {
         let paramsCount = 1;
         const queryParams: any[] = [];
 
+        // Extract title/body/url from the payload for correct notification_inbox schema
+        const inboxTitle = payload.notification?.title || payload.data?.title || 'Notification';
+        const inboxBody = payload.notification?.body || payload.data?.body || '';
+        const inboxUrl = payload.data?.url || '/';
+
         for (const uid of inboxChunk) {
-          values.push(`(${paramsCount++}, ${paramsCount++}, ${paramsCount++}, ${paramsCount++}, ${paramsCount++}, 'delivered')`);
-          queryParams.push(uid, JSON.stringify(payload), options.category || 'general', options.orderId || null, options.tag || null);
+          values.push(`($${paramsCount++}, $${paramsCount++}, $${paramsCount++}, $${paramsCount++}, $${paramsCount++}, $${paramsCount++}, $${paramsCount++}, $${paramsCount++})`);
+          queryParams.push(
+            uid,
+            options.tag || null,
+            options.orderId || null,
+            inboxTitle,
+            inboxBody,
+            options.category || 'general',
+            inboxUrl,
+            JSON.stringify(payload.data || {})
+          );
         }
 
         if (values.length > 0) {
           await client.query(`
-            INSERT INTO notification_inbox (user_id, payload, category, order_id, tag, status)
+            INSERT INTO notification_inbox (user_id, tag, order_id, title, body, category, url, data)
             VALUES ${values.join(',')}
+            ON CONFLICT DO NOTHING
           `, queryParams).catch(err => console.error('[DirectPush] Inbox insert failed:', err));
         }
       }
+
 
       // 6. Enforce 400 notification history limit dynamically
       this.cleanupHistory().catch(() => {});

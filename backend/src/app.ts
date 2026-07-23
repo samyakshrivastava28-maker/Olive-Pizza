@@ -20,6 +20,7 @@ import seoRoutes from './routes/seo.routes.js';
 import versionRoutes from './routes/version.routes.js';
 import githubRoutes from './routes/github.routes.js';
 import phoneVerificationRoutes from './routes/phoneVerification.routes.js';
+import devopsRoutes from './routes/devops.routes.js';
 import { versionCheck } from './middleware/versionCheck.js';
 import { 
   authLimiter, 
@@ -157,6 +158,7 @@ app.use('/version', versionRoutes);
 app.use('/github', githubRoutes);
 app.use('/phone', phoneVerificationRoutes);
 app.use('/data-manager', dataManagerRoutes);
+app.use('/devops', devopsRoutes);
 
 // SEO Routes
 app.use('/', seoRoutes);
