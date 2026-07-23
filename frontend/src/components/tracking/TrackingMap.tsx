@@ -2,143 +2,138 @@ import { useEffect, useRef, useMemo, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import React from 'react';
 
-// ─── Custom Premium Map Icons ────────────────────────────────────────
+// ─── Global CSS injected into the page ──────────────────────────────────
+const GLOBAL_CSS = `
+  @keyframes radar-pulse {
+    0%   { transform: scale(0.5); opacity: 0.9; }
+    100% { transform: scale(2.2); opacity: 0; }
+  }
+  @keyframes float-label {
+    0%,100% { transform: translateX(-50%) translateY(0px); }
+    50%     { transform: translateX(-50%) translateY(-3px); }
+  }
+  @keyframes rider-glow {
+    0%,100% { box-shadow: 0 0 0 0 rgba(249,115,22,0.45); }
+    50%     { box-shadow: 0 0 0 14px rgba(249,115,22,0); }
+  }
+  @keyframes route-dash {
+    to { stroke-dashoffset: -30; }
+  }
+  .route-path-animated {
+    animation: route-dash 1.5s linear infinite;
+  }
+  .premium-popup .leaflet-popup-content-wrapper {
+    background: rgba(255,255,255,0.97);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(0,0,0,0.08);
+    color: #1e293b;
+    border-radius: 14px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .premium-popup .leaflet-popup-tip-container { display: none; }
+  .leaflet-attribution-flag { display: none !important; }
+  .leaflet-control-attribution {
+    background: rgba(255,255,255,0.7) !important;
+    backdrop-filter: blur(4px);
+    border-radius: 8px 0 0 0 !important;
+    font-size: 10px !important;
+  }
+`;
 
+// ─── Destination / Customer Icon ─────────────────────────────────────────
 const customerIcon = new L.DivIcon({
   html: `
-  <div style="position: relative; width: 60px; height: 60px; display: flex; align-items: center; justify-content: center;">
-    <!-- Radar Pulse -->
-    <div style="position: absolute; width: 100%; height: 100%; border-radius: 50%; border: 2px solid #3b82f6; animation: radar-pulse 2s infinite cubic-bezier(0.1, 0.8, 0.3, 1);"></div>
-    <div style="position: absolute; width: 100%; height: 100%; border-radius: 50%; border: 2px solid #3b82f6; animation: radar-pulse 2s infinite cubic-bezier(0.1, 0.8, 0.3, 1); animation-delay: 1s;"></div>
-    
-    <!-- House Pin -->
-    <div style="
-      position: relative; z-index: 10; width: 36px; height: 36px; border-radius: 12px;
-      background: linear-gradient(135deg, #3b82f6, #1d4ed8);
-      display: flex; align-items: center; justify-content: center;
-      box-shadow: 0 10px 20px rgba(37,99,235,0.4), inset 0 2px 5px rgba(255,255,255,0.3);
-      border: 1px solid rgba(255,255,255,0.2);
-    ">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
-        <polyline points="9 22 9 12 15 12 15 22"></polyline>
+  <div style="position:relative;width:56px;height:68px;display:flex;flex-direction:column;align-items:center;">
+    <div style="position:absolute;top:4px;width:50px;height:50px;border-radius:50%;border:2px solid #3b82f6;opacity:0.55;animation:radar-pulse 2s infinite cubic-bezier(0.1,0.8,0.3,1);"></div>
+    <div style="position:absolute;top:4px;width:50px;height:50px;border-radius:50%;border:2px solid #3b82f6;opacity:0.35;animation:radar-pulse 2s 0.9s infinite cubic-bezier(0.1,0.8,0.3,1);"></div>
+    <div style="position:relative;z-index:10;width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#1d4ed8);display:flex;align-items:center;justify-content:center;box-shadow:0 6px 18px rgba(37,99,235,0.45),inset 0 1px 4px rgba(255,255,255,0.35);border:2.5px solid rgba(255,255,255,0.95);margin-top:9px;">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+        <polyline points="9 22 9 12 15 12 15 22"/>
       </svg>
     </div>
-  </div>
-  <style>
-    @keyframes radar-pulse {
-      0% { transform: scale(0.5); opacity: 1; }
-      100% { transform: scale(1.5); opacity: 0; }
-    }
-  </style>
-  `,
+    <div style="width:2.5px;height:10px;background:linear-gradient(to bottom,#3b82f6,transparent);margin-top:-1px;z-index:9;border-radius:2px;"></div>
+  </div>`,
   className: '',
-  iconSize: [60, 60],
-  iconAnchor: [30, 48],
+  iconSize: [56, 68],
+  iconAnchor: [28, 68],
 });
 
-const restaurantIcon = new L.DivIcon({
+// ─── Restaurant Icon ─────────────────────────────────────────────────────
+const restaurantMapIcon = new L.DivIcon({
   html: `
-  <div style="position: relative; width: 70px; height: 70px; display: flex; align-items: center; justify-content: center;">
-    <!-- Outer Glow -->
-    <div style="position: absolute; width: 50px; height: 50px; background: #f97316; filter: blur(20px); opacity: 0.5; animation: restaurant-glow 3s infinite alternate;"></div>
-    
-    <!-- 3D Restaurant Building -->
-    <div style="
-      position: relative; z-index: 10; width: 48px; height: 48px; border-radius: 50%;
-      background: linear-gradient(135deg, #1e293b, #0f172a);
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      box-shadow: 0 15px 30px rgba(0,0,0,0.6), inset 0 2px 10px rgba(255,255,255,0.1);
-      border: 3px solid #f97316;
-    ">
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f97316" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="filter: drop-shadow(0 0 5px #f97316);">
-        <!-- Shop Awning -->
-        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
-        <path d="M3 9h18"></path>
-        <path d="M9 22V12h6v10"></path>
-        <!-- Store details -->
-        <circle cx="12" cy="7" r="1.5" fill="#f97316" />
-      </svg>
+  <div style="position:relative;width:60px;height:74px;display:flex;flex-direction:column;align-items:center;">
+    <div style="position:absolute;top:-24px;left:50%;transform:translateX(-50%);background:white;color:#ea580c;font-size:10px;font-weight:800;padding:2px 9px;border-radius:10px;white-space:nowrap;box-shadow:0 3px 10px rgba(249,115,22,0.22);animation:float-label 2.5s ease-in-out infinite;border:1.5px solid #fed7aa;letter-spacing:0.2px;">🍕 Olive Pizza</div>
+    <div style="position:relative;z-index:10;width:44px;height:44px;border-radius:14px;background:linear-gradient(135deg,#fff7ed,#ffedd5);display:flex;align-items:center;justify-content:center;box-shadow:0 8px 22px rgba(249,115,22,0.28),inset 0 1px 4px rgba(255,255,255,0.9);border:2px solid #f97316;margin-top:25px;">
+      <span style="font-size:24px;line-height:1;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.15));">🍕</span>
     </div>
-
-    <!-- Smoke particles -->
-    <div style="position: absolute; top: 0; left: 25px; width: 6px; height: 6px; background: rgba(255,255,255,0.3); border-radius: 50%; filter: blur(1px); animation: smoke 2s infinite linear;"></div>
-    <div style="position: absolute; top: 5px; left: 35px; width: 8px; height: 8px; background: rgba(255,255,255,0.3); border-radius: 50%; filter: blur(2px); animation: smoke 2.5s infinite linear 1s;"></div>
-  </div>
-  <style>
-    @keyframes restaurant-glow {
-    <div style="width: 50px; height: 50px; background: #f59e0b; border-radius: 16px; transform: rotate(45deg); box-shadow: 0 10px 25px rgba(245,158,11,0.4);"></div>
-    <div style="position: absolute; color: white; font-size: 24px;">🏪</div>
-  </div>
-  `,
+    <div style="width:2.5px;height:9px;background:linear-gradient(to bottom,#f97316,transparent);margin-top:-1px;z-index:9;border-radius:2px;"></div>
+  </div>`,
   className: '',
-  iconSize: [70, 70],
-  iconAnchor: [35, 35],
+  iconSize: [60, 74],
+  iconAnchor: [30, 74],
 });
 
+// ─── Rider / Delivery Partner Icon ──────────────────────────────────────
 const riderIcon = new L.DivIcon({
   html: `
-  <div style="position: relative; width: 80px; height: 80px; display: flex; align-items: center; justify-content: center; transform-origin: center;">
-    <!-- Map Pin Glow -->
-    <div style="position: absolute; width: 40px; height: 40px; background: #3b82f6; filter: blur(15px); opacity: 0.6; border-radius: 50%;"></div>
-    
-    <!-- Outer Ring -->
-    <div style="position: absolute; width: 50px; height: 50px; border-radius: 50%; border: 2px solid rgba(59, 130, 246, 0.3); background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(4px); box-shadow: 0 8px 32px rgba(0,0,0,0.5);"></div>
-    
-    <!-- 3D Navigation Arrow -->
-    <div style="position: relative; z-index: 10; transform: translateY(-2px); filter: drop-shadow(0 10px 15px rgba(0,0,0,0.6));">
-      <svg width="40" height="40" viewBox="0 0 100 100" style="transform: rotate(-45deg);">
-        <!-- Arrow Shadow -->
-        <path d="M20 80 L50 15 L80 80 L50 60 Z" fill="rgba(0,0,0,0.4)" transform="translate(0, 8)" filter="blur(4px)" />
-        <!-- Arrow Base (Darker Blue) -->
-        <path d="M20 80 L50 15 L80 80 L50 60 Z" fill="#2563eb" />
-        <!-- Arrow Top (Lighter Blue 3D Effect) -->
-        <path d="M50 15 L80 80 L50 60 Z" fill="#60a5fa" />
-        <path d="M50 15 L20 80 L50 60 Z" fill="#3b82f6" />
-        <!-- Arrow Core Highlight -->
-        <path d="M50 25 L50 55" stroke="white" stroke-width="2" stroke-linecap="round" opacity="0.5" />
-      </svg>
-    </div>
-  </div>
-  `,
+  <div style="position:relative;width:64px;height:64px;display:flex;align-items:center;justify-content:center;transform-origin:center;">
+    <div style="position:absolute;inset:0;border-radius:50%;background:rgba(255,247,237,0.92);border:2px solid rgba(249,115,22,0.4);animation:rider-glow 2s infinite;"></div>
+    <div style="position:relative;z-index:10;font-size:28px;line-height:1;filter:drop-shadow(0 3px 8px rgba(0,0,0,0.22));">🛵</div>
+  </div>`,
   className: '',
-  iconSize: [80, 80],
-  iconAnchor: [40, 40],
+  iconSize: [64, 64],
+  iconAnchor: [32, 32],
 });
 
-// ─── Auto-fit map bounds ─────────────────────────────────────────────
+// ─── Auto-Fit Bounds ──────────────────────────────────────────────────────
 function FitBounds({ points }: { points: [number, number][] }) {
   const map = useMap();
+  const fitted = useRef(false);
 
   useEffect(() => {
     if (points.length === 0) return;
+    // Only auto-fit once we have multiple points (restaurant + customer or partner)
+    if (fitted.current && points.length === 1) return;
     const bounds = L.latLngBounds(points.map(p => L.latLng(p[0], p[1])));
-    map.fitBounds(bounds, { padding: [80, 80], maxZoom: 16 });
-  }, [points.length]); 
+    map.fitBounds(bounds, { padding: [75, 75], maxZoom: 16, animate: true });
+    if (points.length > 1) fitted.current = true;
+  }, [points.length, points[0]?.[0], points[0]?.[1]]);
 
   return null;
 }
 
-// ─── Smooth Marker Movement ─────────────────────────────────────────
-function SmoothMarker({ position, heading, icon, popupText }: { position: [number, number]; heading?: number; icon: L.DivIcon; popupText: string }) {
+// ─── Smooth Animated Rider Marker ─────────────────────────────────────────
+function SmoothMarker({
+  position,
+  heading,
+  icon,
+  popupText,
+}: {
+  position: [number, number];
+  heading?: number;
+  icon: L.DivIcon;
+  popupText: string;
+}) {
   const markerRef = useRef<L.Marker>(null);
-  const prevPos = useRef(position);
+  const prevPos = useRef<[number, number]>(position);
   const prevHeading = useRef(heading || 0);
 
   useEffect(() => {
     const marker = markerRef.current;
     if (!marker) return;
 
-    const startLat = prevPos.current[0];
-    const startLng = prevPos.current[1];
-    const endLat = position[0];
-    const endLng = position[1];
-    
+    const [startLat, startLng] = prevPos.current;
+    const [endLat, endLng] = position;
     let startH = prevHeading.current;
     let endH = heading || 0;
-    
-    // Normalize shortest rotation direction
+
+    // Shortest-path rotation
     let diff = endH - startH;
     while (diff < -180) diff += 360;
     while (diff > 180) diff -= 360;
@@ -146,42 +141,33 @@ function SmoothMarker({ position, heading, icon, popupText }: { position: [numbe
 
     const duration = 2000;
     const startTime = Date.now();
+    let rafId: number;
 
-    let animationFrameId: number;
+    const tick = () => {
+      const t = Math.min((Date.now() - startTime) / duration, 1);
+      const ease = 1 - Math.pow(1 - t, 3); // cubic ease-out
 
-    const animate = () => {
-      const elapsed = Date.now() - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-      const ease = 1 - Math.pow(1 - progress, 3);
+      marker.setLatLng([
+        startLat + (endLat - startLat) * ease,
+        startLng + (endLng - startLng) * ease,
+      ]);
 
-      const lat = startLat + (endLat - startLat) * ease;
-      const lng = startLng + (endLng - startLng) * ease;
-      const currentH = startH + (endH - startH) * ease;
-      
-      marker.setLatLng([lat, lng]);
-      
       const el = marker.getElement();
       if (el) {
-        const innerDiv = el.firstElementChild as HTMLElement;
-        if (innerDiv) {
-          // Rotate the 3D navigation arrow to point in the direction of travel
-          innerDiv.style.transform = `rotate(${currentH}deg)`;
-        }
+        const inner = el.firstElementChild as HTMLElement | null;
+        if (inner) inner.style.transform = `rotate(${startH + (endH - startH) * ease}deg)`;
       }
 
-      if (progress < 1) {
-        animationFrameId = requestAnimationFrame(animate);
+      if (t < 1) {
+        rafId = requestAnimationFrame(tick);
       } else {
         prevPos.current = position;
         prevHeading.current = endH;
       }
     };
 
-    animate();
-
-    return () => {
-      if (animationFrameId) cancelAnimationFrame(animationFrameId);
-    };
+    tick();
+    return () => { if (rafId) cancelAnimationFrame(rafId); };
   }, [position[0], position[1], heading]);
 
   return (
@@ -191,9 +177,7 @@ function SmoothMarker({ position, heading, icon, popupText }: { position: [numbe
   );
 }
 
-import React from 'react';
-
-// ─── Main Map Component ──────────────────────────────────────────────
+// ─── Main TrackingMap Component ───────────────────────────────────────────
 interface TrackingMapProps {
   restaurantLat: number;
   restaurantLng: number;
@@ -206,17 +190,22 @@ interface TrackingMapProps {
 }
 
 const TrackingMap = React.memo(function TrackingMap({
-  restaurantLat, restaurantLng,
-  customerLat, customerLng,
-  partnerLat, partnerLng,
+  restaurantLat,
+  restaurantLng,
+  customerLat,
+  customerLng,
+  partnerLat,
+  partnerLng,
   partnerHeading,
   status,
 }: TrackingMapProps) {
+  // Initial map center: partner position if available, else restaurant
   const center = useMemo<[number, number]>(() => {
     if (partnerLat && partnerLng) return [partnerLat, partnerLng];
     return [restaurantLat, restaurantLng];
   }, [restaurantLat, restaurantLng, partnerLat, partnerLng]);
 
+  // Points to fit in view
   const fitPoints = useMemo<[number, number][]>(() => {
     const pts: [number, number][] = [[restaurantLat, restaurantLng]];
     if (customerLat && customerLng) pts.push([customerLat, customerLng]);
@@ -224,142 +213,123 @@ const TrackingMap = React.memo(function TrackingMap({
     return pts;
   }, [restaurantLat, restaurantLng, customerLat, customerLng, partnerLat, partnerLng]);
 
-  // Route polyline (Real Road snapping via OSRM)
+  // Real-road route via OSRM
   const [routeCoords, setRouteCoords] = useState<[number, number][]>([]);
 
   useEffect(() => {
     const fetchRoute = async () => {
-      const waypoints = [];
-      
+      const waypoints: string[] = [];
+
       if (status === 'out_for_delivery') {
-        if (partnerLat && partnerLng) waypoints.push(`${partnerLng},${partnerLat}`);
-        else waypoints.push(`${restaurantLng},${restaurantLat}`);
-        
+        waypoints.push(
+          partnerLat && partnerLng
+            ? `${partnerLng},${partnerLat}`
+            : `${restaurantLng},${restaurantLat}`
+        );
         if (customerLat && customerLng) waypoints.push(`${customerLng},${customerLat}`);
-        else waypoints.push(`72.8777,19.0760`);
+        else return; // can't draw route without destination
       } else {
         waypoints.push(`${restaurantLng},${restaurantLat}`);
         if (partnerLat && partnerLng) waypoints.push(`${partnerLng},${partnerLat}`);
         if (customerLat && customerLng) waypoints.push(`${customerLng},${customerLat}`);
-        else waypoints.push(`72.8777,19.0760`);
       }
 
       if (waypoints.length < 2) return;
 
       try {
-        const res = await fetch(`https://router.project-osrm.org/route/v1/driving/${waypoints.join(';')}?overview=full&geometries=geojson`);
+        const res = await fetch(
+          `https://router.project-osrm.org/route/v1/driving/${waypoints.join(';')}?overview=full&geometries=geojson`
+        );
         const data = await res.json();
-        if (data.routes && data.routes[0]) {
-          const coords = data.routes[0].geometry.coordinates.map((c: number[]) => [c[1], c[0]]);
-          setRouteCoords(coords);
+        if (data.routes?.[0]) {
+          setRouteCoords(
+            data.routes[0].geometry.coordinates.map((c: number[]) => [c[1], c[0]] as [number, number])
+          );
         }
-      } catch (err) {
-        // Fallback to straight line
-        const fallbackPts: [number, number][] = [];
+      } catch {
+        // Straight-line fallback
+        const fb: [number, number][] = [];
         if (status === 'out_for_delivery') {
-          if (partnerLat && partnerLng) fallbackPts.push([partnerLat, partnerLng]);
-          else fallbackPts.push([restaurantLat, restaurantLng]);
-          
-          if (customerLat && customerLng) fallbackPts.push([customerLat, customerLng]);
+          fb.push(partnerLat && partnerLng ? [partnerLat, partnerLng] : [restaurantLat, restaurantLng]);
+          if (customerLat && customerLng) fb.push([customerLat, customerLng]);
         } else {
-          fallbackPts.push([restaurantLat, restaurantLng]);
-          if (partnerLat && partnerLng) fallbackPts.push([partnerLat, partnerLng]);
-          if (customerLat && customerLng) fallbackPts.push([customerLat, customerLng]);
+          fb.push([restaurantLat, restaurantLng]);
+          if (customerLat && customerLng) fb.push([customerLat, customerLng]);
         }
-        setRouteCoords(fallbackPts);
+        setRouteCoords(fb);
       }
     };
-    
+
     fetchRoute();
-    const interval = setInterval(fetchRoute, 30000);
-    return () => clearInterval(interval);
+    const id = setInterval(fetchRoute, 30_000);
+    return () => clearInterval(id);
   }, [restaurantLat, restaurantLng, partnerLat, partnerLng, customerLat, customerLng, status]);
 
   return (
     <div className="w-full h-full relative">
+      <style>{GLOBAL_CSS}</style>
+
       <MapContainer
         center={center}
         zoom={14}
         className="w-full h-full z-0"
         zoomControl={false}
-        attributionControl={false}
+        attributionControl={true}
       >
-        {/* PREMIUM DARK THEME TILE LAYER */}
+        {/* ── Natural Light Tile Layer (CartoDB Voyager) ── */}
         <TileLayer
-          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-          attribution='&copy; <a href="https://carto.com">CARTO</a>'
+          url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com">CARTO</a>'
           maxZoom={19}
         />
 
         <FitBounds points={fitPoints} />
 
-        {/* ─── Glowing Animated Route ─── */}
+        {/* ── Route Lines ── */}
         {routeCoords.length >= 2 && (
           <>
-            {/* Outer large blur glow */}
+            {/* Wide soft glow */}
             <Polyline
               positions={routeCoords}
-              pathOptions={{ color: '#f97316', weight: 15, opacity: 0.15, lineCap: 'round', lineJoin: 'round' }}
+              pathOptions={{ color: '#3b82f6', weight: 16, opacity: 0.10, lineCap: 'round', lineJoin: 'round' }}
             />
-            {/* Inner tight blur glow */}
+            {/* Core road line */}
             <Polyline
               positions={routeCoords}
-              pathOptions={{ color: '#f97316', weight: 6, opacity: 0.4, lineCap: 'round', lineJoin: 'round' }}
+              pathOptions={{ color: '#2563eb', weight: 5, opacity: 0.85, lineCap: 'round', lineJoin: 'round' }}
             />
-            {/* Solid animated core path */}
+            {/* Animated white dashes on top when en-route */}
             <Polyline
               positions={routeCoords}
               pathOptions={{
                 color: '#ffffff',
-                weight: 3,
+                weight: 2.5,
                 opacity: 0.9,
-                dashArray: status === 'out_for_delivery' ? '15, 15' : '0',
-                className: status === 'out_for_delivery' ? 'route-path-animated' : ''
+                dashArray: status === 'out_for_delivery' ? '12, 14' : '0',
+                className: status === 'out_for_delivery' ? 'route-path-animated' : '',
               }}
             />
           </>
         )}
 
-        {/* Restaurant marker */}
-        <Marker position={[restaurantLat, restaurantLng]} icon={restaurantIcon} zIndexOffset={100} />
+        {/* Restaurant pin */}
+        <Marker position={[restaurantLat, restaurantLng]} icon={restaurantMapIcon} zIndexOffset={100} />
 
-        {/* Customer marker */}
+        {/* Customer / destination pin */}
         {customerLat && customerLng && (
           <Marker position={[customerLat, customerLng]} icon={customerIcon} zIndexOffset={150} />
         )}
 
-        {/* Delivery partner marker (smooth movement) */}
+        {/* Rider — smooth animated, only visible when out for delivery */}
         {partnerLat && partnerLng && status === 'out_for_delivery' && (
           <SmoothMarker
             position={[partnerLat, partnerLng]}
             heading={partnerHeading}
             icon={riderIcon}
-            popupText="🛵 Delivery Partner"
+            popupText="🛵 Your delivery partner is on the way!"
           />
         )}
       </MapContainer>
-      
-      {/* Route Animation CSS */}
-      <style>{`
-        .route-path-animated {
-          animation: route-dash 1.5s linear infinite;
-        }
-        @keyframes route-dash {
-          to { stroke-dashoffset: -30; }
-        }
-        .premium-popup .leaflet-popup-content-wrapper {
-          background: rgba(15, 23, 42, 0.9);
-          backdrop-filter: blur(10px);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          color: white;
-          border-radius: 12px;
-          box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-        }
-        .premium-popup .leaflet-popup-tip {
-          background: rgba(15, 23, 42, 0.9);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-      `}</style>
     </div>
   );
 });

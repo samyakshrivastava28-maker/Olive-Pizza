@@ -7,7 +7,7 @@ import {
   lazy,
   Suspense,
 } from "react";
-import { useParams, useNavigate, useLocation } from "react-router";
+import { useParams, useNavigate } from "react-router";
 import { useAuthStore } from "../lib/store";
 import { auth, db } from "../lib/firebase";
 import { doc, getDoc, onSnapshot, updateDoc } from "firebase/firestore";
@@ -15,13 +15,11 @@ import { useNotificationDebugger } from "../hooks/useNotificationDebugger";
 import { supabase } from "../lib/supabase";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { RESTAURANT_LOCATION } from "../lib/config";
-import { motion, AnimatePresence, useAnimation, PanInfo } from "framer-motion";
+import { motion, AnimatePresence, PanInfo } from "framer-motion";
 import {
   ChevronLeft,
   Phone,
-  Copy,
   MapPin,
-  Clock,
   Package,
   ChefHat,
   Truck,
@@ -31,8 +29,6 @@ import {
   Navigation,
   Store,
   User,
-  ChevronUp,
-  ChevronDown,
   Download,
   RotateCcw,
   PartyPopper,
@@ -41,7 +37,8 @@ import {
   Share2,
   MessageSquare,
   Star,
-  Camera
+  Camera,
+  Clock,
 } from "lucide-react";
 import "leaflet/dist/leaflet.css";
 
@@ -50,7 +47,6 @@ import { OwnerAcceptedOverlay, DeliveredOverlay } from "../components/tracking/O
 import { toast } from "react-hot-toast";
 import { playNotificationSound, statusToSoundType } from "../hooks/useNotificationSound";
 import OrderTimeline from "../components/ui/OrderTimeline";
-import SideRays from "../components/ui/SideRays";
 
 
 // Lazy load map only when needed
@@ -616,11 +612,11 @@ export default function OrderTracking() {
   };
 
   return (
-    <div className="h-[100dvh] w-full bg-dark-950 flex flex-col overflow-hidden relative">
+    <div className="h-[100dvh] w-full bg-slate-100 flex flex-col overflow-hidden relative">
       
-      {/* ─── FULLSCREEN MAP HERO ─── */}
+      {/* ─── FULLSCREEN MAP ─── */}
       <div className="absolute inset-0 z-0">
-        <Suspense fallback={<div className="w-full h-full bg-dark-950" />}>
+        <Suspense fallback={<div className="w-full h-full bg-slate-200 flex items-center justify-center"><div className="w-10 h-10 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" /></div>}>
           <MapSection
             restaurantLat={RESTAURANT_LOCATION.lat} restaurantLng={RESTAURANT_LOCATION.lng}
             customerLat={order.deliveryAddress?.lat} customerLng={order.deliveryAddress?.lng}
@@ -628,237 +624,284 @@ export default function OrderTracking() {
             partnerHeading={partnerHeading} status={order.status}
           />
         </Suspense>
-        {/* Shadow overlays for depth */}
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-transparent via-dark-950/20 to-dark-950/80 pointer-events-none z-10" />
-        <div className="absolute inset-0 z-20 pointer-events-none opacity-60">
-          <SideRays
-            speed={2.5}
-            rayColor1="#EAB308"
-            rayColor2="#96c8ff"
-            intensity={2}
-            spread={2}
-            origin="top-right"
-            tilt={0}
-            saturation={1.5}
-            blend={0.75}
-            falloff={1.6}
-            opacity={1.0}
-          />
-        </div>
+        {/* Subtle bottom gradient so the sheet blends in */}
+        <div className="absolute bottom-0 left-0 right-0 h-48 bg-gradient-to-t from-white/60 to-transparent pointer-events-none z-10" />
       </div>
 
-      {/* ─── PREMIUM FLOATING TOP HUD ─── */}
-      <div className="absolute top-0 left-0 right-0 z-50 p-4 pt-safe flex flex-col gap-4 pointer-events-none">
+      {/* ─── FLOATING TOP HUD ─── */}
+      <div className="absolute top-0 left-0 right-0 z-50 p-4 pt-safe flex flex-col gap-3 pointer-events-none">
         
-        {/* Top Navbar */}
+        {/* Navbar Row */}
         <div className="flex items-center justify-between pointer-events-auto">
-          <button onClick={() => navigate("/dashboard")} className="w-12 h-12 flex items-center justify-center bg-dark-900/60 backdrop-blur-xl rounded-full border border-white/10 text-white shadow-2xl hover:bg-dark-900/80 transition-colors active:scale-95">
-            <ChevronLeft size={24} />
+          <button
+            onClick={() => navigate("/dashboard")}
+            className="w-11 h-11 flex items-center justify-center bg-white/90 backdrop-blur-xl rounded-full border border-black/10 text-slate-700 shadow-lg hover:bg-white transition-colors active:scale-95"
+          >
+            <ChevronLeft size={22} />
           </button>
           
-          <div className="flex bg-dark-900/60 backdrop-blur-xl rounded-full border border-white/10 shadow-2xl px-5 py-3 items-center gap-3">
-            <div className="flex items-center gap-2">
-              <span className="relative flex h-2.5 w-2.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-              </span>
-              <span className="text-[11px] font-black tracking-widest text-emerald-400 uppercase">Live</span>
-            </div>
-            <div className="w-px h-4 bg-white/10" />
-            <span className="text-sm font-bold text-white">{order?.dailyOrderNumber || `#${orderId?.slice(-6).toUpperCase()}`}</span>
+          <div className="flex bg-white/90 backdrop-blur-xl rounded-full border border-black/10 shadow-lg px-5 py-2.5 items-center gap-3">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+            </span>
+            <span className="text-[11px] font-black tracking-widest text-emerald-600 uppercase">Live</span>
+            <div className="w-px h-4 bg-slate-200" />
+            <span className="text-sm font-bold text-slate-800">{order?.dailyOrderNumber || `#${orderId?.slice(-6).toUpperCase()}`}</span>
           </div>
 
-          <button onClick={() => {
-             navigator.clipboard.writeText(window.location.href);
-             toast.success("Tracking link copied!");
-          }} className="w-12 h-12 flex items-center justify-center bg-dark-900/60 backdrop-blur-xl rounded-full border border-white/10 text-white shadow-2xl hover:bg-dark-900/80 transition-colors active:scale-95">
-            <Share2 size={20} />
+          <button
+            onClick={() => { navigator.clipboard.writeText(window.location.href); toast.success("Tracking link copied!"); }}
+            className="w-11 h-11 flex items-center justify-center bg-white/90 backdrop-blur-xl rounded-full border border-black/10 text-slate-700 shadow-lg hover:bg-white transition-colors active:scale-95"
+          >
+            <Share2 size={18} />
           </button>
         </div>
 
-        {/* Floating ETA Pill */}
+        {/* ETA Pill */}
         {eta && (
-          <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="self-center mt-2 pointer-events-auto">
-             <div className="bg-dark-900/80 backdrop-blur-2xl border border-white/10 shadow-[0_20px_40px_rgba(0,0,0,0.5)] rounded-[2rem] px-8 py-4 flex flex-col items-center">
-                <p className="text-xs font-bold tracking-widest text-white/50 uppercase mb-1">Estimated Arrival</p>
-                <div className="flex items-baseline gap-2">
-                  <motion.span 
-                    key={eta} initial={{ opacity: 0, scale: 0.8, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }}
-                    className="text-4xl font-black text-white tracking-tighter"
-                  >
-                    {eta}
-                  </motion.span>
-                  <span className="text-lg font-bold text-white/60">min</span>
+          <motion.div
+            initial={{ opacity: 0, y: -16 }} animate={{ opacity: 1, y: 0 }}
+            className="self-center pointer-events-auto"
+          >
+            <div className="bg-white/95 backdrop-blur-xl border border-black/10 shadow-xl rounded-2xl px-7 py-3.5 flex flex-col items-center">
+              <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-0.5">Estimated Arrival</p>
+              <div className="flex items-baseline gap-1.5">
+                <motion.span
+                  key={eta} initial={{ opacity: 0, scale: 0.8, y: 8 }} animate={{ opacity: 1, scale: 1, y: 0 }}
+                  className="text-3xl font-black text-slate-900 tracking-tighter"
+                >
+                  {eta}
+                </motion.span>
+                <span className="text-base font-bold text-slate-400">min</span>
+              </div>
+              {distance && (
+                <div className="mt-1.5 flex items-center gap-1.5 px-3 py-0.5 bg-blue-50 rounded-full border border-blue-100">
+                  <Navigation size={10} className="text-blue-500" />
+                  <span className="text-[10px] font-bold text-blue-600">{distance} km away</span>
                 </div>
-                {distance && (
-                  <div className="mt-2 flex items-center gap-1.5 px-3 py-1 bg-white/5 rounded-full border border-white/5">
-                    <Navigation size={10} className="text-primary-500" />
-                    <span className="text-[10px] font-bold text-white/60">{distance} km away</span>
-                  </div>
-                )}
-             </div>
+              )}
+            </div>
           </motion.div>
         )}
       </div>
 
       {/* ─── DRAGGABLE BOTTOM SHEET ─── */}
-      <motion.div 
-        className="absolute bottom-0 left-0 right-0 bg-dark-950 rounded-t-[2.5rem] shadow-[0_-20px_60px_rgba(0,0,0,0.6)] z-[100] border-t border-white/5 flex flex-col"
+      <motion.div
+        className="absolute bottom-0 left-0 right-0 bg-white rounded-t-[2rem] shadow-[0_-8px_40px_rgba(0,0,0,0.15)] z-[100] flex flex-col"
         initial="half"
         animate={sheetState}
         variants={sheetVariants}
-        transition={{ type: "spring", damping: 25, stiffness: 200 }}
+        transition={{ type: "spring", damping: 28, stiffness: 220 }}
         drag="y"
         dragConstraints={{ top: 0, bottom: 0 }}
-        dragElastic={0.2}
+        dragElastic={0.18}
         onDragEnd={handleDragEnd}
         style={{ height: "100vh" }}
       >
-        {/* Drag Handle Area */}
-        <div className="w-full flex justify-center py-4 cursor-grab active:cursor-grabbing">
-          <div className="w-12 h-1.5 bg-white/20 rounded-full" />
+        {/* Drag Handle */}
+        <div className="w-full flex justify-center pt-3 pb-2 cursor-grab active:cursor-grabbing">
+          <div className="w-10 h-1 bg-slate-300 rounded-full" />
         </div>
 
-        {/* Scrollable Content inside Sheet */}
-        <div className="flex-1 overflow-y-auto px-6 pb-40 custom-scrollbar overscroll-contain">
-          
-          {/* Status Header */}
-          <div className="flex items-center justify-between mb-8">
-            <div>
-              <h2 className="text-2xl font-black text-white tracking-tight">{statusLabel}</h2>
-              <p className="text-sm text-slate-400 font-medium">Updating in real-time</p>
-            </div>
-            {order.status === "preparing" && (
-               <div className="w-12 h-12 bg-amber-500/10 rounded-full flex items-center justify-center animate-pulse">
-                 <ChefHat size={24} className="text-amber-500" />
-               </div>
-            )}
-          </div>
+        {/* Scrollable Content */}
+        <div className="flex-1 overflow-y-auto overscroll-contain pb-10">
 
-          {/* Premium Timeline */}
-          <div className="relative mb-10 mt-2 px-2">
-             <OrderTimeline status={order.status} />
-          </div>
-
-          {/* Delivery Partner Card */}
-          {partnerDetails && (
-            <div className="mb-6">
-              <h3 className="text-sm font-bold text-white/50 uppercase tracking-widest mb-3 px-1">Delivery Partner</h3>
-              <GlassCard className="p-5 relative overflow-hidden group">
-                <div className="absolute inset-0 bg-gradient-to-br from-primary-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                <div className="relative z-10 flex items-center gap-4">
-                  
-                  {/* Avatar */}
-                  <div className="relative">
-                    <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-primary-500 shadow-[0_0_20px_rgba(249,115,22,0.3)]">
-                      {partnerDetails.photoUrl ? (
-                        <img src={partnerDetails.photoUrl} alt="" className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full bg-dark-800 flex items-center justify-center"><User className="text-slate-500" /></div>
-                      )}
-                    </div>
-                    <div className="absolute -bottom-2 -right-2 w-8 h-8 bg-dark-900 rounded-full border-2 border-dark-950 flex items-center justify-center shadow-lg">
-                       <span className="text-[10px] font-black text-amber-400 flex items-center">⭐4.9</span>
-                    </div>
-                  </div>
-
-                  {/* Info */}
-                  <div className="flex-1 min-w-0">
-                    <h4 className="text-lg font-bold text-white truncate">{partnerDetails.name || "Delivery Partner"}</h4>
-                    <p className="text-sm text-slate-400 mt-0.5 truncate">{partnerDetails.vehicleType || "Scooter"} • {partnerDetails.vehicleNumber}</p>
-                    <p className="text-[11px] text-slate-500 font-bold mt-1">2,340 DELIVERIES</p>
-                  </div>
-
-                  {/* Actions */}
-                  {partnerDetails.phone && (
-                    <div className="flex gap-2">
-                       <a href={`tel:${partnerDetails.phone}`} className="w-12 h-12 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.2)] hover:scale-110 active:scale-95 transition-all">
-                         <Phone size={20} />
-                       </a>
-                       <button className="w-12 h-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-white hover:scale-110 active:scale-95 transition-all">
-                         <MessageSquare size={20} />
-                       </button>
-                    </div>
-                  )}
+          {/* ── Status Banner ── */}
+          <div className="px-5 pt-2 pb-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-black text-slate-900 tracking-tight">{statusLabel}</h2>
+                <p className="text-xs text-slate-400 font-medium mt-0.5">Updating in real-time</p>
+              </div>
+              {order.status === "preparing" && (
+                <div className="w-11 h-11 bg-amber-50 rounded-xl flex items-center justify-center">
+                  <ChefHat size={22} className="text-amber-500" />
                 </div>
-              </GlassCard>
+              )}
+              {order.status === "out_for_delivery" && (
+                <div className="w-11 h-11 bg-blue-50 rounded-xl flex items-center justify-center animate-pulse">
+                  <span className="text-2xl">🛵</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* ── Timeline ── */}
+          <div className="px-5 pb-5">
+            <OrderTimeline status={order.status} />
+          </div>
+
+          {/* Divider */}
+          <div className="h-2 bg-slate-50 border-y border-slate-100" />
+
+          {/* ── Delivery Partner ── */}
+          {partnerDetails && (
+            <div className="px-5 py-4">
+              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3">Your Delivery Partner</p>
+              <div className="flex items-center gap-4">
+                {/* Avatar */}
+                <div className="relative shrink-0">
+                  <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-orange-400 shadow-md">
+                    {partnerDetails.photoUrl ? (
+                      <img src={partnerDetails.photoUrl} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full bg-orange-50 flex items-center justify-center">
+                        <User size={24} className="text-orange-400" />
+                      </div>
+                    )}
+                  </div>
+                  {/* Online dot */}
+                  <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-emerald-500 border-2 border-white rounded-full" />
+                </div>
+
+                {/* Info */}
+                <div className="flex-1 min-w-0">
+                  <h4 className="text-base font-bold text-slate-900 truncate">{partnerDetails.name || "Delivery Partner"}</h4>
+                  <p className="text-xs text-slate-500 mt-0.5 truncate">
+                    {partnerDetails.vehicleType || "Scooter"}{partnerDetails.vehicleNumber ? ` · ${partnerDetails.vehicleNumber}` : ""}
+                  </p>
+                  <div className="flex items-center gap-1 mt-1">
+                    <Star size={11} className="text-amber-400 fill-amber-400" />
+                    <span className="text-xs font-bold text-slate-600">
+                      {partnerDetails.metrics?.ratingSum && partnerDetails.metrics?.ratingCount
+                        ? (partnerDetails.metrics.ratingSum / partnerDetails.metrics.ratingCount).toFixed(1)
+                        : "4.9"}
+                    </span>
+                    <span className="text-xs text-slate-400 ml-1">
+                      {partnerDetails.metrics?.totalDeliveries ? `${partnerDetails.metrics.totalDeliveries} deliveries` : ""}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Call button */}
+                {partnerDetails.phone && (
+                  <div className="flex gap-2 shrink-0">
+                    <a
+                      href={`tel:${partnerDetails.phone}`}
+                      className="w-11 h-11 rounded-full bg-emerald-500 flex items-center justify-center text-white shadow-md shadow-emerald-200 hover:bg-emerald-600 active:scale-95 transition-all"
+                    >
+                      <Phone size={18} />
+                    </a>
+                    <button className="w-11 h-11 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-200 active:scale-95 transition-all">
+                      <MessageSquare size={18} />
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
-          {/* Restaurant Card */}
-          <div className="mb-6">
-             <h3 className="text-sm font-bold text-white/50 uppercase tracking-widest mb-3 px-1">Restaurant</h3>
-             <GlassCard className="p-4 flex items-center gap-4">
-                <div className="w-14 h-14 rounded-2xl bg-dark-800 border border-white/10 flex items-center justify-center shadow-inner">
-                  <Store size={24} className="text-primary-500" />
-                </div>
-                <div className="flex-1 min-w-0">
-                   <h4 className="font-bold text-white text-base">Olive Pizza</h4>
-                   <p className="text-xs text-slate-400 truncate mt-0.5">{RESTAURANT_LOCATION.address}</p>
-                </div>
-                <a href={`tel:9999999999`} className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-slate-300 hover:text-white transition-colors">
-                   <Phone size={16} />
-                </a>
-             </GlassCard>
+          <div className="h-2 bg-slate-50 border-y border-slate-100" />
+
+          {/* ── Delivery Address ── */}
+          <div className="px-5 py-4">
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3">Delivery Address</p>
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center shrink-0 mt-0.5">
+                <MapPin size={18} className="text-blue-500" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-slate-800 leading-snug">
+                  {order.deliveryAddress?.address || order.deliveryAddress?.fullAddress || "Your Location"}
+                </p>
+                {order.deliveryAddress?.landmark && (
+                  <p className="text-xs text-slate-400 mt-0.5">Near {order.deliveryAddress.landmark}</p>
+                )}
+              </div>
+            </div>
           </div>
 
-          {/* Order Summary */}
-          <div className="mb-8">
-             <h3 className="text-sm font-bold text-white/50 uppercase tracking-widest mb-3 px-1 flex items-center gap-2">
-               <ShoppingBag size={14} /> Order Summary
-             </h3>
-             <GlassCard className="p-5">
-                <div className="space-y-4 mb-4">
-                  {order.items?.map((item: any, i: number) => (
-                    <div key={i} className="flex gap-4">
-                      {item.image && (
-                        <div className="w-12 h-12 rounded-xl overflow-hidden border border-white/10 shrink-0">
-                          <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0 flex flex-col justify-center">
-                        <div className="flex justify-between items-start">
-                           <p className="text-sm font-bold text-white leading-tight">{item.name}</p>
-                           <p className="text-sm font-black text-white">₹{item.price * item.quantity}</p>
-                        </div>
-                        <div className="flex justify-between items-end mt-1">
-                           <p className="text-[11px] text-slate-400 truncate max-w-[180px]">
-                             {[item.variant, item.crust].filter(Boolean).join(" · ")}
-                           </p>
-                           <p className="text-xs font-bold text-slate-500 bg-dark-800 px-2 py-0.5 rounded-md">Qty {item.quantity}</p>
-                        </div>
-                      </div>
+          <div className="h-2 bg-slate-50 border-y border-slate-100" />
+
+          {/* ── Restaurant Info ── */}
+          <div className="px-5 py-4">
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3">Restaurant</p>
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-orange-50 flex items-center justify-center shrink-0">
+                <span className="text-lg">🍕</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-slate-800">Olive Pizza</p>
+                <p className="text-xs text-slate-400 truncate mt-0.5">{RESTAURANT_LOCATION.address}</p>
+              </div>
+              <a
+                href="tel:9999999999"
+                className="w-9 h-9 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-200 transition-colors"
+              >
+                <Phone size={15} />
+              </a>
+            </div>
+          </div>
+
+          <div className="h-2 bg-slate-50 border-y border-slate-100" />
+
+          {/* ── Order Summary ── */}
+          <div className="px-5 py-4">
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+              <ShoppingBag size={12} /> Your Order
+            </p>
+            <div className="space-y-3 mb-4">
+              {order.items?.map((item: any, i: number) => (
+                <div key={i} className="flex items-center gap-3">
+                  {item.image && (
+                    <div className="w-11 h-11 rounded-xl overflow-hidden border border-slate-100 shrink-0">
+                      <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
                     </div>
-                  ))}
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-slate-800 truncate">{item.name}</p>
+                    {(item.variant || item.crust) && (
+                      <p className="text-xs text-slate-400 truncate">{[item.variant, item.crust].filter(Boolean).join(" · ")}</p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">×{item.quantity}</span>
+                    <span className="text-sm font-bold text-slate-900">₹{item.price * item.quantity}</span>
+                  </div>
                 </div>
-                
-                <div className="border-t border-white/5 pt-4 space-y-2">
-                   <div className="flex justify-between text-sm text-slate-400">
-                     <span>Item Total</span>
-                     <span>₹{order.totalAmount - (order.deliveryFee || 40)}</span>
-                   </div>
-                   <div className="flex justify-between text-sm text-slate-400">
-                     <span>Delivery Fee</span>
-                     <span>₹{order.deliveryFee || 40}</span>
-                   </div>
-                   <div className="flex justify-between items-center mt-3 pt-3 border-t border-white/5">
-                     <span className="text-base font-bold text-white">Grand Total</span>
-                     <span className="text-xl font-black text-primary-400">₹{order.totalAmount}</span>
-                   </div>
+              ))}
+            </div>
+
+            {/* Bill summary */}
+            <div className="bg-slate-50 rounded-2xl p-4 space-y-2">
+              <div className="flex justify-between text-sm text-slate-500">
+                <span>Item Total</span>
+                <span>₹{order.totalAmount - (order.deliveryFee || 40)}</span>
+              </div>
+              <div className="flex justify-between text-sm text-slate-500">
+                <span>Delivery Fee</span>
+                <span>₹{order.deliveryFee || 40}</span>
+              </div>
+              <div className="flex justify-between items-center pt-2 mt-1 border-t border-slate-200">
+                <span className="text-sm font-bold text-slate-800">Grand Total</span>
+                <span className="text-lg font-black text-orange-500">₹{order.totalAmount}</span>
+              </div>
+              <div className="flex items-center gap-1.5 pt-1">
+                <div className="w-4 h-4 rounded-full bg-slate-200 flex items-center justify-center">
+                  <span className="text-[9px]">💳</span>
                 </div>
-             </GlassCard>
+                <span className="text-xs text-slate-400 font-medium">
+                  {order.paymentMethod === "online" ? "Paid Online" : "Cash on Delivery"}
+                </span>
+              </div>
+            </div>
           </div>
 
-          {/* Support Actions */}
-          <div className="grid grid-cols-2 gap-3 pb-8">
-             {["pending", "accepted", "preparing"].includes(order.status) && (
-               <GlassButton variant="secondary" onClick={handleCancel} disabled={cancelling} className="w-full py-4 !text-red-400 !bg-red-500/10 !border-red-500/20 hover:!bg-red-500/20">
-                 {cancelling ? "Cancelling..." : "Cancel Order"}
-               </GlassButton>
-             )}
-             <GlassButton variant="secondary" className="w-full py-4 col-span-full sm:col-span-1 text-slate-300">
-               Need Help?
-             </GlassButton>
+          {/* ── Actions ── */}
+          <div className="px-5 pt-2 pb-6 space-y-3">
+            {["pending", "accepted", "preparing"].includes(order.status) && (
+              <button
+                onClick={handleCancel}
+                disabled={cancelling}
+                className="w-full py-3.5 rounded-2xl border-2 border-red-200 bg-red-50 text-red-500 font-bold text-sm hover:bg-red-100 active:scale-[0.98] transition-all disabled:opacity-50"
+              >
+                {cancelling ? "Cancelling..." : "Cancel Order"}
+              </button>
+            )}
+            <button className="w-full py-3.5 rounded-2xl border border-slate-200 bg-slate-50 text-slate-600 font-semibold text-sm hover:bg-slate-100 active:scale-[0.98] transition-all">
+              Need Help? Contact Support
+            </button>
           </div>
 
         </div>
