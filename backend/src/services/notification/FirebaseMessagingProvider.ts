@@ -23,10 +23,19 @@ export class FirebaseMessagingProvider {
         await notificationDebugger.updateStage(notificationId, 'Sent to Firebase', { tokensFound: tokens.length });
       }
 
+      const sanitizedData: Record<string, string> = {};
+      if (payload.data && typeof payload.data === 'object') {
+        for (const [k, v] of Object.entries(payload.data)) {
+          if (v !== undefined && v !== null) {
+            sanitizedData[k] = typeof v === 'string' ? v : typeof v === 'object' ? JSON.stringify(v) : String(v);
+          }
+        }
+      }
+
       const message: admin.messaging.MulticastMessage = {
         tokens,
         notification: payload.notification,
-        data: payload.data
+        data: sanitizedData
       };
       const response = await adminMessaging.sendEachForMulticast(message);
       

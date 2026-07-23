@@ -1,62 +1,39 @@
 import PDFDocument from 'pdfkit';
 
-// ── Monthly Report Metrics (used by MonthlyReportService) ─────────────────────
 export interface MonthlyReportMetrics {
-  month: string;              // e.g. "July 2026"
+  month: string;
   year: number;
   monthNumber: number;
-
-  // Orders
   totalOrders: number;
   completedOrders: number;
   cancelledOrders: number;
   failedOrders: number;
-
-  // Revenue
   totalRevenue: number;
   netRevenue: number;
   taxes: number;
   discounts: number;
   averageOrderValue: number;
-
-  // Payment
   paymentBreakdown: {
     cod: { amount: number; count: number; percent: number };
     upi: { amount: number; count: number; percent: number };
     card: { amount: number; count: number; percent: number };
   };
-
-  // Coupons
   couponsUsed: { code: string; count: number; discountTotal: number }[];
-
-  // Delivery
   avgDeliveryTimeMinutes: number;
   avgPreparationTimeMinutes: number;
   onTimeDeliveryRate: number;
-  activeDeliveryPartners: number;
-  deliveryPartnerStats: { name: string; completedCount: number; rating: number }[];
-
-  // Products
   topSellingProducts: { name: string; quantity: number; revenue: number }[];
   worstSellingProducts: { name: string; quantity: number; revenue: number }[];
-
-  // Customers
   newCustomers: number;
   returningCustomers: number;
   totalActiveCustomers: number;
-
-  // Reviews
+  deliveryPartnerStats: { name: string; completedCount: number; rating: number }[];
   totalReviews: number;
   averageRating: number;
-
-  // Infrastructure
   notificationsSent: number;
   emailsSent: number;
   emailSuccessRate: number;
-
-  // Trends
   dailySales: { date: string; revenue: number; orders: number }[];
-  weeklySales: { date: string; revenue: number; orders: number }[];
   peakHours: { hour: string; count: number }[];
 }
 
@@ -507,14 +484,14 @@ export class PdfGenerator {
 
         doc.moveDown(0.8);
         let pRowY = doc.y;
-        metrics.topSellingProducts.slice(0, 5).forEach((item, idx) => {
+        metrics.topSellingProducts.slice(0, 5).forEach((item: { name: string; quantity: number; revenue: number }, idx: number) => {
           doc.fontSize(8.5).font('Helvetica').fillColor(darkColor);
           doc.text(`${idx + 1}. ${item.name} (${item.quantity} sold - ₹${item.revenue})`, 40, pRowY);
           pRowY += 15;
         });
 
         let pRowY2 = doc.y;
-        metrics.worstSellingProducts.slice(0, 5).forEach((item, idx) => {
+        metrics.worstSellingProducts.slice(0, 5).forEach((item: { name: string; quantity: number; revenue: number }, idx: number) => {
           doc.fontSize(8.5).font('Helvetica').fillColor(mutedColor);
           doc.text(`${idx + 1}. ${item.name} (${item.quantity} sold)`, 300, pRowY2);
           pRowY2 += 15;
@@ -532,7 +509,7 @@ export class PdfGenerator {
         doc.text('Total Discount', 360, coupY);
         doc.strokeColor('#e2e8f0').lineWidth(1).moveTo(40, coupY + 14).lineTo(555, coupY + 14).stroke();
         coupY += 20;
-        metrics.couponsUsed.slice(0, 8).forEach((c) => {
+        metrics.couponsUsed.slice(0, 8).forEach((c: { code: string; count: number; discountTotal: number }) => {
           doc.fontSize(8.5).font('Helvetica').fillColor(darkColor);
           doc.text(c.code, 50, coupY);
           doc.text(`${c.count}x`, 220, coupY);
@@ -582,7 +559,7 @@ export class PdfGenerator {
         doc.text('Rating', 480, dpY);
         doc.strokeColor('#e2e8f0').lineWidth(1).moveTo(40, dpY + 14).lineTo(555, dpY + 14).stroke();
         dpY += 20;
-        metrics.deliveryPartnerStats.slice(0, 5).forEach((dp) => {
+        metrics.deliveryPartnerStats.slice(0, 5).forEach((dp: { name: string; completedCount: number; rating: number }) => {
           doc.fontSize(8.5).font('Helvetica').fillColor(darkColor);
           doc.text(dp.name, 50, dpY);
           doc.text(`${dp.completedCount} orders`, 220, dpY);
@@ -611,8 +588,8 @@ export class PdfGenerator {
         doc.strokeColor('#e2e8f0').lineWidth(1).moveTo(40, dsY + 14).lineTo(555, dsY + 14).stroke();
         dsY += 20;
 
-        const maxDailyRev = Math.max(...metrics.dailySales.map(d => d.revenue), 1);
-        metrics.dailySales.slice(0, 20).forEach((d) => {
+        const maxDailyRev = Math.max(...metrics.dailySales.map((d: { revenue: number }) => d.revenue), 1);
+        metrics.dailySales.slice(0, 20).forEach((d: { date: string; revenue: number; orders: number }) => {
           doc.fontSize(8.5).font('Helvetica').fillColor(darkColor);
           doc.text(d.date, 50, dsY);
           doc.text(`${d.orders}`, 180, dsY);
@@ -641,8 +618,8 @@ export class PdfGenerator {
         doc.text('Activity', 360, phY);
         doc.strokeColor('#e2e8f0').lineWidth(1).moveTo(40, phY + 14).lineTo(555, phY + 14).stroke();
         phY += 20;
-        const maxHourCount = Math.max(...metrics.peakHours.map(h => h.count), 1);
-        metrics.peakHours.slice(0, 12).forEach((h) => {
+        const maxHourCount = Math.max(...metrics.peakHours.map((h: { count: number }) => h.count), 1);
+        metrics.peakHours.slice(0, 12).forEach((h: { hour: string; count: number }) => {
           doc.fontSize(8.5).font('Helvetica').fillColor(darkColor);
           doc.text(h.hour, 50, phY);
           doc.text(`${h.count} orders`, 220, phY);

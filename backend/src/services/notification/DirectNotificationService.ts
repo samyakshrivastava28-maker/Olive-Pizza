@@ -91,10 +91,19 @@ export class DirectNotificationService {
       // 4. Send chunks concurrently without blocking the main event loop
       const sendPromises = chunks.map(async (chunk) => {
         try {
+          const sanitizedData: Record<string, string> = {};
+          if (payload.data && typeof payload.data === 'object') {
+            for (const [k, v] of Object.entries(payload.data)) {
+              if (v !== undefined && v !== null) {
+                sanitizedData[k] = typeof v === 'string' ? v : typeof v === 'object' ? JSON.stringify(v) : String(v);
+              }
+            }
+          }
+
           const message: admin.messaging.MulticastMessage = {
             tokens: chunk,
             notification: payload.notification,
-            data: payload.data,
+            data: sanitizedData,
             android: payload.android,
             apns: payload.apns,
             webpush: payload.webpush,

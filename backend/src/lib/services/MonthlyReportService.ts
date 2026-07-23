@@ -102,7 +102,7 @@ export class MonthlyReportService {
             averageOrderValue: metrics.averageOrderValue,
             newCustomers: metrics.newCustomers,
             returningCustomers: metrics.returningCustomers,
-            topSellingProducts: metrics.topSellingProducts.map(p => p.name),
+            topSellingProducts: metrics.topSellingProducts.map((p: { name: string }) => p.name),
             averageRating: metrics.averageRating,
             emailed: false,
             emailSentAt: null as string | null,

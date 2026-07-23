@@ -427,10 +427,19 @@ export class NotificationQueueService {
         parsedPayload.android = { priority: 'high' };
       }
 
+      const sanitizedData: Record<string, string> = {};
+      if (parsedPayload.data && typeof parsedPayload.data === 'object') {
+        for (const [k, v] of Object.entries(parsedPayload.data)) {
+          if (v !== undefined && v !== null) {
+            sanitizedData[k] = typeof v === 'string' ? v : typeof v === 'object' ? JSON.stringify(v) : String(v);
+          }
+        }
+      }
+
       const message: admin.messaging.MulticastMessage = {
         tokens,
         notification: parsedPayload.notification,
-        data: parsedPayload.data,
+        data: sanitizedData,
         android: parsedPayload.android,
         apns: parsedPayload.apns,
         webpush: parsedPayload.webpush,
