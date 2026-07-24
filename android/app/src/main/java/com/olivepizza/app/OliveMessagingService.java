@@ -25,32 +25,16 @@ import org.json.JSONObject;
 import android.os.PowerManager;
 
 /**
- * Olive Pizza — Custom Firebase Messaging Service
+ * Olive Pizza — Custom Firebase Messaging Service (Production Grade)
  *
  * RESPONSIBILITIES:
  *  1. Receive ALL FCM messages (data-only AND notification+data).
  *  2. For continuous alarms (alert=continuous) and ongoing trackers (ongoing=true),
  *     build a native notification with the correct channel, sound, full-screen intent,
- *     and action buttons — REGARDLESS of whether the message has a `notification` block.
- *  3. For notification+data messages where the app is KILLED, FCM auto-displays the
- *     notification via the system tray using the channel created at app startup
- *     (see MainActivity). When the app process IS alive, onMessageReceived fires and
- *     we build the rich native notification here.
+ *     and action buttons — REGARDLESS of whether the app process is alive or dead.
+ *  3. Turn screen physically ON immediately when a critical alarm arrives.
  *  4. Register refreshed FCM tokens natively (onNewToken) so killed-app delivery
- *     always has a valid token even if the web JS bridge isn't running.
- *
- * CHANNEL STRATEGY (canonical IDs — NO suffix variants):
- *   olive_order_new           — Owner: New Orders    (MAX importance, order_alert sound)
- *   olive_order_status        — Updates              (HIGH importance, soft_pop sound)
- *   olive_order_completed     — Delivered/Cancelled  (HIGH importance, success_ding/cancel_buzz)
- *   olive_delivery_assignment — Delivery assignments (MAX importance, delivery_chime sound)
- *   olive_delivery_updates    — Navigation/progress  (HIGH importance, default)
- *   olive_marketing           — Promotions           (DEFAULT importance, soft_pop)
- *   olive_system              — Alerts               (HIGH importance, system_alert)
- *
- * These IDs MUST match the AndroidManifest default channel
- * (com.google.firebase.messaging.default_notification_channel_id = olive_order_new)
- * and the channels created in MainActivity.onCreate().
+ *     always has a valid token.
  */
 public class OliveMessagingService extends MessagingService {
     private static final String TAG = "OliveMessagingService";
@@ -64,20 +48,13 @@ public class OliveMessagingService extends MessagingService {
         PowerManager.WakeLock wakeLock = null;
         if (powerManager != null) {
             wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "OlivePizza::NotificationWakeLock");
-            wakeLock.acquire(10000); // 10 seconds max
+            wakeLock.acquire(15000); // 15 seconds max for message processing
         }
 
         try {
-            // 2. Build a unified data map from BOTH the data payload AND the notification block.
-            //    When the app is in the foreground, onMessageReceived fires for ALL message types
-            //    (data-only AND notification+data). We normalize the fields so the native alarm
-            //    logic works regardless of how the backend constructed the message.
             Map<String, String> data = new HashMap<>(remoteMessage.getData());
 
-            // If a `notification` block is present, fall back to it for title/body when the
-            // data block doesn't already carry them. This is the key fix for notification+data
-            // messages: previously only data payloads were processed, so status-update messages
-            // (which include a notification block) never triggered the native alarm path.
+            // If a notification block is present, normalize fallback fields
             RemoteMessage.Notification notif = remoteMessage.getNotification();
             if (notif != null) {
                 if (!data.containsKey("title") && notif.getTitle() != null) {
@@ -86,7 +63,6 @@ public class OliveMessagingService extends MessagingService {
                 if (!data.containsKey("body") && notif.getBody() != null) {
                     data.put("body", notif.getBody());
                 }
-                // The notification block's click_action maps to our data "clickAction"
                 if (!data.containsKey("clickAction") && notif.getClickAction() != null) {
                     data.put("clickAction", notif.getClickAction());
                 }
@@ -94,23 +70,20 @@ public class OliveMessagingService extends MessagingService {
 
             Log.d(TAG, "Normalized data payload: " + data);
 
-            // 3. Route to the correct native handler
             if (data.size() > 0) {
                 String alert = data.get("alert");
                 String ongoing = data.get("ongoing");
                 String action = data.get("action");
 
                 if ("continuous".equals(alert) || "true".equals(ongoing)) {
-                    // Critical alarm or live tracker — build rich native notification
+                    // Turn screen ON physically if continuous emergency alarm
+                    if ("continuous".equals(alert)) {
+                        wakeScreenOnEmergency(powerManager);
+                    }
                     showNativeNotification(data);
                 } else if ("stop_alert".equals(action)) {
                     stopNativeAlarm(data);
                 }
-                // For non-alarm status updates WITHOUT ongoing/continuous flags, the
-                // notification block (if present) is already auto-displayed by FCM's
-                // system tray path when the app is killed. When the app is in the
-                // foreground, Capacitor's super.onMessageReceived() below forwards it
-                // to the JS layer for in-app display. No native action needed here.
             }
         } catch (Exception e) {
             Log.e(TAG, "Error processing native notification", e);
@@ -120,13 +93,28 @@ public class OliveMessagingService extends MessagingService {
             }
         }
 
-        // 4. Let Capacitor do its thing (JS foreground events) LAST
-        // Wrapped in try-catch because if app is swiped away (dead), Capacitor might
-        // crash trying to init the JS bridge. This is expected and safe to swallow.
         try {
             super.onMessageReceived(remoteMessage);
         } catch (Exception e) {
-            Log.e(TAG, "Capacitor MessagingService failed (expected if app is closed)", e);
+            Log.e(TAG, "Capacitor MessagingService call safe catch (expected if app is closed)", e);
+        }
+    }
+
+    /**
+     * Physically wakes screen up from black/sleeping state when an order alarm arrives.
+     */
+    private void wakeScreenOnEmergency(PowerManager powerManager) {
+        if (powerManager == null) return;
+        try {
+            @SuppressWarnings("deprecation")
+            PowerManager.WakeLock screenLock = powerManager.newWakeLock(
+                PowerManager.FULL_WAKE_LOCK | PowerManager.ACQUIRE_CAUSES_WAKEUP | PowerManager.ON_AFTER_RELEASE,
+                "OlivePizza::EmergencyScreenWakeLock"
+            );
+            screenLock.acquire(10000); // 10 seconds to display screen
+            Log.d(TAG, "⚡ Emergency screen wake lock acquired!");
+        } catch (Exception e) {
+            Log.w(TAG, "Could not acquire screen wake lock: " + e.getMessage());
         }
     }
 
@@ -137,52 +125,49 @@ public class OliveMessagingService extends MessagingService {
         boolean isOngoing = "true".equals(data.get("ongoing"));
         boolean isContinuous = "continuous".equals(data.get("alert"));
 
-        // Ongoing tracker uses same ID. Alarms use offset to not collide.
         int notificationId = isOngoing ? orderId.hashCode() : (orderId.hashCode() + 1000);
 
         String title = data.get("title");
         String body = data.get("body");
         String soundName = data.get("sound");
 
-        // ── CANONICAL CHANNEL ID (no _v4 suffix) ─────────────────────────────
-        // The previous code appended "_v4" which mismatched the manifest default
-        // channel (olive_order_new). When the app is killed and FCM falls back to
-        // the system tray using the manifest default, that channel didn't exist
-        // → Android 8+ silently dropped the notification. Now we use the canonical
-        // IDs that MainActivity.onCreate() creates at startup.
         String channelId = data.get("channelId");
         if (channelId == null || channelId.isEmpty()) {
             channelId = isOngoing ? "olive_order_status" : "olive_order_new";
         }
-        // Strip any legacy "_v4" suffix to migrate to canonical IDs
         if (channelId.endsWith("_v4")) {
             channelId = channelId.substring(0, channelId.length() - 3);
         }
 
         NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
 
-        // Ensure the channel exists (safety net — MainActivity creates them at startup,
-        // but if this service runs in a fresh process before MainActivity, we create it here).
+        // Ensure channel exists with MAX importance and USAGE_ALARM for emergency alarms
         ensureChannelExists(notificationManager, channelId, isContinuous, isOngoing, soundName);
 
         Intent intent;
         if (isContinuous) {
             intent = new Intent(this, AlarmActivity.class);
             intent.putExtra("orderId", orderId);
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         } else {
             intent = new Intent(this, MainActivity.class);
-            intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
+            intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
             intent.putExtra("url", data.get("url"));
         }
-        PendingIntent pendingIntent = PendingIntent.getActivity(this, notificationId, intent, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+        PendingIntent pendingIntent = PendingIntent.getActivity(
+            this,
+            notificationId,
+            intent,
+            PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT
+        );
 
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this, channelId)
                 .setSmallIcon(getResources().getIdentifier("ic_stat_icon_config_sample", "drawable", getPackageName()))
                 .setContentTitle(title)
                 .setContentText(body)
                 .setStyle(new NotificationCompat.BigTextStyle().bigText(body))
-                .setContentIntent(pendingIntent);
+                .setContentIntent(pendingIntent)
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC);
 
         if (isOngoing) {
             builder.setOngoing(true).setOnlyAlertOnce(true);
@@ -201,7 +186,7 @@ public class OliveMessagingService extends MessagingService {
                    .setFullScreenIntent(pendingIntent, true);
         }
 
-        // Actions (Accept / Reject / Stop Alert)
+        // Action Buttons (Accept / Reject / Stop Alert)
         String actionsStr = data.get("actions");
         if (actionsStr != null) {
             try {
@@ -232,18 +217,13 @@ public class OliveMessagingService extends MessagingService {
         Notification notification = builder.build();
 
         if (isContinuous) {
-            notification.flags |= Notification.FLAG_INSISTENT; // Continuous loop sound!
+            notification.flags |= Notification.FLAG_INSISTENT; // Loop alarm sound continuously
         }
 
         notificationManager.notify(notificationId, notification);
+        Log.i(TAG, "🔔 Native alarm notification posted: id=" + notificationId + " channel=" + channelId + " continuous=" + isContinuous);
     }
 
-    /**
-     * Ensures a notification channel exists with the correct importance + sound.
-     * This is a safety net — MainActivity.onCreate() creates all channels at startup,
-     * but if OliveMessagingService runs in a fresh process (e.g., after a force-stop
-     * followed by a high-priority FCM data message), the channels may not exist yet.
-     */
     private void ensureChannelExists(NotificationManager notificationManager,
                                      String channelId, boolean isContinuous, boolean isOngoing,
                                      String soundName) {
@@ -267,10 +247,11 @@ public class OliveMessagingService extends MessagingService {
             }
         }
         channel.enableVibration(true);
+        channel.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
         try {
             channel.setBypassDnd(true);
         } catch (Exception e) {
-            Log.w(TAG, "Failed to set Bypass DND (missing permission): " + e.getMessage());
+            Log.w(TAG, "Failed to set Bypass DND: " + e.getMessage());
         }
         notificationManager.createNotificationChannel(channel);
     }
@@ -286,7 +267,6 @@ public class OliveMessagingService extends MessagingService {
         }
     }
 
-    // Static helper for NotificationActionReceiver to cancel
     public static void stopAlarm(Context context, int notificationId) {
         NotificationManager notificationManager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
         if (notificationManager != null) {
@@ -294,21 +274,12 @@ public class OliveMessagingService extends MessagingService {
         }
     }
 
-    public static void stopAlarm() {
-        // Fallback for any lingering calls that expected the old parameterless stopAlarm()
-    }
+    public static void stopAlarm() {}
 
-    /**
-     * Called when the FCM token is refreshed. We POST it to the backend so the
-     * backend always has a valid token for killed-app delivery, even if the web
-     * JS bridge isn't running (e.g., app is in background or was killed).
-     */
     @Override
     public void onNewToken(@NonNull String token) {
         super.onNewToken(token);
         Log.d(TAG, "Refreshed FCM token: " + token);
-        // Delegate to MainActivity's native token registration helper which handles
-        // the authenticated POST to /api/notifications/token.
         MainActivity.registerTokenNatively(this, token, null);
     }
 }

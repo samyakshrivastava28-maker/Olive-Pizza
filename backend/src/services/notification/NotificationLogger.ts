@@ -13,12 +13,20 @@ export interface NotificationLogEntry {
   orderId?: string;
   userId?: string;
   role?: string;
+  triggerSource?: 'manual' | 'automatic';
+  eventType?: string;
+  recipientRole?: string;
+  recipientCount?: number;
+  activeTokenCount?: number;
+  inactiveTokenCount?: number;
   fcmToken: string;
   payload: any;
   firebaseResponse: any;
   status: 'success' | 'failure';
   errorDetails?: string;
   elapsedTimeMs: number;
+  retryCount?: number;
+  retryReason?: string;
 }
 
 export class NotificationLogger {

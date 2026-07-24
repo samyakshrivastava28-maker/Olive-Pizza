@@ -51,6 +51,19 @@ router.get('/notifications/logs', async (req: DevRequest, res: Response) => {
 });
 
 /**
+ * GET /devops/notifications/pipeline-monitor — Live notification monitor
+ */
+router.get('/notifications/pipeline-monitor', async (req: DevRequest, res: Response) => {
+  try {
+    const limit = parseInt((req.query.limit as string) || '100', 10);
+    const data = await DevOpsService.getNotificationPipelineMonitorData(limit);
+    res.json({ success: true, data });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
  * GET /devops/security-logs — Security audit logs
  */
 router.get('/security-logs', async (req: DevRequest, res: Response) => {

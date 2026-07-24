@@ -160,10 +160,15 @@ export default function DeveloperDashboard() {
   const [diagnostics, setDiagnostics] = useState<any>(null);
   const [diagLoading, setDiagLoading] = useState(false);
   const [diagOrderId, setDiagOrderId] = useState('');
+  const [monitorData, setMonitorData] = useState<any>(null);
+  const [monitorLoading, setMonitorLoading] = useState(false);
+  const [roleFilter, setRoleFilter] = useState<'all' | 'owner' | 'customer' | 'delivery'>('all');
+  const [sourceFilter, setSourceFilter] = useState<'all' | 'manual' | 'automatic'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'success' | 'failure'>('all');
   const [fcmLogs, setFcmLogs] = useState<any[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
   const [claimLoading, setClaimLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'health' | 'diagnostics' | 'logs' | 'security'>('health');
+  const [activeTab, setActiveTab] = useState<'health' | 'monitor' | 'diagnostics' | 'logs' | 'security'>('health');
   const [autoRefresh, setAutoRefresh] = useState(false);
 
   const fetchHealth = useCallback(async () => {
@@ -171,6 +176,15 @@ export default function DeveloperDashboard() {
     try { const res = await devGet('/health'); setHealth(res.data); }
     catch (err: any) { setHealthError(err.message); }
     finally { setHealthLoading(false); }
+  }, []);
+
+  const fetchMonitor = useCallback(async () => {
+    setMonitorLoading(true);
+    try {
+      const res = await devGet('/notifications/pipeline-monitor?limit=100');
+      setMonitorData(res.data);
+    } catch (err: any) { toast.error(`Pipeline Monitor: ${err.message}`); }
+    finally { setMonitorLoading(false); }
   }, []);
 
   const fetchDiagnostics = useCallback(async () => {
@@ -198,14 +212,19 @@ export default function DeveloperDashboard() {
 
   useEffect(() => { fetchHealth(); }, [fetchHealth]);
   useEffect(() => {
+    if (activeTab === 'monitor') fetchMonitor();
     if (activeTab === 'diagnostics') fetchDiagnostics();
     if (activeTab === 'logs') fetchLogs();
-  }, [activeTab]);
+  }, [activeTab, fetchMonitor, fetchDiagnostics, fetchLogs]);
+
   useEffect(() => {
     if (!autoRefresh) return;
-    const id = setInterval(() => fetchHealth(), 10000);
+    const id = setInterval(() => {
+      fetchHealth();
+      if (activeTab === 'monitor') fetchMonitor();
+    }, 10000);
     return () => clearInterval(id);
-  }, [autoRefresh, fetchHealth]);
+  }, [autoRefresh, fetchHealth, activeTab, fetchMonitor]);
 
   const mb = (b: number) => `${(b / 1024 / 1024).toFixed(1)} MB`;
   const fmt = (s: number) => {
@@ -215,6 +234,7 @@ export default function DeveloperDashboard() {
 
   const tabs = [
     { id: 'health', label: 'System Health', icon: Activity },
+    { id: 'monitor', label: 'Pipeline Monitor', icon: Zap },
     { id: 'diagnostics', label: 'Notification Trace', icon: Bell },
     { id: 'logs', label: 'FCM Logs', icon: Terminal },
     { id: 'security', label: 'Setup', icon: ShieldCheck },
@@ -292,6 +312,144 @@ export default function DeveloperDashboard() {
                 </div>
               </>
             ) : null}
+          </motion.div>
+        )}
+
+        {/* Live Notification Pipeline Monitor */}
+        {activeTab === 'monitor' && (
+          <motion.div key="monitor" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+            {/* Filters */}
+            <div className="bg-slate-900/60 border border-white/[0.08] rounded-2xl p-4 mb-6 flex flex-wrap gap-4 items-center justify-between">
+              <div className="flex flex-wrap gap-3 items-center">
+                <span className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Filters:</span>
+                
+                {/* Role Filter */}
+                <select
+                  value={roleFilter}
+                  onChange={(e: any) => setRoleFilter(e.target.value)}
+                  className="bg-black/40 border border-white/10 text-slate-200 text-xs rounded-xl px-3 py-1.5 focus:outline-none focus:border-primary-500"
+                >
+                  <option value="all">Role: All</option>
+                  <option value="owner">Owner / Admin</option>
+                  <option value="customer">Customer</option>
+                  <option value="delivery">Delivery Partner</option>
+                </select>
+
+                {/* Source Filter */}
+                <select
+                  value={sourceFilter}
+                  onChange={(e: any) => setSourceFilter(e.target.value)}
+                  className="bg-black/40 border border-white/10 text-slate-200 text-xs rounded-xl px-3 py-1.5 focus:outline-none focus:border-primary-500"
+                >
+                  <option value="all">Source: All</option>
+                  <option value="manual">Manual Broadcast</option>
+                  <option value="automatic">Automatic Event</option>
+                </select>
+
+                {/* Status Filter */}
+                <select
+                  value={statusFilter}
+                  onChange={(e: any) => setStatusFilter(e.target.value)}
+                  className="bg-black/40 border border-white/10 text-slate-200 text-xs rounded-xl px-3 py-1.5 focus:outline-none focus:border-primary-500"
+                >
+                  <option value="all">Result: All</option>
+                  <option value="success">Success</option>
+                  <option value="failure">Failed</option>
+                </select>
+              </div>
+
+              <button
+                onClick={fetchMonitor}
+                disabled={monitorLoading}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary-600 hover:bg-primary-500 text-white text-xs font-semibold transition-all disabled:opacity-60"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${monitorLoading ? 'animate-spin' : ''}`} /> Refresh Monitor
+              </button>
+            </div>
+
+            {/* Logs List */}
+            {monitorLoading ? (
+              <div className="space-y-2">{[...Array(6)].map((_, i) => <div key={i} className="h-20 bg-white/5 rounded-xl animate-pulse" />)}</div>
+            ) : monitorData?.logs && monitorData.logs.length > 0 ? (
+              <div className="space-y-3">
+                {monitorData.logs
+                  .filter((log: any) => {
+                    if (roleFilter !== 'all' && (log.recipientRole || log.role) !== roleFilter) return false;
+                    if (sourceFilter !== 'all' && log.triggerSource !== sourceFilter) return false;
+                    if (statusFilter !== 'all' && log.status !== statusFilter) return false;
+                    return true;
+                  })
+                  .map((log: any, idx: number) => (
+                    <motion.div
+                      key={idx}
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="bg-slate-900/60 border border-white/[0.08] rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4"
+                    >
+                      <div className="flex items-start gap-3 flex-1 min-w-0">
+                        <div className="mt-1">
+                          {log.status === 'success' ? (
+                            <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                          ) : (
+                            <XCircle className="w-5 h-5 text-red-400" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2 mb-1">
+                            {/* Source Pill */}
+                            <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider border ${
+                              log.triggerSource === 'manual'
+                                ? 'bg-blue-500/15 text-blue-400 border-blue-500/30'
+                                : 'bg-purple-500/15 text-purple-400 border-purple-500/30'
+                            }`}>
+                              {log.triggerSource || 'automatic'}
+                            </span>
+
+                            {/* Event Type */}
+                            <span className="text-white font-semibold text-sm truncate">
+                              {log.eventType || log.payload?.data?.stage || log.payload?.data?.category || 'Notification Event'}
+                            </span>
+
+                            {/* Order ID */}
+                            {log.orderId && (
+                              <span className="bg-white/5 border border-white/10 text-primary-300 font-mono text-xs px-2 py-0.5 rounded-md">
+                                Order #{log.orderId.slice(-6).toUpperCase()}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex flex-wrap gap-x-4 gap-y-1 text-slate-400 text-xs mt-1">
+                            <span>User: <strong className="text-slate-200">{log.userId || 'Bulk'}</strong></span>
+                            {log.recipientRole && <span>Role: <strong className="text-slate-200">{log.recipientRole}</strong></span>}
+                            {log.elapsedTimeMs > 0 && <span>Latency: <strong className="text-slate-200">{log.elapsedTimeMs}ms</strong></span>}
+                            {log.timestamp && <span>{new Date(log.timestamp).toLocaleTimeString()}</span>}
+                          </div>
+
+                          {log.errorDetails && (
+                            <p className="text-red-400 text-xs mt-2 bg-red-500/10 border border-red-500/20 p-2 rounded-lg font-mono">
+                              Error: {log.errorDetails}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col items-end gap-1 flex-shrink-0 text-right">
+                        <StatusPill status={log.status} />
+                        {log.retryReason && (
+                          <span className="text-red-400/80 text-[10px] font-mono">
+                            Reason: {log.retryReason}
+                          </span>
+                        )}
+                        <span className="text-slate-500 text-[10px] font-mono truncate max-w-[180px]">
+                          Token: {log.fcmToken ? `${log.fcmToken.slice(0, 12)}...` : 'None'}
+                        </span>
+                      </div>
+                    </motion.div>
+                  ))}
+              </div>
+            ) : (
+              <div className="text-center py-16 text-slate-500 text-sm">No notification events recorded yet</div>
+            )}
           </motion.div>
         )}
 

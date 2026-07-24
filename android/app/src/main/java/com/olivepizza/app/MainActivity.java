@@ -275,12 +275,13 @@ public class MainActivity extends BridgeActivity {
             return;
         }
 
-        // Check the role-gated flag set by the web JS layer. We only prompt for
-        // owner/delivery roles (they need emergency alarms). Customers don't need it.
         boolean roleGated = getSharedPreferences("olive_native", MODE_PRIVATE)
                 .getBoolean("battery_prompt_role_set", false);
-        if (!roleGated) {
-            Log.d(TAG, "Battery prompt not yet role-gated — waiting for web layer to set role.");
+        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+
+        // Prompt if role-gated by web layer OR if a signed-in Firebase user exists
+        if (!roleGated && user == null) {
+            Log.d(TAG, "Battery prompt skipped — waiting for sign-in or role set.");
             return;
         }
 

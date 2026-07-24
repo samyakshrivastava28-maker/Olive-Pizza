@@ -121,6 +121,31 @@ export class DevOpsService {
   }
 
   /**
+   * Fetch live pipeline monitor logs for Developer Dashboard
+   */
+  static async getNotificationPipelineMonitorData(limit = 100) {
+    const { NotificationLogger } = await import('../notification/NotificationLogger.js');
+    const logs = NotificationLogger.getRecentLogs(limit);
+    
+    // Also fetch current queue status summary from DB
+    let queueSummary: Record<string, number> = {};
+    try {
+      const res = await pgPool.query(`SELECT status, COUNT(*) as count FROM notification_queue GROUP BY status`);
+      res.rows.forEach((r: any) => {
+        queueSummary[r.status] = parseInt(r.count, 10);
+      });
+    } catch (e: any) {
+      console.error('[DevOpsService] Error fetching queue summary:', e.message);
+    }
+
+    return {
+      logs,
+      queueSummary,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  /**
    * Fetch recent security logs from Firestore
    */
   static async getSecurityLogs(limit = 100) {

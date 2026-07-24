@@ -457,20 +457,30 @@ export class NotificationQueueService {
           timestamp: new Date().toISOString(),
           orderId: order_id,
           userId: target_user_id,
+          triggerSource: 'automatic',
+          eventType: stage || category || 'queued_push',
+          recipientRole: role,
+          recipientCount: 1,
+          activeTokenCount: tokens.length,
+          inactiveTokenCount: failedTokens.length,
           fcmToken,
           payload: parsedPayload,
           firebaseResponse: r,
           status: r.success ? 'success' : 'failure',
           errorDetails: r.error?.message,
-          elapsedTimeMs: deliveryMs
+          elapsedTimeMs: deliveryMs,
+          retryCount: retry_count || 0,
+          retryReason: r.error ? r.error.code : undefined,
         });
 
         if (r.error) {
           const code = r.error.code;
+          // ONLY deactivate tokens for permanent registration error codes per Fix 2
           if (
             code === 'messaging/invalid-registration-token' ||
             code === 'messaging/registration-token-not-registered' ||
-            code === 'messaging/invalid-argument'
+            code === 'invalid-registration-token' ||
+            code === 'registration-token-not-registered'
           ) {
             failedTokens.push(fcmToken);
           }

@@ -69,17 +69,38 @@ export class DirectNotificationService {
       tokens = Array.from(new Set(tokens));
       
       // 2. Ensure Android payload triggers immediately. FCM only supports 'normal' or 'high'.
-      // If priority is 'critical' (our internal abstraction), map it to 'high' for Android.
       let priority = priorityOverride || options.priority || 'high';
       if (priority === 'critical' || priority === 'silent') {
-        priority = 'high'; // Android only supports 'high' or 'normal'
+        priority = 'high';
       }
-      
-      if (payload.android) {
-        payload.android.priority = priority;
-      } else {
-        payload.android = { priority };
+
+      // Preserve existing Android channel if set by template; fallback to payload.data channel or default
+      const channelId = payload.android?.notification?.channelId || payload.data?.channelId || 'olive_order_new';
+      const soundName = payload.android?.notification?.sound || payload.data?.sound || 'default';
+      const clickAction = payload.android?.notification?.clickAction || (payload.data?.alert === 'continuous' ? 'olive_alarm' : undefined);
+
+      if (!payload.android) {
+        payload.android = {};
       }
+      payload.android.priority = priority;
+
+      if (!payload.android.notification) {
+        payload.android.notification = {};
+      }
+      payload.android.notification.channelId = channelId;
+      payload.android.notification.sound = soundName;
+      payload.android.notification.visibility = 'public';
+      payload.android.notification.notificationPriority = priority === 'high' ? 'PRIORITY_MAX' : 'PRIORITY_DEFAULT';
+      payload.android.notification.defaultVibrateTimings = payload.android.notification.defaultVibrateTimings ?? true;
+      if (clickAction) {
+        payload.android.notification.clickAction = clickAction;
+      }
+
+      const startTime = Date.now();
+      const triggerSource = options.category === 'marketing' || payload.data?.source === 'owner_broadcast' ? 'manual' : 'automatic';
+      const eventType = payload.data?.stage || payload.data?.category || options.category || 'push';
+
+      console.log(`[DirectPush] Event Triggered: ${eventType} | Source: ${triggerSource} | Targets: ${firebaseUserIds.length} | Tokens Found: ${tokens.length}`);
 
       // 3. Chunk tokens into arrays of 500 (FCM limit)
       const chunkSize = 500;
@@ -109,37 +130,52 @@ export class DirectNotificationService {
             webpush: payload.webpush,
           };
           const response = await adminMessaging.sendEachForMulticast(message);
+          const elapsedTimeMs = Date.now() - startTime;
           
           // Cleanup invalid tokens async
-            const failedTokens: string[] = [];
-            response.responses.forEach((r, idx) => {
-              const fcmToken = chunk[idx];
-              // Fire & forget logging
-              NotificationLogger.log({
-                timestamp: new Date().toISOString(),
-                orderId: options.orderId,
-                userId: 'bulk_target', // could be inferred, but token is unique
-                fcmToken,
-                payload,
-                firebaseResponse: r,
-                status: r.success ? 'success' : 'failure',
-                errorDetails: r.error?.message,
-                elapsedTimeMs: 0 // We could measure this if we start a timer
-              });
-
-              if (r.error && (
-                r.error.code === 'messaging/invalid-registration-token' ||
-                r.error.code === 'messaging/registration-token-not-registered'
-              )) {
-                failedTokens.push(fcmToken);
-              }
+          const failedTokens: string[] = [];
+          response.responses.forEach((r, idx) => {
+            const fcmToken = chunk[idx];
+            
+            NotificationLogger.log({
+              timestamp: new Date().toISOString(),
+              orderId: options.orderId,
+              userId: firebaseUserIds.length === 1 ? firebaseUserIds[0] : 'bulk_target',
+              triggerSource,
+              eventType,
+              recipientRole: payload.data?.role || options.category,
+              recipientCount: firebaseUserIds.length,
+              activeTokenCount: tokens.length,
+              inactiveTokenCount: failedTokens.length,
+              fcmToken,
+              payload,
+              firebaseResponse: r,
+              status: r.success ? 'success' : 'failure',
+              errorDetails: r.error?.message,
+              elapsedTimeMs,
+              retryReason: r.error ? r.error.code : undefined,
             });
 
-            if (failedTokens.length > 0) {
+            if (r.error) {
+              const code = r.error.code;
+              // ONLY deactivate tokens for permanent registration error codes per Fix 2
+              if (
+                code === 'messaging/invalid-registration-token' ||
+                code === 'messaging/registration-token-not-registered' ||
+                code === 'invalid-registration-token' ||
+                code === 'registration-token-not-registered'
+              ) {
+                failedTokens.push(fcmToken);
+              }
+            }
+          });
+
+          if (failedTokens.length > 0) {
             await pgPool.query(
               `UPDATE fcm_tokens SET is_active = FALSE WHERE token = ANY($1)`,
               [failedTokens]
-            ).catch(() => {});
+            ).catch(err => console.error('[DirectPush] Token deactivation failed:', err.message));
+            console.log(`[DirectPush] Deactivated ${failedTokens.length} permanent invalid FCM tokens`);
           }
           
           return {

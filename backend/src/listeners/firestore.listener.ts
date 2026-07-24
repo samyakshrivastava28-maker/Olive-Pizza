@@ -3,6 +3,7 @@
  * This is the SINGLE SOURCE OF TRUTH for all order notifications.
  */
 import { adminDb as db } from '../config/firebase.js';
+import { pgPool } from '../config/postgres.js';
 import { notificationService } from '../services/notification/notification.service.js';
 import { SlackProvider } from '../services/notification/slack.provider.js';
 import { notificationQueue } from '../services/notification/NotificationQueueService.js';
@@ -26,13 +27,58 @@ export class FirestoreListener {
     }
   }, 30 * 60 * 1000);
 
-  static init() {
+  static async init() {
     try {
+      await this.hydrateActiveOrdersCache();
       this.listenToOrders();
       this.listenToActivityLogs();
       console.log('🎧 Firestore Listeners (Admin SDK) initialized for Unified Notifications.');
-    } catch (err) {
-      console.error('❌ Failed to initialize Firestore Listeners:', err);
+    } catch (err: any) {
+      console.error('❌ Failed to initialize Firestore Listeners:', err.message || err);
+    }
+  }
+
+  /**
+   * Fix 4: Hydrate all active (non-terminal) orders into orderStatusCache at startup
+   */
+  private static async hydrateActiveOrdersCache() {
+    try {
+      const activeSnap = await db.collection('orders')
+        .where('status', 'not-in', ['delivered', 'completed', 'cancelled'])
+        .get();
+      activeSnap.docs.forEach((doc: any) => {
+        this.orderStatusCache.set(doc.id, doc.data()?.status);
+      });
+      console.log(`[FirestoreListener] Hydrated ${activeSnap.size} active order statuses into cache.`);
+    } catch (err: any) {
+      console.warn('[FirestoreListener] Active orders cache hydration notice:', err.message);
+    }
+  }
+
+  /**
+   * Fix 1: Unified Owner Recipient Resolution (Postgres fcm_tokens + Firestore users)
+   */
+  private static async getOwnerRecipients(): Promise<string[]> {
+    try {
+      let targetUids: string[] = [];
+      const client = await pgPool.connect();
+      try {
+        const res = await client.query(
+          "SELECT DISTINCT user_id as firebase_uid FROM fcm_tokens WHERE role = 'owner' OR role = 'admin' OR role IS NULL"
+        );
+        targetUids = res.rows.map((r: any) => r.firebase_uid);
+      } finally {
+        client.release();
+      }
+
+      const ownerDocs = await db.collection('users').where('role', 'in', ['owner', 'admin']).get();
+      const fsUids = ownerDocs.docs.map(d => d.id);
+      targetUids = Array.from(new Set([...targetUids, ...fsUids]));
+      return targetUids;
+    } catch (err: any) {
+      console.error('[FirestoreListener] Owner recipient lookup error:', err.message);
+      const ownerDocs = await db.collection('users').where('role', 'in', ['owner', 'admin']).get();
+      return ownerDocs.docs.map(d => d.id);
     }
   }
 
@@ -60,14 +106,15 @@ export class FirestoreListener {
               createdAt = new Date();
             }
 
-            // Skip orders older than 10 min (server restart replay protection)
+            // ALWAYS set status cache for state tracking, even for historical orders
+            this.orderStatusCache.set(orderData.id, orderData.status);
+
+            // Skip trigger push alarms for orders older than 10 min (server restart replay protection)
             if (Date.now() - createdAt.getTime() > 10 * 60 * 1000) continue;
             
             // Prevent duplicate triggers if we already processed this order creation
             if (this.processedOrderIds.has(orderData.id)) continue;
             this.processedOrderIds.add(orderData.id);
-
-            this.orderStatusCache.set(orderData.id, orderData.status);
 
             const shortId = orderData.id.slice(-6).toUpperCase();
             const orderNumber = orderData.dailyOrderNumber
@@ -88,12 +135,13 @@ export class FirestoreListener {
               try { await change.doc.ref.update({ slackThreadTs: ts }); } catch (e) {}
             }
 
-            if (orderData.orderTiming === 'scheduled') continue; // Skip push alarms for scheduled until ready (use continue, not return — return exits the entire snapshot callback)
+            if (orderData.orderTiming === 'scheduled') continue; // Skip push alarms for scheduled until ready
 
             // 2. FCM PUSH NOTIFICATION TO OWNERS (INSTANT DIRECT PUSH + QUEUE BACKUP)
             try {
-              const ownerDocs = await db.collection('users').where('role', '==', 'owner').get();
-              const ownerUids = ownerDocs.docs.map(d => d.id);
+              const ownerUids = await this.getOwnerRecipients();
+              console.log(`[AutoNotif] New Order ${orderData.id} -> Resolved ${ownerUids.length} owner/admin recipients: [${ownerUids.join(', ')}]`);
+
               if (ownerUids.length > 0) {
                 const ownerPayload = OwnerTemplates.newOrder(orderData.id, {
                   customerName: orderData.customerName || orderData.customer_name || 'Customer',
@@ -270,8 +318,7 @@ export class FirestoreListener {
 
             // Notify Owners (Fast Direct Push)
             if (['picked_up', 'out_for_delivery', 'delivered'].includes(currentStatus)) {
-               const ownerDocs = await db.collection('users').where('role', '==', 'owner').get();
-               const ownerUids = ownerDocs.docs.map(d => d.id);
+               const ownerUids = await this.getOwnerRecipients();
                if (ownerUids.length > 0) {
                  const oPayload = OwnerTemplates.orderStatusUpdate(orderData.id, { orderNumber: shortId, customerName: orderData.customerName || 'Customer', status: currentStatus as any, deliveryPartnerName: orderData.deliveryPartnerName || 'Partner', totalAmount, version });
                   await directNotification.sendBulkPush(ownerUids, oPayload, 'normal', { tag: `order_owner_tracking_${orderData.id}`, orderId: orderData.id, category: 'order', version }).catch((e: any) => console.error(`[AutoNotif] ❌ Owner tracking push FAILED: ${e.message}`));
@@ -283,8 +330,7 @@ export class FirestoreListener {
 
             // Kill Owner Alarms (Stop Alert)
             if (prevStatus === 'pending' && currentStatus !== 'pending') {
-               const ownerDocs = await db.collection('users').where('role', '==', 'owner').get();
-               const ownerUids = ownerDocs.docs.map(d => d.id);
+               const ownerUids = await this.getOwnerRecipients();
                if (ownerUids.length > 0) {
                  const stopPayload = { data: { action: 'stop_alert', orderId: orderData.id } };
                  await directNotification.sendBulkPush(ownerUids, stopPayload, 'high', { tag: `order_owner_stop_${orderData.id}`, orderId: orderData.id, category: 'order', version }).catch((e: any) => console.error(`[AutoNotif] ❌ Owner stop_alert push FAILED: ${e.message}`));
