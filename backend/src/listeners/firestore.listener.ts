@@ -70,7 +70,9 @@ export class FirestoreListener {
             this.orderStatusCache.set(orderData.id, orderData.status);
 
             const shortId = orderData.id.slice(-6).toUpperCase();
-            const orderNumber = orderData.dailyOrderNumber || orderData.daily_order_number || `OP-${shortId}`;
+            const orderNumber = orderData.dailyOrderNumber
+              ? `#${orderData.dailyOrderNumber}`
+              : (orderData.dailyOrderNumber || orderData.daily_order_number || `OP-${shortId}`);
             const totalAmount = Number(orderData.totalAmount || orderData.total_amount || 0);
             
             // 1. SLACK NOTIFICATION
@@ -201,7 +203,9 @@ export class FirestoreListener {
             this.orderStatusCache.set(orderData.id, currentStatus);
 
             const shortId = orderData.id.slice(-6).toUpperCase();
-            const orderNumber = orderData.dailyOrderNumber || orderData.daily_order_number || `OP-${shortId}`;
+            const orderNumber = orderData.dailyOrderNumber
+              ? `#${orderData.dailyOrderNumber}`
+              : (orderData.daily_order_number || `OP-${shortId}`);
             const totalAmount = Number(orderData.totalAmount || orderData.total_amount || 0);
 
             console.log(`🔄 Order ${orderNumber} Status Transition: ${prevStatus} → ${currentStatus}`);
@@ -257,7 +261,8 @@ export class FirestoreListener {
             if (customerId && ['accepted', 'preparing', 'ready', 'packed', 'partner_assigned', 'picked_up', 'out_for_delivery', 'delivered', 'cancelled'].includes(currentStatus)) {
               const cPayload = CustomerTemplates.orderUpdate(orderData.id, {
                 orderNumber: shortId, status: currentStatus as any, totalAmount, 
-                deliveryPartnerName: orderData.deliveryPartnerName || 'Partner', version
+                deliveryPartnerName: orderData.deliveryPartnerName || 'Partner', version,
+                cancellationReason: currentStatus === 'cancelled' ? (orderData.cancellationReason || undefined) : undefined,
               });
               await directNotification.sendPush(customerId, cPayload, 'high', { tag: `order_customer_${orderData.id}`, orderId: orderData.id, category: 'order', version }).catch((e: any) => console.error(`[AutoNotif] ❌ Customer push FAILED uid=${customerId}: ${e.message}`));
               await notificationQueue.enqueue(customerId, cPayload, 'high', { tag: `order_customer_${orderData.id}`, orderId: orderData.id, category: 'order', version }).catch((e: any) => console.error(`[AutoNotif] ❌ Customer queue FAILED uid=${customerId}: ${e.message}`));

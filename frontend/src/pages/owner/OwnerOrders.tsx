@@ -14,6 +14,7 @@ import { playNotificationSound, statusToSoundType } from "../../hooks/useNotific
 import { logActivity } from "../../lib/logger";
 import { useNotificationDebugger } from "../../hooks/useNotificationDebugger";
 import toast from "react-hot-toast";
+import CancelOrderReasonModal from "../../components/owner/CancelOrderReasonModal";
 
 
 export default function OwnerOrders() {
@@ -82,6 +83,61 @@ export default function OwnerOrders() {
   }, []);
 
   const [processingId, setProcessingId] = useState<string | null>(null);
+
+  // Cancel modal state
+  const [cancelTarget, setCancelTarget] = useState<Order | null>(null);
+  const [cancelSubmitting, setCancelSubmitting] = useState(false);
+
+  /** Opens the cancel-reason modal instead of firing immediately */
+  const requestCancel = (order: Order) => {
+    setCancelTarget(order);
+  };
+
+  /** Called after owner confirms reason in modal */
+  const cancelWithReason = async (reason: string) => {
+    if (!cancelTarget) return;
+    setCancelSubmitting(true);
+    const order = cancelTarget;
+    const endpoint = '/api/notifications/action';
+    try {
+      const isDebug = localStorage.getItem('diag_mode') === 'true';
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) {
+        toast.error('Authentication error: Please log in again.');
+        return;
+      }
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          ...(isDebug ? { 'X-Debug-Mode': 'true' } : {})
+        },
+        body: JSON.stringify({
+          orderId: order.id,
+          action: 'cancel_order',
+          currentStage: order.status,
+          reason,
+        }),
+        signal: AbortSignal.timeout(15000),
+      });
+      const data = await res.json();
+      if (isDebug && data.trace) useNotificationDebugger.getState().updateTrace(data.trace);
+      if (!res.ok) {
+        if (!data.duplicate) {
+          toast.error(data.error || `Cancel failed (${res.status})`);
+          return;
+        }
+      }
+      logActivity('Order Cancelled', `Order ${order.dailyOrderNumber || order.id?.slice(-6)} cancelled: ${reason}`, auth.currentUser?.email || undefined);
+      toast.success('Order cancelled successfully.');
+      setCancelTarget(null);
+    } catch (e: any) {
+      toast.error(`Failed to cancel: ${e.message}`);
+    } finally {
+      setCancelSubmitting(false);
+    }
+  };
 
   const updateStatus = async (
     order: any,
@@ -348,7 +404,7 @@ export default function OwnerOrders() {
                 )}
                 <button
                   disabled={processingId === order.id}
-                  onClick={() => updateStatus(order, "cancelled")}
+                  onClick={() => requestCancel(order)}
                   className="w-full bg-slate-100 hover:bg-red-500 disabled:opacity-50 text-slate-300 hover:text-white p-3 rounded-xl font-bold transition-colors"
                 >
                   Cancel Order
@@ -516,6 +572,21 @@ export default function OwnerOrders() {
           </div>
         </div>
       )}
+
+      {/* ─── Cancel Order Modal ─── */}
+      <CancelOrderReasonModal
+        isOpen={!!cancelTarget}
+        orderNumber={
+          cancelTarget
+            ? (cancelTarget.dailyOrderNumber
+                ? `#${cancelTarget.dailyOrderNumber}`
+                : `Order #${cancelTarget.id?.slice(-6).toUpperCase() || ''}`)
+            : ""
+        }
+        isSubmitting={cancelSubmitting}
+        onConfirm={cancelWithReason}
+        onClose={() => !cancelSubmitting && setCancelTarget(null)}
+      />
     </div>
   );
 }

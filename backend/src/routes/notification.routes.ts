@@ -234,6 +234,7 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
     const OWNER_TRANSITIONS: Record<string, { from: string[], to: string }> = {
       accept: { from: ['pending', 'new_order'], to: 'accepted' },
       reject: { from: ['pending', 'new_order', 'accepted', 'preparing', 'ready', 'partner_assigned'], to: 'cancelled' },
+      cancel_order: { from: ['pending', 'new_order', 'accepted', 'preparing', 'ready', 'partner_assigned'], to: 'cancelled' },
       start_cooking: { from: ['accepted'], to: 'preparing' },
       ready: { from: ['preparing'], to: 'ready' },
       assign_delivery: { from: ['preparing', 'ready'], to: 'partner_assigned' },
@@ -279,13 +280,24 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
         }
         firestoreUpdates.deliveryPartnerId = partnerId;
         firestoreUpdates.delivery_partner_id = partnerId;
-
         // Notification dispatch removed - handled by firestore.listener.ts
       } else if (action === 'accept') {
         firestoreUpdates.acceptedAt = new Date().toISOString();
         firestoreUpdates.eta = '20-30 mins';
         // Notification dispatch removed - handled by firestore.listener.ts
-      } else if (action === 'reject') {
+      } else if (action === 'reject' || action === 'cancel_order') {
+        // cancel_order requires a mandatory non-empty reason
+        if (action === 'cancel_order') {
+          const reason: string | undefined = req.body.reason?.trim();
+          if (!reason) {
+            await releaseOrderLock(orderId);
+            lockReleased = true;
+            res.status(400).json({ error: 'Cancellation reason is required.', requestId });
+            return;
+          }
+          firestoreUpdates.cancellationReason = reason;
+          trace.steps.push({ step: 'Cancellation Reason', status: 'success', reason });
+        }
         firestoreUpdates.cancelledAt = new Date().toISOString();
         // Notification dispatch removed - handled by firestore.listener.ts
       } else if (action === 'start_cooking') {
@@ -296,7 +308,11 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
         // Notification dispatch removed - handled by firestore.listener.ts
       }
 
-      responseData = { message: `Order ${action === 'reject' ? 'rejected' : action === 'accept' ? 'accepted' : action === 'assign_delivery' ? 'partner assigned' : newStatus}` };
+      const isCancellation = action === 'reject' || action === 'cancel_order';
+      responseData = { message: `Order ${
+        isCancellation ? 'cancelled' :
+        action === 'accept' ? 'accepted' :
+        action === 'assign_delivery' ? 'partner assigned' : newStatus}` };
     }
 
     // ── DELIVERY ACTIONS ───────────────────────────────────────────────────
@@ -309,8 +325,69 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
           res.status(403).json({ error: 'You are not assigned to this order', requestId });
           return;
         }
-        // Notification dispatch removed - handled by firestore.listener.ts
+        // No status change needed — acknowledgment only
         responseData = { message: 'Delivery accepted' };
+      } else if (action === 'reject_delivery') {
+        // Partner declines the assignment
+        if (orderData.delivery_partner_id !== userId && orderData.deliveryPartnerId !== userId) {
+          await releaseOrderLock(orderId);
+          lockReleased = true;
+          res.status(403).json({ error: 'You are not assigned to this order', requestId });
+          return;
+        }
+        if (!['partner_assigned', 'picked_up'].includes(currentStatus)) {
+          await releaseOrderLock(orderId);
+          lockReleased = true;
+          res.status(409).json({ error: `Cannot reject delivery with status "${currentStatus}"`, requestId });
+          return;
+        }
+        // Return order to 'ready', unassign partner, record declined partner
+        newStatus = 'ready';
+        firestoreWriteRequired = true;
+        const declinedIds = Array.isArray(orderData.declinedPartnerIds)
+          ? [...orderData.declinedPartnerIds, userId]
+          : [userId];
+        firestoreUpdates = {
+          status: newStatus,
+          updatedAt: new Date(),
+          deliveryPartnerId: null,
+          delivery_partner_id: null,
+          deliveryPartnerName: null,
+          declinedPartnerIds: declinedIds,
+          rejectedAt: new Date().toISOString(),
+        };
+        // Fire-and-forget: notify owners that partner declined (non-blocking, standard push — not alarm)
+        const shortId2 = orderData.dailyOrderNumber
+          ? `#${orderData.dailyOrderNumber}`
+          : `OP-${orderId.slice(-6).toUpperCase()}`;
+        backgroundTasks.push(async () => {
+          try {
+            const ownerDocs = await db.collection('users').where('role', '==', 'owner').get();
+            const ownerUids = ownerDocs.docs.map((d: any) => d.id);
+            if (ownerUids.length > 0) {
+              const rejectPayload = {
+                data: {
+                  title: '🚴 Rider Declined Delivery',
+                  body: `Order ${shortId2} was declined by the delivery partner. Please reassign.`,
+                  orderId,
+                  action: 'rider_declined',
+                  url: '/owner/orders',
+                  priority: 'high',
+                  category: 'order',
+                  sound: 'system_alert',
+                  channelId: 'olive_order_status',
+                },
+              };
+              await directNotification.sendBulkPush(ownerUids, rejectPayload, 'high', {
+                tag: `order_rider_declined_${orderId}`, orderId, category: 'order', priority: 'high', version: 1
+              });
+              console.log(`[Action][${requestId}] Owner rider-declined push sent for order ${orderId}`);
+            }
+          } catch (e: any) {
+            console.error(`[Action][${requestId}] Owner rider-declined push failed:`, e.message);
+          }
+        });
+        responseData = { message: 'Delivery declined — order returned to ready' };
       } else if (action === 'picked_up') {
         if (currentStatus !== 'partner_assigned') {
           await releaseOrderLock(orderId);
@@ -339,7 +416,7 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
       } else {
         await releaseOrderLock(orderId);
         lockReleased = true;
-        res.status(400).json({ error: `Unknown delivery action "${action}"`, allowedActions: ['accept_delivery', 'picked_up', 'delivered'], requestId });
+        res.status(400).json({ error: `Unknown delivery action "${action}"`, allowedActions: ['accept_delivery', 'reject_delivery', 'picked_up', 'delivered'], requestId });
         return;
       }
     }

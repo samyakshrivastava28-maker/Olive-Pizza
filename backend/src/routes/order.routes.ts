@@ -9,6 +9,34 @@ import { queueEmail } from '../services/email.service.js';
 import { buildOrderStatusEmail } from '../services/emailTemplates.service.js';
 import crypto from 'crypto';
 
+// Restaurant local timezone for daily order counter reset
+const RESTAURANT_TIMEZONE = process.env.RESTAURANT_TIMEZONE || 'Asia/Kolkata';
+
+/** Returns YYYY-MM-DD in the restaurant's local timezone */
+function getLocalDateString(): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: RESTAURANT_TIMEZONE })
+    .format(new Date());
+}
+
+/**
+ * Atomically increments the daily order counter in Firestore and returns
+ * the next sequential number for today. Resets to 1 when the date changes.
+ */
+async function getNextDailyOrderNumber(): Promise<{ dailyOrderNumber: number; orderDateLocal: string }> {
+  const today = getLocalDateString();
+  const counterRef = adminDb.collection('counters').doc('dailyOrders');
+
+  const dailyOrderNumber = await adminDb.runTransaction(async (t) => {
+    const snap = await t.get(counterRef);
+    const data = snap.exists ? snap.data()! : { date: today, count: 0 };
+    const newCount = data.date === today ? (data.count as number) + 1 : 1;
+    t.set(counterRef, { date: today, count: newCount });
+    return newCount;
+  });
+
+  return { dailyOrderNumber, orderDateLocal: today };
+}
+
 const router = Router();
 
 // Get orders for logged in user
@@ -185,10 +213,22 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
     }
     trace.steps.push({ step: 'Idempotency Lock', status: 'success' });
 
-    // 3 & 4. Push Firestore document for real-time tracking (Single source of truth)
+    // 3. Generate unique order ID + atomic daily order number
     const newOrderId = crypto.randomUUID();
     const shortId = newOrderId.slice(-6).toUpperCase();
-    const orderNumber = `OP-${shortId}`;
+
+    let dailyOrderNumber = 0;
+    let orderDateLocal = getLocalDateString();
+    try {
+      const counter = await getNextDailyOrderNumber();
+      dailyOrderNumber = counter.dailyOrderNumber;
+      orderDateLocal = counter.orderDateLocal;
+    } catch (counterErr: any) {
+      console.warn('[Orders] Daily counter failed (non-blocking, falling back to shortId):', counterErr.message);
+    }
+
+    // Human-readable daily number (#14) or fallback OP-XXXXXX
+    const orderNumber = dailyOrderNumber > 0 ? `#${dailyOrderNumber}` : `OP-${shortId}`;
 
     try {
       await adminDb.collection('orders').doc(newOrderId).set({
@@ -209,13 +249,17 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
         },
         contactPhone: userPhone,
         customerName: userData.name || 'Customer',
+        // Canonical order identifiers
+        dailyOrderNumber: dailyOrderNumber > 0 ? dailyOrderNumber : null,
+        orderDateLocal,
+        // Legacy field for backwards-compat with older listeners
         daily_order_number: orderNumber,
         paymentMethod: req.body.paymentMethod || 'COD',
         deliveryType: req.body.deliveryType || 'delivery',
         createdAt: new Date(),
         updatedAt: new Date(),
       });
-      trace.steps.push({ step: 'Firestore Write', status: 'success', orderId: newOrderId });
+      trace.steps.push({ step: 'Firestore Write', status: 'success', orderId: newOrderId, dailyOrderNumber });
     } catch (err: any) {
       console.warn('[Orders] Firestore write failed:', err);
       trace.steps.push({ step: 'Firestore Write', status: 'error', error: err.message });
@@ -234,7 +278,14 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
     }
 
     trace.processingTime = Date.now() - startTime;
-    res.status(201).json({ message: 'Order placed successfully', orderId: newOrderId, orderNumber, trace: isDebug ? trace : undefined });
+    res.status(201).json({ 
+      message: 'Order placed successfully', 
+      orderId: newOrderId, 
+      orderNumber, 
+      dailyOrderNumber: dailyOrderNumber > 0 ? dailyOrderNumber : null, 
+      orderDateLocal, 
+      trace: isDebug ? trace : undefined 
+    });
   } catch (error: any) {
     console.error('Error creating order:', error);
     trace.steps.push({ step: 'Fatal Error', status: 'failed', error: error.message });

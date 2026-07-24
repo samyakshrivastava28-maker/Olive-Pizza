@@ -137,6 +137,16 @@ export interface Order {
   scheduledTime?: string | null;
   noContactDelivery?: boolean;
   
+  // Cancellation
+  cancellationReason?: string;
+  cancelledAt?: string;
+  
+  // Delivery partner tracking
+  declinedPartnerIds?: string[];
+  
+  // Daily order number
+  orderDateLocal?: string;
+  
   // Proof of delivery
   deliveryProof?: {
     photoUrl?: string;

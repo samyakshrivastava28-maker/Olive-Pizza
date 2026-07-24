@@ -32,6 +32,7 @@ export interface OrderSnapshot {
   firebaseUid: string;
   orderNumber: string;
   dailyOrderNumber: string;
+  orderDateLocal?: string;
   totalAmount: number;
   deliveryFee: number;
   contactPhone: string;
@@ -43,6 +44,8 @@ export interface OrderSnapshot {
   version: number;
   eta?: string;
   paymentMethod: string;
+  cancellationReason?: string;
+  declinedPartnerIds?: string[];
 }
 
 export interface OrderItemSnapshot {

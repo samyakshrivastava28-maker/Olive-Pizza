@@ -610,6 +610,7 @@ export class CustomerTemplates {
       eventId?: string;
       previousStatus?: string;
       eventTimestamp?: string;
+      cancellationReason?: string;
     }
   ): NotificationPayload {
     const statusConfig: Record<OrderStatus, {
@@ -674,7 +675,9 @@ export class CustomerTemplates {
       },
       cancelled: {
         title: `❌ Order Cancelled — #${payload.orderNumber}`,
-        body: `Your order has been cancelled. Contact us if you need help.`,
+        body: payload.cancellationReason
+          ? `Your order was cancelled: ${payload.cancellationReason}. Contact us if you need help.`
+          : `Your order has been cancelled. Contact us if you need help.`,
         sound: 'cancelled',
         ongoing: true,
       },

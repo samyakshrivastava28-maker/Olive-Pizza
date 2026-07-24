@@ -10,6 +10,7 @@ export type ActivityAction =
   | 'Ad Created' 
   | 'Ad Updated'
   | 'Order Status Changed' 
+  | 'Order Cancelled'
   | 'Delivery Assigned'
   | 'Special Category Created'
   | 'Special Category Updated'

@@ -18,12 +18,21 @@ import org.json.JSONObject;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.Arrays;
+import java.util.List;
 
 public class NotificationActionReceiver extends BroadcastReceiver {
     private static final String TAG = "NotificationAction";
-    // Using relative path isn't possible here natively without build config, so we use the prod URL.
-    // In a real app this would be injected via BuildConfig.
     private static final String BACKEND_URL = "https://olive-pizza-backend.onrender.com/api/notifications/action";
+
+    /**
+     * Silent one-tap actions that complete without opening the app.
+     * Anything NOT in this list will launch MainActivity to handle in-app.
+     */
+    private static final List<String> SILENT_ACTIONS = Arrays.asList(
+        "accept_order",
+        "accept_delivery"
+    );
 
     @Override
     public void onReceive(Context context, Intent intent) {
@@ -32,16 +41,25 @@ public class NotificationActionReceiver extends BroadcastReceiver {
         int notificationId = intent.getIntExtra("notificationId", -1);
 
         if (action == null || orderId == null) {
+            Log.w(TAG, "Received intent with null action or orderId — ignoring.");
             return;
         }
 
         Log.d(TAG, "Received action: " + action + " for order: " + orderId);
 
-        // For instantly stopping the alarm on this device before the network call completes
+        // Stop local alarm immediately on this device (before any network call)
         if (notificationId != -1) {
             OliveMessagingService.stopAlarm(context, notificationId);
         }
 
+        // ── UI-requiring actions: reject_order / reject_delivery ──────────────
+        // These require a reason; launch the app which shows the modal.
+        if (!SILENT_ACTIONS.contains(action)) {
+            launchMainActivityWithModal(context, action, orderId, notificationId);
+            return;
+        }
+
+        // ── Silent actions: authenticate and make backend call ─────────────────
         final PendingResult pendingResult = goAsync();
 
         FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
@@ -64,12 +82,40 @@ public class NotificationActionReceiver extends BroadcastReceiver {
         });
     }
 
-    private void performBackendAction(Context context, String action, String orderId, int notificationId, String token, PendingResult pendingResult) {
-        // Acquire WakeLock for backend call
+    /**
+     * Launches MainActivity with intent extras so the React layer (via Capacitor bridge
+     * or MainActivity.onNewIntent) can show the correct cancellation/decline modal.
+     *
+     * Extras:
+     *   openModal  — "cancel_order" or "decline_delivery"
+     *   orderId    — the Firestore order document ID
+     */
+    private void launchMainActivityWithModal(Context context, String action, String orderId, int notificationId) {
+        Log.d(TAG, "Launching MainActivity for UI-required action: " + action);
+
+        // Dismiss the notification shade entry
+        NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+        if (notificationId != -1 && nm != null) {
+            nm.cancel(notificationId);
+        }
+
+        String openModal = action.equals("reject_delivery") ? "decline_delivery" : "cancel_order";
+
+        Intent launch = new Intent(context, MainActivity.class);
+        launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        launch.putExtra("openModal", openModal);
+        launch.putExtra("orderId", orderId);
+        context.startActivity(launch);
+    }
+
+    private void performBackendAction(Context context, String action, String orderId,
+                                      int notificationId, String token, PendingResult pendingResult) {
+        // Acquire WakeLock so the network call completes even if screen turns off
         PowerManager powerManager = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
         PowerManager.WakeLock wakeLock = null;
         if (powerManager != null) {
-            wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "OlivePizza::ActionReceiverWakeLock");
+            wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,
+                "OlivePizza::ActionReceiverWakeLock");
             wakeLock.acquire(15000); // Max 15s for network call
         }
         final PowerManager.WakeLock finalWakeLock = wakeLock;
@@ -83,11 +129,12 @@ public class NotificationActionReceiver extends BroadcastReceiver {
                 conn.setRequestProperty("Content-Type", "application/json");
                 conn.setRequestProperty("Authorization", "Bearer " + token);
                 conn.setDoOutput(true);
+                conn.setConnectTimeout(10000);
+                conn.setReadTimeout(12000);
 
                 JSONObject payload = new JSONObject();
                 payload.put("orderId", orderId);
                 payload.put("action", action);
-                payload.put("stage", "new_order");
 
                 try (OutputStream os = conn.getOutputStream()) {
                     byte[] input = payload.toString().getBytes("utf-8");
@@ -98,23 +145,23 @@ public class NotificationActionReceiver extends BroadcastReceiver {
                 Log.d(TAG, "Backend response code: " + responseCode);
 
                 if (responseCode >= 200 && responseCode < 300) {
-                    NotificationManager notificationManager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
-                    if (notificationId != -1) {
+                    NotificationManager notificationManager =
+                        (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+                    if (notificationId != -1 && notificationManager != null) {
                         notificationManager.cancel(notificationId);
                     }
-                    showToast(context, "Order " + action + "ed successfully.");
+                    String successMsg = action.equals("accept_order") ? "Order accepted!" : "Delivery accepted!";
+                    showToast(context, successMsg);
                 } else if (responseCode == 409) {
-                    showToast(context, "Action failed: Order already processed.");
+                    showToast(context, "Already processed — no change needed.");
                 } else {
-                    showToast(context, "Action failed: Server error (" + responseCode + "). Open the app to complete.");
+                    showToast(context, "Action failed (" + responseCode + "). Open the app to complete.");
                 }
             } catch (Exception e) {
                 Log.e(TAG, "Error performing action", e);
                 showToast(context, "Network error. Open the app to complete.");
             } finally {
-                if (conn != null) {
-                    conn.disconnect();
-                }
+                if (conn != null) conn.disconnect();
                 pendingResult.finish();
                 if (finalWakeLock != null && finalWakeLock.isHeld()) {
                     finalWakeLock.release();
@@ -124,6 +171,7 @@ public class NotificationActionReceiver extends BroadcastReceiver {
     }
 
     private void showToast(Context context, String message) {
-        new Handler(Looper.getMainLooper()).post(() -> Toast.makeText(context, message, Toast.LENGTH_LONG).show());
+        new Handler(Looper.getMainLooper()).post(() ->
+            Toast.makeText(context, message, Toast.LENGTH_LONG).show());
     }
 }
