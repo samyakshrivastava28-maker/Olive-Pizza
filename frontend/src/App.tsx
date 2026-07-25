@@ -83,6 +83,7 @@ import { CartAnimationProvider } from './components/ui/CartAnimationProvider';
 import { OwnerGuard, DeliveryGuard, CustomerGuard, AuthGuard, DeveloperGuard } from './components/auth/RouteGuards';
 
 import LocationPrompt from './components/ui/LocationPrompt';
+import OrderCancelledModal from './components/customer/OrderCancelledModal';
 import PushNotificationManager from './components/PushNotificationManager';
 import PizzaLoader from './components/ui/PizzaLoader';
 import { RouteErrorBoundary } from './components/RouteErrorBoundary';
@@ -378,6 +379,7 @@ function App() {
                   <AIAssistant />
                 </Suspense>
                 <LocationPrompt />
+                <OrderCancelledModal />
               </StartupGate>
             </CartAnimationProvider>
           </SafeErrorBoundary>

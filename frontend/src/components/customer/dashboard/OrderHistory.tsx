@@ -81,7 +81,7 @@ export default function OrderHistory({ orders }: Props) {
                   ? "bg-[#273449] border-primary-500/50 shadow-[0_0_20px_rgba(249,115,22,0.15)]"
                   : "bg-white/5 border-white/10"
               }`}
-              onClick={() => isActive ? navigate(`/order-tracking/${order.id}`) : null}
+              onClick={() => navigate(`/order-tracking/${order.id}`)}
             >
               {/* Active pulse indicator */}
               {isActive && (
@@ -108,6 +108,18 @@ export default function OrderHistory({ orders }: Props) {
                   ₹{order.totalAmount}
                 </span>
               </div>
+
+              {/* Cancelled Reason Snippet */}
+              {order.status === "cancelled" && (
+                <div className="mb-4 bg-red-950/40 border border-red-500/30 rounded-xl p-3 text-xs text-red-200">
+                  <span className="font-bold text-red-400 block uppercase tracking-wider text-[10px] mb-0.5">
+                    Cancellation Reason:
+                  </span>
+                  <p className="italic font-medium text-white">
+                    {order.cancellationReason || (order as any).cancellation_reason || (order as any).lastRejectionReason || (order as any).reason ? `"${order.cancellationReason || (order as any).cancellation_reason || (order as any).lastRejectionReason || (order as any).reason}"` : "Cancelled by restaurant."}
+                  </p>
+                </div>
+              )}
 
               {/* Items preview */}
               <div className="flex gap-2 mb-5 overflow-hidden">
@@ -140,7 +152,7 @@ export default function OrderHistory({ orders }: Props) {
                 </span>
                 
                 <div className="flex items-center gap-2">
-                  {!isActive && order.status === "delivered" && (
+                  {order.status === "delivered" && (
                     <GlassButton
                       variant="primary"
                       className="!px-4 !py-1.5 text-xs font-bold h-auto rounded-lg hover:shadow-lg hover:shadow-primary-500/25"
@@ -148,6 +160,11 @@ export default function OrderHistory({ orders }: Props) {
                     >
                       <RotateCcw className="w-3 h-3 mr-1 inline" /> Reorder
                     </GlassButton>
+                  )}
+                  {order.status === "cancelled" && (
+                    <span className="text-xs font-bold text-red-400 flex items-center gap-1 bg-red-500/10 px-3 py-1.5 rounded-lg border border-red-500/20">
+                      View Details
+                    </span>
                   )}
                   {isActive && (
                     <span className="text-xs font-bold text-primary-400 flex items-center gap-1 bg-primary-500/10 px-3 py-1.5 rounded-lg border border-primary-500/20">

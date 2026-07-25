@@ -3,7 +3,7 @@ import { Order } from "../../../types/models";
 import { useAuthStore, useCartStore } from "../../../lib/store";
 import { TiltCard } from "../../ui/TiltCard";
 import { GlassButton } from "../../ui/glass/GlassSystem";
-import { Package, MapPin, MessageSquare, DollarSign, Award, Heart, Navigation } from "lucide-react";
+import { Package, MapPin, MessageSquare, DollarSign, Award, Heart, Navigation, XCircle } from "lucide-react";
 import { useNavigate } from "react-router";
 import toast from "react-hot-toast";
 
@@ -17,6 +17,11 @@ export default function DashboardHome({ orders, stats, setActiveTab }: Props) {
   const { user } = useAuthStore();
   const navigate = useNavigate();
   const activeOrder = orders.find((o) => !["delivered", "cancelled", "pending"].includes(o.status));
+  const latestOrder = orders[0];
+  const isLatestCancelled = latestOrder && latestOrder.status === "cancelled";
+  const cancelReason = isLatestCancelled
+    ? latestOrder.cancellationReason || (latestOrder as any).cancellation_reason || (latestOrder as any).lastRejectionReason || (latestOrder as any).reason
+    : null;
 
   // Determine Loyalty Tier
   let tier = "Bronze Member";
@@ -26,6 +31,31 @@ export default function DashboardHome({ orders, stats, setActiveTab }: Props) {
 
   return (
     <div className="flex flex-col gap-8">
+      {/* Cancelled Order Banner */}
+      {isLatestCancelled && (
+        <div className="bg-red-950/40 border border-red-500/40 rounded-2xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-lg">
+          <div className="flex items-start gap-3">
+            <div className="p-2 bg-red-500/20 rounded-xl text-red-400 border border-red-500/30">
+              <XCircle size={20} />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-red-400 uppercase tracking-wider">
+                Order {latestOrder.dailyOrderNumber || `#${latestOrder.id?.slice(-6).toUpperCase()}`} Cancelled
+              </p>
+              <p className="text-white text-sm font-medium mt-0.5">
+                Reason: <span className="font-semibold italic">{cancelReason ? `"${cancelReason}"` : "Cancelled by restaurant."}</span>
+              </p>
+            </div>
+          </div>
+          <GlassButton
+            variant="secondary"
+            onClick={() => navigate(`/order-tracking/${latestOrder.id}`)}
+            className="text-xs font-bold whitespace-nowrap !py-2 !px-4"
+          >
+            View Details
+          </GlassButton>
+        </div>
+      )}
       {/* 3D Hero Section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Welcome Card */}

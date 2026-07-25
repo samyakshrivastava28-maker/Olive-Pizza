@@ -575,15 +575,66 @@ export default function OrderTracking() {
   if (order.status === "delivered") return <DeliverySuccessScreen order={order} orderId={orderId!} partnerDetails={partnerDetails} navigate={navigate} />;
 
   if (order.status === "cancelled") {
+    const reasonText =
+      order.cancellationReason ||
+      order.cancellation_reason ||
+      order.lastRejectionReason ||
+      order.reason;
+
+    const orderNum = order.dailyOrderNumber || `#${orderId?.slice(-6).toUpperCase()}`;
+
     return (
-      <div className="h-[100dvh] bg-dark-950 flex flex-col items-center justify-center p-8 text-center relative overflow-hidden">
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-red-500/10 blur-[100px] rounded-full" />
-        <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="w-24 h-24 bg-dark-900 border border-white/10 rounded-3xl flex items-center justify-center mb-8 shadow-2xl relative z-10">
+      <div className="h-[100dvh] bg-dark-950 flex flex-col items-center justify-center p-6 text-center relative overflow-hidden">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-red-500/10 blur-[120px] rounded-full pointer-events-none" />
+        
+        <motion.div 
+          initial={{ scale: 0 }} 
+          animate={{ scale: 1 }} 
+          transition={{ type: "spring", stiffness: 300, damping: 20 }}
+          className="w-24 h-24 bg-dark-900 border border-red-500/30 rounded-3xl flex items-center justify-center mb-6 shadow-[0_0_40px_rgba(239,68,68,0.25)] relative z-10"
+        >
           <X className="w-12 h-12 text-red-500" />
         </motion.div>
-        <h1 className="text-3xl font-black text-white mb-3 relative z-10">Order Cancelled</h1>
-        <p className="text-slate-400 mb-10 max-w-sm relative z-10">Your order {order.dailyOrderNumber || `#${orderId?.slice(-6).toUpperCase()}`} has been successfully cancelled.</p>
-        <GlassButton variant="primary" onClick={() => navigate("/menu")} className="px-10 py-4 relative z-10">Order Again</GlassButton>
+
+        <span className="text-xs font-black tracking-widest text-red-400 uppercase bg-red-500/10 px-3 py-1 rounded-full border border-red-500/20 mb-3 relative z-10">
+          Status: Cancelled
+        </span>
+
+        <h1 className="text-3xl font-black text-white mb-2 relative z-10">Order Cancelled</h1>
+        <p className="text-slate-400 mb-6 max-w-sm text-sm relative z-10">
+          Order <span className="font-bold text-white">{orderNum}</span> was cancelled by the restaurant.
+        </p>
+
+        {/* Owner's Reason Display Box */}
+        <motion.div 
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.15 }}
+          className="w-full max-w-md bg-red-950/30 border border-red-500/30 rounded-2xl p-5 mb-8 text-left relative z-10 backdrop-blur-md shadow-xl"
+        >
+          <div className="flex items-start gap-3">
+            <div className="p-2 bg-red-500/10 rounded-xl border border-red-500/20 text-red-400 flex-shrink-0">
+              <MessageSquare size={20} />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-red-400 uppercase tracking-wider mb-1">
+                Reason Provided by Restaurant
+              </p>
+              <p className="text-white font-semibold text-base leading-relaxed">
+                {reasonText ? `"${reasonText}"` : "No specific reason was entered by the owner."}
+              </p>
+            </div>
+          </div>
+        </motion.div>
+
+        <div className="flex flex-col sm:flex-row gap-3 relative z-10 w-full max-w-xs">
+          <GlassButton variant="primary" onClick={() => navigate("/menu")} className="w-full py-3.5 text-sm font-bold flex items-center justify-center gap-2">
+            <ShoppingBag size={18} /> Order Again
+          </GlassButton>
+          <GlassButton variant="secondary" onClick={() => navigate("/dashboard")} className="w-full py-3.5 text-sm font-bold flex items-center justify-center gap-2">
+            Back to Dashboard
+          </GlassButton>
+        </div>
       </div>
     );
   }
