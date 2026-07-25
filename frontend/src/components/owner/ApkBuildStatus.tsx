@@ -10,7 +10,8 @@ import {
   GitCommit, 
   TerminalSquare,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  ExternalLink
 } from "lucide-react";
 
 interface JobStep {
@@ -32,6 +33,7 @@ interface BuildData {
   duration: number; // in seconds
   steps: JobStep[];
   downloadUrl: string | null;
+  githubRunUrl?: string;
 }
 
 export default function ApkBuildStatus() {
@@ -81,7 +83,8 @@ export default function ApkBuildStatus() {
         updatedAt: latestRun.updated_at,
         duration: Math.floor((end - start) / 1000),
         steps: mainJob.steps.filter((s: JobStep) => !s.name.includes("Checkout") && !s.name.includes("Set up job") && !s.name.includes("Post ") && !s.name.includes("Complete job")),
-        downloadUrl
+        downloadUrl,
+        githubRunUrl: latestRun.html_url || "https://github.com/samyakshrivastava28-maker/Olive-Pizza/actions"
       });
     } catch (e) {
       console.error("Failed to fetch GitHub Actions build status", e);
@@ -159,19 +162,34 @@ export default function ApkBuildStatus() {
           </div>
         </div>
         
-        <div className="flex items-center gap-3 w-full sm:w-auto mt-4 sm:mt-0">
+        <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto mt-4 sm:mt-0">
           <button 
             onClick={() => setShowLogs(!showLogs)}
-            className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-dark-700 hover:bg-dark-600 text-white px-4 py-2.5 rounded-xl font-medium text-sm transition-all border border-dark-600"
+            className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-dark-700 hover:bg-dark-600 text-white px-3.5 py-2.5 rounded-xl font-medium text-sm transition-all border border-dark-600"
           >
             <TerminalSquare className="w-4 h-4 text-gray-400" />
             {showLogs ? "Hide Logs" : "View Logs"}
             {showLogs ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
           </button>
-          
-          {isSuccess && buildData.downloadUrl ? (
+
+          {buildData.githubRunUrl && (
             <a
-              href={buildData.downloadUrl}
+              href={buildData.githubRunUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-dark-700 hover:bg-dark-600 text-slate-200 px-4 py-2.5 rounded-xl font-medium text-sm transition-all border border-dark-600 hover:border-slate-500"
+              title="Open GitHub Actions build run page"
+            >
+              <ExternalLink className="w-4 h-4 text-blue-400" />
+              GitHub Actions
+            </a>
+          )}
+          
+          {isSuccess ? (
+            <a
+              href={buildData.downloadUrl || '/api/github/download-apk'}
+              target="_blank"
+              rel="noopener noreferrer"
               download
               className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-[#3ddc84] hover:bg-[#34c077] text-black px-5 py-2.5 rounded-xl font-bold text-sm transition-all hover:scale-105 active:scale-95 shadow-lg shadow-[#3ddc84]/20"
             >
