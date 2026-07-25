@@ -147,7 +147,7 @@ export class NotificationEngine {
       payload.android!.notification!.clickAction = clickAction;
     }
 
-    // ── 3. Sanitize data block (all values must be strings) ──────────────────
+    // ── 3. Sanitize data block & APNs headers (MUST be string values) ──────
     const sanitizedData: Record<string, string> = {};
     if (payload.data && typeof payload.data === 'object') {
       for (const [k, v] of Object.entries(payload.data)) {
@@ -158,6 +158,9 @@ export class NotificationEngine {
         }
       }
     }
+
+    // Strict APNs header sanitization & validation (Firebase requires EVERY APNs header to be a string)
+    const sanitizedApns = sanitizeApnsConfig(payload.apns, options.category || 'push');
 
     // ── 4. Chunk and send ────────────────────────────────────────────────────
     const chunkSize = 500;
@@ -183,7 +186,7 @@ export class NotificationEngine {
           notification: payload.notification,
           data: sanitizedData,
           android: payload.android,
-          apns: payload.apns,
+          apns: sanitizedApns,
           webpush: payload.webpush,
         };
 
@@ -214,6 +217,7 @@ export class NotificationEngine {
             timestamp: new Date().toISOString(),
             orderId: options.orderId,
             userId: firebaseUserIds.length === 1 ? firebaseUserIds[0] : 'bulk_target',
+            category: options.category || payload.data?.category || 'push',
             triggerSource,
             eventType,
             recipientRole: payload.data?.role || options.category,
@@ -230,6 +234,8 @@ export class NotificationEngine {
             elapsedTimeMs: elapsedMs,
             fcmToken,
             payload,
+            apnsHeaders: sanitizedApns?.headers || null,
+            androidConfig: payload.android || null,
             firebaseResponse: r,
             status: r.success ? 'success' : 'failure',
             errorDetails: r.error?.message,
@@ -397,6 +403,42 @@ export class NotificationEngine {
       client.release();
     }
   }
+}
+
+/**
+ * Strict APNs Payload Sanitizer & Validator:
+ * Guarantees EVERY value in `apns.headers` is explicitly a string.
+ * Removes null, undefined, boolean, and numeric values or converts them to String(v).
+ */
+export function sanitizeApnsConfig(apns?: any, category?: string): admin.messaging.ApnsConfig | undefined {
+  if (!apns || typeof apns !== 'object') return undefined;
+
+  const cleanApns: admin.messaging.ApnsConfig = {};
+
+  if (apns.headers && typeof apns.headers === 'object') {
+    const cleanHeaders: Record<string, string> = {};
+    for (const [key, rawVal] of Object.entries(apns.headers)) {
+      if (rawVal === null || rawVal === undefined || rawVal === '') continue;
+
+      const stringVal = String(rawVal);
+      if (typeof rawVal !== 'string') {
+        console.warn(`[NotificationEngine][APNs Validation] Category="${category || 'push'}" Header "${key}" converted from ${typeof rawVal} (${rawVal}) to string "${stringVal}"`);
+      }
+      cleanHeaders[key] = stringVal;
+    }
+    if (Object.keys(cleanHeaders).length > 0) {
+      cleanApns.headers = cleanHeaders;
+    }
+  }
+
+  if (apns.payload && typeof apns.payload === 'object') {
+    cleanApns.payload = apns.payload;
+  }
+  if (apns.fcmOptions && typeof apns.fcmOptions === 'object') {
+    cleanApns.fcmOptions = apns.fcmOptions;
+  }
+
+  return Object.keys(cleanApns).length > 0 ? cleanApns : undefined;
 }
 
 // Singleton export

@@ -848,19 +848,21 @@ export default function OwnerNotificationDiagnostics() {
             <thead className="text-[11px] uppercase bg-slate-800/80 text-slate-400 font-bold border-b border-white/5">
               <tr>
                 <th className="px-3 py-3">Notif ID / Time</th>
-                <th className="px-3 py-3">Trigger Source</th>
+                <th className="px-3 py-3">Category / Source</th>
                 <th className="px-3 py-3">Recipients & UIDs</th>
                 <th className="px-3 py-3">Tokens (Active/Invalid/Skip)</th>
                 <th className="px-3 py-3">FCM (Success/Fail)</th>
-                <th className="px-3 py-3">Provider</th>
+                <th className="px-3 py-3">APNs & Android Config</th>
                 <th className="px-3 py-3">Latency</th>
-                <th className="px-3 py-3">Status / Error Details</th>
+                <th className="px-3 py-3">Status / Exact Error</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
               {diag.backend?.deliveryLogs?.map((log: any, idx: number) => {
                 const isSuccess = log.status === 'success' || log.status === 'sent';
                 const isSkipped = log.status === 'skipped';
+                const apnsHeadersStr = log.apnsHeaders ? JSON.stringify(log.apnsHeaders) : 'apns-priority: 10';
+                const androidChannel = log.androidConfig?.notification?.channelId || 'olive_order_new';
                 return (
                   <tr key={log.notificationId || log.id || idx} className="hover:bg-slate-800/40 transition-colors font-mono">
                     <td className="px-3 py-3">
@@ -868,7 +870,8 @@ export default function OwnerNotificationDiagnostics() {
                       <span className="text-slate-500 text-[10px]">{new Date(log.timestamp || log.created_at).toLocaleTimeString()}</span>
                     </td>
                     <td className="px-3 py-3">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                      <span className="text-orange-400 font-bold block text-[11px]">{log.category || log.eventType || 'push'}</span>
+                      <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase inline-block mt-0.5 ${
                         log.triggerSource === 'manual' ? 'bg-purple-500/20 text-purple-300' : 'bg-blue-500/20 text-blue-300'
                       }`}>
                         {log.triggerSource || 'automatic'}
@@ -886,8 +889,9 @@ export default function OwnerNotificationDiagnostics() {
                       <span className="text-green-400 font-bold">✓ {log.fcmSuccess ?? (isSuccess ? 1 : 0)}</span>
                       {log.fcmFailure > 0 && <span className="text-red-400 font-bold ml-2">✗ {log.fcmFailure}</span>}
                     </td>
-                    <td className="px-3 py-3 text-slate-400">
-                      {log.providerUsed || 'Firebase FCM'}
+                    <td className="px-3 py-3 text-[10px] text-slate-400 max-w-[180px] truncate" title={`APNs: ${apnsHeadersStr} | Channel: ${androidChannel}`}>
+                      <span className="text-blue-300 block">APNs: {apnsHeadersStr}</span>
+                      <span className="text-slate-500">Channel: {androidChannel}</span>
                     </td>
                     <td className="px-3 py-3 text-slate-400">
                       {log.latencyMs ?? log.elapsedTimeMs ?? 0}ms
@@ -902,7 +906,7 @@ export default function OwnerNotificationDiagnostics() {
                           {log.status?.toUpperCase() || 'UNKNOWN'}
                         </span>
                         {log.errorDetails && (
-                          <span className="text-red-400 text-[10px] mt-1 line-clamp-1 max-w-[220px]" title={log.errorDetails}>
+                          <span className="text-red-400 text-[10px] mt-1 line-clamp-2 max-w-[240px] font-sans" title={log.errorDetails}>
                             {log.errorDetails}
                           </span>
                         )}

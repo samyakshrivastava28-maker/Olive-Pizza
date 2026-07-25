@@ -302,13 +302,17 @@ function buildPayload(title: string, body: string, opts: BuildOptions): Notifica
       ...(opts.alert === 'continuous' ? { notificationCount: 1 } : {}),
     };
   }
+  const apnsHeaders: Record<string, string> = {
+    'apns-priority': isHigh ? '10' : '5',
+  };
+  if (opts.ongoing && opts.tag) {
+    apnsHeaders['apns-collapse-id'] = String(opts.tag);
+  }
+
   return {
     ...basePayload,
     apns: {
-      headers: {
-        'apns-priority': isHigh ? '10' : '5',
-        'apns-collapse-id': opts.ongoing ? opts.tag : undefined,
-      },
+      headers: apnsHeaders,
       payload: {
         aps: {
           alert: { title, body },

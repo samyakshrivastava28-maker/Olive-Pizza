@@ -14,6 +14,7 @@ export interface NotificationLogEntry {
   orderId?: string;
   userId?: string;
   role?: string;
+  category?: string;
   triggerSource?: 'manual' | 'automatic';
   eventType?: string;
   recipientRole?: string;
@@ -33,6 +34,8 @@ export interface NotificationLogEntry {
   elapsedTimeMs: number;
   fcmToken?: string;
   payload?: any;
+  apnsHeaders?: any;
+  androidConfig?: any;
   firebaseResponse?: any;
   status: 'success' | 'failure' | 'skipped';
   errorDetails?: string;

@@ -2,6 +2,7 @@ import * as admin from 'firebase-admin';
 import { adminMessaging } from '../../config/firebase.js';
 import { pgPool } from '../../config/postgres.js';
 import { NotificationLogger } from './NotificationLogger.js';
+import { sanitizeApnsConfig } from './NotificationEngine.js';
 
 export interface NotificationOptions {
   tag?: string;
@@ -121,12 +122,14 @@ export class DirectNotificationService {
             }
           }
 
+          const sanitizedApns = sanitizeApnsConfig(payload.apns, 'direct_push');
+
           const message: admin.messaging.MulticastMessage = {
             tokens: chunk,
             notification: payload.notification,
             data: sanitizedData,
             android: payload.android,
-            apns: payload.apns,
+            apns: sanitizedApns,
             webpush: payload.webpush,
           };
           const response = await adminMessaging.sendEachForMulticast(message);

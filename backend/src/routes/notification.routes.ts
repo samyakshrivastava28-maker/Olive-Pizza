@@ -1100,6 +1100,7 @@ router.get('/debug', verifyToken, async (req: AuthRequest, res: Response): Promi
         timestamp: entry.timestamp,
         orderId: entry.orderId || null,
         userId: entry.userId || null,
+        category: entry.category || entry.recipientRole || entry.eventType || 'push',
         triggerSource: entry.triggerSource || 'automatic',
         eventType: entry.eventType || 'push',
         recipientRole: entry.recipientRole || null,
@@ -1115,6 +1116,14 @@ router.get('/debug', verifyToken, async (req: AuthRequest, res: Response): Promi
         latencyMs: entry.latencyMs ?? entry.elapsedTimeMs ?? 0,
         elapsedTimeMs: entry.elapsedTimeMs || 0,
         fcmTokenMasked: entry.fcmToken ? (entry.fcmToken.substring(0, 12) + '...') : null,
+        payloadPreview: entry.payload ? {
+          title: entry.payload.notification?.title || entry.payload.title,
+          body: entry.payload.notification?.body || entry.payload.body,
+          data: entry.payload.data,
+        } : null,
+        apnsHeaders: entry.apnsHeaders || entry.payload?.apns?.headers || null,
+        androidConfig: entry.androidConfig || entry.payload?.android || null,
+        firebaseResponse: entry.firebaseResponse || null,
         status: entry.status,
         errorDetails: entry.errorDetails || null,
       }));

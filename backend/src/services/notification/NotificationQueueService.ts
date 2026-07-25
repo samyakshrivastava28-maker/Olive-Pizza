@@ -23,6 +23,7 @@ import * as admin from 'firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { notificationDebugger } from './NotificationDebugger.js';
 import { NotificationLogger } from './NotificationLogger.js';
+import { sanitizeApnsConfig } from './NotificationEngine.js';
 import { pgPool } from '../../config/postgres.js';
 import { queueEmail } from '../email.service.js';
 import { buildOrderStatusEmail } from '../emailTemplates.service.js';
@@ -464,12 +465,14 @@ export class NotificationQueueService {
         }
       }
 
+      const sanitizedApns = sanitizeApnsConfig(parsedPayload.apns, category);
+
       const message: admin.messaging.MulticastMessage = {
         tokens,
         notification: parsedPayload.notification,
         data: sanitizedData,
         android: parsedPayload.android,
-        apns: parsedPayload.apns,
+        apns: sanitizedApns,
         webpush: parsedPayload.webpush,
       };
 

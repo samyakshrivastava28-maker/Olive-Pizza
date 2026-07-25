@@ -133,7 +133,7 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
 
     // 2. Validate prices from Firestore / DB across collections
     let serverCalculatedTotal = 0;
-    const validatedItems = [];
+    const validatedItems: any[] = [];
 
     for (const item of items) {
       const itemId = item.menuItemId || item.id;
@@ -269,38 +269,6 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
     }
 
 
-    // 5. Direct NotificationEngine Dispatch to Owners (CRITICAL New Order Alarm)
-    try {
-      const ownerUids = await notificationEngine.resolveByRole('owner');
-      if (ownerUids.length > 0) {
-        const ownerPayload = OwnerTemplates.newOrder(newOrderId, {
-          customerName: userData.name || 'Customer',
-          orderNumber,
-          totalAmount: serverCalculatedTotal,
-          items: validatedItems.map(i => `${i.name} x${i.quantity}`),
-          paymentMethod: req.body.paymentMethod || 'COD',
-          deliveryAddress: userAddress || 'Pickup',
-          phone: userPhone,
-          orderTime: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-          version: 1,
-        });
-        await notificationEngine.sendBulk(ownerUids, ownerPayload, { category: 'alarm_actionable', priority: 'critical', orderId: newOrderId });
-        trace.steps.push({ step: 'NotificationEngine', status: 'success', ownerCount: ownerUids.length });
-      }
-    } catch (notifErr: any) {
-      console.error('[Orders] NotificationEngine dispatch error:', notifErr.message);
-      trace.steps.push({ step: 'NotificationEngine', status: 'error', error: notifErr.message });
-    }
-
-    // 6. Emit canonical OrderEvent via OrderEventService (Legacy trigger)
-    try {
-      const event = await orderEventService.emitNewOrder(newOrderId);
-      trace.steps.push({ step: 'OrderEventService', status: 'success' });
-    } catch (pushErr: any) {
-      console.error('[Orders] OrderEventService failed (non-blocking):', pushErr);
-      trace.steps.push({ step: 'OrderEventService', status: 'error', error: pushErr.message });
-    }
-
     trace.processingTime = Date.now() - startTime;
     res.status(201).json({ 
       message: 'Order placed successfully', 
@@ -309,6 +277,35 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
       dailyOrderNumber: dailyOrderNumber > 0 ? dailyOrderNumber : null, 
       orderDateLocal, 
       trace: isDebug ? trace : undefined 
+    });
+
+    // 5. Asynchronous Background Dispatch (Non-blocking: Customer receives instant response)
+    setImmediate(async () => {
+      try {
+        const ownerUids = await notificationEngine.resolveByRole('owner');
+        if (ownerUids.length > 0) {
+          const ownerPayload = OwnerTemplates.newOrder(newOrderId, {
+            customerName: userData.name || 'Customer',
+            orderNumber,
+            totalAmount: serverCalculatedTotal,
+            items: validatedItems.map(i => `${i.name} x${i.quantity}`),
+            paymentMethod: req.body.paymentMethod || 'COD',
+            deliveryAddress: userAddress || 'Pickup',
+            phone: userPhone,
+            orderTime: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+            version: 1,
+          });
+          await notificationEngine.sendBulk(ownerUids, ownerPayload, { category: 'alarm_actionable', priority: 'critical', orderId: newOrderId });
+        }
+      } catch (notifErr: any) {
+        console.error('[Orders] Async NotificationEngine dispatch error:', notifErr.message);
+      }
+
+      try {
+        await orderEventService.emitNewOrder(newOrderId);
+      } catch (pushErr: any) {
+        console.error('[Orders] Async OrderEventService failed:', pushErr.message);
+      }
     });
   } catch (error: any) {
     console.error('Error creating order:', error);
