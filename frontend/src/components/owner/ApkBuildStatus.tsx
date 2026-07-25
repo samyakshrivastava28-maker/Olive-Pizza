@@ -116,11 +116,48 @@ export default function ApkBuildStatus() {
     );
   }
 
-  if (!buildData) return null;
+  if (!buildData) {
+    return (
+      <div className="flex flex-col border border-dark-700 rounded-2xl overflow-hidden bg-dark-800/80 backdrop-blur-md shadow-xl mb-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 px-5 py-4">
+          <div className="flex items-center gap-3 flex-1">
+            <div className="w-12 h-12 rounded-xl border border-[#3ddc84]/30 bg-[#3ddc84]/15 flex items-center justify-center flex-shrink-0 text-[#3ddc84]">
+              <Smartphone className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-white">Android Native APK Center</h3>
+              <p className="text-sm text-slate-400 mt-0.5">
+                Download the compiled Android APK or view GitHub Actions build runs.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
+            <a
+              href="https://github.com/samyakshrivastava28-maker/Olive-Pizza/actions"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-dark-700 hover:bg-dark-600 text-slate-200 px-4 py-2.5 rounded-xl font-medium text-sm transition-all border border-dark-600"
+            >
+              <ExternalLink className="w-4 h-4 text-blue-400" />
+              GitHub Actions
+            </a>
+            <a
+              href="/api/github/download-apk"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-[#3ddc84] hover:bg-[#34c077] text-black px-5 py-2.5 rounded-xl font-bold text-sm transition-all hover:scale-105 active:scale-95 shadow-lg shadow-[#3ddc84]/20"
+            >
+              <Download className="w-4 h-4" />
+              Download APK
+            </a>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const isBuilding = buildData.status === "in_progress" || buildData.status === "queued";
   const isFailed = buildData.status === "completed" && buildData.conclusion === "failure";
-  const isSuccess = buildData.status === "completed" && buildData.conclusion === "success";
 
   const getStatusColor = () => {
     if (isBuilding) return "text-blue-400 border-blue-400/30 bg-blue-400/10";
@@ -172,39 +209,26 @@ export default function ApkBuildStatus() {
             {showLogs ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
           </button>
 
-          {buildData.githubRunUrl && (
-            <a
-              href={buildData.githubRunUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-dark-700 hover:bg-dark-600 text-slate-200 px-4 py-2.5 rounded-xl font-medium text-sm transition-all border border-dark-600 hover:border-slate-500"
-              title="Open GitHub Actions build run page"
-            >
-              <ExternalLink className="w-4 h-4 text-blue-400" />
-              GitHub Actions
-            </a>
-          )}
+          <a
+            href={buildData.githubRunUrl || "https://github.com/samyakshrivastava28-maker/Olive-Pizza/actions"}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-dark-700 hover:bg-dark-600 text-slate-200 px-4 py-2.5 rounded-xl font-medium text-sm transition-all border border-dark-600 hover:border-slate-500"
+            title="Open GitHub Actions build run page"
+          >
+            <ExternalLink className="w-4 h-4 text-blue-400" />
+            GitHub Actions
+          </a>
           
-          {isSuccess ? (
-            <a
-              href={buildData.downloadUrl || '/api/github/download-apk'}
-              target="_blank"
-              rel="noopener noreferrer"
-              download
-              className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-[#3ddc84] hover:bg-[#34c077] text-black px-5 py-2.5 rounded-xl font-bold text-sm transition-all hover:scale-105 active:scale-95 shadow-lg shadow-[#3ddc84]/20"
-            >
-              <Download className="w-4 h-4" />
-              Download APK
-            </a>
-          ) : (
-            <button
-              disabled
-              className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-dark-700/50 text-gray-500 px-5 py-2.5 rounded-xl font-bold text-sm cursor-not-allowed border border-dark-600"
-            >
-              <Download className="w-4 h-4 opacity-50" />
-              {isBuilding ? "Building..." : "Unavailable"}
-            </button>
-          )}
+          <a
+            href={buildData.downloadUrl || '/api/github/download-apk'}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-[#3ddc84] hover:bg-[#34c077] text-black px-5 py-2.5 rounded-xl font-bold text-sm transition-all hover:scale-105 active:scale-95 shadow-lg shadow-[#3ddc84]/20"
+          >
+            <Download className="w-4 h-4" />
+            Download APK
+          </a>
         </div>
       </div>
 
