@@ -39,8 +39,7 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-
-      # 7. Initialize dummy webDir and sync Capacitor
+      # 6. Initialize dummy webDir and sync Capacitor
       #    We must create the webDir before syncing so Capacitor doesn't crash.
       #    Syncing must happen after Java/Android SDK setup so Capacitor can process Gradle files.
       - name: Sync Capacitor
@@ -67,34 +66,59 @@ jobs:
       # 9. Automatic Versioning
       - name: Inject Version into Gradle
         run: |
-          # Use GitHub Run Number as the version code and a generated version name
           sed -i "s/versionCode 1/versionCode ${{ github.run_number }}/g" android/app/build.gradle
           sed -i "s/versionName \"1.0\"/versionName \"1.0.${{ github.run_number }}\"/g" android/app/build.gradle
 
-      # 10. Decode Release Keystore
-      - name: Decode Keystore
+      # 10. Prepare Signing Keystore
+      #     Priority: KEYSTORE_BASE64 secret (if set) → committed release.keystore
+      #     The signing passwords are hardcoded in build.gradle with fallback "olivepizza".
+      - name: Prepare Keystore
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
           if [ -n "$KEYSTORE_BASE64" ]; then
             echo "$KEYSTORE_BASE64" | base64 -d > android/app/release.keystore
-            echo "Keystore decoded successfully."
+            echo "✅ Keystore decoded from KEYSTORE_BASE64 secret."
+          elif [ -f "android/app/release.keystore" ]; then
+            echo "✅ Using committed release.keystore from repository."
           else
-            echo "::warning::KEYSTORE_BASE64 secret is missing. The APK will fail to sign properly if not configured."
+            echo "❌ ERROR: No keystore available. Commit release.keystore or set KEYSTORE_BASE64 secret."
+            exit 1
           fi
+          # Verify the keystore is readable and alias exists
+          keytool -list -keystore android/app/release.keystore \
+            -storepass olivepizza -alias olivepizza -noprompt \
+            && echo "✅ Keystore verified — alias 'olivepizza' found." \
+            || { echo "❌ Keystore verification failed."; exit 1; }
 
-      # 11. Build Release APK
+      # 11. Build Signed Release APK
       - name: Build Release APK
-        run: ./gradlew assembleRelease --no-daemon --stacktrace
+        run: ./gradlew assembleRelease --no-daemon
         working-directory: android
 
-      # 12. Rename APK for easy identification
+      # 12. Verify the APK is properly signed (not unsigned)
+      - name: Verify APK Signature
+        run: |
+          APK="android/app/build/outputs/apk/release/app-release.apk"
+          if [ ! -f "$APK" ]; then
+            echo "❌ app-release.apk not found. Checking directory:"
+            ls android/app/build/outputs/apk/release/ || true
+            exit 1
+          fi
+          SIZE=$(du -sh "$APK" | cut -f1)
+          echo "✅ APK found ($SIZE)"
+          BUILD_TOOLS=$(ls $ANDROID_HOME/build-tools | sort -V | tail -1)
+          $ANDROID_HOME/build-tools/$BUILD_TOOLS/apksigner verify --verbose "$APK" \
+            && echo "✅ APK is properly signed." \
+            || { echo "❌ APK signature verification FAILED — APK is unsigned or corrupted."; exit 1; }
+
+      # 13. Rename APK for easy identification
       - name: Rename APK
         run: |
           mkdir -p artifact
           cp android/app/build/outputs/apk/release/app-release.apk artifact/OlivePizza-v1.0.apk
 
-      # 13. Upload APK as GitHub Actions artifact (available 90 days)
+      # 14. Upload APK as GitHub Actions artifact (available 90 days)
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -102,7 +126,7 @@ jobs:
           path: artifact/OlivePizza-v1.0.apk
           retention-days: 90
 
-      # 11. Publish as a GitHub Release so the Owner Dashboard download button always works
+      # 15. Publish as a GitHub Release (always replaces android-latest tag)
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
