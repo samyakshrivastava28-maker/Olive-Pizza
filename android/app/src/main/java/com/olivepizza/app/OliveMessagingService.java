@@ -72,17 +72,15 @@ public class OliveMessagingService extends MessagingService {
 
             if (data.size() > 0) {
                 String alert = data.get("alert");
-                String ongoing = data.get("ongoing");
                 String action = data.get("action");
 
-                if ("continuous".equals(alert) || "true".equals(ongoing)) {
-                    // Turn screen ON physically if continuous emergency alarm
+                if ("stop_alert".equals(action)) {
+                    stopNativeAlarm(data);
+                } else {
                     if ("continuous".equals(alert)) {
                         wakeScreenOnEmergency(powerManager);
                     }
                     showNativeNotification(data);
-                } else if ("stop_alert".equals(action)) {
-                    stopNativeAlarm(data);
                 }
             }
         } catch (Exception e) {
@@ -119,17 +117,19 @@ public class OliveMessagingService extends MessagingService {
     }
 
     private void showNativeNotification(Map<String, String> data) {
+        String title = data.get("title");
+        String body = data.get("body");
         String orderId = data.get("orderId");
-        if (orderId == null) return;
+        String soundName = data.get("sound");
+
+        if (title == null && body == null && orderId == null) return;
 
         boolean isOngoing = "true".equals(data.get("ongoing"));
         boolean isContinuous = "continuous".equals(data.get("alert"));
 
-        int notificationId = isOngoing ? orderId.hashCode() : (orderId.hashCode() + 1000);
-
-        String title = data.get("title");
-        String body = data.get("body");
-        String soundName = data.get("sound");
+        int notificationId = (orderId != null) 
+            ? (isOngoing ? orderId.hashCode() : (orderId.hashCode() + 1000))
+            : (int) (System.currentTimeMillis() & 0x7fffffff);
 
         String channelId = data.get("channelId");
         if (channelId == null || channelId.isEmpty()) {
@@ -145,7 +145,7 @@ public class OliveMessagingService extends MessagingService {
         ensureChannelExists(notificationManager, channelId, isContinuous, isOngoing, soundName);
 
         Intent intent;
-        if (isContinuous) {
+        if (isContinuous && orderId != null) {
             intent = new Intent(this, AlarmActivity.class);
             intent.putExtra("orderId", orderId);
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
@@ -163,11 +163,26 @@ public class OliveMessagingService extends MessagingService {
 
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this, channelId)
                 .setSmallIcon(getResources().getIdentifier("ic_stat_icon_config_sample", "drawable", getPackageName()))
-                .setContentTitle(title)
-                .setContentText(body)
-                .setStyle(new NotificationCompat.BigTextStyle().bigText(body))
+                .setContentTitle(title != null ? title : "Olive Pizza")
+                .setContentText(body != null ? body : "You have a new update")
+                .setStyle(new NotificationCompat.BigTextStyle().bigText(body != null ? body : ""))
                 .setContentIntent(pendingIntent)
+                .setDefaults(Notification.DEFAULT_VIBRATE | Notification.DEFAULT_LIGHTS)
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC);
+
+        // Explicitly set sound on builder
+        Uri soundUri = null;
+        if (soundName != null && !soundName.isEmpty() && !"default".equals(soundName)) {
+            String cleanSoundName = soundName.contains(".") ? soundName.split("\\.")[0] : soundName;
+            int resId = getResources().getIdentifier(cleanSoundName, "raw", getPackageName());
+            if (resId != 0) {
+                soundUri = Uri.parse("android.resource://" + getPackageName() + "/" + resId);
+            }
+        }
+        if (soundUri == null) {
+            soundUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION);
+        }
+        builder.setSound(soundUri);
 
         if (isOngoing) {
             builder.setOngoing(true).setOnlyAlertOnce(true);
@@ -182,13 +197,15 @@ public class OliveMessagingService extends MessagingService {
         } else {
             builder.setPriority(NotificationCompat.PRIORITY_MAX)
                    .setCategory(NotificationCompat.CATEGORY_ALARM)
-                   .setAutoCancel(true)
-                   .setFullScreenIntent(pendingIntent, true);
+                   .setAutoCancel(true);
+            if (isContinuous && pendingIntent != null) {
+                builder.setFullScreenIntent(pendingIntent, true);
+            }
         }
 
         // Action Buttons (Accept / Reject / Stop Alert)
         String actionsStr = data.get("actions");
-        if (actionsStr != null) {
+        if (actionsStr != null && orderId != null) {
             try {
                 JSONArray actionsArr = new JSONArray(actionsStr);
                 for (int i = 0; i < actionsArr.length(); i++) {
@@ -221,7 +238,7 @@ public class OliveMessagingService extends MessagingService {
         }
 
         notificationManager.notify(notificationId, notification);
-        Log.i(TAG, "🔔 Native alarm notification posted: id=" + notificationId + " channel=" + channelId + " continuous=" + isContinuous);
+        Log.i(TAG, "🔔 Native notification posted: id=" + notificationId + " channel=" + channelId + " continuous=" + isContinuous);
     }
 
     private void ensureChannelExists(NotificationManager notificationManager,
@@ -234,18 +251,24 @@ public class OliveMessagingService extends MessagingService {
                          (isOngoing ? NotificationManager.IMPORTANCE_DEFAULT : NotificationManager.IMPORTANCE_HIGH);
         NotificationChannel channel = new NotificationChannel(channelId, channelId.replace("_", " "), importance);
 
+        Uri soundUri = null;
         if (soundName != null && !soundName.isEmpty() && !"default".equals(soundName)) {
             String cleanSoundName = soundName.contains(".") ? soundName.split("\\.")[0] : soundName;
             int resId = getResources().getIdentifier(cleanSoundName, "raw", getPackageName());
             if (resId != 0) {
-                Uri soundUri = Uri.parse("android.resource://" + getPackageName() + "/" + resId);
-                AudioAttributes audioAttributes = new AudioAttributes.Builder()
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                        .setUsage(isContinuous ? AudioAttributes.USAGE_ALARM : AudioAttributes.USAGE_NOTIFICATION)
-                        .build();
-                channel.setSound(soundUri, audioAttributes);
+                soundUri = Uri.parse("android.resource://" + getPackageName() + "/" + resId);
             }
         }
+        if (soundUri == null) {
+            soundUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION);
+        }
+
+        AudioAttributes audioAttributes = new AudioAttributes.Builder()
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .setUsage(isContinuous ? AudioAttributes.USAGE_ALARM : AudioAttributes.USAGE_NOTIFICATION)
+                .build();
+        channel.setSound(soundUri, audioAttributes);
+
         channel.enableVibration(true);
         channel.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
         try {

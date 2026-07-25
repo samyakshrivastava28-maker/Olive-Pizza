@@ -21,11 +21,31 @@ type SoundType =
 
 let audioCtx: AudioContext | null = null;
 
-function getAudioContext(): AudioContext {
+export function getAudioContext(): AudioContext {
   if (!audioCtx) {
     audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
   }
   return audioCtx;
+}
+
+export function unlockAudio() {
+  try {
+    const ctx = getAudioContext();
+    if (ctx.state === 'suspended') {
+      ctx.resume();
+    }
+  } catch (e) {
+    console.warn('[NotificationSound] Could not unlock audio:', e);
+  }
+}
+
+if (typeof window !== 'undefined') {
+  const unlockEvents = ['click', 'touchstart', 'keydown', 'pointerdown'];
+  const handleUnlock = () => {
+    unlockAudio();
+    unlockEvents.forEach((e) => window.removeEventListener(e, handleUnlock));
+  };
+  unlockEvents.forEach((e) => window.addEventListener(e, handleUnlock, { passive: true }));
 }
 
 // ── Tone primitives ───────────────────────────────────────────────────────────

@@ -1,6 +1,6 @@
 import { collection, onSnapshot, query, where, getDocs } from "firebase/firestore";
 import { db } from "../lib/firebase";
-import { playDeliveryRingtone } from "../hooks/useNotificationSound";
+import { playNotificationSound, unlockAudio } from "../hooks/useNotificationSound";
 
 export type DeliveryAlarmState = {
   isAlarming: boolean;
@@ -19,6 +19,7 @@ class DeliveryAlarmManagerClass {
   private unsubscribe: (() => void) | null = null;
   private masterLoopTimeout: ReturnType<typeof setTimeout> | null = null;
   private soundInterval: ReturnType<typeof setInterval> | null = null;
+  private currentPartnerId: string | null = null;
   
   // Cycle configuration
   private PLAY_DURATION = 60000; // 60 seconds playing
@@ -27,14 +28,17 @@ class DeliveryAlarmManagerClass {
   /**
    * Start listening to Firestore for pending assignments for this specific partner.
    */
-  public init(uid: string) {
-    if (this.unsubscribe) return;
+  public init(partnerId: string) {
+    if (this.unsubscribe && this.currentPartnerId === partnerId) return;
+    if (this.unsubscribe) this.destroy();
+
+    this.currentPartnerId = partnerId;
 
     // Delivery Partner is assigned when status is 'partner_assigned' and deliveryPartnerId matches
     const q = query(
       collection(db, "orders"),
-      where("deliveryPartnerId", "==", uid),
-      where("status", "==", "partner_assigned")
+      where("deliveryPartnerId", "==", partnerId),
+      where("status", "in", ["partner_assigned", "out_for_delivery"])
     );
     
     // First, direct fetch
@@ -60,15 +64,7 @@ class DeliveryAlarmManagerClass {
 
   public handleUserInteraction() {
     this.needsInteraction = false;
-    
-    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-    if (AudioContextClass) {
-      const ctx = new AudioContextClass();
-      if (ctx.state === 'suspended') {
-        ctx.resume();
-      }
-    }
-    
+    unlockAudio();
     this.notify();
     
     if (this.pendingCount > 0) {

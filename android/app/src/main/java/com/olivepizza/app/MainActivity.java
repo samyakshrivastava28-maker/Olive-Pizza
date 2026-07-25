@@ -148,17 +148,22 @@ public class MainActivity extends BridgeActivity {
         channel.enableVibration(true);
 
         // Sound
+        Uri soundUri = null;
         if (soundRawName != null && !"default".equals(soundRawName)) {
             int resId = getResources().getIdentifier(soundRawName, "raw", getPackageName());
             if (resId != 0) {
-                Uri soundUri = Uri.parse("android.resource://" + getPackageName() + "/" + resId);
-                AudioAttributes attrs = new AudioAttributes.Builder()
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                        .setUsage(audioUsage)
-                        .build();
-                channel.setSound(soundUri, attrs);
+                soundUri = Uri.parse("android.resource://" + getPackageName() + "/" + resId);
             }
         }
+        if (soundUri == null) {
+            soundUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION);
+        }
+
+        AudioAttributes attrs = new AudioAttributes.Builder()
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .setUsage(audioUsage)
+                .build();
+        channel.setSound(soundUri, attrs);
 
         if (bypassDnd) {
             try {

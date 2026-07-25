@@ -1,6 +1,6 @@
 import { collection, onSnapshot, query, where, getDocs } from "firebase/firestore";
 import { db } from "../lib/firebase";
-import { playPOSAlarm } from "../hooks/useNotificationSound";
+import { playPOSAlarm, unlockAudio } from "../hooks/useNotificationSound";
 
 export type OwnerAlarmState = {
   isAlarming: boolean;
@@ -62,16 +62,7 @@ class OwnerAlarmManagerClass {
    */
   public handleUserInteraction() {
     this.needsInteraction = false;
-    
-    // Resume audio context if available
-    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-    if (AudioContextClass) {
-      const ctx = new AudioContextClass();
-      if (ctx.state === 'suspended') {
-        ctx.resume();
-      }
-    }
-    
+    unlockAudio();
     this.notify();
     
     // If we have pending orders, restart the loop to play sound immediately
