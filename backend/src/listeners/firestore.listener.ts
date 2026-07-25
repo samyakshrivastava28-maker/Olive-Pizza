@@ -11,6 +11,7 @@ import { directNotification } from '../services/notification/DirectNotificationS
 import { OwnerTemplates, CustomerTemplates, DeliveryTemplates } from '../services/notification/NotificationTemplates.js';
 import { queueEmail } from '../services/email.service.js';
 import { buildOrderStatusEmail } from '../services/emailTemplates.service.js';
+import { notificationEngine } from '../services/notification/NotificationEngine.js';
 import { appEventBus } from '../services/eventBus/AppEventBus.js';
 
 export class FirestoreListener {

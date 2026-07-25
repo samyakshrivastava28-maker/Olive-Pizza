@@ -18,6 +18,7 @@ export interface NotificationLogEntry {
   eventType?: string;
   recipientRole?: string;
   recipients?: string;
+  recipientCount?: number;
   resolvedUids: string[];
   resolvedTokens: number;
   invalidTokens: number;
