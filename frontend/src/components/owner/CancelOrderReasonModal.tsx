@@ -6,7 +6,9 @@ interface CancelOrderReasonModalProps {
   isOpen: boolean;
   orderNumber: string;
   onClose: () => void;
-  onSubmit: (reason: string) => Promise<void>;
+  onSubmit?: (reason: string) => Promise<void>;
+  onConfirm?: (reason: string) => Promise<void>;
+  isSubmitting?: boolean;
 }
 
 const PRESET_REASONS = [
@@ -22,11 +24,15 @@ export const CancelOrderReasonModal: React.FC<CancelOrderReasonModalProps> = ({
   orderNumber,
   onClose,
   onSubmit,
+  onConfirm,
+  isSubmitting = false,
 }) => {
   const [selectedReason, setSelectedReason] = useState<string>('');
   const [customReason, setCustomReason] = useState<string>('');
-  const [loading, setLoading] = useState<boolean>(false);
+  const [internalLoading, setInternalLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
+
+  const loading = isSubmitting || internalLoading;
 
   if (!isOpen) return null;
 
@@ -37,15 +43,18 @@ export const CancelOrderReasonModal: React.FC<CancelOrderReasonModalProps> = ({
       return;
     }
 
+    const handler = onConfirm || onSubmit;
+    if (!handler) return;
+
     try {
-      setLoading(true);
+      setInternalLoading(true);
       setError('');
-      await onSubmit(finalReason);
+      await handler(finalReason);
       onClose();
     } catch (err: any) {
       setError(err.message || 'Failed to cancel order.');
     } finally {
-      setLoading(false);
+      setInternalLoading(false);
     }
   };
 

@@ -110,7 +110,7 @@ export class NotificationEngine {
     if (!payload.android!.notification) payload.android!.notification = {} as any;
     payload.android!.notification!.channelId = channelId;
     payload.android!.notification!.sound = soundName;
-    payload.android!.notification!.visibility = 'public';
+    (payload.android!.notification as any).visibility = 'public';
     payload.android!.notification!.notificationPriority =
       androidPriority === 'high' ? 'PRIORITY_MAX' : 'PRIORITY_DEFAULT';
     payload.android!.notification!.defaultVibrateTimings =
