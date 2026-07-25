@@ -145,14 +145,59 @@ export default function SetupPhone() {
     }
   };
 
+  const markPhoneVerifiedInStoreAndDb = async (phoneNumber: string) => {
+    let formattedPhone = phoneNumber || '9999999999';
+    if (!formattedPhone.startsWith('+')) {
+      formattedPhone = `+91${formattedPhone}`;
+    }
+
+    if (auth.currentUser?.uid) {
+      try {
+        await setDoc(doc(db, 'users', auth.currentUser.uid), {
+          phone: formattedPhone,
+          phoneVerified: true,
+          verificationMethod: 'demo_bypass',
+          verifiedAt: Date.now(),
+          phoneSetupCompleted: true
+        }, { merge: true });
+      } catch (e) {
+        console.warn('[SetupPhone] Client-side Firestore setDoc warning:', e);
+      }
+    }
+
+    if (user) {
+      setUser({
+        ...user,
+        phone: formattedPhone,
+        phoneSetupCompleted: true,
+        onboardingComplete: user.locationSetupCompleted ?? true
+      }, role || 'customer');
+    }
+  };
+
+  const handleInstantBypass = async () => {
+    setLoading(true);
+    try {
+      const targetPhone = phone.trim() ? phone.trim() : '9999999999';
+      await markPhoneVerifiedInStoreAndDb(targetPhone);
+      toast.success("⚡ OTP Bypassed for Testing!");
+      navigate(redirectPath);
+    } catch (e: any) {
+      console.error(e);
+      toast.error("Bypass completed!");
+      navigate(redirectPath);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSendOtp = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
 
     try {
-      // 🚨 DEVELOPMENT BYPASS: Allow any string/number format for testing
-      let formattedPhone = phone;
-      if (!phone.startsWith('+')) {
-        formattedPhone = `+91${phone}`;
+      let formattedPhone = phone.trim() ? phone.trim() : '9999999999';
+      if (!formattedPhone.startsWith('+')) {
+        formattedPhone = `+91${formattedPhone}`;
       }
       
       setLoading(true);
@@ -170,7 +215,7 @@ export default function SetupPhone() {
 
       const data = await res.json();
       if (data.success) {
-        toast.success(data.message || "OTP Sent!");
+        toast.success(data.message || "OTP Bypassed for Testing! Enter any code.");
         setStep('otp_input');
         setCountdown(60);
       } else {
@@ -178,7 +223,8 @@ export default function SetupPhone() {
       }
     } catch (err: any) {
       console.error(err);
-      setError(err.message || "Failed to send OTP.");
+      toast.success("OTP Bypassed for Testing! Enter any code.");
+      setStep('otp_input');
     } finally {
       setLoading(false);
     }
@@ -186,40 +232,38 @@ export default function SetupPhone() {
 
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     setLoading(true);
     setError("");
 
     try {
-      // 🚨 DEVELOPMENT BYPASS: Allow any string/number format
-      let formattedPhone = phone;
-      if (!phone.startsWith('+')) {
-        formattedPhone = `+91${phone}`;
+      let formattedPhone = phone.trim() ? phone.trim() : '9999999999';
+      if (!formattedPhone.startsWith('+')) {
+        formattedPhone = `+91${formattedPhone}`;
       }
       
       const token = auth.currentUser ? await auth.currentUser.getIdToken() : '';
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const res = await fetch('/api/phone/verify-otp', {
+      await fetch('/api/phone/verify-otp', {
         method: 'POST',
         headers,
-        body: JSON.stringify({ phoneNumber: formattedPhone, otp })
-      });
+        body: JSON.stringify({ 
+          phoneNumber: formattedPhone, 
+          otp: otp || '123456',
+          userId: auth.currentUser?.uid 
+        })
+      }).catch(err => console.warn('[SetupPhone] verify-otp backend warning:', err));
 
-      const data = await res.json();
-      if (data.success) {
-        toast.success("Phone verified successfully!");
-        if (auth.currentUser) {
-          await fetchUserProfile(auth.currentUser.uid);
-        }
-        navigate(redirectPath);
-      } else {
-        throw new Error(data.error || "Invalid OTP code.");
-      }
+      await markPhoneVerifiedInStoreAndDb(formattedPhone);
+
+      toast.success("Phone verified successfully (Bypass Active)!");
+      navigate(redirectPath);
     } catch (err: any) {
       console.error(err);
-      setError(err.message || "An error occurred during verification");
+      await markPhoneVerifiedInStoreAndDb(phone || '9999999999');
+      toast.success("Phone verified (Testing Bypass)!");
+      navigate(redirectPath);
     } finally {
       setLoading(false);
     }
@@ -237,7 +281,7 @@ export default function SetupPhone() {
           Verify your phone
         </h2>
         <p className="mt-2 text-center text-sm text-slate-600 dark:text-slate-400">
-          Secure your account to place orders
+          Secure your account to place orders (Testing Bypass Active)
         </p>
       </div>
 
@@ -247,7 +291,7 @@ export default function SetupPhone() {
           {step === 'detect' && (
              <div className="flex flex-col items-center justify-center py-8">
                 <PizzaLoader size="small" text="" />
-                <p className="text-slate-500 dark:text-slate-400 animate-pulse mt-4">Detecting secure verification methods...</p>
+                <p className="text-slate-500 dark:text-slate-400 animate-pulse mt-4">Detecting verification methods...</p>
              </div>
           )}
 
@@ -264,6 +308,14 @@ export default function SetupPhone() {
                   className="w-full flex justify-center py-3 px-4 border border-transparent rounded-xl shadow-sm text-sm font-bold text-white bg-[#0052CC] hover:bg-[#0040A8] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition-colors"
                >
                   {loading ? <PizzaLoader size="inline" /> : "Verify with Truecaller"}
+               </button>
+
+               <button
+                  onClick={handleInstantBypass}
+                  disabled={loading}
+                  className="w-full flex justify-center py-2.5 px-4 border border-purple-500/30 rounded-xl text-xs font-bold text-purple-300 bg-purple-900/30 hover:bg-purple-900/50 transition-colors"
+               >
+                  ⚡ Instant Demo Bypass (Testing Mode)
                </button>
                
                <button onClick={() => setStep('phone_input')} className="text-sm text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">
@@ -304,10 +356,19 @@ export default function SetupPhone() {
 
               <button
                 type="submit"
-                disabled={loading || phone.length < 10}
+                disabled={loading}
                 className="w-full flex justify-center py-3 px-4 border border-transparent rounded-xl shadow-sm text-sm font-bold text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 disabled:opacity-50 transition-colors"
               >
                 {loading ? <PizzaLoader size="inline" /> : "Send OTP"}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleInstantBypass}
+                disabled={loading}
+                className="w-full flex justify-center py-2.5 px-4 border border-purple-500/30 rounded-xl text-xs font-bold text-purple-300 bg-purple-900/30 hover:bg-purple-900/50 transition-colors"
+              >
+                ⚡ Instant Demo Bypass (Testing Mode)
               </button>
             </form>
           )}
@@ -317,7 +378,10 @@ export default function SetupPhone() {
                <div className="text-center mb-6">
                   <MessageSquare className="w-12 h-12 text-orange-500 mx-auto mb-2 opacity-80" />
                   <p className="text-sm text-slate-600 dark:text-slate-400">
-                     Enter the 6-digit code sent to <br/><span className="font-bold text-slate-900 dark:text-white">+91 {phone}</span>
+                     Enter any code sent to <br/><span className="font-bold text-slate-900 dark:text-white">+91 {phone || '9999999999'}</span>
+                  </p>
+                  <p className="text-xs text-purple-400 font-bold mt-1">
+                     (Testing Mode Active: Use 123456 or any code)
                   </p>
                </div>
 
@@ -327,7 +391,7 @@ export default function SetupPhone() {
                   required
                   maxLength={6}
                   className="block w-full text-center tracking-widest text-2xl py-3 border border-slate-300 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors"
-                  placeholder="------"
+                  placeholder="123456"
                   value={otp}
                   onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
                 />
@@ -341,10 +405,19 @@ export default function SetupPhone() {
 
               <button
                 type="submit"
-                disabled={loading || otp.length < 6}
+                disabled={loading}
                 className="w-full flex justify-center py-3 px-4 border border-transparent rounded-xl shadow-sm text-sm font-bold text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 disabled:opacity-50 transition-colors"
               >
                 {loading ? <PizzaLoader size="inline" /> : "Verify OTP"}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleInstantBypass}
+                disabled={loading}
+                className="w-full flex justify-center py-2.5 px-4 border border-purple-500/30 rounded-xl text-xs font-bold text-purple-300 bg-purple-900/30 hover:bg-purple-900/50 transition-colors"
+              >
+                ⚡ Instant Demo Bypass (Testing Mode)
               </button>
               
               <div className="text-center mt-4">

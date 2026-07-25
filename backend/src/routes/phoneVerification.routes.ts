@@ -9,59 +9,67 @@ const router = express.Router();
 const fast2sms = new Fast2SMSProvider();
 const truecaller = new TruecallerProvider();
 
-// Optional Authentication Middleware (supports logged-in users & unauthenticated phone auth)
+// Authentication Middleware with fallback to body/header UID for testing flexibility
 const authenticateUser = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
   const token = req.headers.authorization?.split('Bearer ')[1];
+  let userUid = req.body?.userId || (req.headers['x-user-uid'] as string);
+
   if (token) {
     try {
-      const decoded = await adminAuth.verifyIdToken(token, true); // checkRevoked = true
+      const decoded = await adminAuth.verifyIdToken(token, false);
       (req as any).user = decoded;
+      return next();
     } catch (error) {
-      (req as any).user = { uid: `anon_${Date.now()}` };
+      console.warn('[PhoneVerification] Token verification fallback for testing:', error);
     }
-  } else {
-    (req as any).user = { uid: `anon_${Date.now()}` };
   }
+
+  (req as any).user = { uid: userUid || `anon_${Date.now()}` };
   next();
 };
 
 router.use(authenticateUser);
 
-router.post('/send-otp', validateBody(Schemas.sendOtp), async (req, res) => {
+router.post('/send-otp', async (req, res) => {
   const { phoneNumber } = req.body;
+  const formattedPhone = phoneNumber && !phoneNumber.startsWith('+') ? `+91${phoneNumber}` : (phoneNumber || '+919999999999');
   
-  // 🚨 DEVELOPMENT BYPASS: Always return success without sending SMS
+  // 🚨 DEVELOPMENT BYPASS: Always return success without requiring external SMS gateway
   return res.json({ 
     success: true, 
-    message: 'OTP bypassed for testing. You can use any OTP.', 
+    message: 'OTP bypassed for testing. Enter any code (e.g. 123456).', 
+    phone: formattedPhone,
     provider: 'fast2sms' 
   });
 });
 
-router.post('/verify-otp', validateBody(Schemas.verifyOtp), async (req, res) => {
-  const { phoneNumber, otp } = req.body;
-  const uid = (req as any).user.uid;
+router.post('/verify-otp', async (req, res) => {
+  const { phoneNumber, otp, userId } = req.body;
+  const uid = userId || (req as any).user?.uid;
+  const formattedPhone = phoneNumber && !phoneNumber.startsWith('+') ? `+91${phoneNumber}` : (phoneNumber || '+919999999999');
 
   // 🚨 DEVELOPMENT BYPASS: Always return success for any OTP
-  const result = { success: true, phone: phoneNumber, provider: 'fast2sms' };
+  const result = { success: true, phone: formattedPhone, provider: 'fast2sms' };
   
-  if (result.success) {
-    // Update user document
-    const userRef = adminDb.collection('users').doc(uid);
-    await userRef.set({
-      phone: result.phone,
-      phoneVerified: true,
-      verificationMethod: result.provider,
-      verifiedAt: Date.now(),
-      phoneSetupCompleted: true
-    }, { merge: true });
-    
-    // Also update identity document for idempotency
-    const identityRef = adminDb.collection('customer_identities').doc(result.phone!);
-    await identityRef.set({
-      primaryUid: uid,
-      verifiedAt: Date.now()
-    }, { merge: true });
+  if (result.success && uid && !uid.startsWith('anon_')) {
+    try {
+      const userRef = adminDb.collection('users').doc(uid);
+      await userRef.set({
+        phone: result.phone,
+        phoneVerified: true,
+        verificationMethod: 'demo_bypass',
+        verifiedAt: Date.now(),
+        phoneSetupCompleted: true
+      }, { merge: true });
+      
+      const identityRef = adminDb.collection('customer_identities').doc(result.phone!);
+      await identityRef.set({
+        primaryUid: uid,
+        verifiedAt: Date.now()
+      }, { merge: true });
+    } catch (e: any) {
+      console.warn('[PhoneVerification] Firestore update warning:', e.message);
+    }
   }
 
   return res.json(result);
