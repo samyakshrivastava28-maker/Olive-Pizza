@@ -9,8 +9,25 @@ export default function FloatingCart() {
 
   const cartCount = items.reduce((acc, item) => acc + item.quantity, 0);
 
-  // Hide on checkout, cart, or dashboard pages
-  if (location.pathname === '/cart' || location.pathname === '/checkout' || location.pathname.startsWith('/owner') || location.pathname.startsWith('/delivery')) {
+  // Hide on tracking, checkout, cart, or order detail pages
+  const p = location.pathname;
+  const isHiddenPage = [
+    '/cart',
+    '/checkout',
+    '/order-tracking',
+    '/tracking',
+    '/track',
+    '/order-success',
+    '/recheck-order',
+    '/processing-order',
+    '/order/',
+    '/orders/',
+    '/order-details',
+    '/owner',
+    '/delivery'
+  ].some(prefix => p === prefix || p.startsWith(prefix));
+
+  if (isHiddenPage) {
     return null;
   }
 

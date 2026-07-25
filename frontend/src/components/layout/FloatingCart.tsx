@@ -1,10 +1,31 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence, useAnimation } from 'framer-motion';
 import { ShoppingBag, ChevronRight, Sparkles } from 'lucide-react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useLocation } from 'react-router';
 import { useCartStore } from '../../lib/store';
 
 export default function FloatingCart() {
+  const location = useLocation();
+  
+  // Hide on tracking, checkout, cart, or order detail pages
+  const p = location.pathname;
+  const isHiddenPage = [
+    '/cart',
+    '/checkout',
+    '/order-tracking',
+    '/tracking',
+    '/track',
+    '/order-success',
+    '/recheck-order',
+    '/processing-order',
+    '/order/',
+    '/orders/',
+    '/order-details',
+    '/owner',
+    '/delivery'
+  ].some(prefix => p === prefix || p.startsWith(prefix));
+
+  if (isHiddenPage) return null;
   const playSuccessSound = () => {
     try {
       const AudioContext = window.AudioContext || (window as any).webkitAudioContext;

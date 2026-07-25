@@ -76,13 +76,34 @@ export default function MainLayout() {
       <PWAPrompts />
       
       {/* Premium Floating Components */}
-      {location.pathname !== '/checkout' && location.pathname !== '/cart' && (
-         <>
-           <FloatingCart />
-           <FloatingWaitingCard />
-           <FloatingOrderTracker />
-         </>
-      )}
+      {(() => {
+        const p = location.pathname;
+        const hideCart = [
+          '/cart',
+          '/checkout',
+          '/order-tracking',
+          '/tracking',
+          '/track',
+          '/order-success',
+          '/recheck-order',
+          '/processing-order',
+          '/order/',
+          '/orders/',
+          '/order-details',
+          '/owner',
+          '/delivery'
+        ].some(prefix => p === prefix || p.startsWith(prefix));
+
+        if (hideCart) return null;
+
+        return (
+          <>
+            <FloatingCart />
+            <FloatingWaitingCard />
+            <FloatingOrderTracker />
+          </>
+        );
+      })()}
       
       <AnimatePresence>
         {isOffline && (
