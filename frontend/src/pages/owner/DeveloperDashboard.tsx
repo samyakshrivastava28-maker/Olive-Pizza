@@ -168,7 +168,7 @@ export default function DeveloperDashboard() {
   const [fcmLogs, setFcmLogs] = useState<any[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
   const [claimLoading, setClaimLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'health' | 'monitor' | 'diagnostics' | 'logs' | 'security'>('health');
+  const [activeTab, setActiveTab] = useState<'health' | 'email' | 'monitor' | 'diagnostics' | 'logs' | 'security'>('health');
   const [autoRefresh, setAutoRefresh] = useState(false);
 
   const fetchHealth = useCallback(async () => {

@@ -19,6 +19,8 @@ export interface SystemHealthMetrics {
   activeFcmTokensCount: number;
   notificationQueueStatus: Record<string, number>;
   emailQueueStatus: Record<string, number>;
+  deadLetterCount?: number;
+  lastSentEmailAt?: string | null;
 }
 
 export class DevOpsService {

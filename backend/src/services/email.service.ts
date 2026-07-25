@@ -218,10 +218,10 @@ export const processEmailQueue = async () => {
         } else {
           await pgPool.query(`
             UPDATE email_queue 
-            SET status = 'pending', retry_count = $2, last_error = $3, smtp_response = $4, 
-                retry_timestamp = CURRENT_TIMESTAMP + ($5::text || ' minutes')::interval
-            WHERE id = $6
-          `, [newStatus, newRetryCount, error.message, error.response || error.message, nextRetryMinutes, email.id]);
+            SET status = 'pending', retry_count = $1, last_error = $2, smtp_response = $3, 
+                retry_timestamp = CURRENT_TIMESTAMP + ($4::text || ' minutes')::interval
+            WHERE id = $5
+          `, [newRetryCount, error.message, error.response || error.message, nextRetryMinutes, email.id]);
         }
       }
     }
