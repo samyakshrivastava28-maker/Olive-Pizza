@@ -150,7 +150,6 @@ const OwnerSpecialCategories = lazyWithRetry(() => import('./pages/owner/OwnerSp
 const OwnerVerificationMetrics = lazyWithRetry(() => import('./pages/owner/OwnerVerificationMetrics'));
 const OwnerHomepageManager = lazyWithRetry(() => import('./pages/owner/OwnerHomepageManager'));
 const OwnerVersionManagement = lazyWithRetry(() => import('./pages/owner/OwnerVersionManagement'));
-const OwnerSlackCenter = lazyWithRetry(() => import('./pages/owner/OwnerSlackCenter'));
 const OwnerAIKnowledge = lazyWithRetry(() => import('./pages/owner/OwnerAIKnowledge'));
 const OwnerNotificationCenter = lazyWithRetry(() => import('./pages/owner/OwnerNotificationCenter'));
 const AIHealthMonitor = lazyWithRetry(() => import('./pages/owner/AIHealthMonitor'));
@@ -310,7 +309,6 @@ function AppContent() {
                   <Route path="security" element={<OwnerSecurity />} />
                   <Route path="customers" element={<OwnerCustomers />} />
                   <Route path="email" element={<OwnerEmailCenter />} />
-                  <Route path="slack" element={<OwnerSlackCenter />} />
                   <Route path="special-categories" element={<OwnerSpecialCategories />} />
                   <Route path="homepage" element={<OwnerHomepageManager />} />
                   <Route path="notifications" element={<OwnerNotificationCenter />} />

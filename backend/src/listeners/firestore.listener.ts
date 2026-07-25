@@ -4,8 +4,6 @@
  */
 import { adminDb as db } from '../config/firebase.js';
 import { pgPool } from '../config/postgres.js';
-import { notificationService } from '../services/notification/notification.service.js';
-import { SlackProvider } from '../services/notification/slack.provider.js';
 import { notificationQueue } from '../services/notification/NotificationQueueService.js';
 import { directNotification } from '../services/notification/DirectNotificationService.js';
 import { OwnerTemplates, CustomerTemplates, DeliveryTemplates } from '../services/notification/NotificationTemplates.js';
@@ -108,18 +106,7 @@ export class FirestoreListener {
               : (orderData.dailyOrderNumber || orderData.daily_order_number || `OP-${shortId}`);
             const totalAmount = Number(orderData.totalAmount || orderData.total_amount || 0);
             
-            // 1. SLACK NOTIFICATION
             console.log(`🍕 New order: ${orderNumber} — triggering Unified Pipeline`);
-            const blocks = SlackProvider.generateOrderBlock(orderData);
-            const ts = await notificationService.dispatchImmediate({
-              type: orderData.orderTiming === 'scheduled' ? 'scheduled_order_received' : 'new_order',
-              category: 'orders',
-              title: `🍕 New Order — ${orderNumber}`,
-              blocks,
-            });
-            if (ts) {
-              try { await change.doc.ref.update({ slackThreadTs: ts }); } catch (e) {}
-            }
 
             if (orderData.orderTiming === 'scheduled') continue; // Skip push alarms for scheduled until ready
 
@@ -179,14 +166,6 @@ export class FirestoreListener {
 
             const cfg = statusConfig[currentStatus];
             if (!cfg) continue;
-
-            // 1. SLACK NOTIFICATION
-            if (currentStatus === 'partner_assigned' || currentStatus === 'out_for_delivery') {
-              const deliveryBlocks = SlackProvider.generateDeliveryBlock(orderData, orderData.deliveryPartnerName || 'Partner');
-              await notificationService.dispatch({ type: currentStatus, category: 'delivery', title: cfg.label, blocks: deliveryBlocks, thread_ts: slackTs });
-            } else {
-              await notificationService.dispatch({ type: currentStatus, category: cfg.category, title: cfg.label, details: `Order #${shortId} → ${cfg.emoji} *${cfg.label}*`, thread_ts: slackTs });
-            }
 
             // FCM Push Notifications for Order Status Updates removed here per Spec §2.2 —
             // Handled directly & synchronously by NotificationEngine in POST /api/notifications/action.
@@ -282,7 +261,6 @@ export class FirestoreListener {
         if (/security|login|permission|admin/i.test(action)) category = 'security';
         else if (/stock|inventory|product/i.test(action)) category = 'inventory';
         else if (/customer|support|ticket/i.test(action)) category = 'support';
-        notificationService.dispatch({ type: 'activity_log', category, title: action, details: `*User:* ${data.user || 'System'}\n${data.details || ''}` });
       }
     });
   }

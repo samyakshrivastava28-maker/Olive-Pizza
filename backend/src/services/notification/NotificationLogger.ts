@@ -9,12 +9,12 @@ if (!fs.existsSync(LOG_DIR)) {
 }
 
 export interface NotificationLogEntry {
-  notificationId: string;
+  notificationId?: string;
   timestamp: string;
   orderId?: string;
   userId?: string;
   role?: string;
-  triggerSource: 'manual' | 'automatic';
+  triggerSource?: 'manual' | 'automatic';
   eventType?: string;
   recipientRole?: string;
   recipients?: string;

@@ -67,7 +67,6 @@ export default function PrivacyPolicy() {
         <li><strong>Firebase & Firestore:</strong> Serves as our primary real-time database and secure authentication provider.</li>
         <li><strong>Cloudinary:</strong> Used for secure storage of delivery photo proofs and media.</li>
         <li><strong>Google Drive Backups:</strong> Secure cloud backups for critical business data.</li>
-        <li><strong>Slack Notifications:</strong> Used internally by our restaurant management to fulfill your orders quickly.</li>
       </ul>
 
       <h2 id="data-security">6. Data Security</h2>
