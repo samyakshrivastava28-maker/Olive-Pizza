@@ -217,4 +217,26 @@ router.get('/logs', async (req, res) => {
   }
 });
 
+// ── Developer Dashboard Controls ────────────────────────────────────────────────
+router.post('/devops/email-retry/:id', async (req, res) => {
+  try {
+    const emailId = parseInt(req.params.id, 10);
+    const { DevOpsService } = await import('../services/devOps/DevOpsService.js');
+    const result = await DevOpsService.retryFailedEmail(emailId);
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.post('/devops/test-alert', async (req, res) => {
+  try {
+    const { DevOpsService } = await import('../services/devOps/DevOpsService.js');
+    const result = await DevOpsService.sendTestDevAlert();
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 export default router;

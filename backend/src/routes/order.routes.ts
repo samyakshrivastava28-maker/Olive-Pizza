@@ -301,6 +301,38 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
         console.error('[Orders] Async NotificationEngine dispatch error:', notifErr.message);
       }
 
+      // Customer Confirmation Email Dispatch (Non-blocking)
+      if (userData.email) {
+        try {
+          const { buildOrderStatusEmail } = await import('../services/emailTemplates.service.js');
+          const customerEmailHtml = buildOrderStatusEmail({
+            customerName: userData.name || 'Valued Customer',
+            subject: '🍕 Order Placed - Olive Pizza',
+            stage: 'pending',
+            orderId: newOrderId,
+            data: { orderNumber, totalAmount: `₹${serverCalculatedTotal}` },
+            orderData: {
+              items: validatedItems,
+              total_amount: serverCalculatedTotal,
+              subtotal: serverCalculatedTotal,
+              delivery_address: { addressLine1: userAddress, fullName: userData.name, phone: userPhone },
+              payment_method: req.body.paymentMethod || 'COD'
+            }
+          });
+
+          await queueEmail(
+            userData.email,
+            `🍕 Your Olive Pizza Order ${orderNumber} is Received!`,
+            customerEmailHtml,
+            'transactional',
+            null,
+            `order_placed_${newOrderId}`
+          );
+        } catch (emailErr: any) {
+          console.warn('[Orders] Customer order placed email queue warning:', emailErr.message);
+        }
+      }
+
       try {
         await orderEventService.emitNewOrder(newOrderId);
       } catch (pushErr: any) {

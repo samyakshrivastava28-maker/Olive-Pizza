@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer';
 import { pgPool } from '../config/postgres.js';
+import { DevAlertService } from './email/DevAlertService.js';
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -8,7 +9,7 @@ if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) 
   console.error("CRITICAL ERROR: SMTP credentials missing in environment variables. Emails will fail.");
 }
 
-// Create reusable transporter object using the default SMTP transport
+// Reusable transporter object using standard SMTP transport
 export const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || 'smtp.gmail.com',
   port: parseInt(process.env.SMTP_PORT || '587'),
@@ -29,18 +30,30 @@ transporter.verify((error, success) => {
     console.error("FATAL EMAIL ERROR: SMTP Verification Failed!");
     console.error("==========================================");
     console.error("SMTP Response:", error.message);
-    console.error("Stack Trace:", error.stack);
     console.error("Configuration Used:");
     console.error(`Host: ${process.env.SMTP_HOST}`);
     console.error(`Port: ${process.env.SMTP_PORT}`);
     console.error(`User: ${process.env.SMTP_USER}`);
     console.error("==========================================");
+
+    // Notify developer via DevAlertService
+    DevAlertService.sendAlert({
+      service: 'SMTP Transporter',
+      action: 'Startup Verification',
+      error: error,
+      context: { host: process.env.SMTP_HOST, user: process.env.SMTP_USER }
+    }).catch(() => {});
   } else {
-    console.log("SMTP Server is ready to take our messages");
+    console.log("📧 SMTP Server is ready to take our messages.");
   }
 });
 
-// Generic Queue function to add an email to the queue
+/**
+ * Non-Blocking Asynchronous Queue Function
+ *
+ * Instantly inserts email into PostgreSQL email_queue as 'pending' and returns
+ * immediately without blocking the request thread. Triggers background worker.
+ */
 export const queueEmail = async (
   recipient: string,
   subject: string,
@@ -49,64 +62,81 @@ export const queueEmail = async (
   campaignId: number | null = null,
   idempotencyKey: string | null = null,
   attachments?: any[]
-) => {
+): Promise<number> => {
+  const attachmentsJson = attachments ? JSON.stringify(attachments) : null;
+  let queueId = -1;
+
   try {
-    const attachmentsJson = attachments ? JSON.stringify(attachments) : null;
-    
-    // 🚨 DEVELOPMENT BYPASS: The user requested that system emails use the EXACT SAME 
-    // direct-send mechanism as manual emails because the background queue was failing to dispatch.
-    // We send instantly and synchronously FIRST.
-    console.log(`[EmailDirect] Instantly sending email to ${recipient}...`);
-    const info = await transporter.sendMail({
-      from: process.env.SMTP_FROM || '"Olive Pizza" <noreply@olivepizza.app>',
-      to: recipient,
-      subject: subject,
-      html: htmlContent,
-      attachments: attachments,
-    });
-    console.log(`[EmailDirect] ✅ Sent successfully: ${info.messageId}`);
-
-    // Now insert it into the DB purely for tracking purposes, marked as 'sent' immediately.
-    try {
-      if (idempotencyKey) {
-        await pgPool.query(`
-          INSERT INTO email_queue (recipient, subject, html_content, type, campaign_id, idempotency_key, attachments, status, sent_at, smtp_response)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, 'sent', CURRENT_TIMESTAMP, $8)
-          ON CONFLICT (idempotency_key) DO NOTHING
-        `, [recipient, subject, htmlContent, type, campaignId, idempotencyKey, attachmentsJson, info.response || info.messageId]);
-      } else {
-        await pgPool.query(`
-          INSERT INTO email_queue (recipient, subject, html_content, type, campaign_id, attachments, status, sent_at, smtp_response)
-          VALUES ($1, $2, $3, $4, $5, $6, 'sent', CURRENT_TIMESTAMP, $7)
-        `, [recipient, subject, htmlContent, type, campaignId, attachmentsJson, info.response || info.messageId]);
-      }
-    } catch (dbErr: any) {
-      console.warn('[EmailDirect] Sent successfully, but failed to log to DB tracking:', dbErr.message);
+    if (idempotencyKey) {
+      const res = await pgPool.query(`
+        INSERT INTO email_queue (recipient, subject, html_content, type, campaign_id, idempotency_key, attachments, status, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', CURRENT_TIMESTAMP)
+        ON CONFLICT (idempotency_key) DO NOTHING
+        RETURNING id
+      `, [recipient, subject, htmlContent, type, campaignId, idempotencyKey, attachmentsJson]);
+      queueId = res.rows[0]?.id || -1;
+    } else {
+      const res = await pgPool.query(`
+        INSERT INTO email_queue (recipient, subject, html_content, type, campaign_id, attachments, status, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6, 'pending', CURRENT_TIMESTAMP)
+        RETURNING id
+      `, [recipient, subject, htmlContent, type, campaignId, attachmentsJson]);
+      queueId = res.rows[0]?.id || -1;
     }
-    
-    return -1; // Indicate direct send complete
 
-  } catch (error: any) {
-    console.error('==========================================');
-    console.error('FATAL EMAIL ERROR: Direct send failed!');
-    console.error(`Recipient: ${recipient} | Type: ${type}`);
-    console.error('Error Details:', error.message);
-    console.error('Stack Trace:', error.stack);
-    console.error('==========================================');
-    throw error;
+    console.log(`[EmailQueue] Enqueued email ID=${queueId} to ${recipient} (type=${type})`);
+
+    // Trigger immediate background drain without awaiting
+    setImmediate(() => {
+      processEmailQueue().catch(err => console.warn('[EmailQueue] Immediate drain warning:', err.message));
+    });
+
+    return queueId;
+  } catch (dbErr: any) {
+    console.warn('[EmailQueue] DB Queue insert failed. Falling back to non-blocking async direct send:', dbErr.message);
+    
+    // Direct fallback send if DB table unavailable
+    setImmediate(async () => {
+      try {
+        const info = await transporter.sendMail({
+          from: process.env.SMTP_FROM || '"Olive Pizza" <noreply@olivepizza.app>',
+          to: recipient,
+          subject: subject,
+          html: htmlContent,
+          attachments: attachments,
+        });
+        console.log(`[EmailDirectFallback] Sent email to ${recipient}: ${info.messageId}`);
+      } catch (directErr: any) {
+        console.error(`[EmailDirectFallback] Failed to send email to ${recipient}:`, directErr.message);
+        DevAlertService.sendAlert({
+          service: 'EmailDirectFallback',
+          action: 'SendMail',
+          error: directErr,
+          context: { recipient, subject, type }
+        }).catch(() => {});
+      }
+    });
+
+    return -1;
   }
 };
 
 let isProcessingEmailQueue = false;
 
-// Process Queue
+/**
+ * Background Email Worker Processor
+ *
+ * Drains pending emails in batches of 20 with exponential backoff retries:
+ *   retry_count = 1 → wait 1 min
+ *   retry_count = 2 → wait 5 min
+ *   retry_count = 3 → wait 15 min
+ * Max retries exhausted → Moves to dead_letter_queue & notifies developer.
+ */
 export const processEmailQueue = async () => {
   if (isProcessingEmailQueue) return;
   isProcessingEmailQueue = true;
 
   try {
-    // Grab up to 20 pending emails or emails that failed and need retrying (exponential backoff)
-    // Retry backoff logic: retry_count = 1 -> wait 1 min, retry_count = 2 -> wait 5 min, retry_count = 3 -> wait 15 min
     const { rows: emails } = await pgPool.query(`
       SELECT * FROM email_queue 
       WHERE status = 'pending' 
@@ -122,7 +152,6 @@ export const processEmailQueue = async () => {
 
     for (const email of emails) {
       try {
-        // Mark as processing
         await pgPool.query(`UPDATE email_queue SET status = 'processing' WHERE id = $1`, [email.id]);
 
         let parsedAttachments;
@@ -140,15 +169,12 @@ export const processEmailQueue = async () => {
 
         console.log(`[EmailQueue] ✅ Sent email ID ${email.id} to ${email.recipient} (${info.messageId})`);
 
-        // Mark as sent
         await pgPool.query(`
           UPDATE email_queue 
           SET status = 'sent', sent_at = CURRENT_TIMESTAMP, smtp_response = $2
           WHERE id = $1
         `, [email.id, info.response || info.messageId]);
 
-
-        // If it belongs to a campaign, increment sent_count
         if (email.campaign_id) {
           await pgPool.query(`
             UPDATE email_campaigns 
@@ -158,56 +184,55 @@ export const processEmailQueue = async () => {
         }
 
       } catch (error: any) {
-        console.error(`==========================================`);
-        console.error(`EMAIL SEND FAILED for Queue ID ${email.id}`);
-        console.error(`Recipient: ${email.recipient}`);
-        console.error(`SMTP Error: ${error.message}`);
-        console.error(`SMTP Code: ${error.code || 'N/A'}`);
-        console.error(`SMTP Command: ${error.command || 'N/A'}`);
-        console.error(`==========================================`);
-        
-        // Mark as failed, increment retry_count, calculate backoff
-        const newRetryCount = email.retry_count + 1;
+        console.error(`[EmailQueue] Send failed for Queue ID ${email.id} (${email.recipient}):`, error.message);
+
+        const newRetryCount = (email.retry_count || 0) + 1;
         let nextRetryMinutes = 0;
         if (newRetryCount === 1) nextRetryMinutes = 1;
         else if (newRetryCount === 2) nextRetryMinutes = 5;
         else nextRetryMinutes = 15;
 
-        const newStatus = newRetryCount >= email.max_retries ? 'failed' : 'pending'; // pending = will be picked up when retry_timestamp passes
+        if (newRetryCount >= (email.max_retries || 3)) {
+          console.error(`[EmailQueue] Max retries reached for Queue ID ${email.id}. Moving to Dead Letter Queue.`);
+          
+          await pgPool.query(`
+            INSERT INTO dead_letter_queue (original_queue_id, recipient, subject, payload, final_error)
+            VALUES ($1, $2, $3, $4, $5)
+          `, [email.id, email.recipient, email.subject, email.html_content, error.message]);
 
-        // If max retries reached, move to dead letter queue
-        if (newRetryCount >= email.max_retries) {
-            console.error(`Max retries reached for Queue ID ${email.id}. Moving to Dead Letter Queue.`);
-            await pgPool.query(`
-              INSERT INTO dead_letter_queue (original_queue_id, recipient, subject, payload, final_error)
-              VALUES ($1, $2, $3, $4, $5)
-            `, [email.id, email.recipient, email.subject, email.html_content, error.message]);
-            
-            await pgPool.query(`
-              UPDATE email_queue SET status = 'failed', retry_count = $2, last_error = $3, smtp_response = $4, retry_timestamp = NULL
-              WHERE id = $1
-            `, [email.id, newRetryCount, error.message, error.response || error.message]);
+          await pgPool.query(`
+            UPDATE email_queue 
+            SET status = 'failed', retry_count = $2, last_error = $3, smtp_response = $4, retry_timestamp = NULL
+            WHERE id = $1
+          `, [email.id, newRetryCount, error.message, error.response || error.message]);
+
+          // Trigger developer alert email for exhausted queue retries
+          DevAlertService.sendAlert({
+            service: 'EmailQueueWorker',
+            action: 'DeadLetterExhaustion',
+            error: error,
+            context: { queueId: email.id, recipient: email.recipient, subject: email.subject, retries: newRetryCount },
+            key: `dead_letter_${email.id}`
+          }).catch(() => {});
+
         } else {
-            await pgPool.query(`
-              UPDATE email_queue 
-              SET status = $1, retry_count = $2, last_error = $3, smtp_response = $4, 
-                  retry_timestamp = CURRENT_TIMESTAMP + ($5::text || ' minutes')::interval
-              WHERE id = $6
-            `, [newStatus, newRetryCount, error.message, error.response || error.message, nextRetryMinutes, email.id]);
+          await pgPool.query(`
+            UPDATE email_queue 
+            SET status = 'pending', retry_count = $2, last_error = $3, smtp_response = $4, 
+                retry_timestamp = CURRENT_TIMESTAMP + ($5::text || ' minutes')::interval
+            WHERE id = $6
+          `, [newStatus, newRetryCount, error.message, error.response || error.message, nextRetryMinutes, email.id]);
         }
       }
     }
   } catch (error: any) {
-    console.error('==========================================');
-    console.error('ERROR in processEmailQueue Loop:', error.message);
-    console.error(error.stack);
-    console.error('==========================================');
+    console.error('[EmailQueue] Worker loop error:', error.message);
   } finally {
     isProcessingEmailQueue = false;
   }
 };
 
-// Safety-net polling timer: Drains queued and retrying emails every 5 seconds
+// Background polling timer: Drains queued emails every 5 seconds
 const emailPollingTimer = setInterval(() => {
   processEmailQueue().catch(err => {
     if (err && err.message !== 'No work') {
@@ -217,5 +242,4 @@ const emailPollingTimer = setInterval(() => {
 }, 5000);
 
 if (emailPollingTimer.unref) emailPollingTimer.unref();
-console.log('📧 [EmailQueue] Background polling processor initialized (5s interval).');
-
+console.log('📧 [EmailQueue] Asynchronous background queue worker active (5s polling interval).');

@@ -88,6 +88,15 @@ export class WeeklyReportService {
         console.log(`[WeeklyReportService] Uploaded to Google Drive: ${driveLink}`);
       } catch (driveErr: any) {
         console.error('[WeeklyReportService] Google Drive upload failed:', driveErr.message);
+        try {
+          const { DevAlertService } = await import('../../services/email/DevAlertService.js');
+          DevAlertService.sendAlert({
+            service: 'WeeklyReportService',
+            action: 'GoogleDriveUpload',
+            error: driveErr,
+            context: { weekLabel: weekInfo.weekLabel, fileName }
+          }).catch(() => {});
+        } catch(e) {}
       }
     } else {
       console.warn('[Google Drive] Service disabled or credentials missing. Drive upload skipped.');
@@ -196,7 +205,13 @@ export class WeeklyReportService {
         emailHtml,
         'transactional',
         null,
-        `weekly-report-${weekInfo.docId}`
+        `weekly-report-${weekInfo.docId}`,
+        [{
+          filename: fileName,
+          content: pdfBuffer.toString('base64'),
+          encoding: 'base64',
+          contentType: 'application/pdf'
+        }]
       );
 
       emailed = true;

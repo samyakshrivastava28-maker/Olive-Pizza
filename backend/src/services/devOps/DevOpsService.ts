@@ -59,11 +59,21 @@ export class DevOpsService {
 
     // Email Queue Status Breakdown
     const emailQueueStatus: Record<string, number> = {};
+    let deadLetterCount = 0;
+    let lastSentEmailAt: string | null = null;
     try {
       const res = await pgPool.query(`SELECT status, COUNT(*) as count FROM email_queue GROUP BY status`);
       res.rows.forEach((r: any) => {
         emailQueueStatus[r.status] = parseInt(r.count, 10);
       });
+
+      const dlRes = await pgPool.query(`SELECT COUNT(*) as count FROM dead_letter_queue`);
+      deadLetterCount = parseInt(dlRes.rows[0]?.count || '0', 10);
+
+      const lastSentRes = await pgPool.query(`SELECT sent_at FROM email_queue WHERE status = 'sent' ORDER BY sent_at DESC LIMIT 1`);
+      if (lastSentRes.rows.length > 0 && lastSentRes.rows[0].sent_at) {
+        lastSentEmailAt = new Date(lastSentRes.rows[0].sent_at).toISOString();
+      }
     } catch (err: any) {
       console.warn('[DevOpsService] Failed to fetch email_queue status:', err.message);
     }
@@ -76,7 +86,49 @@ export class DevOpsService {
       activeFcmTokensCount,
       notificationQueueStatus,
       emailQueueStatus,
+      deadLetterCount,
+      lastSentEmailAt,
     };
+  }
+
+  /**
+   * Manually retry a failed email from Developer Dashboard
+   */
+  static async retryFailedEmail(emailId: number) {
+    try {
+      await pgPool.query(`
+        UPDATE email_queue 
+        SET status = 'pending', retry_count = 0, last_error = NULL, retry_timestamp = CURRENT_TIMESTAMP 
+        WHERE id = $1
+      `, [emailId]);
+      
+      // Trigger queue processor immediately
+      const { processEmailQueue } = await import('../email.service.js');
+      setImmediate(() => processEmailQueue().catch(() => {}));
+
+      return { success: true, message: `Email ID ${emailId} reset to pending and enqueued for retry.` };
+    } catch (err: any) {
+      console.error(`[DevOpsService] Failed to retry email ${emailId}:`, err.message);
+      return { success: false, error: err.message };
+    }
+  }
+
+  /**
+   * Send a test developer alert email to webhub2811@gmail.com
+   */
+  static async sendTestDevAlert() {
+    try {
+      const { DevAlertService } = await import('../email/DevAlertService.js');
+      const sent = await DevAlertService.sendAlert({
+        service: 'Developer Dashboard',
+        action: 'Manual System Diagnostic Test',
+        error: 'Manual test trigger initiated from Developer Dashboard by lead developer.',
+        context: { timestamp: new Date().toISOString(), nodeVersion: process.version }
+      });
+      return { success: sent, message: sent ? 'Developer alert sent to webhub2811@gmail.com' : 'Alert suppressed by rate-limit' };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
   }
 
   /**

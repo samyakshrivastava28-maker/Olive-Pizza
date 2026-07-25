@@ -234,6 +234,7 @@ export default function DeveloperDashboard() {
 
   const tabs = [
     { id: 'health', label: 'System Health', icon: Activity },
+    { id: 'email', label: 'Email Controls', icon: Mail },
     { id: 'monitor', label: 'Pipeline Monitor', icon: Zap },
     { id: 'diagnostics', label: 'Notification Trace', icon: Bell },
     { id: 'logs', label: 'FCM Logs', icon: Terminal },
@@ -312,6 +313,94 @@ export default function DeveloperDashboard() {
                 </div>
               </>
             ) : null}
+          </motion.div>
+        )}
+
+        {/* Email Controls Tab */}
+        {activeTab === 'email' && (
+          <motion.div key="email" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <StatCard icon={Mail} label="Dead Letter Queue" value={health?.deadLetterCount ?? 0} color="text-red-400" sub="failed after max retries" />
+              <StatCard icon={Clock} label="Last Email Sent" value={health?.lastSentEmailAt ? new Date(health.lastSentEmailAt).toLocaleTimeString() : 'N/A'} color="text-green-400" sub={health?.lastSentEmailAt ? new Date(health.lastSentEmailAt).toLocaleDateString() : ''} />
+              <StatCard icon={ShieldCheck} label="Developer Alerts Target" value="webhub2811@gmail.com" color="text-primary-400" sub="locked recipient" />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Test Developer Alert */}
+              <div className="bg-slate-900/60 border border-white/[0.08] rounded-2xl p-6">
+                <div className="flex items-center gap-2 mb-3">
+                  <Zap className="w-5 h-5 text-primary-400" />
+                  <h3 className="text-white font-bold text-base">Send Test Developer Alert</h3>
+                </div>
+                <p className="text-slate-400 text-xs mb-5">
+                  Sends an immediate system diagnostic alert email to <strong>webhub2811@gmail.com</strong> using <code className="text-primary-300">DevAlertService</code>. Rate-limited to 1 alert per 15 minutes.
+                </p>
+                <button
+                  onClick={async () => {
+                    try {
+                      const token = await auth.currentUser?.getIdToken();
+                      const res = await fetch(`${BACKEND}/data-manager/devops/test-alert`, {
+                        method: 'POST',
+                        headers: { Authorization: `Bearer ${token}` }
+                      });
+                      const data = await res.json();
+                      if (data.success) toast.success(data.message || 'Developer alert sent!');
+                      else toast.error(data.error || 'Failed to send alert');
+                    } catch (e: any) {
+                      toast.error(e.message);
+                    }
+                  }}
+                  className="w-full bg-primary-600 hover:bg-primary-500 text-white font-semibold py-3 px-4 rounded-xl text-sm transition-all flex items-center justify-center gap-2"
+                >
+                  <Mail className="w-4 h-4" /> Send Test Alert to webhub2811@gmail.com
+                </button>
+              </div>
+
+              {/* Retry Failed Email */}
+              <div className="bg-slate-900/60 border border-white/[0.08] rounded-2xl p-6">
+                <div className="flex items-center gap-2 mb-3">
+                  <RefreshCw className="w-5 h-5 text-orange-400" />
+                  <h3 className="text-white font-bold text-base">Manual Email Queue Retry</h3>
+                </div>
+                <p className="text-slate-400 text-xs mb-4">
+                  Reset a failed or dead-letter queued email ID back to <code className="text-orange-300">'pending'</code> state for immediate worker processing.
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    id="dev-retry-email-id"
+                    type="number"
+                    placeholder="Enter Queue Email ID (e.g. 42)"
+                    className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-primary-500"
+                  />
+                  <button
+                    onClick={async () => {
+                      const input = document.getElementById('dev-retry-email-id') as HTMLInputElement;
+                      const emailId = input?.value;
+                      if (!emailId) { toast.error('Please enter a Queue Email ID'); return; }
+                      try {
+                        const token = await auth.currentUser?.getIdToken();
+                        const res = await fetch(`${BACKEND}/data-manager/devops/email-retry/${emailId}`, {
+                          method: 'POST',
+                          headers: { Authorization: `Bearer ${token}` }
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                          toast.success(data.message || 'Email queue item reset!');
+                          fetchHealth();
+                        } else {
+                          toast.error(data.error || 'Retry failed');
+                        }
+                      } catch (e: any) {
+                        toast.error(e.message);
+                      }
+                    }}
+                    className="bg-orange-600 hover:bg-orange-500 text-white font-semibold px-4 py-2.5 rounded-xl text-sm transition-all"
+                  >
+                    Retry Email
+                  </button>
+                </div>
+              </div>
+            </div>
           </motion.div>
         )}
 

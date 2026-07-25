@@ -283,3 +283,44 @@ class OrderEventServiceImpl extends EventEmitter {
 }
 
 export const orderEventService = new OrderEventServiceImpl();
+
+// Asynchronous Customer Order Status Email Dispatcher
+orderEventService.on('order_status_changed', async (event: OrderEvent) => {
+  try {
+    const { userId, id: orderId, status, orderNumber, totalAmount, deliveryPartnerName, eta } = event.order;
+    if (!userId || !status) return;
+
+    const userDoc = await adminDb.collection('users').doc(userId).get();
+    const customerEmail = userDoc.data()?.email;
+    if (!customerEmail) return;
+
+    const { buildOrderStatusEmail } = await import('../emailTemplates.service.js');
+    const { queueEmail } = await import('../email.service.js');
+
+    const emailHtml = buildOrderStatusEmail({
+      customerName: userDoc.data()?.name || 'Valued Customer',
+      subject: `Order ${orderNumber || orderId} Update - Olive Pizza`,
+      stage: status,
+      orderId: orderId,
+      data: {
+        orderNumber: String(orderNumber || orderId),
+        totalAmount: `₹${totalAmount}`,
+        deliveryPartnerName: deliveryPartnerName || 'Your partner',
+        eta: eta || ''
+      },
+      orderData: event.order
+    });
+
+    await queueEmail(
+      customerEmail,
+      `Olive Pizza Order ${orderNumber || ''}: Status Updated to ${status.replace('_', ' ').toUpperCase()}`,
+      emailHtml,
+      'transactional',
+      null,
+      `order_${status}_${orderId}`
+    );
+    console.log(`[OrderEventService] Async status email enqueued for ${customerEmail} (Status: ${status})`);
+  } catch (err: any) {
+    console.warn('[OrderEventService] Async status email queue warning:', err.message);
+  }
+});
