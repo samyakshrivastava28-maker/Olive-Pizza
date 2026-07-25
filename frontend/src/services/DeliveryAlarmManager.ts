@@ -1,6 +1,6 @@
 import { collection, onSnapshot, query, where, getDocs } from "firebase/firestore";
 import { db } from "../lib/firebase";
-import { playNotificationSound, unlockAudio } from "../hooks/useNotificationSound";
+import { playDeliveryRingtone, unlockAudio } from "../hooks/useNotificationSound";
 
 export type DeliveryAlarmState = {
   isAlarming: boolean;
