@@ -64,7 +64,7 @@ export default function ApkBuildStatus() {
         if (relRes.ok) {
           const relData = await relRes.json();
           const asset = relData.assets?.find((a: any) => a.name.endsWith('.apk'));
-          if (asset) downloadUrl = asset.browser_download_url;
+          if (asset) downloadUrl = '/api/github/download-apk';
         }
       }
 

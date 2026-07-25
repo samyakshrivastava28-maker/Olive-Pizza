@@ -39,7 +39,7 @@ export default function AutoUpdater() {
             // Find the APK download URL
             const asset = data.assets?.find((a: any) => a.name.endsWith('.apk'));
             if (asset) {
-              setDownloadUrl(asset.browser_download_url);
+              setDownloadUrl('/api/github/download-apk');
               setLatestVersion(`Build ${githubVersionCode}`);
               setUpdateAvailable(true);
               setIsVisible(true);
