@@ -25,13 +25,14 @@ export class SlackProvider {
   }
 
   private init() {
+    const isExplicitlyEnabled = process.env.SLACK_ENABLED === 'true';
     const token = process.env.SLACK_BOT_TOKEN;
-    if (token) {
+    if (isExplicitlyEnabled && token) {
       this.client = new WebClient(token);
       this.isEnabled = true;
       console.log('✅ SlackProvider initialized successfully.');
     } else {
-      console.warn('⚠️ SLACK_BOT_TOKEN not found. Slack integration is disabled.');
+      this.client = null;
       this.isEnabled = false;
     }
   }
@@ -45,7 +46,7 @@ export class SlackProvider {
    */
   async testConnection(): Promise<ConnectionInfo> {
     if (!this.isEnabled || !this.client) {
-      return { ok: false, error: 'SLACK_BOT_TOKEN is missing from .env' };
+      return { ok: false, error: 'SLACK_ENABLED is false or SLACK_BOT_TOKEN is missing' };
     }
     try {
       const result = await this.client.auth.test();
@@ -60,25 +61,30 @@ export class SlackProvider {
   }
 
   /**
-   * Post a message to Slack. Throws on failure so the queue can retry.
+   * Post a message to Slack. Returns null when Slack is disabled or on channel errors (no retries).
    */
   async postMessage(payload: SlackMessagePayload): Promise<{ ts: string; channel: string } | null> {
     if (!this.isEnabled || !this.client) {
-      console.log(`[Slack Disabled] Would have sent to ${payload.channel}: ${payload.text}`);
       return null;
     }
 
-    const response = await this.client.chat.postMessage({
-      channel: payload.channel,
-      text: payload.text,
-      blocks: payload.blocks,
-      thread_ts: payload.thread_ts,
-    });
+    try {
+      const response = await this.client.chat.postMessage({
+        channel: payload.channel,
+        text: payload.text,
+        blocks: payload.blocks,
+        thread_ts: payload.thread_ts,
+      });
 
-    if (response.ok) {
-      return { ts: response.ts as string, channel: response.channel as string };
-    } else {
-      throw new Error(response.error || 'Slack API returned not-ok');
+      if (response.ok) {
+        return { ts: response.ts as string, channel: response.channel as string };
+      } else {
+        console.warn(`[Slack] Skipped message to channel "${payload.channel}": ${response.error}`);
+        return null;
+      }
+    } catch (err: any) {
+      console.warn(`[Slack] Provider skipped message for channel "${payload.channel}": ${err.message}`);
+      return null;
     }
   }
 

@@ -832,48 +832,87 @@ export default function OwnerNotificationDiagnostics() {
           </div>
         </div>
       )}
-      {/* ── Section: Delivery Guarantee Logs ─────────────────────────────── */}
+      {/* ── Section: Notification Pipeline Telemetry & Diagnostics ──────────── */}
       <div className="bg-slate-900 rounded-2xl border border-white/5 overflow-hidden">
         <div className="p-5 border-b border-white/5">
           <h3 className="text-white font-bold flex items-center gap-2">
             <Activity className="w-5 h-5 text-orange-500" />
-            Delivery Guarantee Logs
+            Notification Engine Pipeline Diagnostics
           </h3>
           <p className="text-slate-400 text-xs mt-1">
-            Real-time delivery status of the last 50 push notifications.
+            Complete telemetry breakdown (Notification ID, Trigger Source, Recipients, Token counts, FCM Status, Provider, Latency & Error Reasons).
           </p>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm text-slate-300">
-            <thead className="text-xs uppercase bg-slate-800/50 text-slate-400">
+          <table className="w-full text-left text-xs text-slate-300">
+            <thead className="text-[11px] uppercase bg-slate-800/80 text-slate-400 font-bold border-b border-white/5">
               <tr>
-                <th className="px-4 py-3 font-semibold">Status</th>
-                <th className="px-4 py-3 font-semibold">Sent At</th>
-                <th className="px-4 py-3 font-semibold">Retries</th>
-                <th className="px-4 py-3 font-semibold">Error Reason</th>
+                <th className="px-3 py-3">Notif ID / Time</th>
+                <th className="px-3 py-3">Trigger Source</th>
+                <th className="px-3 py-3">Recipients & UIDs</th>
+                <th className="px-3 py-3">Tokens (Active/Invalid/Skip)</th>
+                <th className="px-3 py-3">FCM (Success/Fail)</th>
+                <th className="px-3 py-3">Provider</th>
+                <th className="px-3 py-3">Latency</th>
+                <th className="px-3 py-3">Status / Error Details</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
-              {diag.backend?.deliveryLogs?.map((log: any) => (
-                <tr key={log.id} className="hover:bg-slate-800/30 transition-colors">
-                  <td className="px-4 py-3">
-                    <span className={`px-2 py-1 rounded-full text-xs font-bold ${
-                      log.status === 'sent' ? 'bg-green-500/20 text-green-400' :
-                      log.status === 'queued' ? 'bg-orange-500/20 text-orange-400' :
-                      'bg-red-500/20 text-red-400'
-                    }`}>
-                      {log.status.toUpperCase()}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 font-mono text-xs text-slate-400">{new Date(log.created_at).toLocaleString()}</td>
-                  <td className="px-4 py-3 font-mono">{log.retry_count || 0}</td>
-                  <td className="px-4 py-3 text-red-400 text-xs max-w-[200px] truncate" title={log.error_message || ''}>
-                    {log.error_message || '—'}
-                  </td>
-                </tr>
-              )) || (
+              {diag.backend?.deliveryLogs?.map((log: any, idx: number) => {
+                const isSuccess = log.status === 'success' || log.status === 'sent';
+                const isSkipped = log.status === 'skipped';
+                return (
+                  <tr key={log.notificationId || log.id || idx} className="hover:bg-slate-800/40 transition-colors font-mono">
+                    <td className="px-3 py-3">
+                      <span className="text-white font-bold block">{log.notificationId || `#${(log.id || '').slice(-8)}`}</span>
+                      <span className="text-slate-500 text-[10px]">{new Date(log.timestamp || log.created_at).toLocaleTimeString()}</span>
+                    </td>
+                    <td className="px-3 py-3">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                        log.triggerSource === 'manual' ? 'bg-purple-500/20 text-purple-300' : 'bg-blue-500/20 text-blue-300'
+                      }`}>
+                        {log.triggerSource || 'automatic'}
+                      </span>
+                    </td>
+                    <td className="px-3 py-3 max-w-[150px] truncate text-slate-300" title={log.recipients || log.userId}>
+                      {log.recipients || log.userId || '—'}
+                    </td>
+                    <td className="px-3 py-3 text-slate-300">
+                      <span className="text-green-400 font-bold">{log.resolvedTokens ?? log.activeTokenCount ?? 0}</span> / 
+                      <span className="text-red-400 ml-1">{log.invalidTokens ?? 0}</span> / 
+                      <span className="text-yellow-400 ml-1">{log.skippedTokens ?? 0}</span>
+                    </td>
+                    <td className="px-3 py-3">
+                      <span className="text-green-400 font-bold">✓ {log.fcmSuccess ?? (isSuccess ? 1 : 0)}</span>
+                      {log.fcmFailure > 0 && <span className="text-red-400 font-bold ml-2">✗ {log.fcmFailure}</span>}
+                    </td>
+                    <td className="px-3 py-3 text-slate-400">
+                      {log.providerUsed || 'Firebase FCM'}
+                    </td>
+                    <td className="px-3 py-3 text-slate-400">
+                      {log.latencyMs ?? log.elapsedTimeMs ?? 0}ms
+                    </td>
+                    <td className="px-3 py-3">
+                      <div className="flex flex-col">
+                        <span className={`w-fit px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                          isSuccess ? 'bg-green-500/20 text-green-400' :
+                          isSkipped ? 'bg-yellow-500/20 text-yellow-400' :
+                          'bg-red-500/20 text-red-400'
+                        }`}>
+                          {log.status?.toUpperCase() || 'UNKNOWN'}
+                        </span>
+                        {log.errorDetails && (
+                          <span className="text-red-400 text-[10px] mt-1 line-clamp-1 max-w-[220px]" title={log.errorDetails}>
+                            {log.errorDetails}
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              }) || (
                 <tr>
-                  <td colSpan={4} className="px-4 py-8 text-center text-slate-500">No delivery logs available</td>
+                  <td colSpan={8} className="px-4 py-8 text-center text-slate-500 font-sans">No diagnostic logs available</td>
                 </tr>
               )}
             </tbody>

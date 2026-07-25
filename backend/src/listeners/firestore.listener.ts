@@ -60,25 +60,10 @@ export class FirestoreListener {
    */
   private static async getOwnerRecipients(): Promise<string[]> {
     try {
-      let targetUids: string[] = [];
-      const client = await pgPool.connect();
-      try {
-        const res = await client.query(
-          "SELECT DISTINCT user_id as firebase_uid FROM fcm_tokens WHERE role = 'owner' OR role = 'admin' OR role IS NULL"
-        );
-        targetUids = res.rows.map((r: any) => r.firebase_uid);
-      } finally {
-        client.release();
-      }
-
-      const ownerDocs = await db.collection('users').where('role', 'in', ['owner', 'admin']).get();
-      const fsUids = ownerDocs.docs.map(d => d.id);
-      targetUids = Array.from(new Set([...targetUids, ...fsUids]));
-      return targetUids;
+      return await notificationEngine.resolveByRole('owner');
     } catch (err: any) {
-      console.error('[FirestoreListener] Owner recipient lookup error:', err.message);
-      const ownerDocs = await db.collection('users').where('role', 'in', ['owner', 'admin']).get();
-      return ownerDocs.docs.map(d => d.id);
+      console.error('[FirestoreListener] Error resolving owner recipients:', err.message);
+      return [];
     }
   }
 

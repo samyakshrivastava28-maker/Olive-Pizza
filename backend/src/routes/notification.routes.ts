@@ -841,26 +841,11 @@ router.post('/send-custom', verifyToken, async (req: AuthRequest, res: Response)
 
     try {
       if (audience === 'customers') {
-        const res = await client.query("SELECT DISTINCT user_id as firebase_uid FROM fcm_tokens WHERE role = 'customer' OR role IS NULL");
-        targetUids = res.rows.map(r => r.firebase_uid);
-        if (targetUids.length === 0) {
-          const custDocs = await db.collection('users').where('role', '==', 'customer').get();
-          targetUids = custDocs.docs.map(d => d.id);
-        }
+        targetUids = await notificationEngine.resolveByRole('customer');
       } else if (audience === 'delivery') {
-        const res = await client.query("SELECT DISTINCT user_id as firebase_uid FROM fcm_tokens WHERE role = 'delivery' OR role = 'delivery_partner'");
-        targetUids = res.rows.map(r => r.firebase_uid);
-        if (targetUids.length === 0) {
-          const dpDocs = await db.collection('users').where('role', '==', 'delivery_partner').get();
-          targetUids = dpDocs.docs.map(d => d.id);
-        }
+        targetUids = await notificationEngine.resolveByRole('delivery_partner');
       } else if (audience === 'owners') {
-        const res = await client.query("SELECT DISTINCT user_id as firebase_uid FROM fcm_tokens WHERE role = 'owner' OR role = 'admin'");
-        targetUids = res.rows.map(r => r.firebase_uid);
-        if (targetUids.length === 0) {
-          const ownerDocs = await db.collection('users').where('role', '==', 'owner').get();
-          targetUids = ownerDocs.docs.map(d => d.id);
-        }
+        targetUids = await notificationEngine.resolveByRole('owner');
       } else if (audience === 'specific' && targetUser) {
         const queryStr = String(targetUser).trim();
         if (queryStr.includes('@')) {
@@ -1110,17 +1095,28 @@ router.get('/debug', verifyToken, async (req: AuthRequest, res: Response): Promi
     let recentFcmLogs: any[] = [];
     try {
       const { NotificationLogger } = await import('../services/notification/NotificationLogger.js');
-      recentFcmLogs = NotificationLogger.getRecentLogs(20).map((entry: any) => ({
+      recentFcmLogs = NotificationLogger.getRecentLogs(50).map((entry: any) => ({
+        notificationId: entry.notificationId || `notif_${entry.timestamp}`,
         timestamp: entry.timestamp,
-        orderId: entry.orderId,
-        userId: entry.userId,
-        role: entry.role,
-        fcmToken: entry.fcmToken ? (entry.fcmToken.substring(0, 12) + '...') : null, // mask token
+        orderId: entry.orderId || null,
+        userId: entry.userId || null,
+        triggerSource: entry.triggerSource || 'automatic',
+        eventType: entry.eventType || 'push',
+        recipientRole: entry.recipientRole || null,
+        recipients: entry.recipients || entry.userId || 'N/A',
+        resolvedUids: entry.resolvedUids || [],
+        resolvedTokens: entry.resolvedTokens ?? entry.activeTokenCount ?? 0,
+        invalidTokens: entry.invalidTokens ?? 0,
+        fcmSuccess: entry.fcmSuccess ?? (entry.status === 'success' ? 1 : 0),
+        fcmFailure: entry.fcmFailure ?? (entry.status === 'failure' ? 1 : 0),
+        skippedTokens: entry.skippedTokens ?? (entry.status === 'skipped' ? 1 : 0),
+        retryCount: entry.retryCount ?? 0,
+        providerUsed: entry.providerUsed || 'Firebase FCM',
+        latencyMs: entry.latencyMs ?? entry.elapsedTimeMs ?? 0,
+        elapsedTimeMs: entry.elapsedTimeMs || 0,
+        fcmTokenMasked: entry.fcmToken ? (entry.fcmToken.substring(0, 12) + '...') : null,
         status: entry.status,
-        errorDetails: entry.errorDetails,
-        elapsedTimeMs: entry.elapsedTimeMs,
-        firebaseSuccessCount: entry.firebaseResponse?.successCount,
-        firebaseFailureCount: entry.firebaseResponse?.failureCount,
+        errorDetails: entry.errorDetails || null,
       }));
     } catch (e) {
       recentFcmLogs = [];

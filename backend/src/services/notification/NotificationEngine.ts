@@ -85,8 +85,36 @@ export class NotificationEngine {
     // ── 1. Resolve FCM tokens ─────────────────────────────────────────────────
     const tokens = await this.resolveTokens(firebaseUserIds);
 
+    const startTime = Date.now();
+    const notificationId = options.orderId ? `notif_${options.orderId}_${Date.now()}` : `notif_${Date.now()}`;
+    const eventType = payload.data?.stage || payload.data?.category || options.category || 'push';
+    const triggerSource = options.category === 'simple_informational' || payload.data?.source === 'owner_broadcast'
+      ? 'manual' : 'automatic';
+
     if (tokens.length === 0) {
       console.warn(`[NotificationEngine] No active FCM tokens found for UIDs: ${firebaseUserIds.join(', ')}`);
+      NotificationLogger.log({
+        notificationId,
+        timestamp: new Date().toISOString(),
+        orderId: options.orderId,
+        userId: firebaseUserIds[0] || 'unknown',
+        triggerSource,
+        eventType,
+        recipientRole: payload.data?.role || options.category,
+        recipients: firebaseUserIds.join(', '),
+        resolvedUids: firebaseUserIds,
+        resolvedTokens: 0,
+        invalidTokens: 0,
+        fcmSuccess: 0,
+        fcmFailure: 0,
+        skippedTokens: firebaseUserIds.length,
+        retryCount: 0,
+        providerUsed: 'Firebase FCM',
+        latencyMs: 0,
+        elapsedTimeMs: 0,
+        status: 'skipped',
+        errorDetails: 'No active FCM tokens found for target user(s)',
+      });
       return { successCount: 0, failureCount: 0, tokensFound: 0, errors: ['no_tokens'] };
     }
 
@@ -138,11 +166,6 @@ export class NotificationEngine {
       chunks.push(tokens.slice(i, i + chunkSize));
     }
 
-    const startTime = Date.now();
-    const eventType = payload.data?.stage || payload.data?.category || options.category || 'push';
-    const triggerSource = options.category === 'simple_informational' || payload.data?.source === 'owner_broadcast'
-      ? 'manual' : 'automatic';
-
     console.log(
       `[NotificationEngine] Sending category=${options.category || 'order'} | ` +
       `targets=${firebaseUserIds.length} | tokens=${tokens.length} | chunks=${chunks.length}`
@@ -171,28 +194,9 @@ export class NotificationEngine {
 
         response.responses.forEach((r, idx) => {
           const fcmToken = chunk[idx];
-          NotificationLogger.log({
-            timestamp: new Date().toISOString(),
-            orderId: options.orderId,
-            userId: firebaseUserIds.length === 1 ? firebaseUserIds[0] : 'bulk_target',
-            triggerSource,
-            eventType,
-            recipientRole: payload.data?.role || options.category,
-            recipientCount: firebaseUserIds.length,
-            activeTokenCount: tokens.length,
-            inactiveTokenCount: 0,
-            fcmToken,
-            payload,
-            firebaseResponse: r,
-            status: r.success ? 'success' : 'failure',
-            errorDetails: r.error?.message,
-            elapsedTimeMs: elapsedMs,
-            retryReason: r.error?.code,
-          });
 
           if (r.error) {
             const code = r.error.code;
-            // Only permanently deactivate tokens for registration errors, not transient failures
             if (
               code === 'messaging/invalid-registration-token' ||
               code === 'messaging/registration-token-not-registered' ||
@@ -204,6 +208,33 @@ export class NotificationEngine {
               errors.push(`${code}: ${r.error.message}`);
             }
           }
+
+          NotificationLogger.log({
+            notificationId,
+            timestamp: new Date().toISOString(),
+            orderId: options.orderId,
+            userId: firebaseUserIds.length === 1 ? firebaseUserIds[0] : 'bulk_target',
+            triggerSource,
+            eventType,
+            recipientRole: payload.data?.role || options.category,
+            recipients: firebaseUserIds.join(', '),
+            resolvedUids: firebaseUserIds,
+            resolvedTokens: tokens.length,
+            invalidTokens: failedTokens.length,
+            fcmSuccess: response.successCount,
+            fcmFailure: response.failureCount,
+            skippedTokens: 0,
+            retryCount: 0,
+            providerUsed: 'Firebase FCM',
+            latencyMs: elapsedMs,
+            elapsedTimeMs: elapsedMs,
+            fcmToken,
+            payload,
+            firebaseResponse: r,
+            status: r.success ? 'success' : 'failure',
+            errorDetails: r.error?.message,
+            retryReason: r.error?.code,
+          });
         });
       } catch (err: any) {
         console.error('[NotificationEngine] Chunk send failed:', err.message);
@@ -212,12 +243,20 @@ export class NotificationEngine {
       }
     }));
 
-    // ── 5. Deactivate permanently invalid tokens ─────────────────────────────
+    // ── 5. Deactivate permanently invalid tokens in Postgres & Firestore ────────
     if (failedTokens.length > 0) {
       pgPool.query(
         `UPDATE fcm_tokens SET is_active = FALSE WHERE token = ANY($1)`,
         [failedTokens]
       ).catch(err => console.error('[NotificationEngine] Token deactivation failed:', err.message));
+
+      // Remove from Firestore user docs as well
+      for (const uid of firebaseUserIds) {
+        db.collection('users').doc(uid).update({
+          fcmTokens: admin.firestore.FieldValue.arrayRemove(...failedTokens)
+        }).catch(() => {});
+      }
+
       console.log(`[NotificationEngine] Deactivated ${failedTokens.length} invalid FCM tokens`);
     }
 
@@ -286,29 +325,74 @@ export class NotificationEngine {
 
   /**
    * Resolve all active FCM tokens for users with a given role.
-   * Used for bulk owner/delivery notifications.
+   * Resolves UIDs from Firestore users collection (role == owner | delivery_partner | customer).
+   * Does NOT assume a 'role' column exists in PostgreSQL fcm_tokens.
    */
   public async resolveByRole(role: 'owner' | 'delivery_partner' | 'customer'): Promise<string[]> {
-    const pgRole = role === 'delivery_partner' ? ['delivery', 'delivery_partner'] : [role];
+    const targetRoles = role === 'delivery_partner'
+      ? ['delivery_partner', 'delivery']
+      : role === 'owner'
+      ? ['owner', 'admin']
+      : ['customer'];
+
+    const uidsSet = new Set<string>();
+
+    // 1. Resolve user UIDs from Firestore users collection
+    try {
+      for (const r of targetRoles) {
+        const snap = await db.collection('users').where('role', '==', r).get();
+        snap.docs.forEach(doc => uidsSet.add(doc.id));
+      }
+    } catch (e: any) {
+      console.warn(`[NotificationEngine] Firestore role lookup failed for ${role}:`, e.message);
+    }
+
+    // 2. Also check PostgreSQL users table if available (graceful fallback)
+    try {
+      const res = await pgPool.query(
+        `SELECT firebase_uid FROM users WHERE role = ANY($1)`,
+        [targetRoles]
+      );
+      res.rows.forEach((row: any) => {
+        if (row.firebase_uid) uidsSet.add(row.firebase_uid);
+      });
+    } catch (e: any) {
+      // Ignore error if Postgres users table doesn't have role column
+    }
+
+    return Array.from(uidsSet);
+  }
+
+  /**
+   * Automatic Token Cleanup Job:
+   * 1. Deactivates tokens inactive > 30 days.
+   * 2. Deletes duplicate inactive tokens older than 60 days.
+   */
+  public async cleanupStaleTokens(): Promise<{ deactivatedCount: number; deletedCount: number }> {
     const client = await pgPool.connect();
     try {
-      const result = await client.query(
-        `SELECT DISTINCT user_id FROM fcm_tokens WHERE role = ANY($1) AND is_active = TRUE`,
-        [pgRole]
+      const deactRes = await client.query(
+        `UPDATE fcm_tokens SET is_active = FALSE 
+         WHERE is_active = TRUE AND (last_used_at < NOW() - INTERVAL '30 days' OR (last_used_at IS NULL AND created_at < NOW() - INTERVAL '30 days'))
+         RETURNING id`
       );
-      let uids: string[] = result.rows.map((r: any) => r.user_id);
 
-      // Always also union from Firestore users collection to catch any gaps
-      const fsRole = role === 'delivery_partner' ? 'delivery_partner' : role;
-      try {
-        const fsSnap = await db.collection('users').where('role', '==', fsRole).get();
-        const fsUids = fsSnap.docs.map((d: any) => d.id);
-        uids = Array.from(new Set([...uids, ...fsUids]));
-      } catch (e: any) {
-        console.warn(`[NotificationEngine] Firestore role lookup failed for ${role}:`, e.message);
+      const delRes = await client.query(
+        `DELETE FROM fcm_tokens 
+         WHERE is_active = FALSE AND (updated_at < NOW() - INTERVAL '60 days' OR created_at < NOW() - INTERVAL '60 days')
+         RETURNING id`
+      );
+
+      const deactivatedCount = deactRes.rows.length;
+      const deletedCount = delRes.rows.length;
+      if (deactivatedCount > 0 || deletedCount > 0) {
+        console.log(`[NotificationEngine] Token Cleanup: Deactivated ${deactivatedCount} stale tokens, deleted ${deletedCount} expired tokens.`);
       }
 
-      return uids;
+      return { deactivatedCount, deletedCount };
+    } catch (err: any) {
+      console.error('[NotificationEngine] Token cleanup failed:', err.message);
+      return { deactivatedCount: 0, deletedCount: 0 };
     } finally {
       client.release();
     }

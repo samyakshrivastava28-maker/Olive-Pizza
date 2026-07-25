@@ -3,11 +3,18 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { directNotification } from './DirectNotificationService.js';
 import { notificationDebugger } from './NotificationDebugger.js';
 
+import { notificationEngine } from './NotificationEngine.js';
+
 export class NotificationScheduler {
   private activeIntervals: Map<string, NodeJS.Timeout> = new Map();
 
   constructor() {
     this.resumeAlarms();
+    // Daily FCM token hygiene & stale token cleanup
+    notificationEngine.cleanupStaleTokens().catch(() => {});
+    setInterval(() => {
+      notificationEngine.cleanupStaleTokens().catch(() => {});
+    }, 24 * 60 * 60 * 1000);
   }
 
   /**

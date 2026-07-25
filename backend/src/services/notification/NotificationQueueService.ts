@@ -243,9 +243,19 @@ export class NotificationQueueService {
         db.collection('users').doc(firebaseUserId).update({ fcmTokens: FieldValue.arrayRemove(deviceInfo.oldToken) }).catch(() => { });
       }
 
-      // CRITICAL FIX: Ensure 1 Device = 1 User. Deactivate this token for ANY OTHER user who might have previously logged in on this device.
+      // If deviceName + platform match for this user, deactivate old token for that device
+      if (deviceInfo.deviceName && deviceInfo.platform) {
+        await client.query(
+          `UPDATE fcm_tokens SET is_active = FALSE 
+           WHERE user_id = $1 AND device_name = $2 AND platform = $3 AND token != $4`,
+          [pgUserId, deviceInfo.deviceName, deviceInfo.platform, token]
+        );
+      }
+
+      // Ensure 1 Device Token = 1 User (deactivate token for any previous user)
       await client.query('UPDATE fcm_tokens SET is_active = FALSE WHERE token = $1 AND user_id != $2', [token, pgUserId]);
 
+      // Upsert token
       await client.query(
         `INSERT INTO fcm_tokens (user_id, token, device_name, platform, browser, app_version, is_active, last_used_at)
          VALUES ($1,$2,$3,$4,$5,$6,TRUE,NOW())
@@ -256,13 +266,31 @@ export class NotificationQueueService {
         [pgUserId, token, deviceInfo.deviceName, deviceInfo.platform, deviceInfo.browser, deviceInfo.appVersion]
       );
 
-      db.collection('users').doc(firebaseUserId).update({
-        fcmTokens: FieldValue.arrayUnion(token),
+      // Active Token Limit: Enforce MAX 5 active tokens per user
+      const activeRes = await client.query(
+        `SELECT token FROM fcm_tokens WHERE user_id = $1 AND is_active = TRUE ORDER BY last_used_at DESC, id DESC`,
+        [pgUserId]
+      );
+
+      let activeTokensList = activeRes.rows.map((r: any) => r.token);
+      if (activeTokensList.length > 5) {
+        const keepTokens = activeTokensList.slice(0, 5);
+        const deactivateTokens = activeTokensList.slice(5);
+        await client.query(
+          `UPDATE fcm_tokens SET is_active = FALSE WHERE user_id = $1 AND token = ANY($2)`,
+          [pgUserId, deactivateTokens]
+        );
+        activeTokensList = keepTokens;
+      }
+
+      // Update Firestore user document with capped fcmTokens array (max 5)
+      db.collection('users').doc(firebaseUserId).set({
+        fcmTokens: activeTokensList,
         notificationReady: true,
         lastTokenRefresh: FieldValue.serverTimestamp(),
-      }).catch(() => { });
+      }, { merge: true }).catch(() => { });
 
-      // Evict stale cache so next notification picks up the new token immediately
+      // Evict stale cache
       fcmTokenCache.evict(pgUserId);
     } finally {
       client.release();

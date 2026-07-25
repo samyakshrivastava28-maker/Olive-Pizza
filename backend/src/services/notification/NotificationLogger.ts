@@ -9,23 +9,30 @@ if (!fs.existsSync(LOG_DIR)) {
 }
 
 export interface NotificationLogEntry {
+  notificationId: string;
   timestamp: string;
   orderId?: string;
   userId?: string;
   role?: string;
-  triggerSource?: 'manual' | 'automatic';
+  triggerSource: 'manual' | 'automatic';
   eventType?: string;
   recipientRole?: string;
-  recipientCount?: number;
-  activeTokenCount?: number;
-  inactiveTokenCount?: number;
-  fcmToken: string;
-  payload: any;
-  firebaseResponse: any;
-  status: 'success' | 'failure';
-  errorDetails?: string;
+  recipients?: string;
+  resolvedUids: string[];
+  resolvedTokens: number;
+  invalidTokens: number;
+  fcmSuccess: number;
+  fcmFailure: number;
+  skippedTokens: number;
+  retryCount: number;
+  providerUsed: string;
+  latencyMs: number;
   elapsedTimeMs: number;
-  retryCount?: number;
+  fcmToken?: string;
+  payload?: any;
+  firebaseResponse?: any;
+  status: 'success' | 'failure' | 'skipped';
+  errorDetails?: string;
   retryReason?: string;
 }
 
