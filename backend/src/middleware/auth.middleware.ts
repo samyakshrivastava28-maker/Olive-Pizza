@@ -69,7 +69,12 @@ export const requireRole = (allowedRoles: string[]) => {
       return;
     }
     
-    if (!allowedRoles.includes(req.user.role)) {
+    const userRole = req.user.role || '';
+    const isDeliveryEquivalent = (r: string) => r === 'delivery' || r === 'delivery_partner';
+    const hasRole = allowedRoles.includes(userRole) || 
+      (isDeliveryEquivalent(userRole) && allowedRoles.some(isDeliveryEquivalent));
+
+    if (!hasRole) {
       await logSecurityEventServer({
          action: 'api_forbidden_insufficient_permissions',
          route: req.originalUrl,

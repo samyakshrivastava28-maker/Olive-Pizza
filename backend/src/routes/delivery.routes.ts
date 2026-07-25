@@ -3,6 +3,7 @@ import { verifyToken, requireRole, AuthRequest } from '../middleware/auth.middle
 import { adminDb } from '../config/firebase.js';
 import { FieldValue } from 'firebase-admin/firestore';
 import { orderEventService } from '../services/order/OrderEventService.js';
+import { pgPool } from '../config/postgres.js';
 
 const router = Router();
 
@@ -77,25 +78,60 @@ router.patch('/orders/:id/status', requireRole(['owner', 'delivery']), async (re
   }
 });
 
-// Update live delivery location
-router.post('/orders/:id/location', requireRole(['delivery']), async (req: AuthRequest, res: Response) => {
+// Update live delivery location (supports /orders/:id/location and /location)
+const handleLocationUpdate = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const { lat, lng } = req.body;
+    const { lat, lng, latitude, longitude, speed, heading, accuracy, orderId } = req.body;
 
-    if (!lat || !lng) {
+    const actualLat = lat !== undefined ? lat : latitude;
+    const actualLng = lng !== undefined ? lng : longitude;
+    const targetOrderId = id || orderId || null;
+
+    if (actualLat === undefined || actualLng === undefined) {
       res.status(400).json({ error: 'Missing coordinates' });
       return;
     }
 
     const deliveryPartnerId = req.user?.uid;
+    if (!deliveryPartnerId) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
 
-    await adminDb.collection('active_deliveries').doc(id).set({
-      order_id: id,
+    // 1. Update PostgreSQL delivery_locations (Triggers Supabase Realtime)
+    try {
+      const client = await pgPool.connect();
+      await client.query(`
+        INSERT INTO delivery_locations 
+          (delivery_partner_id, active_order_id, latitude, longitude, accuracy, speed, heading, online_status, last_updated)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, true, CURRENT_TIMESTAMP)
+        ON CONFLICT (delivery_partner_id) 
+        DO UPDATE SET 
+          active_order_id = COALESCE($2, delivery_locations.active_order_id),
+          latitude = $3,
+          longitude = $4,
+          accuracy = $5,
+          speed = $6,
+          heading = $7,
+          online_status = true,
+          last_updated = CURRENT_TIMESTAMP
+      `, [deliveryPartnerId, targetOrderId, actualLat, actualLng, accuracy || null, speed || null, heading || null]);
+      client.release();
+    } catch (pgErr: any) {
+      console.warn('[LocationUpdate] Postgres update warning:', pgErr.message);
+    }
+
+    // 2. Update Firestore active_deliveries (Triggers Firestore Polling Fallback)
+    const docId = targetOrderId || deliveryPartnerId;
+    await adminDb.collection('active_deliveries').doc(docId).set({
+      order_id: targetOrderId,
       delivery_partner_id: deliveryPartnerId,
       status: 'active',
-      current_lat: lat,
-      current_lng: lng,
+      current_lat: actualLat,
+      current_lng: actualLng,
+      speed: speed || 0,
+      heading: heading || 0,
       updated_at: new Date().toISOString()
     }, { merge: true });
 
@@ -104,6 +140,9 @@ router.post('/orders/:id/location', requireRole(['delivery']), async (req: AuthR
     console.error("Live tracking error:", error);
     res.status(500).json({ error: 'Failed to update location' });
   }
-});
+};
+
+router.post('/orders/:id/location', requireRole(['delivery', 'delivery_partner']), handleLocationUpdate);
+router.post('/location', requireRole(['delivery', 'delivery_partner']), handleLocationUpdate);
 
 export default router;

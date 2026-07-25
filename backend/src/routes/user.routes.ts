@@ -123,11 +123,27 @@ router.put('/location', async (req: AuthRequest, res: Response): Promise<void> =
     } else {
       userData = { 
         ...doc.data(), 
-        full_address: addressLine, city, state, lat, lng, location_setup_completed: true, 
+        full_address: addressLine,
+        fullAddress: addressLine, 
+        city, 
+        state, 
+        pincode,
+        lat, 
+        lng, 
+        location_setup_completed: true, 
+        locationSetupCompleted: true,
         updatedAt: new Date().toISOString() 
       };
       await userRef.update({ 
-        full_address: addressLine, city, state, lat, lng, location_setup_completed: true, 
+        full_address: addressLine,
+        fullAddress: addressLine, 
+        city, 
+        state, 
+        pincode,
+        lat, 
+        lng, 
+        location_setup_completed: true, 
+        locationSetupCompleted: true,
         updatedAt: userData.updatedAt 
       });
     }

@@ -137,26 +137,64 @@ import aiKnowledgeRoutes from './routes/aiKnowledge.routes.js';
 import dataManagerRoutes from './routes/dataManager.routes.js';
 
 app.use('/orders', orderRoutes);
+app.use('/api/orders', orderRoutes);
+
 app.use('/admin', adminRoutes);
+app.use('/api/admin', adminRoutes);
+
 app.use('/ai', aiRoutes);
 app.use('/api/ai', aiKnowledgeRoutes);
+
 app.use('/delivery', deliveryRoutes);
+app.use('/api/delivery', deliveryRoutes);
+
 app.use('/users', userRoutes);
+app.use('/api/users', userRoutes);
+
 app.use('/auth', authRoutes);
+app.use('/api/auth', authRoutes);
+
 app.use('/menu', menuRoutes);
+app.use('/api/menu', menuRoutes);
+
 app.use('/reports', reportRoutes);
+app.use('/api/reports', reportRoutes);
+
 app.use('/notifications', notificationRoutes);
+app.use('/api/notifications', notificationRoutes);
+
 app.use('/media', mediaRoutes);
+app.use('/api/media', mediaRoutes);
+
 app.use('/coupons', couponRoutes);
+app.use('/api/coupons', couponRoutes);
+
 app.use('/tracking', trackingRoutes);
+app.use('/api/tracking', trackingRoutes);
+
 app.use('/email', emailRoutes);
+app.use('/api/email', emailRoutes);
+
 app.use('/google-drive', googleDriveRoutes);
+app.use('/api/google-drive', googleDriveRoutes);
+
 app.use('/heartbeat', heartbeatRoutes);
+app.use('/api/heartbeat', heartbeatRoutes);
+
 app.use('/version', versionRoutes);
+app.use('/api/version', versionRoutes);
+
 app.use('/github', githubRoutes);
+app.use('/api/github', githubRoutes);
+
 app.use('/phone', phoneVerificationRoutes);
+app.use('/api/phone', phoneVerificationRoutes);
+
 app.use('/data-manager', dataManagerRoutes);
+app.use('/api/data-manager', dataManagerRoutes);
+
 app.use('/devops', devopsRoutes);
+app.use('/api/devops', devopsRoutes);
 
 // SEO Routes
 app.use('/', seoRoutes);

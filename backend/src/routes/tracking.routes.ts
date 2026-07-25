@@ -25,28 +25,31 @@ function calculateETA(distanceKm: number, speedKmh?: number): number {
 }
 
 // Updates delivery partner location
-router.post('/location/update', verifyToken, requireRole(['delivery_partner']), async (req: AuthRequest, res: Response) => {
+router.post('/location/update', verifyToken, requireRole(['delivery', 'delivery_partner']), async (req: AuthRequest, res: Response) => {
   try {
-    const { partnerId, orderId, latitude, longitude, accuracy, speed, heading } = req.body;
+    const { partnerId, orderId, latitude, longitude, lat, lng, accuracy, speed, heading } = req.body;
+    const actualPartnerId = partnerId || req.user?.uid;
+    const actualLat = latitude !== undefined ? latitude : lat;
+    const actualLng = longitude !== undefined ? longitude : lng;
     
-    if (!partnerId || latitude === undefined || longitude === undefined) {
+    if (!actualPartnerId || actualLat === undefined || actualLng === undefined) {
       return res.status(400).json({ error: 'Missing required location data' });
     }
 
-    if (req.user?.uid !== partnerId) {
+    if (req.user?.uid !== actualPartnerId && req.user?.role !== 'admin') {
       return res.status(403).json({ error: 'Forbidden: Cannot update other partner locations' });
     }
 
     const client = await pgPool.connect();
     
-    // Update delivery_locations
+    // 1. Update PostgreSQL delivery_locations (Triggers Supabase Realtime)
     await client.query(`
       INSERT INTO delivery_locations 
         (delivery_partner_id, active_order_id, latitude, longitude, accuracy, speed, heading, online_status, last_updated)
       VALUES ($1, $2, $3, $4, $5, $6, $7, true, CURRENT_TIMESTAMP)
       ON CONFLICT (delivery_partner_id) 
       DO UPDATE SET 
-        active_order_id = $2,
+        active_order_id = COALESCE($2, delivery_locations.active_order_id),
         latitude = $3,
         longitude = $4,
         accuracy = $5,
@@ -54,24 +57,40 @@ router.post('/location/update', verifyToken, requireRole(['delivery_partner']), 
         heading = $7,
         online_status = true,
         last_updated = CURRENT_TIMESTAMP
-    `, [partnerId, orderId || null, latitude, longitude, accuracy || null, speed || null, heading || null]);
+    `, [actualPartnerId, orderId || null, actualLat, actualLng, accuracy || null, speed || null, heading || null]);
 
     // If there's an active order, update distance and ETA in delivery_routes
     if (orderId) {
-      const routeResult = await client.query('SELECT customer_lat, customer_lng FROM delivery_routes WHERE order_id = $1 AND delivery_partner_id = $2', [orderId, partnerId]);
+      const routeResult = await client.query('SELECT customer_lat, customer_lng FROM delivery_routes WHERE order_id = $1 AND delivery_partner_id = $2', [orderId, actualPartnerId]);
       
       if (routeResult.rows.length > 0) {
         const route = routeResult.rows[0];
         if (route.customer_lat && route.customer_lng) {
-          const distance = calculateDistance(latitude, longitude, route.customer_lat, route.customer_lng);
+          const distance = calculateDistance(actualLat, actualLng, route.customer_lat, route.customer_lng);
           const eta = calculateETA(distance, speed ? speed * 3.6 : 30); // speed in m/s to km/h if available
 
           await client.query(`
             UPDATE delivery_routes 
             SET distance_km = $1, estimated_minutes = $2 
             WHERE order_id = $3 AND delivery_partner_id = $4
-          `, [distance, eta, orderId, partnerId]);
+          `, [distance, eta, orderId, actualPartnerId]);
         }
+      }
+
+      // Also update Firestore active_deliveries
+      try {
+        await adminDb.collection('active_deliveries').doc(orderId).set({
+          order_id: orderId,
+          delivery_partner_id: actualPartnerId,
+          status: 'active',
+          current_lat: actualLat,
+          current_lng: actualLng,
+          speed: speed || 0,
+          heading: heading || 0,
+          updated_at: new Date().toISOString()
+        }, { merge: true });
+      } catch (fErr: any) {
+        console.warn('[TrackingRoute] Firestore update warning:', fErr.message);
       }
     }
 

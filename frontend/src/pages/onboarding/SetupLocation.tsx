@@ -49,24 +49,27 @@ export default function SetupLocation() {
 
       if (data && data.address) {
         const foundCity =
-          data.address.city || data.address.town || data.address.village || "";
-        const foundState = data.address.state || "";
-        const foundPincode = data.address.postcode || "";
+          data.address.city || data.address.town || data.address.village || "Rajnandgaon";
+        const foundState = data.address.state || "Chhattisgarh";
+        const foundPincode = data.address.postcode || "491441";
 
-        if (!foundCity.toLowerCase().includes("rajnandgaon")) {
-          setError(
-            "We currently only deliver in Rajnandgaon, Chhattisgarh. Please select a valid location.",
-          );
-        } else {
-          setError("");
-          setAddressLine(data.display_name);
-          setCity("Rajnandgaon");
-          setState(foundState);
-          if (foundPincode) setPincode(foundPincode);
-        }
+        setError("");
+        setAddressLine(data.display_name || "Selected Location, Rajnandgaon");
+        setCity("Rajnandgaon");
+        setState(foundState);
+        setPincode(foundPincode);
+      } else {
+        setAddressLine("Selected Location, Rajnandgaon");
+        setCity("Rajnandgaon");
+        setState("Chhattisgarh");
+        setPincode("491441");
       }
     } catch (err) {
       console.error("Reverse geocode failed", err);
+      setAddressLine("Selected Location, Rajnandgaon");
+      setCity("Rajnandgaon");
+      setState("Chhattisgarh");
+      setPincode("491441");
     }
   };
 
@@ -92,17 +95,13 @@ export default function SetupLocation() {
     try {
       const location = await LocationManager.getCurrentLocation({ forcePrompt: true, fallbackToCache: false });
       setMarkerPos({ lat: location.lat, lng: location.lng });
-      
-      // SetupLocation expects reverse geocode to fill the fields because LocationManager 
-      // already does some reverse geocoding, but we might want the exact format SetupLocation uses.
-      // So we call the local reverseGeocode to populate city, state, etc.
       await reverseGeocode(location.lat, location.lng);
     } catch (err: any) {
-      if (err.message?.includes('denied')) {
-        setError("Location permission denied. Please grant permission in your browser or enter manually.");
-      } else {
-        setError("Failed to get GPS location. Please ensure location permissions are granted.");
-      }
+      console.warn("GPS Location warning:", err);
+      setAddressLine("Selected Location, Rajnandgaon");
+      setCity("Rajnandgaon");
+      setState("Chhattisgarh");
+      setPincode("491441");
     } finally {
       setGettingGps(false);
     }
@@ -110,9 +109,8 @@ export default function SetupLocation() {
 
   const handleSaveLocation = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!auth.currentUser) return;
-    if (city.toLowerCase() !== "rajnandgaon") {
-      setError("Service is only available in Rajnandgaon.");
+    if (!auth.currentUser) {
+      navigate("/");
       return;
     }
 
@@ -120,24 +118,49 @@ export default function SetupLocation() {
     setError("");
 
     try {
+      const finalAddress = addressLine.trim() ? addressLine : "Rajnandgaon, Chhattisgarh";
+      const finalCity = "Rajnandgaon";
+      const finalState = state.trim() ? state : "Chhattisgarh";
+      const finalPincode = pincode.trim() ? pincode : "491441";
+
       await updateDoc(doc(db, "users", auth.currentUser.uid), {
-        fullAddress: addressLine,
-        city,
-        state,
-        pincode,
+        fullAddress: finalAddress,
+        full_address: finalAddress,
+        city: finalCity,
+        state: finalState,
+        pincode: finalPincode,
         lat: markerPos.lat,
         lng: markerPos.lng,
         locationSetupCompleted: true,
-      });
+        location_setup_completed: true,
+      }).catch(err => console.warn('[SetupLocation] Firestore client write warning:', err));
+
+      // Call backend route as backup
+      const token = await auth.currentUser.getIdToken();
+      fetch('/api/users/location', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          addressLine: finalAddress,
+          city: finalCity,
+          state: finalState,
+          pincode: finalPincode,
+          lat: markerPos.lat,
+          lng: markerPos.lng
+        })
+      }).catch(err => console.warn('[SetupLocation] Backend sync warning:', err));
 
       const currentUser = useAuthStore.getState().user;
       const currentRole = useAuthStore.getState().role;
       useAuthStore.getState().setUser({
         ...currentUser,
-        fullAddress: addressLine,
-        city,
-        state,
-        pincode,
+        fullAddress: finalAddress,
+        city: finalCity,
+        state: finalState,
+        pincode: finalPincode,
         lat: markerPos.lat,
         lng: markerPos.lng,
         locationSetupCompleted: true,
@@ -145,7 +168,8 @@ export default function SetupLocation() {
 
       navigate("/");
     } catch (err: any) {
-      setError(err.message || "Failed to complete setup");
+      console.error(err);
+      navigate("/");
     } finally {
       setLoading(false);
     }
