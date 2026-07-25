@@ -23,6 +23,7 @@ import { pgPool } from '../config/postgres.js';
 import { notificationScheduler } from '../services/notification/NotificationScheduler.js';
 import { OwnerTemplates, CustomerTemplates, DeliveryTemplates, MarketingTemplates, type OrderStatus } from '../services/notification/NotificationTemplates.js';
 import { directNotification } from '../services/notification/DirectNotificationService.js';
+import { notificationEngine } from '../services/notification/NotificationEngine.js';
 import { notificationQueue } from '../services/notification/NotificationQueueService.js';
 import { verifyToken, AuthRequest } from '../middleware/auth.middleware.js';
 import { orderEventService } from '../services/order/OrderEventService.js';
@@ -280,32 +281,126 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
         }
         firestoreUpdates.deliveryPartnerId = partnerId;
         firestoreUpdates.delivery_partner_id = partnerId;
-        // Notification dispatch removed - handled by firestore.listener.ts
+        
+        // Direct Notification Engine dispatch to assigned rider
+        backgroundTasks.push(async () => {
+          try {
+            const partnerDoc = await db.collection('users').doc(partnerId).get();
+            const partnerData = partnerDoc.exists ? partnerDoc.data() : {};
+            firestoreUpdates.deliveryPartnerName = partnerData?.name || 'Delivery Partner';
+
+            const assignPayload = DeliveryTemplates.newAssignment(orderId, {
+              orderNumber: shortId,
+              customerName: orderData.customerName || 'Customer',
+              customerPhone: orderData.contactPhone || 'N/A',
+              deliveryAddress: orderData.deliveryAddress?.addressLine || orderData.deliveryAddress || 'Pickup',
+              distance: '2.5 km',
+              eta: '15-20 mins',
+              totalAmount: Number(orderData.totalAmount || 0),
+              paymentMethod: orderData.paymentMethod || 'COD',
+            });
+            await notificationEngine.send(partnerId, assignPayload, { category: 'alarm_actionable', priority: 'critical', orderId });
+            
+            // Also update customer tracker
+            if (customerFirebaseUid) {
+              const cPayload = CustomerTemplates.orderUpdate(orderId, {
+                orderNumber: shortId,
+                status: 'partner_assigned',
+                totalAmount: Number(orderData.totalAmount || 0),
+                deliveryPartnerName: partnerData?.name || 'Delivery Partner',
+              });
+              await notificationEngine.send(customerFirebaseUid, cPayload, { category: 'pinned_live', priority: 'high', orderId });
+            }
+          } catch (e: any) {
+            console.error(`[Action][${requestId}] Partner assignment notification failed:`, e.message);
+          }
+        });
+
       } else if (action === 'accept') {
         firestoreUpdates.acceptedAt = new Date().toISOString();
         firestoreUpdates.eta = '20-30 mins';
-        // Notification dispatch removed - handled by firestore.listener.ts
-      } else if (action === 'reject' || action === 'cancel_order') {
-        // cancel_order requires a mandatory non-empty reason
-        if (action === 'cancel_order') {
-          const reason: string | undefined = req.body.reason?.trim();
-          if (!reason) {
-            await releaseOrderLock(orderId);
-            lockReleased = true;
-            res.status(400).json({ error: 'Cancellation reason is required.', requestId });
-            return;
+        
+        // Stop owner continuous alarm & send customer confirmed notification
+        backgroundTasks.push(async () => {
+          try {
+            const ownerUids = await notificationEngine.resolveByRole('owner');
+            if (ownerUids.length > 0) {
+              const stopPayload = { data: { action: 'stop_alert', orderId } } as any;
+              await notificationEngine.sendBulk(ownerUids, stopPayload, { priority: 'high', orderId });
+            }
+            if (customerFirebaseUid) {
+              const cPayload = CustomerTemplates.orderUpdate(orderId, {
+                orderNumber: shortId,
+                status: 'accepted',
+                eta: '20-30 mins',
+                totalAmount: Number(orderData.totalAmount || 0),
+              });
+              await notificationEngine.send(customerFirebaseUid, cPayload, { category: 'pinned_live', priority: 'high', orderId });
+            }
+          } catch (e: any) {
+            console.error(`[Action][${requestId}] Owner accept notifications failed:`, e.message);
           }
-          firestoreUpdates.cancellationReason = reason;
-          trace.steps.push({ step: 'Cancellation Reason', status: 'success', reason });
+        });
+
+      } else if (action === 'reject' || action === 'cancel_order') {
+        const reason: string | undefined = req.body.reason?.trim() || req.body.cancellationReason?.trim();
+        if (!reason && (action === 'reject' || action === 'cancel_order')) {
+          await releaseOrderLock(orderId);
+          lockReleased = true;
+          res.status(400).json({ error: 'Cancellation reason is mandatory.', requestId });
+          return;
         }
+        firestoreUpdates.cancellationReason = reason;
         firestoreUpdates.cancelledAt = new Date().toISOString();
-        // Notification dispatch removed - handled by firestore.listener.ts
+        trace.steps.push({ step: 'Cancellation Reason', status: 'success', reason });
+
+        // Stop owner continuous alarm & send unpinned customer cancellation notification
+        backgroundTasks.push(async () => {
+          try {
+            const ownerUids = await notificationEngine.resolveByRole('owner');
+            if (ownerUids.length > 0) {
+              const stopPayload = { data: { action: 'stop_alert', orderId } } as any;
+              await notificationEngine.sendBulk(ownerUids, stopPayload, { priority: 'high', orderId });
+            }
+            if (customerFirebaseUid) {
+              const cPayload = CustomerTemplates.orderUpdate(orderId, {
+                orderNumber: shortId,
+                status: 'cancelled',
+                totalAmount: Number(orderData.totalAmount || 0),
+                cancellationReason: reason,
+              });
+              await notificationEngine.send(customerFirebaseUid, cPayload, { category: 'simple_informational', priority: 'high', orderId });
+            }
+          } catch (e: any) {
+            console.error(`[Action][${requestId}] Cancellation notifications failed:`, e.message);
+          }
+        });
+
       } else if (action === 'start_cooking') {
         firestoreUpdates.preparingAt = new Date().toISOString();
-        // Notification dispatch removed - handled by firestore.listener.ts
+        backgroundTasks.push(async () => {
+          if (customerFirebaseUid) {
+            const cPayload = CustomerTemplates.orderUpdate(orderId, {
+              orderNumber: shortId,
+              status: 'preparing',
+              totalAmount: Number(orderData.totalAmount || 0),
+            });
+            await notificationEngine.send(customerFirebaseUid, cPayload, { category: 'pinned_live', priority: 'high', orderId });
+          }
+        });
+
       } else if (action === 'ready') {
         firestoreUpdates.readyAt = new Date().toISOString();
-        // Notification dispatch removed - handled by firestore.listener.ts
+        backgroundTasks.push(async () => {
+          if (customerFirebaseUid) {
+            const cPayload = CustomerTemplates.orderUpdate(orderId, {
+              orderNumber: shortId,
+              status: 'ready',
+              totalAmount: Number(orderData.totalAmount || 0),
+            });
+            await notificationEngine.send(customerFirebaseUid, cPayload, { category: 'pinned_live', priority: 'high', orderId });
+          }
+        });
       }
 
       const isCancellation = action === 'reject' || action === 'cancel_order';
@@ -316,7 +411,7 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
     }
 
     // ── DELIVERY ACTIONS ───────────────────────────────────────────────────
-    else if (userRole === 'delivery') {
+    else if (userRole === 'delivery' || userRole === 'delivery_partner') {
       if (action === 'accept_delivery') {
         if (orderData.delivery_partner_id !== userId && orderData.deliveryPartnerId !== userId) {
           await releaseOrderLock(orderId);
@@ -325,10 +420,35 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
           res.status(403).json({ error: 'You are not assigned to this order', requestId });
           return;
         }
-        // No status change needed — acknowledgment only
+        
+        // Delivery partner accepted assignment -> update customer notification
+        backgroundTasks.push(async () => {
+          try {
+            if (customerFirebaseUid) {
+              const cPayload = CustomerTemplates.orderUpdate(orderId, {
+                orderNumber: shortId,
+                status: 'partner_assigned',
+                deliveryPartnerName: orderData.deliveryPartnerName || 'Your Delivery Partner',
+                totalAmount: Number(orderData.totalAmount || 0),
+              });
+              await notificationEngine.send(customerFirebaseUid, cPayload, { category: 'pinned_live', priority: 'high', orderId });
+            }
+          } catch (e: any) {
+            console.error(`[Action][${requestId}] Partner accept notification failed:`, e.message);
+          }
+        });
+
         responseData = { message: 'Delivery accepted' };
       } else if (action === 'reject_delivery') {
-        // Partner declines the assignment
+        // Partner declines assignment — mandatory reason required
+        const reason: string | undefined = req.body.reason?.trim() || req.body.rejectionReason?.trim();
+        if (!reason) {
+          await releaseOrderLock(orderId);
+          lockReleased = true;
+          res.status(400).json({ error: 'Rejection reason is mandatory.', requestId });
+          return;
+        }
+
         if (orderData.delivery_partner_id !== userId && orderData.deliveryPartnerId !== userId) {
           await releaseOrderLock(orderId);
           lockReleased = true;
@@ -341,6 +461,7 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
           res.status(409).json({ error: `Cannot reject delivery with status "${currentStatus}"`, requestId });
           return;
         }
+
         // Return order to 'ready', unassign partner, record declined partner
         newStatus = 'ready';
         firestoreWriteRequired = true;
@@ -355,39 +476,26 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
           deliveryPartnerName: null,
           declinedPartnerIds: declinedIds,
           rejectedAt: new Date().toISOString(),
+          lastRejectionReason: reason,
         };
-        // Fire-and-forget: notify owners that partner declined (non-blocking, standard push — not alarm)
-        const shortId2 = orderData.dailyOrderNumber
-          ? `#${orderData.dailyOrderNumber}`
-          : `OP-${orderId.slice(-6).toUpperCase()}`;
+
+        // Notify owners via standard push (non-alarm per spec)
         backgroundTasks.push(async () => {
           try {
-            const ownerDocs = await db.collection('users').where('role', '==', 'owner').get();
-            const ownerUids = ownerDocs.docs.map((d: any) => d.id);
+            const ownerUids = await notificationEngine.resolveByRole('owner');
             if (ownerUids.length > 0) {
-              const rejectPayload = {
-                data: {
-                  title: '🚴 Rider Declined Delivery',
-                  body: `Order ${shortId2} was declined by the delivery partner. Please reassign.`,
-                  orderId,
-                  action: 'rider_declined',
-                  url: '/owner/orders',
-                  priority: 'high',
-                  category: 'order',
-                  sound: 'system_alert',
-                  channelId: 'olive_order_status',
-                },
-              };
-              await directNotification.sendBulkPush(ownerUids, rejectPayload, 'high', {
-                tag: `order_rider_declined_${orderId}`, orderId, category: 'order', priority: 'high', version: 1
+              const rejectPayload = MarketingTemplates.systemAlert({
+                title: '🚴 Delivery Partner Declined',
+                body: `Order ${shortId} was declined by the delivery partner (${reason}). Please reassign.`,
               });
-              console.log(`[Action][${requestId}] Owner rider-declined push sent for order ${orderId}`);
+              await notificationEngine.sendBulk(ownerUids, rejectPayload, { category: 'simple_informational', priority: 'high', orderId });
             }
           } catch (e: any) {
             console.error(`[Action][${requestId}] Owner rider-declined push failed:`, e.message);
           }
         });
-        responseData = { message: 'Delivery declined — order returned to ready' };
+        responseData = { message: 'Delivery declined — order returned to ready pool' };
+
       } else if (action === 'picked_up') {
         if (currentStatus !== 'partner_assigned') {
           await releaseOrderLock(orderId);
@@ -398,7 +506,19 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
         newStatus = 'out_for_delivery';
         firestoreWriteRequired = true;
         firestoreUpdates = { status: newStatus, updatedAt: new Date(), pickedUpAt: new Date().toISOString() };
-        // Notification dispatch removed - handled by firestore.listener.ts
+        
+        backgroundTasks.push(async () => {
+          if (customerFirebaseUid) {
+            const cPayload = CustomerTemplates.orderUpdate(orderId, {
+              orderNumber: shortId,
+              status: 'out_for_delivery',
+              deliveryPartnerName: orderData.deliveryPartnerName || 'Your Delivery Partner',
+              totalAmount: Number(orderData.totalAmount || 0),
+            });
+            await notificationEngine.send(customerFirebaseUid, cPayload, { category: 'pinned_live', priority: 'high', orderId });
+          }
+        });
+
         responseData = { message: 'Picked up — out for delivery' };
       } else if (action === 'delivered') {
         if (currentStatus !== 'out_for_delivery') {
@@ -411,7 +531,19 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
         newStatus = 'delivered';
         firestoreWriteRequired = true;
         firestoreUpdates = { status: newStatus, updatedAt: new Date(), deliveredAt: new Date().toISOString(), ...(deliveryProof ? { deliveryProof } : {}) };
-        // Notification dispatch removed - handled by firestore.listener.ts
+        
+        backgroundTasks.push(async () => {
+          if (customerFirebaseUid) {
+            const cPayload = CustomerTemplates.orderUpdate(orderId, {
+              orderNumber: shortId,
+              status: 'delivered',
+              deliveryPartnerName: orderData.deliveryPartnerName || 'Your Delivery Partner',
+              totalAmount: Number(orderData.totalAmount || 0),
+            });
+            await notificationEngine.send(customerFirebaseUid, cPayload, { category: 'simple_informational', priority: 'high', orderId });
+          }
+        });
+
         responseData = { message: 'Delivered — order complete' };
       } else {
         await releaseOrderLock(orderId);

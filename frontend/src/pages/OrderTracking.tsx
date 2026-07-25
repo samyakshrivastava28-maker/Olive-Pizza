@@ -735,8 +735,8 @@ export default function OrderTracking() {
           {/* Divider */}
           <div className="h-2 bg-slate-50 border-y border-slate-100" />
 
-          {/* ── Delivery Partner ── */}
-          {partnerDetails && (
+          {/* ── Delivery Partner (Gated on Partner Acceptance) ── */}
+          {partnerDetails && ['partner_assigned', 'picked_up', 'out_for_delivery', 'delivered'].includes(order.status) && (
             <div className="px-5 py-4">
               <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3">Your Delivery Partner</p>
               <div className="flex items-center gap-4">

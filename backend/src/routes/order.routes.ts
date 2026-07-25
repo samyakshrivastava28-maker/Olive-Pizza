@@ -4,6 +4,7 @@ import { verifyToken, AuthRequest } from '../middleware/auth.middleware.js';
 import { adminDb } from '../config/firebase.js';
 import { OwnerTemplates, CustomerTemplates } from '../services/notification/NotificationTemplates.js';
 import { directNotification } from '../services/notification/DirectNotificationService.js';
+import { notificationEngine } from '../services/notification/NotificationEngine.js';
 import { orderEventService } from '../services/order/OrderEventService.js';
 import { queueEmail } from '../services/email.service.js';
 import { buildOrderStatusEmail } from '../services/emailTemplates.service.js';
@@ -268,7 +269,30 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
     }
 
 
-    // 5. Emit canonical OrderEvent via OrderEventService (Legacy trigger, can be deprecated later)
+    // 5. Direct NotificationEngine Dispatch to Owners (CRITICAL New Order Alarm)
+    try {
+      const ownerUids = await notificationEngine.resolveByRole('owner');
+      if (ownerUids.length > 0) {
+        const ownerPayload = OwnerTemplates.newOrder(newOrderId, {
+          customerName: userData.name || 'Customer',
+          orderNumber,
+          totalAmount: serverCalculatedTotal,
+          items: validatedItems.map(i => `${i.name} x${i.quantity}`),
+          paymentMethod: req.body.paymentMethod || 'COD',
+          deliveryAddress: userAddress || 'Pickup',
+          phone: userPhone,
+          orderTime: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+          version: 1,
+        });
+        await notificationEngine.sendBulk(ownerUids, ownerPayload, { category: 'alarm_actionable', priority: 'critical', orderId: newOrderId });
+        trace.steps.push({ step: 'NotificationEngine', status: 'success', ownerCount: ownerUids.length });
+      }
+    } catch (notifErr: any) {
+      console.error('[Orders] NotificationEngine dispatch error:', notifErr.message);
+      trace.steps.push({ step: 'NotificationEngine', status: 'error', error: notifErr.message });
+    }
+
+    // 6. Emit canonical OrderEvent via OrderEventService (Legacy trigger)
     try {
       const event = await orderEventService.emitNewOrder(newOrderId);
       trace.steps.push({ step: 'OrderEventService', status: 'success' });

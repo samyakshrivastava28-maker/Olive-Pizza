@@ -1,201 +1,151 @@
-import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { X, AlertTriangle, Phone } from "lucide-react";
-
-// ─── Types ───────────────────────────────────────────────────────────────────
+import React, { useState } from 'react';
+import { X, AlertCircle, Phone } from 'lucide-react';
+import { GlassCard, GlassButton } from '../ui/glass/GlassSystem';
 
 interface CancelDeliveryModalProps {
   isOpen: boolean;
   orderNumber: string;
   restaurantPhone?: string;
-  isSubmitting?: boolean;
-  onConfirm: (reason: string) => void;
   onClose: () => void;
+  onSubmit: (reason: string) => Promise<void>;
 }
 
-// ─── Preset Decline Reasons ───────────────────────────────────────────────────
-
-const DECLINE_REASONS = [
-  { emoji: "🏍️", label: "Vehicle issue / breakdown" },
-  { emoji: "📍", label: "Too far from my location" },
-  { emoji: "⏰", label: "Already handling another order" },
-  { emoji: "🤒", label: "I'm not feeling well" },
-  { emoji: "⛽", label: "Out of fuel" },
-  { emoji: "🌧️", label: "Unsafe weather conditions" },
+const PRESET_REASONS = [
+  'Vehicle breakdown / puncture',
+  'Distance too far for current route',
+  'Personal emergency',
+  'Heavy traffic / weather delay',
 ];
 
-// ─── Component ────────────────────────────────────────────────────────────────
-
-export default function CancelDeliveryModal({
+export const CancelDeliveryModal: React.FC<CancelDeliveryModalProps> = ({
   isOpen,
   orderNumber,
-  restaurantPhone = "+91 98765 43210",
-  isSubmitting = false,
-  onConfirm,
+  restaurantPhone = '+919876543210',
   onClose,
-}: CancelDeliveryModalProps) {
-  const [selected, setSelected] = useState<string>("");
-  const [touched, setTouched] = useState(false);
+  onSubmit,
+}) => {
+  const [selectedReason, setSelectedReason] = useState<string>('');
+  const [customReason, setCustomReason] = useState<string>('');
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string>('');
 
-  // Reset on open
-  useEffect(() => {
-    if (isOpen) {
-      setSelected("");
-      setTouched(false);
+  if (!isOpen) return null;
+
+  const handleSubmit = async () => {
+    const finalReason = selectedReason === 'Other' ? customReason.trim() : (selectedReason || customReason.trim());
+    if (!finalReason) {
+      setError('Please select or enter a rejection reason.');
+      return;
     }
-  }, [isOpen]);
 
-  const isValid = selected.length > 0;
-
-  const handleConfirm = () => {
-    setTouched(true);
-    if (!isValid) return;
-    onConfirm(selected);
+    try {
+      setLoading(true);
+      setError('');
+      await onSubmit(finalReason);
+      onClose();
+    } catch (err: any) {
+      setError(err.message || 'Failed to reject delivery.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <AnimatePresence>
-      {isOpen && (
-        <>
-          {/* Backdrop */}
-          <motion.div
-            key="backdrop"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-[200] bg-black/70 backdrop-blur-sm"
-            onClick={onClose}
-          />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
+      <GlassCard className="w-full max-w-md p-6 relative border-amber-500/20 shadow-2xl">
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 p-2 text-slate-400 hover:text-white rounded-full transition-colors"
+        >
+          <X className="w-5 h-5" />
+        </button>
 
-          {/* Bottom sheet (mobile-first) */}
-          <motion.div
-            key="sheet"
-            initial={{ y: "100%" }}
-            animate={{ y: 0 }}
-            exit={{ y: "100%" }}
-            transition={{ type: "spring", stiffness: 300, damping: 30 }}
-            className="fixed bottom-0 inset-x-0 z-[201] sm:inset-auto sm:left-1/2 sm:-translate-x-1/2 sm:bottom-8 sm:w-full sm:max-w-md"
+        <div className="flex items-center space-x-3 mb-4">
+          <div className="p-3 bg-amber-500/10 rounded-full text-amber-500">
+            <AlertCircle className="w-6 h-6" />
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-white">Decline Delivery {orderNumber}</h3>
+            <p className="text-xs text-slate-400">Specify why you cannot complete this delivery</p>
+          </div>
+        </div>
+
+        {error && (
+          <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-xs">
+            {error}
+          </div>
+        )}
+
+        <div className="space-y-2 mb-4">
+          {PRESET_REASONS.map((reason) => (
+            <button
+              key={reason}
+              onClick={() => {
+                setSelectedReason(reason);
+                setError('');
+              }}
+              className={`w-full text-left p-3 rounded-xl border text-sm font-medium transition-all ${
+                selectedReason === reason
+                  ? 'bg-amber-500/20 border-amber-500 text-white'
+                  : 'bg-slate-800/40 border-slate-700/50 text-slate-300 hover:bg-slate-800'
+              }`}
+            >
+              {reason}
+            </button>
+          ))}
+
+          <button
+            onClick={() => {
+              setSelectedReason('Other');
+              setError('');
+            }}
+            className={`w-full text-left p-3 rounded-xl border text-sm font-medium transition-all ${
+              selectedReason === 'Other'
+                ? 'bg-amber-500/20 border-amber-500 text-white'
+                : 'bg-slate-800/40 border-slate-700/50 text-slate-300 hover:bg-slate-800'
+            }`}
           >
-            <div className="bg-[#0f172a] border border-white/10 rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden">
-              {/* Drag handle (mobile) */}
-              <div className="flex justify-center pt-3 pb-1 sm:hidden">
-                <div className="w-10 h-1 bg-white/20 rounded-full" />
-              </div>
+            Other Reason
+          </button>
+        </div>
 
-              {/* Header */}
-              <div className="px-6 pt-4 pb-4 border-b border-white/10 flex items-start justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-amber-500/15 flex items-center justify-center flex-shrink-0">
-                    <AlertTriangle className="w-5 h-5 text-amber-400" />
-                  </div>
-                  <div>
-                    <h2 className="text-white font-black text-lg leading-tight">
-                      Decline Delivery
-                    </h2>
-                    <p className="text-slate-400 text-xs mt-0.5 font-medium">
-                      {orderNumber} — restaurant will be notified
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={onClose}
-                  disabled={isSubmitting}
-                  className="w-8 h-8 flex items-center justify-center rounded-full text-slate-500 hover:text-white hover:bg-white/10 transition-colors"
-                >
-                  <X size={18} />
-                </button>
-              </div>
+        {selectedReason === 'Other' && (
+          <div className="mb-4">
+            <textarea
+              value={customReason}
+              onChange={(e) => setCustomReason(e.target.value)}
+              placeholder="Enter reason..."
+              className="w-full p-3 bg-slate-900/80 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:border-amber-500 resize-none h-20"
+            />
+          </div>
+        )}
 
-              {/* Body */}
-              <div className="p-5 space-y-3">
-                <p className="text-slate-400 text-sm">
-                  Choose why you're unable to take this delivery. The order will be
-                  returned to the pool so another partner can pick it up.
-                </p>
+        <a
+          href={`tel:${restaurantPhone}`}
+          className="flex items-center justify-center space-x-2 w-full p-3 mb-4 bg-blue-500/10 border border-blue-500/30 rounded-xl text-blue-400 text-xs font-semibold hover:bg-blue-500/20 transition-colors"
+        >
+          <Phone className="w-4 h-4" />
+          <span>Contact Restaurant First</span>
+        </a>
 
-                {/* Reason chips */}
-                <div className="grid grid-cols-1 gap-2">
-                  {DECLINE_REASONS.map(({ emoji, label }) => (
-                    <motion.button
-                      key={label}
-                      type="button"
-                      onClick={() => { setSelected(label); setTouched(false); }}
-                      whileTap={{ scale: 0.98 }}
-                      className={`flex items-center gap-3 px-4 py-3 rounded-2xl border text-sm font-semibold text-left transition-all ${
-                        selected === label
-                          ? "border-amber-500/60 bg-amber-500/10 text-amber-300"
-                          : "border-white/10 bg-white/5 text-slate-300 hover:border-white/20 hover:bg-white/8"
-                      }`}
-                    >
-                      <span className="text-lg w-6 flex-shrink-0">{emoji}</span>
-                      {label}
-                    </motion.button>
-                  ))}
-                </div>
-
-                {/* Validation error */}
-                <AnimatePresence>
-                  {touched && !isValid && (
-                    <motion.p
-                      initial={{ opacity: 0, y: -4 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0 }}
-                      className="text-red-400 text-xs font-medium flex items-center gap-1.5"
-                    >
-                      <AlertTriangle size={12} />
-                      Please select a reason before declining.
-                    </motion.p>
-                  )}
-                </AnimatePresence>
-
-                {/* Call restaurant */}
-                <div className="pt-1 border-t border-white/10">
-                  <a
-                    href={`tel:${restaurantPhone.replace(/\s/g, "")}`}
-                    className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl text-slate-400 hover:text-white border border-white/10 hover:border-white/20 hover:bg-white/5 transition-all text-sm font-semibold"
-                  >
-                    <Phone size={15} />
-                    Call Restaurant
-                  </a>
-                </div>
-              </div>
-
-              {/* Footer */}
-              <div className="px-5 pb-6 pb-safe flex gap-3">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  disabled={isSubmitting}
-                  className="flex-1 py-3.5 rounded-2xl border border-white/10 text-slate-300 font-bold text-sm hover:bg-white/5 transition-colors disabled:opacity-50"
-                >
-                  Keep It
-                </button>
-                <motion.button
-                  type="button"
-                  onClick={handleConfirm}
-                  disabled={isSubmitting}
-                  whileTap={{ scale: 0.97 }}
-                  className="flex-1 py-3.5 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm transition-colors disabled:opacity-60 flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20"
-                >
-                  {isSubmitting ? (
-                    <>
-                      <motion.div
-                        animate={{ rotate: 360 }}
-                        transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                        className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full"
-                      />
-                      Declining...
-                    </>
-                  ) : (
-                    "Decline Delivery"
-                  )}
-                </motion.button>
-              </div>
-            </div>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
+        <div className="flex space-x-3">
+          <GlassButton
+            onClick={onClose}
+            disabled={loading}
+            className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300"
+          >
+            Cancel
+          </GlassButton>
+          <GlassButton
+            onClick={handleSubmit}
+            disabled={loading}
+            className="flex-1 bg-amber-600 hover:bg-amber-500 text-white font-bold"
+          >
+            {loading ? 'Submitting...' : 'Confirm Reject'}
+          </GlassButton>
+        </div>
+      </GlassCard>
+    </div>
   );
-}
+};
+export default CancelDeliveryModal;

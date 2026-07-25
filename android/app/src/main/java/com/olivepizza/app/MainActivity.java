@@ -93,9 +93,28 @@ public class MainActivity extends BridgeActivity {
         //    is killed, only the native registration guarantees a valid token exists.
         registerFcmTokenNatively();
 
-        // 3. Prompt for battery-optimization exemption (owner/delivery only — the JS
-        //    layer sets a SharedPreferences flag once the user's role is known).
+        // 3. Prompt for battery-optimization exemption (owner/delivery only)
         promptBatteryOptimizationExemption();
+
+        // 4. Android 14+ Full-Screen Intent Permission Verification
+        checkFullScreenIntentPermission();
+    }
+
+    private void checkFullScreenIntentPermission() {
+        if (Build.VERSION.SDK_INT >= 34) { // Android 14+ (API 34)
+            NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            if (nm != null && !nm.canUseFullScreenIntent()) {
+                Log.w(TAG, "Full-screen intent permission not granted on Android 14+");
+                try {
+                    Intent intent = new Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT);
+                    intent.setData(Uri.parse("package:" + getPackageName()));
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    startActivity(intent);
+                } catch (Exception e) {
+                    Log.w(TAG, "Could not launch ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT: " + e.getMessage());
+                }
+            }
+        }
     }
 
     // ═══════════════════════════════════════════════════════════════════════════

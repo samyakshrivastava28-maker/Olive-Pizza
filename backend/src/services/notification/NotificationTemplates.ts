@@ -256,24 +256,28 @@ function buildPayload(title: string, body: string, opts: BuildOptions): Notifica
     },
   };
 
-  // ── NOTIFICATION BLOCK — ALWAYS INCLUDED ─────────────────────────────────
-  // Previously, continuous alarms were sent DATA-ONLY. This is unreliable when the
-  // app process is KILLED: data-only messages require onMessageReceived() to fire,
-  // which depends on high-priority delivery + Doze state. If the process is dead and
-  // Doze defers it, NOTHING is displayed.
+  // ── NOTIFICATION BLOCK — ALWAYS INCLUDED (ROOT CAUSE FIX) ────────────────
+  // ALL messages include a top-level `notification: { title, body }` block.
   //
-  // By including the `notification` block, FCM auto-displays the notification via the
-  // system tray EVEN WHEN the app is killed — using the channel created at app startup.
-  // The `data` block remains intact, so when onMessageReceived() DOES fire (foreground
-  // or background), OliveMessagingService builds the native alarm with action buttons.
+  // Previously, ongoing=true (pinned trackers) omitted the notification block,
+  // making them data-only FCM messages. On Android 12+ with Doze/App Standby
+  // or OEM battery management (Xiaomi/Samsung/Oppo/OnePlus), data-only messages
+  // are deferred or dropped when the app is swiped closed. This was the primary
+  // cause of automated notifications failing on killed apps.
   //
-  // This gives TWO delivery paths for critical alarms:
-  //   1. System tray auto-display (works even if app is killed)
-  //   2. Native onMessageReceived → AlarmActivity (works when process is alive)
+  // With the notification block present, the Android FCM SDK renders the notification
+  // via the system tray EVEN IF the app process is dead — using the channel
+  // registered at startup. OliveMessagingService.onMessageReceived() still processes
+  // the data block when the process is alive (foreground/background) to build the
+  // enhanced native alarm UI, action buttons, and AlarmActivity full-screen intent.
   //
-  // The clickAction launches the full-screen AlarmActivity when the user taps the
-  // system-tray notification, so the continuous ringtone still plays.
-  if (!opts.ongoing) {
+  // This gives TWO delivery paths for all notification types:
+  //   1. System tray auto-display (works even if app is killed — guaranteed)
+  //   2. Native onMessageReceived → enhanced UI (works when process is alive)
+  //
+  // For ongoing/pinned notifications, we set collapseKey on android to ensure
+  // updates replace in place rather than stacking.
+  {
     basePayload.notification = { title, body };
     // For continuous alarms, use a dedicated clickAction so the system-tray tap
     // launches AlarmActivity (full-screen alarm) instead of MainActivity.
@@ -666,7 +670,7 @@ export class CustomerTemplates {
         body: `Order #${payload.orderNumber} delivered. Rate your experience!\n${progressBar('delivered')}`,
         sound: 'delivered',
         requireInteraction: true,
-        ongoing: true, // MUST be true so it stays data-only and triggers OliveMessagingService to cancel the pinned one
+        ongoing: false, // Unpin on delivery per spec — no longer ongoing after delivered
       },
       completed: {
         title: `🏁 Order Completed`,

@@ -137,91 +137,10 @@ export class FirestoreListener {
 
             if (orderData.orderTiming === 'scheduled') continue; // Skip push alarms for scheduled until ready
 
-            // 2. FCM PUSH NOTIFICATION TO OWNERS (INSTANT DIRECT PUSH + QUEUE BACKUP)
-            try {
-              const ownerUids = await this.getOwnerRecipients();
-              console.log(`[AutoNotif] New Order ${orderData.id} -> Resolved ${ownerUids.length} owner/admin recipients: [${ownerUids.join(', ')}]`);
+            // FCM Push Notifications for New Order removed here per Spec §2.2 —
+            // Handled directly & synchronously by NotificationEngine in POST /api/orders.
 
-              if (ownerUids.length > 0) {
-                const ownerPayload = OwnerTemplates.newOrder(orderData.id, {
-                  customerName: orderData.customerName || orderData.customer_name || 'Customer',
-                  orderNumber,
-                  totalAmount,
-                  items: Array.isArray(orderData.items) ? orderData.items.map((i: any) => `${i.name} x${i.quantity}`) : [],
-                  paymentMethod: orderData.paymentMethod || 'COD',
-                  deliveryAddress: orderData.deliveryAddress?.addressLine || orderData.deliveryAddress || 'Pickup',
-                  phone: orderData.contactPhone || 'No Phone',
-                  orderTime: createdAt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-                  version: 1,
-                  eventId: `new_${orderData.id}`,
-                  previousStatus: undefined,
-                  eventTimestamp: createdAt.toISOString(),
-                });
-
-                // Fast Direct Push (same pipeline as owner manual broadcast)
-                const pushResult = await directNotification.sendBulkPush(ownerUids, ownerPayload, 'high', {
-                  tag: `order_owner_${orderData.id}`,
-                  orderId: orderData.id,
-                  category: 'order',
-                  priority: 'critical',
-                  version: 1
-                }).catch((e: any) => {
-                  console.error(`[AutoNotif] ❌ Direct owner push FAILED for order ${orderData.id}: ${e.message}`);
-                  return null;
-                });
-                if (pushResult) {
-                  console.log(`[AutoNotif] ✅ Direct owner push: ${pushResult.successCount}/${pushResult.tokensFound} tokens, order=${orderData.id}`);
-                }
-
-                for (const uid of ownerUids) {
-                  const queueId = await notificationQueue.enqueue(uid, ownerPayload, 'high', {
-                    tag: `order_owner_${orderData.id}`,
-                    orderId: orderData.id,
-                    category: 'order',
-                    priority: 'critical',
-                    version: 1
-                  }).catch((e: any) => {
-                    console.error(`[AutoNotif] ❌ Owner queue enqueue FAILED uid=${uid}: ${e.message}`);
-                    return null;
-                  });
-                  if (queueId) {
-                    console.log(`[AutoNotif] 📬 Owner queued id=${queueId} uid=${uid}`);
-                  }
-                }
-              }
-            } catch (err: any) {
-              console.error(`[AutoNotif] ❌ Owner push pipeline FAILED for order ${orderData.id}:`, err.message);
-            }
-
-            // 3. PUSH NOTIFICATION TO CUSTOMER (Initial Pinned Tracker)
-            const customerId = orderData.userId || orderData.firebaseUid;
-            if (customerId) {
-              try {
-                const cPayload = CustomerTemplates.orderUpdate(orderData.id, {
-                  orderNumber,
-                  status: 'pending',
-                  totalAmount,
-                  version: 1
-                });
-                await directNotification.sendPush(customerId, cPayload, 'high', {
-                  tag: `order_customer_${orderData.id}`,
-                  orderId: orderData.id,
-                  category: 'order',
-                  version: 1
-                }).catch(e => console.error(`[AutoNotif] ❌ Customer initial push FAILED uid=${customerId}:`, e.message));
-                
-                await notificationQueue.enqueue(customerId, cPayload, 'high', {
-                  tag: `order_customer_${orderData.id}`,
-                  orderId: orderData.id,
-                  category: 'order',
-                  version: 1
-                }).catch(e => console.error(`[AutoNotif] ❌ Customer initial queue FAILED uid=${customerId}:`, e.message));
-              } catch (e: any) {
-                console.error(`[AutoNotif] ❌ Failed to dispatch initial customer push for ${orderData.id}:`, e.message);
-              }
-            }
-
-            // 4. EMAIL TO CUSTOMER
+            // 2. EMAIL TO CUSTOMER & OWNER
             this.sendOrderEmail(orderData, 'pending');
 
             // 4. Emit AppEventBus domain event for WebSocket live updates
@@ -283,61 +202,10 @@ export class FirestoreListener {
               await notificationService.dispatch({ type: currentStatus, category: cfg.category, title: cfg.label, details: `Order #${shortId} → ${cfg.emoji} *${cfg.label}*`, thread_ts: slackTs });
             }
 
-            // 2. FCM PUSH NOTIFICATIONS
-            const customerId = orderData.userId || orderData.firebaseUid;
-            const partnerId = orderData.deliveryPartnerId || orderData.delivery_partner_id;
-            
-            // Map status to payload version sequentially for deduplication
-            const versionMap: Record<string, number> = {
-              'accepted': 2, 'preparing': 3, 'ready': 4, 'packed': 5, 
-              'partner_assigned': 6, 'picked_up': 7, 'out_for_delivery': 8, 'delivered': 9, 'cancelled': 10
-            };
-            const version = versionMap[currentStatus] || 2;
+            // FCM Push Notifications for Order Status Updates removed here per Spec §2.2 —
+            // Handled directly & synchronously by NotificationEngine in POST /api/notifications/action.
 
-            if (currentStatus === 'partner_assigned' && partnerId) {
-              // Notify Partner (Fast Direct Push)
-              const deliveryPayload = DeliveryTemplates.newAssignment(orderData.id, {
-                orderNumber: shortId, customerName: orderData.customerName || 'Customer', customerPhone: orderData.contactPhone,
-                deliveryAddress: orderData.deliveryAddress?.addressLine || orderData.deliveryAddress || 'Address not provided',
-                distance: '?', eta: '15 mins', totalAmount, paymentMethod: orderData.paymentMethod || 'COD', version
-              });
-              await directNotification.sendPush(partnerId, deliveryPayload, 'high', { tag: `order_delivery_${orderData.id}`, orderId: orderData.id, category: 'delivery', priority: 'critical', version }).catch((e: any) => console.error(`[AutoNotif] ❌ Partner push FAILED uid=${partnerId}: ${e.message}`));
-              await notificationQueue.enqueue(partnerId, deliveryPayload, 'high', { tag: `order_delivery_${orderData.id}`, orderId: orderData.id, category: 'delivery', priority: 'critical', version }).catch((e: any) => console.error(`[AutoNotif] ❌ Partner queue FAILED uid=${partnerId}: ${e.message}`));
-            }
-
-            // Notify Customer (Fast Direct Push)
-            if (customerId && ['accepted', 'preparing', 'ready', 'packed', 'partner_assigned', 'picked_up', 'out_for_delivery', 'delivered', 'cancelled'].includes(currentStatus)) {
-              const cPayload = CustomerTemplates.orderUpdate(orderData.id, {
-                orderNumber: shortId, status: currentStatus as any, totalAmount, 
-                deliveryPartnerName: orderData.deliveryPartnerName || 'Partner', version,
-                cancellationReason: currentStatus === 'cancelled' ? (orderData.cancellationReason || undefined) : undefined,
-              });
-              await directNotification.sendPush(customerId, cPayload, 'high', { tag: `order_customer_${orderData.id}`, orderId: orderData.id, category: 'order', version }).catch((e: any) => console.error(`[AutoNotif] ❌ Customer push FAILED uid=${customerId}: ${e.message}`));
-              await notificationQueue.enqueue(customerId, cPayload, 'high', { tag: `order_customer_${orderData.id}`, orderId: orderData.id, category: 'order', version }).catch((e: any) => console.error(`[AutoNotif] ❌ Customer queue FAILED uid=${customerId}: ${e.message}`));
-            }
-
-            // Notify Owners (Fast Direct Push)
-            if (['picked_up', 'out_for_delivery', 'delivered'].includes(currentStatus)) {
-               const ownerUids = await this.getOwnerRecipients();
-               if (ownerUids.length > 0) {
-                 const oPayload = OwnerTemplates.orderStatusUpdate(orderData.id, { orderNumber: shortId, customerName: orderData.customerName || 'Customer', status: currentStatus as any, deliveryPartnerName: orderData.deliveryPartnerName || 'Partner', totalAmount, version });
-                  await directNotification.sendBulkPush(ownerUids, oPayload, 'normal', { tag: `order_owner_tracking_${orderData.id}`, orderId: orderData.id, category: 'order', version }).catch((e: any) => console.error(`[AutoNotif] ❌ Owner tracking push FAILED: ${e.message}`));
-                  for (const ownerUid of ownerUids) {
-                    await notificationQueue.enqueue(ownerUid, oPayload, 'normal', { tag: `order_owner_tracking_${orderData.id}`, orderId: orderData.id, category: 'order', version }).catch((e: any) => console.error(`[AutoNotif] ❌ Owner tracking queue FAILED uid=${ownerUid}: ${e.message}`));
-                  }
-               }
-            }
-
-            // Kill Owner Alarms (Stop Alert)
-            if (prevStatus === 'pending' && currentStatus !== 'pending') {
-               const ownerUids = await this.getOwnerRecipients();
-               if (ownerUids.length > 0) {
-                 const stopPayload = { data: { action: 'stop_alert', orderId: orderData.id } };
-                 await directNotification.sendBulkPush(ownerUids, stopPayload, 'high', { tag: `order_owner_stop_${orderData.id}`, orderId: orderData.id, category: 'order', version }).catch((e: any) => console.error(`[AutoNotif] ❌ Owner stop_alert push FAILED: ${e.message}`));
-               }
-            }
-
-            // 3. EMAIL FALLBACK / TRANSACTIONAL EMAILS
+            // 2. EMAIL FALLBACK / TRANSACTIONAL EMAILS
             this.sendOrderEmail(orderData, currentStatus);
 
             // 4. Emit AppEventBus domain event for WebSocket live updates
