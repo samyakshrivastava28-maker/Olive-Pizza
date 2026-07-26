@@ -13,7 +13,7 @@
  *   gRPC client is unavailable), and streams the WAV/MP3 audio back.
  *
  * Environment variables required:
- *   NVIDIA_API_KEY=nvapi-xxxxxxxxxxxx   (from build.nvidia.com → "Get API Key")
+ *   NVIDIA_API_KEY=your_nvidia_api_key   (from build.nvidia.com → "Get API Key")
  *
  * Supported languages:
  *   en-US, en-GB, en-IN, hi-IN, fr-FR, de-DE, es-ES, pt-BR, ja-JP, zh-CN, ko-KR

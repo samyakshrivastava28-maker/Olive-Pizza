@@ -70,7 +70,7 @@ export class DatabaseManagerService {
         id: 'infra_postgresql',
         name: 'Infrastructure PostgreSQL (Queues & Logs)',
         type: 'postgresql',
-        connectionUri: process.env.DATABASE_URL || 'postgresql://postgres:***@localhost:5432/olive_pizza'
+        connectionUri: process.env.DATABASE_URL || 'db://localhost:5432/olive_pizza'
       },
       {
         id: 'vector_qdrant',

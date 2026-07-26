@@ -1,7 +1,14 @@
 import pkg from 'pg';
 const { Pool } = pkg;
 
-const dbUrl = "postgresql://postgres.tdjrkqmhdynbaciguyvr:Olivepizz%40rjn@aws-1-ap-south-1.pooler.supabase.com:6543/postgres?pgbouncer=true";
+import dotenv from 'dotenv';
+dotenv.config();
+
+const dbUrl = process.env.DATABASE_URL;
+if (!dbUrl) {
+  console.error('[Migration] DATABASE_URL is not set in environment.');
+  process.exit(1);
+}
 const pgPool = new Pool({
   connectionString: dbUrl,
   connectionTimeoutMillis: 15000,

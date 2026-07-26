@@ -273,7 +273,7 @@ SMTP_FROM="Olive Pizza <noreply@olivepizza.app>"
 OWNER_EMAIL="olivepizzarjn@gmail.com"
 
 # PostgreSQL Primary Pooler (Supabase)
-DATABASE_URL="postgresql://postgres:password@aws-1-ap-south-1.pooler.supabase.com:6543/postgres?pgbouncer=true"
+DATABASE_URL="your_postgres_connection_string"
 
 # Cloudinary CDN Credentials
 CLOUDINARY_CLOUD_NAME=dxmlvkff1
@@ -281,8 +281,8 @@ CLOUDINARY_API_KEY=881318315911963
 CLOUDINARY_API_SECRET=your-secret
 
 # AI Providers & NVIDIA Speech NIM
-NVIDIA_API_KEY="nvapi-your-nvidia-nim-api-key"
-OPENROUTER_API_KEY="sk-or-v1-your-openrouter-key"
+NVIDIA_API_KEY="your_nvidia_api_key"
+OPENROUTER_API_KEY="your_openrouter_api_key"
 GEMINI_API_KEY="your-gemini-api-key"
 
 # Supabase Public Keys

@@ -1,0 +1,24 @@
+node_modules
+dist
+.env
+.env.local
+.DS_Store
+
+backend/credentials/
+*.json
+!package.json
+!package-lock.json
+!tsconfig.json
+!firebase.json
+!vercel.json
+!capacitor.config.json
+
+# Android build outputs (keep source, ignore compiled artefacts)
+android/.gradle/
+android/app/build/
+android/build/
+android/local.properties
+*.apk
+*.aab
+*.keystore
+*.jks

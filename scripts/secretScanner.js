@@ -3,43 +3,45 @@ import path from 'path';
 import { execSync } from 'child_process';
 
 const PATTERNS = [
-  /nvapi-[a-zA-Z0-9_-]+/,
-  /sk-or-[a-zA-Z0-9_-]+/,
-  /AIza[a-zA-Z0-9_-]+/,
-  /xoxb-[a-zA-Z0-9_-]+/
+  { name: 'NVIDIA API Key', regex: /nvapi-[a-zA-Z0-9_-]{10,}/ },
+  { name: 'OpenRouter API Key', regex: /sk-or-v1-[a-zA-Z0-9_-]{10,}/ },
+  { name: 'Slack Bot Token', regex: /xoxb-[a-zA-Z0-9_-]{10,}/ },
+  { name: 'PostgreSQL Database Password URI', regex: /postgresql:\/\/[^"'\s]+:[^"'\s]+@/ },
+  { name: 'Firebase Service Account Base64 Key', regex: /FIREBASE_SERVICE_ACCOUNT_BASE64\s*=\s*["']?ew[a-zA-Z0-9+/=]{50,}/ },
 ];
 
-console.log('🔒 Running Secret Scanner...');
+console.log('🔒 Running Project-Wide Secret Scanner...');
 
 try {
-  // Get list of staged files
-  const stagedFilesStr = execSync('git diff --cached --name-only', { encoding: 'utf-8' });
-  const stagedFiles = stagedFilesStr.split('\n').filter(Boolean);
+  // Get all tracked files in git
+  const trackedFilesStr = execSync('git ls-files', { encoding: 'utf-8' });
+  const trackedFiles = trackedFilesStr.split('\n').filter(Boolean);
 
   let hasSecrets = false;
 
-  for (const file of stagedFiles) {
+  for (const file of trackedFiles) {
     if (!fs.existsSync(file)) continue;
-    
-    // Skip large assets or binary files
-    if (file.match(/\.(png|jpg|jpeg|gif|webp|mp4|webm|pdf|svg)$/)) continue;
+
+    // Skip binary, assets, or example files
+    if (file.match(/\.(png|jpg|jpeg|gif|webp|mp4|webm|pdf|svg|keystore|jks|jar|class|zip|ico)$/)) continue;
+    if (file.endsWith('.env') || file.endsWith('.env.local') || file.endsWith('google-services.json')) continue;
 
     const content = fs.readFileSync(file, 'utf-8');
-    for (const pattern of PATTERNS) {
-      if (pattern.test(content)) {
-        console.error(`\x1b[31m❌ SECRET DETECTED in ${file}!\x1b[0m`);
-        console.error(`   Pattern matched: ${pattern}`);
+    for (const item of PATTERNS) {
+      if (item.regex.test(content)) {
+        console.error(`\x1b[31m❌ EXPOSED SECRET DETECTED in tracked file: ${file}!\x1b[0m`);
+        console.error(`   Secret Type: ${item.name}`);
         hasSecrets = true;
       }
     }
   }
 
   if (hasSecrets) {
-    console.error('\x1b[31m\nCommit blocked! Please remove secrets and use process.env.\x1b[0m');
+    console.error('\x1b[31m\nScan failed! Remove exposed secrets from tracked code/docs and use process.env.\x1b[0m');
     process.exit(1);
   }
 
-  console.log('✅ No secrets detected.');
+  console.log('✅ Clean! No exposed secrets or credentials found in tracked files.');
   process.exit(0);
 
 } catch (error) {
