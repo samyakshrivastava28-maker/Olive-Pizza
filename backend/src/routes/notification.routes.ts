@@ -139,7 +139,7 @@ const actionSchema = z.object({
 router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Promise<void> => {
   const parsedBody = actionSchema.safeParse(req.body);
   if (!parsedBody.success) {
-    res.status(400).json({ error: parsedBody.error.errors[0].message });
+    res.status(400).json({ error: parsedBody.error.issues[0].message });
     return;
   }
   
@@ -572,7 +572,7 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
         const ownerUids = ownerDocs.docs.map(d => d.id);
         if (ownerUids.length > 0) {
           const stopPayload = { data: { action: 'stop_alert', orderId: orderId } };
-          await notificationEngine.sendBulk(ownerUids, stopPayload, 'high', { tag: `order_owner_stop_${orderId}`, orderId });
+          await notificationEngine.sendBulk(ownerUids, stopPayload as any, { priority: 'high', tag: `order_owner_stop_${orderId}`, orderId });
         }
       } catch (e: any) {
         console.error(`[ManualAction] Failed to send stop_alert for ${orderId}:`, e.message);
@@ -904,7 +904,8 @@ router.post('/send-custom', verifyToken, async (req: AuthRequest, res: Response)
     }
 
     // Dispatch a single bulk push (fire and forget for massive blasts so the HTTP response is instant)
-    notificationEngine.sendBulk(targetUids, payload, 'normal', {
+    notificationEngine.sendBulk(targetUids, payload, {
+      priority: 'normal',
       category: category || 'marketing',
     }).catch(err => console.error('[NotificationRoutes] sendBulk failed:', err));
 
@@ -1285,12 +1286,12 @@ router.post('/test-center', verifyToken, async (req: AuthRequest, res: Response)
 
     if (delayMs && delayMs > 0) {
       setTimeout(() => {
-        directNotification.sendPush(targetId, payload, 'high', { tag, category: 'test' }).catch(console.error);
+        notificationEngine.send(targetId, payload, { priority: 'high', tag, category: 'test' }).catch(console.error);
       }, delayMs);
       res.json({ success: true, message: `Scheduled ${action} with ${delayMs}ms delay.` });
     } else {
-      const queueId = await directNotification.sendPush(targetId, payload, 'high', { tag, category: 'test' });
-      res.json({ success: true, queueId, message: `Queued ${action} immediately.` });
+      const result = await notificationEngine.send(targetId, payload, { priority: 'high', tag, category: 'test' });
+      res.json({ success: true, queueId: 'none', message: `Queued ${action} immediately.` });
     }
   } catch (error: any) {
     res.status(500).json({ error: error.message });

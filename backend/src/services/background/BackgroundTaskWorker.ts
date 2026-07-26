@@ -97,9 +97,9 @@ export class BackgroundTaskWorker {
   private async processPushTask(payload: any) {
     const { targetUid, targetUids, pushPayload, priority, options } = payload;
     if (targetUid) {
-      await notificationEngine.sendBulk([targetUid], pushPayload, priority, options);
+      await notificationEngine.sendBulk([targetUid], pushPayload, { ...options, priority });
     } else if (targetUids && targetUids.length > 0) {
-      await notificationEngine.sendBulk(targetUids, pushPayload, priority, options);
+      await notificationEngine.sendBulk(targetUids, pushPayload, { ...options, priority });
     }
   }
 

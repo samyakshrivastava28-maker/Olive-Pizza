@@ -110,7 +110,7 @@ export class NotificationScheduler {
       }
       
       // Enqueue the notification instead of sending directly
-      await notificationEngine.sendBulk([userId], payloadCopy, priority);
+      await notificationEngine.sendBulk([userId], payloadCopy, { priority: (priority === 'silent' ? 'normal' : priority) as any });
       const queueId = 'direct-push';
       
       if (notificationId) {

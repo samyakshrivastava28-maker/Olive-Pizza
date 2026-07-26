@@ -296,7 +296,7 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
             orderTime: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
             version: 1,
           });
-          await notificationEngine.sendBulk(ownerUids, ownerPayload, 'high', { category: 'alarm_actionable', priority: 'critical', orderId: newOrderId });
+          await notificationEngine.sendBulk(ownerUids, ownerPayload, { category: 'alarm_actionable', priority: 'critical', orderId: newOrderId });
         }
       } catch (notifErr: any) {
         console.error('[Orders] Async NotificationEngine dispatch error:', notifErr.message);

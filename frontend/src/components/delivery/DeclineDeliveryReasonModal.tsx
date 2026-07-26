@@ -42,7 +42,7 @@ export const DeclineDeliveryReasonModal: React.FC<DeclineDeliveryReasonModalProp
     const finalReason = customReason.trim() || selectedPreset;
     const validation = reasonSchema.safeParse(finalReason);
     if (!validation.success) {
-      toast.error(validation.error.errors[0].message);
+      toast.error(validation.error.issues[0].message);
       return;
     }
 

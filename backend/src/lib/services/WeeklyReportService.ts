@@ -233,26 +233,18 @@ export class WeeklyReportService {
             },
             data: {
               url: '/owner/reports',
-              category: 'system',
+              category: 'system' as any,
               role: 'owner',
               docId: weekInfo.docId,
               driveLink: driveLink || ''
             }
           };
 
-          await notificationEngine.sendBulk(ownerUids, ownerPushPayload, 'high', {
+          await notificationEngine.sendBulk(ownerUids, ownerPushPayload, {
             tag: `weekly_report_${weekInfo.docId}`,
             category: 'system',
             priority: 'high'
           }).catch(e => console.warn('Weekly report direct push warning:', e.message));
-
-          for (const ownerUid of ownerUids) {
-            await notificationQueue.enqueue(ownerUid, ownerPushPayload, 'high', {
-              tag: `weekly_report_${weekInfo.docId}`,
-              category: 'system',
-              priority: 'high'
-            }).catch(() => {});
-          }
         }
       } catch (pushErr: any) {
         console.warn('[WeeklyReportService] Owner FCM push notification skipped:', pushErr.message);

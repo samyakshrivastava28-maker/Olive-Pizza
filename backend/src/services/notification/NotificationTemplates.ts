@@ -44,7 +44,9 @@ export type NotificationCategory =
   | 'announcement'
   | 'alert'
   | 'reward'
-  | 'system';
+  | 'system'
+  | 'alarm_actionable'
+  | 'pinned_live';
 
 // ─── Android Channel IDs ──────────────────────────────────────────────────────
 export const ANDROID_CHANNELS = {

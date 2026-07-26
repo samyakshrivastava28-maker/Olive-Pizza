@@ -43,7 +43,7 @@ export const CancelOrderReasonModal: React.FC<CancelOrderReasonModalProps> = ({
     const finalReason = customReason.trim() || selectedPreset;
     const validation = z.string().min(5, 'Reason must be at least 5 characters long').safeParse(finalReason);
     if (!validation.success) {
-      toast.error(validation.error.errors[0].message);
+      toast.error(validation.error.issues[0].message);
       return;
     }
 
