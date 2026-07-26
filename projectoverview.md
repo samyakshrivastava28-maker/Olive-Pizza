@@ -144,8 +144,9 @@ Olive Pizza intentionally decouples business operations from ephemeral operation
 > [!TIP]
 > The Owner Panel operates as an automated Point-of-Sale (POS) command center equipped with persistent alarm triggers to guarantee zero missed orders.
 
-1. **New Order Arrival**:
+1. **New Order Arrival & Alarm Permissions**:
    - A real-time Firestore snapshot listener detects a new `pending` order.
+   - Staff roles (`owner`, `delivery_partner`) are explicitly prompted via `AlarmPermissionPlugin` for Android 14+ `USE_FULL_SCREEN_INTENT` on login, ensuring they can receive intrusive alerts.
    - Dispatches a continuous loud alarm sound (`olive_order_new` Android channel) that rings repeatedly until acknowledged.
    - Opens full-screen `AlarmActivity` on Android devices even if the app is closed or screen is locked.
 2. **Order Lifecycle Control**:
