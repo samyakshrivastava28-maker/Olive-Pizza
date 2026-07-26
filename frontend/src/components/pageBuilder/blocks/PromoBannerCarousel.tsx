@@ -23,9 +23,8 @@ const DEFAULT_BANNERS: PromoBannerItem[] = [
     title: '50% OFF Your First Order',
     subtitle: 'Use code FIRST50 at checkout. Artisan wood-fired pizza.',
     image: 'https://res.cloudinary.com/diwh22z4a/image/upload/v1711200000/olive-pizza/hero_banner.png',
-    badge: 'Limited Offer',
-    ctaText: 'Claim 50% Off',
-    ctaLink: '/menu',
+    link: '/menu',
+    tag: 'Limited Offer',
   },
   {
     id: 'promo-2',

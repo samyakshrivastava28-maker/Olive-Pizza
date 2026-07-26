@@ -201,10 +201,14 @@ export class FirestoreListener {
     try {
       const customerUid = orderData.customerUid || orderData.firebaseUid || orderData.customerId || orderData.userId || orderData.user_id;
       let email = orderData.customerEmail || orderData.email || orderData.contactEmail;
+      let customerData: any = null;
       
-      if (!email && customerUid) {
+      if (customerUid) {
         const customerDoc = await db.collection('users').doc(customerUid).get();
-        if (customerDoc.exists) email = customerDoc.data()?.email;
+        if (customerDoc.exists) {
+          customerData = customerDoc.data();
+          if (!email) email = customerData?.email;
+        }
       }
       if (!email) return;
 
