@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { PageBlock, BlockType } from '../../types/pageBuilder';
 import PageRenderer from './PageRenderer';
-import { useAuth } from '../../context/AuthContext';
+import { useAuthStore } from '../../lib/store';
 import {
   Plus,
   Trash2,
@@ -32,7 +32,7 @@ const AVAILABLE_BLOCK_TYPES: { type: BlockType; label: string; description: stri
 ];
 
 export default function PageBuilderEditor({ slug = 'home' }: { slug?: string }) {
-  const { user } = useAuth();
+  const user = useAuthStore((s) => s.user);
   const [blocks, setBlocks] = useState<PageBlock[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);

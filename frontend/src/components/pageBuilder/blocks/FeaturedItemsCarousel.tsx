@@ -1,7 +1,8 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Star, Plus, Flame } from 'lucide-react';
-import { useCart } from '../../../context/CartContext';
+import { useCartStore } from '../../../lib/store';
+import { useCartAnimation } from '../../ui/CartAnimationProvider';
 
 interface FeaturedItem {
   id: string;
@@ -54,18 +55,20 @@ export default function FeaturedItemsCarousel({
   items = DEFAULT_ITEMS,
 }: FeaturedItemsCarouselProps) {
   const list = items.length > 0 ? items : DEFAULT_ITEMS;
-  const { addToCart } = useCart();
+  const addItem = useCartStore((s) => s.addItem);
+  const { triggerAnimation } = useCartAnimation();
 
   const handleAdd = (e: React.MouseEvent, item: FeaturedItem) => {
-    addToCart(
-      {
+    triggerAnimation(e, item.image || '', () => {
+      addItem({
         id: item.id,
-        name: item.name,
+        productId: item.id,
+        productName: item.name,
         price: item.price,
-        image: item.image,
-      },
-      e
-    );
+        quantity: 1,
+        imageUrl: item.image || '',
+      } as any);
+    });
   };
 
   return (
