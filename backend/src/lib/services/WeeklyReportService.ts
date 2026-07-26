@@ -240,7 +240,7 @@ export class WeeklyReportService {
             }
           };
 
-          await notificationEngine.sendBulk(ownerUids, ownerPushPayload, {
+          await notificationEngine.sendBulk(ownerUids, ownerPushPayload as any, {
             tag: `weekly_report_${weekInfo.docId}`,
             category: 'system',
             priority: 'high'
