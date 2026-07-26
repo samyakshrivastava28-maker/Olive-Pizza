@@ -85,6 +85,57 @@ export default function DeliveryNotificationCenter() {
           <button className="text-sm font-bold text-slate-400 hover:text-white bg-dark-800 px-3 py-1 rounded-full border border-dark-700">Mark all read</button>
         </div>
 
+        {/* Diagnostics & Permissions */}
+        <div className="bg-slate-900 rounded-[24px] p-4 border border-white/5 space-y-3">
+          <h2 className="text-white font-bold text-sm flex items-center gap-2 mb-2">
+            <AlertTriangle className="w-4 h-4 text-orange-500" />
+            Alert Diagnostics
+          </h2>
+          <div className="flex gap-2">
+            <button 
+              onClick={async () => {
+                const { Capacitor } = await import('@capacitor/core');
+                if (!Capacitor.isNativePlatform()) {
+                  alert('Alarm permissions are native Android 14+ only.');
+                  return;
+                }
+                const { AlarmPermission } = await import('../../plugins/AlarmPermission');
+                await AlarmPermission.setupPermissions().catch(err => alert(`Error: ${err.message}`));
+                alert('Permission prompt triggered natively');
+              }}
+              className="flex-1 bg-primary-600 hover:bg-primary-500 text-white text-xs font-bold py-2 rounded-xl transition-colors"
+            >
+              Turn on Alert System
+            </button>
+            <button 
+              onClick={async () => {
+                try {
+                  const tokenModule = await import('../../lib/firebase');
+                  const token = await tokenModule.getAuthToken();
+                  const res = await fetch('/api/notifications/send-custom', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                    body: JSON.stringify({
+                      title: '🔔 Alarm Test',
+                      body: 'Testing continuous alarm for Delivery Partner.',
+                      audience: 'delivery',
+                      category: 'alarm_actionable',
+                      priority: 'critical'
+                    }),
+                  });
+                  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                  alert('Alarm test sent!');
+                } catch (err: any) {
+                  alert(`Alarm test failed: ${err.message}`);
+                }
+              }}
+              className="flex-1 bg-red-600/80 hover:bg-red-500 text-white text-xs font-bold py-2 rounded-xl transition-colors"
+            >
+              Test Alert System
+            </button>
+          </div>
+        </div>
+
         {/* Summary Boxes */}
         <div className="grid grid-cols-3 gap-3">
           <GlassCard className="p-4 flex flex-col items-center justify-center text-center border-t-2 border-t-amber-500 bg-gradient-to-b from-amber-500/10 to-transparent">

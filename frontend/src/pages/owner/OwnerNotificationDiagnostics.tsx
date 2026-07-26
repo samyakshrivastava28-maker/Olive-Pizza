@@ -646,6 +646,19 @@ export default function OwnerNotificationDiagnostics() {
               })}
             />
             <TestBtn
+              label="Request Alarm Permission"
+              variant="primary"
+              onClick={async () => {
+                if (!Capacitor.isNativePlatform()) {
+                  toast('Alarm permissions are native Android 14+ only.', { icon: 'ℹ️' });
+                  return;
+                }
+                const { AlarmPermission } = await import('../../plugins/AlarmPermission');
+                await AlarmPermission.setupPermissions().catch(err => toast.error(`Error: ${err.message}`));
+                toast.success('Permission prompt triggered natively');
+              }}
+            />
+            <TestBtn
               label="Test Alarm Sound"
               variant="danger"
               result={testResults['alarm']}
@@ -660,8 +673,8 @@ export default function OwnerNotificationDiagnostics() {
                       title: '🔔 Alarm Test',
                       body: 'Testing continuous alarm. Tap Stop Alert to dismiss.',
                       audience: 'owner',
-                      category: 'system',
-                      alert: 'continuous',
+                      category: 'alarm_actionable',
+                      priority: 'critical'
                     }),
                   });
                   if (!res.ok) throw new Error(`HTTP ${res.status}`);
