@@ -33,18 +33,15 @@ export default function StartupGate({ children }: StartupGateProps) {
   };
 
   useEffect(() => {
-    // Prevent remounts from playing the video again during SPA navigation and hard refreshes
     if (showVideo) {
       sessionStorage.setItem('hasSeenIntro', 'true');
       logDiagnostic("Initializing intro video");
-      setShowVideo(true);
-      document.body.style.overflow = "hidden";
       
-      // Strict fallback timer — if video hangs or network drops, force skip to prevent black screens
+      // Strict fallback timer — if video hangs or network drops, force skip quickly (1.5s max)
       const fallbackTimer = setTimeout(() => {
-        logDiagnostic("Startup video timed out, forcing skip.", { timeout: 4500 });
+        logDiagnostic("Startup video timed out, forcing skip.", { timeout: 1500 });
         handleVideoEnd();
-      }, 4500);
+      }, 1500);
       
       return () => {
         clearTimeout(fallbackTimer);
@@ -66,7 +63,6 @@ export default function StartupGate({ children }: StartupGateProps) {
           })
           .catch((error) => {
             logDiagnostic("Video autoplay rejected or failed", error);
-            // Instantly dismiss if autoplay is blocked
             handleVideoEnd();
           });
       }
@@ -90,38 +86,31 @@ export default function StartupGate({ children }: StartupGateProps) {
   const { videoUrl, posterUrl } = getOptimizedIntroUrls();
 
   const handleVideoEnd = () => {
-    if (videoFading || !showVideo) return;
-    
     logDiagnostic("Ending video");
     setVideoFading(true);
     document.body.style.overflow = "";
     
     setTimeout(() => {
       setShowVideo(false);
-      setVideoFading(false);
-    }, 500); // 500ms match with transition duration
+    }, 300);
   };
 
   return (
     <>
-      {/* 
-        We ALWAYS render children. 
-        This is critical. It allows React Router, Firebase Auth, AI services, 
-        and prefetching to initialize in the background while the video plays on top.
-      */}
       {children}
       
       {showVideo && (
         <div 
-          className={`fixed inset-0 z-[99999] bg-black flex items-center justify-center transition-opacity duration-500 ${videoFading ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
+          className={`fixed inset-0 z-[99999] flex items-center justify-center transition-opacity duration-300 ${videoFading ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
         >
-          {/* Fallback poster or loading state */}
-          <div className="absolute inset-0 bg-black" />
+          {/* Subtle dark backdrop instead of pitch black */}
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-md" />
           
           <img 
             src={posterUrl} 
             alt="Loading Olive Pizza"
-            className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-[400ms] ${videoReady ? 'opacity-0' : 'opacity-100'} z-10`}
+            className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${videoReady ? 'opacity-0' : 'opacity-100'} z-10`}
+            onError={handleVideoEnd}
           />
 
           <video
@@ -138,8 +127,8 @@ export default function StartupGate({ children }: StartupGateProps) {
             onError={(e) => {
               logDiagnostic("Video onError fired", e);
               handleVideoEnd();
-            }} // Skip if video fails to load entirely
-            className={`absolute inset-0 w-full h-full object-cover z-20 transition-opacity duration-500 ${videoReady ? 'opacity-100' : 'opacity-0'}`}
+            }}
+            className={`absolute inset-0 w-full h-full object-cover z-20 transition-opacity duration-300 ${videoReady ? 'opacity-100' : 'opacity-0'}`}
           />
         </div>
       )}
