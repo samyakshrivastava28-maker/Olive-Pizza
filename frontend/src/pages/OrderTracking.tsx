@@ -543,7 +543,12 @@ export default function OrderTracking() {
           'Authorization': `Bearer ${token}`,
           ...(isDebug ? { 'X-Debug-Mode': 'true' } : {})
         },
-        body: JSON.stringify({ orderId, action: 'cancel', currentStage: order.status })
+        body: JSON.stringify({ 
+          orderId, 
+          action: 'cancel_order', 
+          currentStage: order.status,
+          reason: 'Customer requested cancellation from app'
+        })
       });
       const data = await res.json();
       if (isDebug && data.trace) useNotificationDebugger.getState().updateTrace(data.trace);

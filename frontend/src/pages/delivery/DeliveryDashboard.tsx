@@ -7,6 +7,7 @@ import { Order } from "../../types/models";
 import { useAuthStore } from "../../lib/store";
 import toast from "react-hot-toast";
 import { uploadMediaToCloudinary } from "../../lib/cloudinary";
+import DeclineDeliveryReasonModal from "../../components/delivery/DeclineDeliveryReasonModal";
 import { useNotificationDebugger } from "../../hooks/useNotificationDebugger";
 import { MapPin, Package, Map as MapIcon, Power, Wifi, WifiOff, AlertTriangle, ShieldAlert, Clock, Navigation2, Zap, Battery, Crosshair, HelpCircle, Utensils, MessageSquare, AlertCircle, Star, PhoneCall, Navigation, PackageOpen, CheckCircle2, Camera, Volume2, VolumeX } from "lucide-react";
 import { RESTAURANT_LOCATION } from "../../lib/config";
@@ -88,6 +89,7 @@ export default function DeliveryDashboard() {
     return () => unsubscribe();
   }, [authUser?.uid]);
 
+  const [isNative, setIsNative] = useState(false);
   useEffect(() => {
     const checkConnection = async () => {
       try {
@@ -101,6 +103,10 @@ export default function DeliveryDashboard() {
       }
     };
     checkConnection();
+
+    import('@capacitor/core').then(({ Capacitor }) => {
+      setIsNative(Capacitor.isNativePlatform());
+    }).catch(() => {});
   }, []);
 
   const toggleStatus = async (forcedStatus?: string) => {
@@ -257,6 +263,30 @@ export default function DeliveryDashboard() {
   }, [user?.uid]);
 
   const [processingId, setProcessingId] = useState<string | null>(null);
+  const [showDeclineModal, setShowDeclineModal] = useState(false);
+  const [decliningOrderId, setDecliningOrderId] = useState<string | null>(null);
+
+  const handleDeclineSubmit = async (reason: string) => {
+    if (!decliningOrderId) return;
+    setProcessingId(decliningOrderId);
+    try {
+      const token = await getCurrentAuthToken();
+      const res = await fetch('/api/notifications/action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ orderId: decliningOrderId, action: 'reject_delivery', reason })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to decline');
+      toast.success('Order declined');
+    } catch (error: any) {
+      toast.error(`Decline failed: ${error.message}`);
+      throw error;
+    } finally {
+      setProcessingId(null);
+      setDecliningOrderId(null);
+    }
+  };
 
   const updateOrderStatus = async (orderId: string, newStatus: string) => {
     if (processingId === orderId) return;
@@ -429,49 +459,51 @@ export default function DeliveryDashboard() {
         </div>
         
         {/* ── Alert Diagnostics ── */}
-        <div className="bg-dark-900 border border-dark-800 rounded-2xl p-4 flex gap-2 shadow-lg">
-          <button 
-            onClick={async () => {
-              const { Capacitor } = await import('@capacitor/core');
-              if (!Capacitor.isNativePlatform()) {
-                alert('Alarm permissions are native Android 14+ only.');
-                return;
-              }
-              const { AlarmPermission } = await import('../../plugins/AlarmPermission');
-              await AlarmPermission.setupPermissions().catch(err => alert(`Error: ${err.message}`));
-              alert('Permission prompt triggered natively');
-            }}
-            className="flex-1 bg-primary-600 hover:bg-primary-500 text-white text-xs font-bold py-2.5 rounded-xl transition-colors shadow-lg"
-          >
-            🔔 Enable Alarm System
-          </button>
-          <button 
-            onClick={async () => {
-              try {
-                const tokenModule = await import('../../lib/firebase');
-                const token = await tokenModule.getCurrentAuthToken();
-                const res = await fetch('/api/notifications/send-custom', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                  body: JSON.stringify({
-                    title: '🔔 Alarm Test',
-                    body: 'Testing continuous alarm for Delivery Partner.',
-                    audience: 'delivery',
-                    category: 'alarm_actionable',
-                    priority: 'critical'
-                  }),
-                });
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                alert('Alarm test sent!');
-              } catch (err: any) {
-                alert(`Alarm test failed: ${err.message}`);
-              }
-            }}
-            className="flex-1 bg-red-600/80 hover:bg-red-500 text-white text-xs font-bold py-2.5 rounded-xl transition-colors shadow-lg"
-          >
-            🚨 Test Alarm System
-          </button>
-        </div>
+        {isNative && (
+          <div className="bg-dark-900 border border-dark-800 rounded-2xl p-4 flex gap-2 shadow-lg">
+            <button 
+              onClick={async () => {
+                const { Capacitor } = await import('@capacitor/core');
+                if (!Capacitor.isNativePlatform()) {
+                  alert('Alarm permissions are native Android 14+ only.');
+                  return;
+                }
+                const { AlarmPermission } = await import('../../plugins/AlarmPermission');
+                await AlarmPermission.setupPermissions().catch(err => alert(`Error: ${err.message}`));
+                alert('Permission prompt triggered natively');
+              }}
+              className="flex-1 bg-primary-600 hover:bg-primary-500 text-white text-xs font-bold py-2.5 rounded-xl transition-colors shadow-lg"
+            >
+              🔔 Enable Alarm System
+            </button>
+            <button 
+              onClick={async () => {
+                try {
+                  const tokenModule = await import('../../lib/firebase');
+                  const token = await tokenModule.getCurrentAuthToken();
+                  const res = await fetch('/api/notifications/send-custom', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                    body: JSON.stringify({
+                      title: '🔔 Alarm Test',
+                      body: 'Testing continuous alarm for Delivery Partner.',
+                      audience: 'delivery',
+                      category: 'alarm_actionable',
+                      priority: 'critical'
+                    }),
+                  });
+                  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                  alert('Alarm test sent!');
+                } catch (err: any) {
+                  alert(`Alarm test failed: ${err.message}`);
+                }
+              }}
+              className="flex-1 bg-red-600/80 hover:bg-red-500 text-white text-xs font-bold py-2.5 rounded-xl transition-colors shadow-lg"
+            >
+              🚨 Test Alarm System
+            </button>
+          </div>
+        )}
 
         {/* ── Warning Alerts ── */}
         {user?.status === "online" && gpsPermission !== "granted" && (
@@ -639,7 +671,7 @@ export default function DeliveryDashboard() {
                 {activeTask.status === "partner_assigned" && (
                   <div className="grid grid-cols-2 gap-3">
                     <button disabled={processingId === activeTask.id} onClick={() => updateOrderStatus(activeTask.id!, "ready")} className="w-full bg-primary-600 hover:bg-primary-500 disabled:opacity-50 text-white font-black py-4 rounded-2xl transition-all shadow-lg shadow-primary-500/20">{processingId === activeTask.id ? 'Processing...' : 'Accept'}</button>
-                    <button disabled={processingId === activeTask.id} onClick={() => updateOrderStatus(activeTask.id!, "pending")} className="w-full bg-red-500/10 hover:bg-red-500/20 disabled:opacity-50 text-red-500 font-black py-4 rounded-2xl transition-all">{processingId === activeTask.id ? 'Processing...' : 'Reject'}</button>
+                    <button disabled={processingId === activeTask.id} onClick={() => { setDecliningOrderId(activeTask.id!); setShowDeclineModal(true); }} className="w-full bg-red-500/10 hover:bg-red-500/20 disabled:opacity-50 text-red-500 font-black py-4 rounded-2xl transition-all">{processingId === activeTask.id ? 'Processing...' : 'Reject'}</button>
                   </div>
                 )}
                 {activeTask.status === "ready" && (
@@ -684,6 +716,17 @@ export default function DeliveryDashboard() {
           ))}
         </div>
       )}
+
+      {/* Decline Modal */}
+      <DeclineDeliveryReasonModal
+        isOpen={showDeclineModal}
+        orderNumber={activeTask?.dailyOrderNumber || activeTask?.id?.slice(-6).toUpperCase()}
+        onClose={() => {
+          setShowDeclineModal(false);
+          setDecliningOrderId(null);
+        }}
+        onSubmit={handleDeclineSubmit}
+      />
 
       {/* Proof Modal */}
       <AnimatePresence>

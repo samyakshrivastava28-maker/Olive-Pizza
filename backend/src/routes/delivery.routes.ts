@@ -4,8 +4,15 @@ import { adminDb } from '../config/firebase.js';
 import { FieldValue } from 'firebase-admin/firestore';
 import { orderEventService } from '../services/order/OrderEventService.js';
 import { pgPool } from '../config/postgres.js';
+import { z } from 'zod';
+import { CustomerTemplates } from '../services/notification/NotificationTemplates.js';
+import { notificationEngine } from '../services/notification/NotificationEngine.js';
 
 const router = Router();
+
+const deliveryStatusSchema = z.object({
+  status: z.enum(['delivered', 'out_for_delivery', 'picked_up', 'partner_assigned', 'ready'])
+});
 
 router.use(verifyToken);
 
@@ -53,27 +60,55 @@ router.get('/tasks', requireRole(['delivery', 'delivery_partner']), async (req: 
 });
 
 // Update order status (used by delivery dashboard)
-router.patch('/orders/:id/status', requireRole(['owner', 'delivery', 'delivery_partner']), async (req: AuthRequest, res: Response) => {
+router.patch('/orders/:id/status', requireRole(['owner', 'delivery', 'delivery_partner']), async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const { status } = req.body;
-    
-    const allowedStatuses = ['delivered', 'out_for_delivery', 'picked_up', 'partner_assigned', 'ready'];
-    if (!allowedStatuses.includes(status)) {
+    const parsedBody = deliveryStatusSchema.safeParse(req.body);
+    if (!parsedBody.success) {
       res.status(400).json({ error: 'Invalid status update for delivery partner' });
       return;
     }
+    const { status } = parsedBody.data;
+
+    // Fetch order first to get details for notification
+    const orderDoc = await adminDb.collection('orders').doc(id).get();
+    if (!orderDoc.exists) {
+      res.status(404).json({ error: 'Order not found' });
+      return;
+    }
+    const orderData = orderDoc.data()!;
 
     await adminDb.collection('orders').doc(id).update({
       status: status,
       updatedAt: FieldValue.serverTimestamp()
     });
     
-    // Emit event so notifications are triggered
-    orderEventService.emitStatusChange(id, status, req.user?.uid || 'system');
+    // Synchronous Dispatch
+    setImmediate(async () => {
+      try {
+        const customerFirebaseUid = orderData.customerUid || orderData.firebaseUid || orderData.customerId || orderData.userId || orderData.user_id;
+        if (customerFirebaseUid) {
+          const shortId = orderData.dailyOrderNumber || `#${id.slice(-6).toUpperCase()}`;
+          const cPayload = CustomerTemplates.orderUpdate(id, {
+            orderNumber: shortId,
+            status: status as any,
+            deliveryPartnerName: orderData.deliveryPartnerName || 'Your Delivery Partner',
+            totalAmount: Number(orderData.totalAmount || 0),
+          });
+          const category = status === 'delivered' ? 'simple_informational' : 'pinned_live';
+          await notificationEngine.send(customerFirebaseUid, cPayload, { category, priority: 'high', orderId: id });
+        }
+      } catch (e: any) {
+        console.error('[Delivery Routes] Async notification failed:', e.message);
+      }
+    });
+
+    // Emit event so emails are triggered
+    orderEventService.emitStatusChange(id, status as any, req.user?.uid || 'system');
     
     res.json({ message: `Order status updated to ${status}` });
   } catch (error) {
+    console.error('[Delivery Routes] Failed to update order status:', error);
     res.status(500).json({ error: 'Failed to update order status' });
   }
 });

@@ -260,7 +260,22 @@ Olive Pizza features an automated update distribution system:
 
 ---
 
-## 8. Environment & Configuration Guide
+## 8. Real-Time Notification & Alarm System
+
+Olive Pizza enforces a strict, unified notification pipeline for maximum reliability on both Android (Capacitor) and Web (PWA):
+
+### The NotificationEngine (`backend/src/services/notification/NotificationEngine.ts`)
+- **Single Source of Truth**: All FCM notifications—whether `pinned_live`, `alarm_actionable`, or `simple_informational`—route exclusively through `NotificationEngine`. 
+- **Legacy Removal**: Any parallel implementations (e.g., `DirectNotificationService` or `FirebaseMessagingProvider`) have been successfully absorbed and deleted.
+- **Data-Only Strategy**: For critical categories (`alarm_actionable`, `pinned_live`), the backend strips the root `notification` key from the FCM payload and sends a pure `data` payload. This ensures Android's auto-handling is bypassed, forcing `onMessageReceived` to trigger even when the app is killed.
+
+### Native Alarm Interception (`OliveMessagingService.java`)
+- **Continuous Alarms**: The Android service acquires a `PARTIAL_WAKE_LOCK`, examines the incoming data payload, and natively spins up `AlarmActivity.java` (using `FULL_WAKE_LOCK` + `TURN_SCREEN_ON`) if the category is `alarm_actionable` (e.g., Owner/Partner assignment).
+- **Alarm Permission Gating**: The frontend Capacitor plugin `AlarmPermissionPlugin` programmatically requests `USE_FULL_SCREEN_INTENT`. This is securely gated at login within `store.tsx`—triggering exclusively when the user logs in as `owner` or `delivery_partner`, strictly ensuring customers are never prompted for full-screen alarm permissions.
+
+---
+
+## 9. Environment & Configuration Guide
 
 ### Mandatory `.env` Variables
 
@@ -296,7 +311,7 @@ TRACKING_TOKEN_SECRET="olive-tracking-hmac-secret-32chars"
 
 ---
 
-## 9. Developer Quick Reference
+## 10. Developer Quick Reference
 
 ### Running Locally
 
@@ -317,6 +332,6 @@ npx tsc --noEmit
 | :--- | :--- | :--- |
 | `POST` | `/api/tts/synthesize` | Synthesize neural speech via NVIDIA Chatterbox TTS |
 | `GET` | `/api/tracking/order/:orderId` | Get live order GPS, distance, & ETA (accepts `trackingToken`) |
-| `POST` | `/api/tracking/navigation/start` | Initialize 3D routing session for driver |
+| `GET` | `/api/tracking/navigation/start` | Initialize route geometry stream (Polylines + TTS cues). |
+| `GET` | `/api/github/download-apk` | Proxy latest APK artifact from GitHub Actions cache. |
 | `GET` | `/api/devops/health` | Comprehensive DevOps system diagnostics (strictly `webhub2811@gmail.com`) |
-| `GET` | `/api/github/download-apk` | Stream direct latest Android APK build download |

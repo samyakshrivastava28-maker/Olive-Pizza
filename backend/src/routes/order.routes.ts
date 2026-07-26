@@ -3,7 +3,7 @@ import { query } from '../lib/db.js';
 import { verifyToken, AuthRequest } from '../middleware/auth.middleware.js';
 import { adminDb } from '../config/firebase.js';
 import { OwnerTemplates, CustomerTemplates } from '../services/notification/NotificationTemplates.js';
-import { directNotification } from '../services/notification/DirectNotificationService.js';
+
 import { notificationEngine } from '../services/notification/NotificationEngine.js';
 import { orderEventService } from '../services/order/OrderEventService.js';
 import { queueEmail } from '../services/email.service.js';
@@ -296,7 +296,7 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
             orderTime: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
             version: 1,
           });
-          await notificationEngine.sendBulk(ownerUids, ownerPayload, { category: 'alarm_actionable', priority: 'critical', orderId: newOrderId });
+          await notificationEngine.sendBulk(ownerUids, ownerPayload, 'high', { category: 'alarm_actionable', priority: 'critical', orderId: newOrderId });
         }
       } catch (notifErr: any) {
         console.error('[Orders] Async NotificationEngine dispatch error:', notifErr.message);

@@ -222,8 +222,7 @@ export class WeeklyReportService {
 
       // Enqueue Owner Push Notification via fast directNotification pipeline
       try {
-        const { directNotification } = await import('../../services/notification/DirectNotificationService.js');
-        const { notificationQueue } = await import('../../services/notification/NotificationQueueService.js');
+        const { notificationEngine } = await import('../../services/notification/NotificationEngine.js');
         const ownerDocs = await adminDb.collection('users').where('role', '==', 'owner').get();
         const ownerUids = ownerDocs.docs.map(d => d.id);
         if (ownerUids.length > 0) {
@@ -241,7 +240,7 @@ export class WeeklyReportService {
             }
           };
 
-          await directNotification.sendBulkPush(ownerUids, ownerPushPayload, 'high', {
+          await notificationEngine.sendBulk(ownerUids, ownerPushPayload, 'high', {
             tag: `weekly_report_${weekInfo.docId}`,
             category: 'system',
             priority: 'high'

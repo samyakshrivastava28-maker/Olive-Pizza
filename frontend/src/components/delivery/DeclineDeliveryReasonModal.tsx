@@ -4,32 +4,31 @@ import { AlertTriangle, X, Check, FileText } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { z } from 'zod';
 
-interface CancelOrderReasonModalProps {
+interface DeclineDeliveryReasonModalProps {
   isOpen: boolean;
   orderId?: string;
-  orderNumber: string;
+  orderNumber?: string;
   onClose: () => void;
-  onSubmit?: (reason: string) => Promise<void>;
-  onConfirm?: (reason: string) => Promise<void>;
+  onSubmit: (reason: string) => Promise<void>;
   isSubmitting?: boolean;
 }
 
 const PRESET_REASONS = [
-  'Item out of stock',
-  'Kitchen too busy / overload',
-  'Outside delivery coverage area',
-  'Restaurant closing soon',
-  'Customer requested cancellation',
-  'Invalid contact details / address'
+  'Too far / Traffic',
+  'Vehicle issue',
+  'Order too large / Heavy',
+  'End of shift',
+  'Customer unreachable',
+  'Safety concern'
 ];
 
-export const CancelOrderReasonModal: React.FC<CancelOrderReasonModalProps> = ({
+const reasonSchema = z.string().min(5, 'Reason must be at least 5 characters long');
+
+export const DeclineDeliveryReasonModal: React.FC<DeclineDeliveryReasonModalProps> = ({
   isOpen,
-  orderId,
   orderNumber,
   onClose,
   onSubmit,
-  onConfirm,
   isSubmitting: externalSubmitting
 }) => {
   const [selectedPreset, setSelectedPreset] = useState<string>('');
@@ -41,7 +40,7 @@ export const CancelOrderReasonModal: React.FC<CancelOrderReasonModalProps> = ({
 
   const handleSubmit = async () => {
     const finalReason = customReason.trim() || selectedPreset;
-    const validation = z.string().min(5, 'Reason must be at least 5 characters long').safeParse(finalReason);
+    const validation = reasonSchema.safeParse(finalReason);
     if (!validation.success) {
       toast.error(validation.error.errors[0].message);
       return;
@@ -49,13 +48,10 @@ export const CancelOrderReasonModal: React.FC<CancelOrderReasonModalProps> = ({
 
     setInternalSubmitting(true);
     try {
-      const handler = onConfirm || onSubmit;
-      if (handler) {
-        await handler(finalReason);
-      }
+      await onSubmit(finalReason);
       onClose();
     } catch (err: any) {
-      toast.error(err.message || 'Failed to cancel order');
+      toast.error(err.message || 'Failed to decline delivery');
     } finally {
       setInternalSubmitting(false);
     }
@@ -76,8 +72,8 @@ export const CancelOrderReasonModal: React.FC<CancelOrderReasonModalProps> = ({
                 <AlertTriangle className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="font-bold text-lg">Cancel Order #{orderNumber}</h3>
-                <p className="text-xs text-slate-400">Reason is mandatory for customer notification</p>
+                <h3 className="font-bold text-lg">Decline Order {orderNumber ? `#${orderNumber}` : ''}</h3>
+                <p className="text-xs text-slate-400">Please select a reason for declining.</p>
               </div>
             </div>
             <button onClick={onClose} className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/5">
@@ -121,7 +117,7 @@ export const CancelOrderReasonModal: React.FC<CancelOrderReasonModalProps> = ({
                 setCustomReason(e.target.value);
                 if (e.target.value) setSelectedPreset('');
               }}
-              placeholder="Type specific reason for customer..."
+              placeholder="Type specific reason..."
               className="w-full bg-slate-800 border border-white/10 rounded-xl p-3 text-xs text-slate-200 focus:outline-none focus:border-red-500/50"
             />
           </div>
@@ -140,7 +136,7 @@ export const CancelOrderReasonModal: React.FC<CancelOrderReasonModalProps> = ({
               onClick={handleSubmit}
               className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-red-600 hover:bg-red-500 disabled:opacity-50 transition-all shadow-lg shadow-red-600/20"
             >
-              {submitting ? 'Cancelling...' : 'Confirm Cancellation'}
+              {submitting ? 'Declining...' : 'Confirm Decline'}
             </button>
           </div>
         </motion.div>
@@ -149,4 +145,4 @@ export const CancelOrderReasonModal: React.FC<CancelOrderReasonModalProps> = ({
   );
 };
 
-export default CancelOrderReasonModal;
+export default DeclineDeliveryReasonModal;

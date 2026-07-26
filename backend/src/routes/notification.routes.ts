@@ -17,12 +17,13 @@
  */
 
 import { Router, Request, Response } from 'express';
+import { z } from 'zod';
 import { adminDb as db } from '../config/firebase.js';
 import * as admin from 'firebase-admin';
 import { pgPool } from '../config/postgres.js';
 import { notificationScheduler } from '../services/notification/NotificationScheduler.js';
 import { OwnerTemplates, CustomerTemplates, DeliveryTemplates, MarketingTemplates, type OrderStatus } from '../services/notification/NotificationTemplates.js';
-import { directNotification } from '../services/notification/DirectNotificationService.js';
+
 import { notificationEngine } from '../services/notification/NotificationEngine.js';
 import { notificationQueue } from '../services/notification/NotificationQueueService.js';
 import { verifyToken, AuthRequest } from '../middleware/auth.middleware.js';
@@ -122,23 +123,34 @@ async function releaseOrderLock(orderId: string): Promise<void> {
 // CRITICAL FLOW: Firestore write is SYNCHRONOUS before HTTP 200.
 // Notifications/emails/analytics are fire-and-forget background tasks.
 // =============================================================================
+
+const actionSchema = z.object({
+  orderId: z.string().min(1, 'Missing orderId'),
+  action: z.string().min(1, 'Missing action'),
+  currentStage: z.string().optional(),
+  partnerId: z.string().optional(),
+  reason: z.string().max(255, 'Reason is too long').optional(), // Free-text reason
+  deliveryProof: z.object({
+    photoUrl: z.string().url().optional(),
+    note: z.string().max(500).optional()
+  }).optional()
+});
+
 router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Promise<void> => {
-  const { orderId, action, currentStage, partnerId } = req.body;
+  const parsedBody = actionSchema.safeParse(req.body);
+  if (!parsedBody.success) {
+    res.status(400).json({ error: parsedBody.error.errors[0].message });
+    return;
+  }
+  
+  const { orderId, action, currentStage, partnerId, reason, deliveryProof } = parsedBody.data;
   const userId = req.user!.uid;
   const isDebug = req.headers['x-debug-mode'] === 'true';
   const startTime = Date.now();
   const requestId = `req_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
   const trace: any = { requestId, route: 'POST /api/notifications/action', action, orderId, userId, currentStage, steps: [] };
 
-  console.log(`[Action][${requestId}] START action=${action} orderId=${orderId} userId=${userId} currentStage=${currentStage}`);
-
-  if (!orderId || !action) {
-    const reason = !orderId ? 'Missing orderId' : 'Missing action';
-    trace.steps.push({ step: 'Validation', status: 'failed', reason });
-    console.warn(`[Action][${requestId}] Validation failed: ${reason}`);
-    res.status(400).json({ error: reason, requestId });
-    return;
-  }
+  console.log(`[Action][${requestId}] START action=${action} orderId=${orderId} userId=${userId} currentStage=${currentStage} reason=${reason}`);
 
   // ── Step 1: Verify user exists and has a role ──────────────────────────
   let userRole: string;
@@ -343,7 +355,6 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
         });
 
       } else if (action === 'reject' || action === 'cancel_order') {
-        const reason: string | undefined = req.body.reason?.trim() || req.body.cancellationReason?.trim();
         if (!reason && (action === 'reject' || action === 'cancel_order')) {
           await releaseOrderLock(orderId);
           lockReleased = true;
@@ -441,7 +452,6 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
         responseData = { message: 'Delivery accepted' };
       } else if (action === 'reject_delivery') {
         // Partner declines assignment — mandatory reason required
-        const reason: string | undefined = req.body.reason?.trim() || req.body.rejectionReason?.trim();
         if (!reason) {
           await releaseOrderLock(orderId);
           lockReleased = true;
@@ -562,7 +572,7 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
         const ownerUids = ownerDocs.docs.map(d => d.id);
         if (ownerUids.length > 0) {
           const stopPayload = { data: { action: 'stop_alert', orderId: orderId } };
-          await directNotification.sendBulkPush(ownerUids, stopPayload, 'high', { tag: `order_owner_stop_${orderId}`, orderId });
+          await notificationEngine.sendBulk(ownerUids, stopPayload, 'high', { tag: `order_owner_stop_${orderId}`, orderId });
         }
       } catch (e: any) {
         console.error(`[ManualAction] Failed to send stop_alert for ${orderId}:`, e.message);
@@ -837,8 +847,9 @@ router.post('/send-custom', verifyToken, async (req: AuthRequest, res: Response)
   try {
     const userId = req.user!.uid;
     const ownerDoc = await db.collection('users').doc(userId).get();
-    if (!ownerDoc.exists || ownerDoc.data()?.role !== 'owner') {
-      res.status(403).json({ error: 'Owner access required' });
+    const role = ownerDoc.data()?.role;
+    if (!ownerDoc.exists || (role !== 'owner' && role !== 'delivery_partner')) {
+      res.status(403).json({ error: 'Owner or Delivery Partner access required' });
       return;
     }
 
@@ -893,9 +904,9 @@ router.post('/send-custom', verifyToken, async (req: AuthRequest, res: Response)
     }
 
     // Dispatch a single bulk push (fire and forget for massive blasts so the HTTP response is instant)
-    directNotification.sendBulkPush(targetUids, payload, 'normal', {
+    notificationEngine.sendBulk(targetUids, payload, 'normal', {
       category: category || 'marketing',
-    }).catch(err => console.error('[NotificationRoutes] sendBulkPush failed:', err));
+    }).catch(err => console.error('[NotificationRoutes] sendBulk failed:', err));
 
     res.json({ success: true, message: `Dispatched notifications to ${targetUids.length} users` });
   } catch (error: any) {

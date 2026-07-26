@@ -11,7 +11,7 @@
 
 import { pgPool } from '../../config/postgres.js';
 import { DevAuditService } from './DevAuditService.js';
-import { directNotification } from '../notification/DirectNotificationService.js';
+
 
 export interface NotificationTemplate {
   id: string;
@@ -199,15 +199,13 @@ export class NotificationTemplateService {
 
   public static async sendTestNotification(targetUid: string, templateId: string): Promise<{ success: boolean; messageId?: string; error?: string }> {
     try {
-      const res = await directNotification.sendPush(targetUid, {
+      return await notificationEngine.sendBulk([targetUid], {
         notification: {
           title: '🧪 Test Notification Dispatch',
-          body: `Test push sent using notification template '${templateId}' at ${new Date().toLocaleTimeString()}`
+          body: `Test push sent using template '${templateId}'`
         },
         data: {
-          url: '/owner/developer',
-          category: 'system',
-          tag: `test_${templateId}`
+          category: 'system'
         }
       }, 'high');
 

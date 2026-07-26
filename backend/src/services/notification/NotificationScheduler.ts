@@ -1,9 +1,7 @@
 import { adminDb } from '../../config/firebase.js';
 import { FieldValue } from 'firebase-admin/firestore';
-import { directNotification } from './DirectNotificationService.js';
-import { notificationDebugger } from './NotificationDebugger.js';
-
 import { notificationEngine } from './NotificationEngine.js';
+import { notificationDebugger } from './NotificationDebugger.js';
 
 export class NotificationScheduler {
   private activeIntervals: Map<string, NodeJS.Timeout> = new Map();
@@ -112,7 +110,7 @@ export class NotificationScheduler {
       }
       
       // Enqueue the notification instead of sending directly
-      await directNotification.sendPush(userId, payloadCopy, priority);
+      await notificationEngine.sendBulk([userId], payloadCopy, priority);
       const queueId = 'direct-push';
       
       if (notificationId) {

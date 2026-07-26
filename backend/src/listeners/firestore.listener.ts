@@ -5,7 +5,7 @@
 import { adminDb as db } from '../config/firebase.js';
 import { pgPool } from '../config/postgres.js';
 import { notificationQueue } from '../services/notification/NotificationQueueService.js';
-import { directNotification } from '../services/notification/DirectNotificationService.js';
+
 import { OwnerTemplates, CustomerTemplates, DeliveryTemplates } from '../services/notification/NotificationTemplates.js';
 import { queueEmail } from '../services/email.service.js';
 import { buildOrderStatusEmail } from '../services/emailTemplates.service.js';

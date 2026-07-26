@@ -274,9 +274,9 @@ export class NotificationQueueService {
       );
 
       let activeTokensList = activeRes.rows.map((r: any) => r.token);
-      if (activeTokensList.length > 5) {
-        const keepTokens = activeTokensList.slice(0, 5);
-        const deactivateTokens = activeTokensList.slice(5);
+      if (activeTokensList.length > 3) {
+        const keepTokens = activeTokensList.slice(0, 3);
+        const deactivateTokens = activeTokensList.slice(3);
         await client.query(
           `UPDATE fcm_tokens SET is_active = FALSE WHERE user_id = $1 AND token = ANY($2)`,
           [pgUserId, deactivateTokens]
@@ -284,7 +284,7 @@ export class NotificationQueueService {
         activeTokensList = keepTokens;
       }
 
-      // Update Firestore user document with capped fcmTokens array (max 5)
+      // Update Firestore user document with capped fcmTokens array (max 3)
       db.collection('users').doc(firebaseUserId).set({
         fcmTokens: activeTokensList,
         notificationReady: true,

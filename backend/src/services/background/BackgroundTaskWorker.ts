@@ -1,6 +1,6 @@
 import { pgPool } from '../../config/postgres.js';
-import { adminDb } from '../../config/firebase.js';
-import { directNotification } from '../notification/DirectNotificationService.js';
+import { adminDb as db } from '../../config/firebase.js';
+import { notificationEngine } from '../notification/NotificationEngine.js';
 import { queueEmail } from '../email.service.js';
 
 export class BackgroundTaskWorker {
@@ -97,9 +97,9 @@ export class BackgroundTaskWorker {
   private async processPushTask(payload: any) {
     const { targetUid, targetUids, pushPayload, priority, options } = payload;
     if (targetUid) {
-      await directNotification.sendPush(targetUid, pushPayload, priority, options);
+      await notificationEngine.sendBulk([targetUid], pushPayload, priority, options);
     } else if (targetUids && targetUids.length > 0) {
-      await directNotification.sendBulkPush(targetUids, pushPayload, priority, options);
+      await notificationEngine.sendBulk(targetUids, pushPayload, priority, options);
     }
   }
 

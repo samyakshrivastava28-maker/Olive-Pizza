@@ -257,29 +257,15 @@ function buildPayload(title: string, body: string, opts: BuildOptions): Notifica
     },
   };
 
-  // ── NOTIFICATION BLOCK — ALWAYS INCLUDED (ROOT CAUSE FIX) ────────────────
-  // ALL messages include a top-level `notification: { title, body }` block.
-  //
-  // Previously, ongoing=true (pinned trackers) omitted the notification block,
-  // making them data-only FCM messages. On Android 12+ with Doze/App Standby
-  // or OEM battery management (Xiaomi/Samsung/Oppo/OnePlus), data-only messages
-  // are deferred or dropped when the app is swiped closed. This was the primary
-  // cause of automated notifications failing on killed apps.
-  //
-  // With the notification block present, the Android FCM SDK renders the notification
-  // via the system tray EVEN IF the app process is dead — using the channel
-  // registered at startup. OliveMessagingService.onMessageReceived() still processes
-  // the data block when the process is alive (foreground/background) to build the
-  // enhanced native alarm UI, action buttons, and AlarmActivity full-screen intent.
-  //
-  // This gives TWO delivery paths for all notification types:
-  //   1. System tray auto-display (works even if app is killed — guaranteed)
-  //   2. Native onMessageReceived → enhanced UI (works when process is alive)
-  //
-  // For ongoing/pinned notifications, we set collapseKey on android to ensure
-  // updates replace in place rather than stacking.
-  {
+  // ── ROOT CAUSE FIX: DATA-ONLY FOR ALARMS AND PINNED LIVE TRACKERS ────────
+  // When a root notification block is present and the app is backgrounded, Android intercepts the message 
+  // and posts a generic system tray notification, entirely skipping our onMessageReceived() handler.
+  // By omitting the root notification block for these specific categories, we force a pure data message,
+  // which forces Android to wake the app and invoke onMessageReceived(), allowing our custom code to construct the UI.
+  if (opts.category !== 'alarm_actionable' && opts.category !== 'pinned_live') {
     basePayload.notification = { title, body };
+  }
+
     // For continuous alarms, use a dedicated clickAction so the system-tray tap
     // launches AlarmActivity (full-screen alarm) instead of MainActivity.
     const clickAction =
