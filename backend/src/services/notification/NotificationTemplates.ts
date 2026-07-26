@@ -288,7 +288,7 @@ function buildPayload(title: string, body: string, opts: BuildOptions): Notifica
       // surfaces immediately (heads-up) even in background/killed scenarios.
       ...(opts.alert === 'continuous' ? { notificationCount: 1 } : {}),
     };
-  }
+
   const apnsHeaders: Record<string, string> = {
     'apns-priority': isHigh ? '10' : '5',
   };
