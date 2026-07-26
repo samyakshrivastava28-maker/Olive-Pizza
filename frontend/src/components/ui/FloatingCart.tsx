@@ -51,15 +51,16 @@ export default function FloatingCart() {
             <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-[200%] group-hover:translate-x-[200%] transition-transform duration-1000 ease-in-out" />
 
             <div className="flex flex-col relative z-10">
-              <span className="text-[10px] font-black text-white/70 uppercase tracking-widest mb-1">Your Order</span>
+              <span className="text-[10px] font-black text-white/80 uppercase tracking-widest mb-1">
+                {cartCount} {cartCount === 1 ? 'item' : 'items'} in your cart
+              </span>
               <div className="flex items-end gap-2">
                  <span className="text-2xl font-black text-white leading-none">₹{total}</span>
-                 <span className="text-xs text-white/80 font-bold mb-1 bg-white/20 px-2 py-0.5 rounded-full">{cartCount} items</span>
               </div>
             </div>
             
             <div className="flex items-center gap-2 bg-white text-primary-900 px-5 py-3 rounded-2xl font-black text-sm relative z-10 shadow-lg group-hover:shadow-xl transition-all">
-              Checkout <ArrowRight className="w-4 h-4" />
+              View Cart <ArrowRight className="w-4 h-4" />
             </div>
             
             <motion.div 
