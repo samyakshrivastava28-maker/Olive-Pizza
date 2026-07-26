@@ -167,16 +167,12 @@ export default function PushNotificationManager() {
         // Always create channels before registering
         await createNativeChannels();
 
-        // Register with FCM — this is idempotent
-        await PushNotifications.register();
-
-        // Await the registration event
+        // Register with FCM — attach listeners FIRST so registration event is never missed
         token = await new Promise<string>((resolve, reject) => {
           const timeout = setTimeout(() => {
             reject(new Error('FCM token registration timeout (15s)'));
           }, 15000);
 
-          // Use addListener — they stack, so we track and remove after first trigger
           const regListener = PushNotifications.addListener('registration', (pushToken) => {
             clearTimeout(timeout);
             regListener.then(h => h.remove()).catch(() => {});
@@ -189,6 +185,11 @@ export default function PushNotificationManager() {
             regListener.then(h => h.remove()).catch(() => {});
             errListener.then(h => h.remove()).catch(() => {});
             reject(new Error(`FCM registration error: ${JSON.stringify(error)}`));
+          });
+
+          PushNotifications.register().catch((regErr) => {
+            clearTimeout(timeout);
+            reject(regErr);
           });
         });
 

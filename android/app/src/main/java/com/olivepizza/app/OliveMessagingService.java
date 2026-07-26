@@ -74,13 +74,20 @@ public class OliveMessagingService extends MessagingService {
 
             if (data.size() > 0) {
                 String alert = data.get("alert");
+                String category = data.get("category");
+                String stage = data.get("stage");
                 String action = data.get("action");
+
+                boolean isContinuousAlert = "continuous".equals(alert) || 
+                                            "alarm_actionable".equals(category) || 
+                                            "new_order".equals(stage) || 
+                                            "delivery_assigned".equals(stage);
 
                 if ("stop_alert".equals(action)) {
                     stopNativeAlarm(data);
                     handledNatively = true;
                 } else {
-                    if ("continuous".equals(alert)) {
+                    if (isContinuousAlert) {
                         wakeScreenOnEmergency(powerManager);
                     }
                     showNativeNotification(data);
@@ -111,10 +118,7 @@ public class OliveMessagingService extends MessagingService {
     private int getSmallIconResId() {
         int resId = getResources().getIdentifier("ic_stat_icon_config_sample", "drawable", getPackageName());
         if (resId == 0) {
-            resId = getResources().getIdentifier("ic_launcher", "mipmap", getPackageName());
-        }
-        if (resId == 0) {
-            resId = getResources().getIdentifier("ic_launcher_round", "mipmap", getPackageName());
+            resId = getApplicationInfo().icon;
         }
         if (resId == 0) {
             resId = android.R.drawable.ic_dialog_info;
@@ -193,6 +197,12 @@ public class OliveMessagingService extends MessagingService {
             intent = new Intent(this, AlarmActivity.class);
             intent.putExtra("orderId", orderId);
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            try {
+                startActivity(intent);
+                Log.d(TAG, "⚡ AlarmActivity started directly from OliveMessagingService");
+            } catch (Exception e) {
+                Log.e(TAG, "Could not start AlarmActivity directly: " + e.getMessage());
+            }
         } else {
             intent = new Intent(this, MainActivity.class);
             intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
