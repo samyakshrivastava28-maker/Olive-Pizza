@@ -89,7 +89,7 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
   };
 
   try {
-    const { items, addressDetails, address } = req.body;
+    const { items, addressDetails, address, location } = req.body;
     trace.steps.push({ step: 'Validation', status: 'started' });
     
     if (!items || !Array.isArray(items) || items.length === 0) {
@@ -126,6 +126,7 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
         fullAddress: userAddress || 'Pickup',
         full_address: userAddress || 'Pickup',
         locationSetupCompleted: true,
+        location: location || null,
       }, { merge: true }).catch(err => console.warn('[Orders] User profile sync warning:', err));
     }
 
@@ -241,8 +242,8 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
         notification_version: 1,
         deliveryAddress: { 
           addressLine: userAddress || 'Pickup', 
-          lat: userData.lat || 0, 
-          lng: userData.lng || 0,
+          lat: location?.lat || userData.lat || userData.location?.lat || 0, 
+          lng: location?.lng || userData.lng || userData.location?.lng || 0,
           houseNumber: addressDetails?.houseNumber || '',
           apartment: addressDetails?.apartment || '',
           landmark: addressDetails?.landmark || '',

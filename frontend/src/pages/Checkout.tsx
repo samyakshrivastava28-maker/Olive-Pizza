@@ -11,26 +11,9 @@ import toast from 'react-hot-toast';
 import PaymentMethodOverlay from '../components/checkout/PaymentMethodOverlay';
 import ProcessingOverlay from '../components/checkout/ProcessingOverlay';
 import PageTransition from '../components/PageTransition';
-import { MapContainer, TileLayer, useMapEvents } from 'react-leaflet';
-import 'leaflet/dist/leaflet.css';
-
-function MapController({ center, setCenter, setAddress }: any) {
-  const map = useMapEvents({
-    dragend: async () => {
-      const c = map.getCenter();
-      setCenter([c.lat, c.lng]);
-      try {
-        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${c.lat}&lon=${c.lng}`);
-        const data = await res.json();
-        if (data && data.display_name) setAddress(data.display_name);
-      } catch (err) {}
-    }
-  });
-  useEffect(() => {
-    map.setView(center, map.getZoom());
-  }, [center]);
-  return null;
-}
+import LocationPicker3D from '../components/map/LocationPicker3D';
+import { fetchRoute } from '../services/navigationRouting.service';
+import { RESTAURANT_LOCATION, MAX_DELIVERY_RADIUS_KM } from '../lib/config';
 
 // Premium Checkout redesign
 export default function Checkout() {
@@ -58,7 +41,7 @@ export default function Checkout() {
   const [showProcessing, setShowProcessing] = useState(false);
   const [processingStatus, setProcessingStatus] = useState('idle'); // idle, processing, success
   const [orderId, setOrderId] = useState('');
-  const [mapCenter, setMapCenter] = useState<[number, number]>([19.0760, 72.8777]);
+  const [mapCenter, setMapCenter] = useState<{lat: number, lng: number}>({lat: 19.0760, lng: 72.8777});
 
   // Auto-fetch location if empty
   useEffect(() => {
@@ -66,7 +49,7 @@ export default function Checkout() {
       navigator.geolocation.getCurrentPosition(
         async (position) => {
           const { latitude, longitude } = position.coords;
-          setMapCenter([latitude, longitude]);
+          setMapCenter({lat: latitude, lng: longitude});
           try {
             const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
             const data = await res.json();
@@ -154,11 +137,33 @@ export default function Checkout() {
     setShowPayment(false);
   };
 
-  const handlePlaceOrder = () => {
+  const handlePlaceOrder = async () => {
     if (!address.trim() && deliveryType === 'delivery') {
       toast.error('Please enter a delivery address');
       return;
     }
+
+    if (deliveryType === 'delivery') {
+      try {
+        const route = await fetchRoute(
+          { lat: RESTAURANT_LOCATION.lat, lng: RESTAURANT_LOCATION.lng },
+          { lat: mapCenter.lat, lng: mapCenter.lng }
+        );
+        if (!route) {
+           toast.error('Could not find a valid road route to your location.');
+           return;
+        }
+        const maxDistMetres = MAX_DELIVERY_RADIUS_KM * 1000;
+        if (route.distanceMetres > maxDistMetres) {
+          toast.error(`Delivery unavailable! Distance is ${(route.distanceMetres/1000).toFixed(1)} km (Max ${MAX_DELIVERY_RADIUS_KM} km)`);
+          return;
+        }
+      } catch (err) {
+        toast.error('Failed to validate delivery distance. Please try again.');
+        return;
+      }
+    }
+
     if (!selectedPayment) {
       toast.error('Please select a payment method');
       setShowPayment(true);
@@ -169,6 +174,7 @@ export default function Checkout() {
       state: {
         items,
         address,
+        location: mapCenter,
         addressDetails: { houseNumber, apartment, landmark, instructions },
         deliveryType,
         paymentMethod: selectedPayment,
@@ -213,16 +219,14 @@ export default function Checkout() {
           </h2>
           <div className="bg-dark-900/50 rounded-2xl p-4 border border-white/5 mb-4 relative overflow-hidden h-64 flex flex-col">
             <div className="absolute inset-0 z-0 opacity-80">
-               <MapContainer center={mapCenter} zoom={16} className="w-full h-full" zoomControl={false} attributionControl={false}>
-                 <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
-                 <MapController center={mapCenter} setCenter={setMapCenter} setAddress={setAddress} />
-               </MapContainer>
-               {/* Center Pin Overlay */}
-               <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[1000] pointer-events-none drop-shadow-2xl">
-                 <div className="w-10 h-10 bg-primary-500 rounded-full flex items-center justify-center border-4 border-white/20 shadow-[0_0_20px_rgba(249,115,22,0.6)]">
-                   <div className="w-3 h-3 bg-white rounded-full animate-pulse" />
-                 </div>
-               </div>
+               <LocationPicker3D
+                  initialCenter={mapCenter}
+                  onChange={({lat, lng, address: reverseAddr}) => {
+                    setMapCenter({lat, lng});
+                    if (reverseAddr) setAddress(reverseAddr);
+                  }}
+                  className="w-full h-full"
+               />
             </div>
             <div className="relative z-10 flex flex-col gap-3">
               <div className="flex items-start gap-3">

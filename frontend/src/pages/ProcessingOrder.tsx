@@ -11,7 +11,7 @@ export default function ProcessingOrder() {
   const location = useLocation();
   const navigate = useNavigate();
   const { clearCart } = useCartStore();
-  const { items, address, addressDetails, deliveryType, paymentMethod, finalTotal } = location.state || {};
+  const { items, address, location: orderLocation, addressDetails, deliveryType, paymentMethod, finalTotal } = location.state || {};
   
   const [stage, setStage] = useState<'processing' | 'success'>('processing');
   const [orderId, setOrderId] = useState<string | null>(null);
@@ -29,7 +29,12 @@ export default function ProcessingOrder() {
         // Ensure backend requirement is met by updating user's address profile before placing order
         if (auth.currentUser && address && deliveryType === 'delivery') {
            const userRef = doc(db, 'users', auth.currentUser.uid);
-           await setDoc(userRef, { full_address: address, fullAddress: address, locationSetupCompleted: true }, { merge: true });
+           await setDoc(userRef, { 
+             full_address: address, 
+             fullAddress: address, 
+             locationSetupCompleted: true,
+             location: orderLocation || null
+           }, { merge: true });
         }
         
         const res = await fetch('/api/orders', {
@@ -47,7 +52,8 @@ export default function ProcessingOrder() {
             paymentMethod: paymentMethod,
             deliveryType,
             address: deliveryType === 'delivery' ? address : 'Pickup',
-            addressDetails
+            addressDetails,
+            location: orderLocation
           })
         });
 

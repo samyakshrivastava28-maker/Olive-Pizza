@@ -35,7 +35,7 @@ export interface MapMarker {
 }
 
 export interface UniversalMap3DProps {
-  mode: 'customer' | 'owner' | 'delivery';
+  mode: 'customer' | 'owner' | 'delivery' | 'picker';
   center?: LatLng;
   markers?: MapMarker[];
   routeGeoJSON?: GeoJSON.Feature<GeoJSON.LineString> | null;
@@ -44,12 +44,15 @@ export interface UniversalMap3DProps {
   onMapReady?: (map: maplibregl.Map) => void;
   /** Called when user manually drags the map (disengages auto-follow) */
   onUserDrag?: () => void;
+  /** Called when map moves (useful for picker mode) */
+  onCenterChange?: (center: LatLng) => void;
 }
 
 export interface UniversalMap3DRef {
   flyTo: (center: LatLng, zoom?: number) => void;
   fitRoute: () => void;
   getMap: () => maplibregl.Map | null;
+  getCenter: () => LatLng | null;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -156,7 +159,7 @@ function injectCSS(id: string, css: string): void {
 
 const UniversalMap3D = forwardRef<UniversalMap3DRef, UniversalMap3DProps>(
   function UniversalMap3D(
-    { mode, center, markers = [], routeGeoJSON, zoom = 15, className = '', onMapReady, onUserDrag },
+    { mode, center, markers = [], routeGeoJSON, zoom = 15, className = '', onMapReady, onUserDrag, onCenterChange },
     ref
   ) {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -185,6 +188,10 @@ const UniversalMap3D = forwardRef<UniversalMap3DRef, UniversalMap3DProps>(
         mapRef.current.fitBounds(bounds, { padding: 60, duration: 1000 });
       },
       getMap() { return mapRef.current; },
+      getCenter() {
+        const c = mapRef.current?.getCenter();
+        return c ? { lat: c.lat, lng: c.lng } : null;
+      }
     }));
 
     // ── Init Map ──────────────────────────────────────────────────────────────
@@ -265,6 +272,11 @@ const UniversalMap3D = forwardRef<UniversalMap3DRef, UniversalMap3DProps>(
         autoFollowRef.current = false;
         setAutoFollow(false);
         onUserDrag?.();
+      });
+      
+      map.on('moveend', () => {
+        const c = map.getCenter();
+        if (c) onCenterChange?.({ lat: c.lat, lng: c.lng });
       });
 
       mapRef.current = map;
@@ -395,7 +407,7 @@ const UniversalMap3D = forwardRef<UniversalMap3DRef, UniversalMap3DProps>(
 
         {/* Re-center button */}
         <AnimatePresence>
-          {!autoFollow && mapLoaded && (
+          {!autoFollow && mapLoaded && mode !== 'picker' && (
             <motion.button
               initial={{ opacity: 0, scale: 0.8, y: 8 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -409,8 +421,27 @@ const UniversalMap3D = forwardRef<UniversalMap3DRef, UniversalMap3DProps>(
           )}
         </AnimatePresence>
 
+        {/* Picker Mode Fixed Center Pin */}
+        {mode === 'picker' && (
+          <div className="absolute inset-0 z-10 pointer-events-none flex flex-col items-center justify-center">
+            <div className="relative">
+              {/* Radar pulse animation beneath the pin */}
+              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-12 h-12 border-2 border-primary-500 rounded-full opacity-50 animate-ping" />
+              {/* Actual Pin */}
+              <div className="relative -mt-6">
+                <div className="w-10 h-10 bg-primary-600 rounded-full flex items-center justify-center shadow-xl border-4 border-white shadow-primary-500/50">
+                  <MapPin className="w-5 h-5 text-white" />
+                </div>
+                {/* Pin Point */}
+                <div className="w-1 h-3 bg-primary-600 mx-auto -mt-1 shadow-sm" />
+                <div className="w-2 h-1 bg-black/30 rounded-full blur-[1px] mx-auto mt-1" />
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Mode badge */}
-        {mapLoaded && (
+        {mapLoaded && mode !== 'picker' && (
           <div className="absolute top-3 left-3 z-10 flex items-center gap-1.5 px-2.5 py-1 bg-black/50 backdrop-blur-md rounded-full text-white text-xs font-medium border border-white/10">
             <Navigation2 size={11} className="text-primary-400" />
             {mode === 'customer' && 'Live Tracking'}
