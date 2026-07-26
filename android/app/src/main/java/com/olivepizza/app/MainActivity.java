@@ -83,6 +83,7 @@ public class MainActivity extends BridgeActivity {
 
         registerPlugin(TruecallerPlugin.class);
         registerPlugin(DeliveryPlugin.class);
+        registerPlugin(com.olivepizza.app.plugins.AlarmPermissionPlugin.class);
         super.onCreate(savedInstanceState);
 
         // 2. Register FCM token natively.

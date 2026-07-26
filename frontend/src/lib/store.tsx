@@ -32,7 +32,14 @@ export const useAuthStore = create<AuthState>()(
       role: null,
       isAuthenticated: false,
       isLoading: true,
-      setUser: (user, role) => set({ user, role, isAuthenticated: !!user, isLoading: false }),
+      setUser: (user, role) => {
+        set({ user, role, isAuthenticated: !!user, isLoading: false });
+        if (user && (role === 'owner' || role === 'delivery_partner')) {
+          import('../plugins/AlarmPermission').then(({ AlarmPermission }) => {
+            AlarmPermission.setupPermissions().catch(err => console.warn('[AlarmPermission]', err));
+          }).catch(console.error);
+        }
+      },
       logout: () => {
         useDataStore.getState().cleanup();
         set({ user: null, role: null, isAuthenticated: false, isLoading: false });
