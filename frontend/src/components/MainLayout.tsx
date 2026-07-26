@@ -1,5 +1,6 @@
 import { Outlet, Link, useNavigate, useLocation } from 'react-router';
 import { useAuthStore, useCartStore, useAppStore } from '../lib/store';
+import { performUpdate } from '../lib/versionManager';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useEffect, useState, Suspense } from 'react';
 import { doc, updateDoc } from 'firebase/firestore';
@@ -265,7 +266,7 @@ export default function MainLayout() {
 
 
               {updateAvailable && (
-                <button onClick={() => window.dispatchEvent(new Event('trigger-pwa-update'))}
+                <button onClick={performUpdate}
                   className="ml-2 px-4 py-2 rounded-xl text-sm font-bold text-white bg-green-600 hover:bg-green-500 transition-all flex items-center gap-2 animate-pulse">
                   <RefreshCw className="w-3.5 h-3.5" /> Update
                 </button>
@@ -307,7 +308,7 @@ export default function MainLayout() {
             {/* Mobile Header Actions */}
             <div className="flex md:hidden items-center gap-2">
               {updateAvailable && (
-                <button onClick={() => window.dispatchEvent(new Event('trigger-pwa-update'))}
+                <button onClick={performUpdate}
                   className="bg-green-600 text-white px-3 py-1.5 rounded-full text-[10px] font-bold flex items-center gap-1 animate-pulse">
                   <RefreshCw className="w-3 h-3" /> Update
                 </button>

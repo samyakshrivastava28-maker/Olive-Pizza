@@ -25,6 +25,8 @@ export const useVersionStore = create<VersionState>((set) => ({
   setUpdating: (updating, progress) => set({ isUpdating: updating, updateProgress: progress || '' }),
 }));
 
+import { Capacitor } from '@capacitor/core';
+
 export function initVersionManager() {
   const originalFetch = window.fetch;
 
@@ -60,6 +62,11 @@ export function initVersionManager() {
     return response;
   };
 
+  // Listen for trigger-pwa-update global events
+  window.addEventListener('trigger-pwa-update', () => {
+    performUpdate();
+  });
+
   // Add event listeners for resume/online
   window.addEventListener('online', checkVersion);
   document.addEventListener('visibilitychange', () => {
@@ -84,7 +91,6 @@ export async function checkVersion() {
       const timePassed = Date.now() - parseInt(laterTimestamp, 10);
       if (timePassed < 30 * 60 * 1000) {
         // Less than 30 minutes since user clicked 'Later', ignore non-critical updates
-        // However, we should still fetch to see if a CRITICAL update was pushed.
       }
     }
 
@@ -96,8 +102,7 @@ export async function checkVersion() {
       const latest = parseFloat(data.latest_version);
 
       if (current < min || current < latest) {
-        // Automatically perform the update without prompting the user or showing an update button
-        performUpdate();
+        useVersionStore.getState().setUpdateAvailable(true, current < min ? 'required' : 'optional', data.latest_version);
       }
     }
   } catch (error) {
@@ -106,13 +111,25 @@ export async function checkVersion() {
 }
 
 export async function performUpdate() {
+  const DOWNLOAD_URL = 'https://github.com/samyakshrivastava28-maker/Olive-Pizza/releases/latest';
+
   try {
+    // 1. Direct user to GitHub latest release download site
+    if (Capacitor.isNativePlatform()) {
+      window.open(DOWNLOAD_URL, '_system');
+      window.open('/api/github/download-apk', '_system');
+    } else {
+      window.open(DOWNLOAD_URL, '_blank');
+    }
+
+    // 2. Unregister service workers and clear caches
     if ('serviceWorker' in navigator) {
       const registrations = await navigator.serviceWorker.getRegistrations();
       for (let registration of registrations) {
         if (registration.waiting) {
             registration.waiting.postMessage({ type: 'SKIP_WAITING' });
         }
+        await registration.unregister().catch(() => {});
       }
     }
 
@@ -128,9 +145,10 @@ export async function performUpdate() {
 
     setTimeout(() => {
       window.location.reload();
-    }, 1000);
+    }, 1200);
 
   } catch (error) {
     console.error('Update failed:', error);
+    window.location.href = DOWNLOAD_URL;
   }
 }
