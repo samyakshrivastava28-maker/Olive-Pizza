@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { motion, useMotionValue, useSpring, useTransform } from "framer-motion";
+import { motion, useMotionValue, useSpring, useTransform, AnimatePresence } from "framer-motion";
 import { Link } from "react-router";
 import { ChevronRight, Sparkles } from "lucide-react";
 
