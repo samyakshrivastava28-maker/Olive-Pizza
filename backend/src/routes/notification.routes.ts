@@ -610,6 +610,16 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
     res.json({ success: true, newStatus, requestId, ...responseData, trace: isDebug ? trace : undefined });
 
     // ── Step 9: Background side-effects (AFTER HTTP 200 sent) ─────────────
+    if (firestoreWriteRequired && newStatus) {
+      backgroundTasks.push(async () => {
+        try {
+          await orderEventService.emitStatusChange(orderId, newStatus as any, userId);
+        } catch (e: any) {
+          console.warn(`[Action] emitStatusChange email trigger warning for ${orderId}:`, e.message);
+        }
+      });
+    }
+
     if (backgroundTasks.length > 0) {
       Promise.allSettled(backgroundTasks.map(task =>
         withTimeout(task(), 8000, 'background_task')

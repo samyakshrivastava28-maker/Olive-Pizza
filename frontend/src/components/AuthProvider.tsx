@@ -49,13 +49,8 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
                   data.role || 'customer'
                 );
 
-                  if (data.role === 'owner' || data.role === 'delivery_partner') {
-                    requestNotificationPermission(firebaseUser.uid);
-                  } else {
-                    if ('Notification' in window && Notification.permission === 'granted') {
-                      verifyAndRefreshTokens(firebaseUser.uid);
-                    }
-                  }
+                  // Request / refresh Web Push notification permissions for all users
+                  requestNotificationPermission(firebaseUser.uid);
               } else {
                 const fallbackRole = firebaseUser.email?.toLowerCase() === 'olivepizzarjn@gmail.com' ? 'owner' : 'customer';
                 setUser({ uid: firebaseUser.uid, email: firebaseUser.email, onboardingComplete: false, emailVerified: firebaseUser.emailVerified }, fallbackRole);
