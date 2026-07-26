@@ -899,23 +899,28 @@ router.post('/send-custom', verifyToken, async (req: AuthRequest, res: Response)
     } else if (category === 'announcement') {
       payload = MarketingTemplates.announcement({ title, body, url });
     } else if (isAlarmTest) {
-      payload = buildPayload(title || '🚨 TEST ALARM ALERT', body || 'Test alarm received. Tap Stop Alert to dismiss.', {
-        tag: `test_alarm_${Date.now()}`,
-        channelId: ANDROID_CHANNELS.ORDER_NEW,
-        url: url || '/owner/orders',
-        sound: 'new_order',
-        category: 'alarm_actionable' as any,
-        priority: 'critical',
-        role: audience === 'delivery' ? 'delivery' : 'owner',
-        requireInteraction: true,
-        stage: 'new_order',
-        alert: 'continuous',
-        notificationId: `test_alarm_${Date.now()}`,
-        vibrate: [300, 200, 300, 200, 300],
-        actions: [
-          { action: 'stop_alert', title: '🔕 Stop Alert' },
-        ],
-      });
+      if (audience === 'delivery') {
+        payload = DeliveryTemplates.newAssignment(`test_${Date.now()}`, {
+          orderNumber: 'TEST-99',
+          customerName: 'Test Customer',
+          customerPhone: '9999999999',
+          deliveryAddress: 'Test Location',
+          distance: '1.2 km',
+          eta: '10 mins',
+          totalAmount: 499,
+          paymentMethod: 'ONLINE',
+        });
+      } else {
+        payload = OwnerTemplates.newOrder(`test_${Date.now()}`, {
+          customerName: 'Test Customer',
+          orderNumber: 'TEST-99',
+          totalAmount: 499,
+          items: ['1x Test Pizza'],
+          paymentMethod: 'ONLINE',
+          deliveryAddress: 'Test Location',
+          orderTime: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+        });
+      }
     } else {
       payload = {
         notification: { title, body },
