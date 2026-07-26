@@ -20,6 +20,7 @@
  */
 
 import type { OrderEvent, OrderSnapshot } from '../order/OrderEventService.js';
+import { generateTrackingToken } from '../../utils/trackingToken.js';
 
 export type OrderStatus =
   | 'pending'
@@ -703,13 +704,21 @@ export class CustomerTemplates {
           ? [{ action: 'rate', title: '⭐ Rate Order' }, { action: 'reorder', title: '🔄 Reorder' }]
           : [{ action: 'open', title: '📍 Track Order' }];
 
+    // Generate a signed expiring tracking token so the push notification
+    // deep-link URL works for unauthenticated/background-closed-app scenarios.
+    // The OrderTracking page accepts EITHER a valid token OR an authenticated
+    // user session (customer/owner/delivery_partner) — so logged-in users are
+    // never broken and unauthenticated deep links remain secure.
+    const trackingToken = generateTrackingToken(orderId);
+    const trackingUrl = `/order-tracking/${orderId}?trackingToken=${trackingToken}`;
+
     return buildPayload(cfg.title, cfg.body, {
       tag: `order_customer_${orderId}`,      // Same tag throughout — updates in place
       channelId: isDelivered ? ANDROID_CHANNELS.ORDER_COMPLETED
         : isCancelled ? ANDROID_CHANNELS.ORDER_COMPLETED
           : ANDROID_CHANNELS.ORDER_STATUS,
       orderId,
-      url: `/order-tracking/${orderId}`,
+      url: trackingUrl,
       sound: cfg.sound,
       category: (isTerminal ? 'simple_informational' : 'pinned_live') as any,
       priority: isTerminal ? 'high' : 'normal',

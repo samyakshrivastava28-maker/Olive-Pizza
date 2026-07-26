@@ -4,10 +4,8 @@ import {
   useRef,
   useMemo,
   useCallback,
-  lazy,
-  Suspense,
 } from "react";
-import { useParams, useNavigate } from "react-router";
+import { useParams, useNavigate, useSearchParams } from "react-router";
 import { useAuthStore } from "../lib/store";
 import { auth, db } from "../lib/firebase";
 import { doc, getDoc, onSnapshot, updateDoc } from "firebase/firestore";
@@ -40,17 +38,14 @@ import {
   Camera,
   Clock,
 } from "lucide-react";
-import "leaflet/dist/leaflet.css";
 
 import { GlassCard, GlassButton } from "../components/ui/glass/GlassSystem";
 import { OwnerAcceptedOverlay, DeliveredOverlay } from "../components/tracking/OrderEventsOverlay";
 import { toast } from "react-hot-toast";
 import { playNotificationSound, statusToSoundType } from "../hooks/useNotificationSound";
 import OrderTimeline from "../components/ui/OrderTimeline";
-
-
-// Lazy load map only when needed
-const MapSection = lazy(() => import("../components/tracking/TrackingMap"));
+import UniversalMap3D from "../components/map/UniversalMap3D";
+import type { MapMarker } from "../components/map/UniversalMap3D";
 
 // ─── Constants ───────────────────────────────────────────────────────
 const TRACKABLE_STATUSES = new Set([
@@ -665,16 +660,42 @@ export default function OrderTracking() {
   return (
     <div className="h-[100dvh] w-full bg-slate-100 flex flex-col overflow-hidden relative">
       
-      {/* ─── FULLSCREEN MAP ─── */}
+      {/* ─── FULLSCREEN MAP (MapLibre GL JS 3D) ─── */}
       <div className="absolute inset-0 z-0">
-        <Suspense fallback={<div className="w-full h-full bg-slate-200 flex items-center justify-center"><div className="w-10 h-10 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" /></div>}>
-          <MapSection
-            restaurantLat={RESTAURANT_LOCATION.lat} restaurantLng={RESTAURANT_LOCATION.lng}
-            customerLat={order.deliveryAddress?.lat} customerLng={order.deliveryAddress?.lng}
-            partnerLat={partnerLocation?.lat} partnerLng={partnerLocation?.lng}
-            partnerHeading={partnerHeading} status={order.status}
-          />
-        </Suspense>
+        <UniversalMap3D
+          mode="customer"
+          center={
+            partnerLocation ||
+            (order?.deliveryAddress?.lat && order?.deliveryAddress?.lng
+              ? { lat: order.deliveryAddress.lat, lng: order.deliveryAddress.lng }
+              : { lat: RESTAURANT_LOCATION.lat, lng: RESTAURANT_LOCATION.lng })
+          }
+          markers={[
+            // Restaurant pin
+            {
+              id: 'restaurant',
+              position: { lat: RESTAURANT_LOCATION.lat, lng: RESTAURANT_LOCATION.lng },
+              type: 'restaurant',
+              label: 'Olive Pizza',
+            },
+            // Customer destination
+            ...(order?.deliveryAddress?.lat && order?.deliveryAddress?.lng ? [{
+              id: 'customer',
+              position: { lat: order.deliveryAddress.lat, lng: order.deliveryAddress.lng },
+              type: 'customer' as const,
+              label: order.deliveryAddress?.addressLine || 'Your location',
+            }] : []),
+            // Rider marker (only when GPS available)
+            ...(partnerLocation ? [{
+              id: 'rider',
+              position: partnerLocation,
+              type: 'rider' as const,
+              heading: partnerHeading,
+            }] : []),
+          ] satisfies MapMarker[]}
+          zoom={15}
+          className="w-full h-full rounded-none"
+        />
         {/* Subtle bottom gradient so the sheet blends in */}
         <div className="absolute bottom-0 left-0 right-0 h-48 bg-gradient-to-t from-white/60 to-transparent pointer-events-none z-10" />
       </div>

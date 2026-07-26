@@ -235,8 +235,8 @@ export default function MainLayout() {
                 </AnimatePresence>
               </Link>
 
-              {/* Developer Dashboard 3-Lines Button (webhub2811@gmail.com account) */}
-              {(user?.email === 'webhub2811@gmail.com' || role === 'owner') && (
+              {/* Developer Dashboard 3-Lines Button (webhub2811@gmail.com account strictly) */}
+              {user?.email?.toLowerCase() === 'webhub2811@gmail.com' && (
                 <Link
                   to="/owner/developer"
                   title="Developer Operations & Control Center"
@@ -318,8 +318,8 @@ export default function MainLayout() {
                   <Download className="w-3 h-3" /> Install
                 </button>
               )}
-              {/* Mobile 3-Lines Developer Dashboard Button (webhub2811@gmail.com) */}
-              {(user?.email === 'webhub2811@gmail.com' || role === 'owner') && (
+              {/* Mobile 3-Lines Developer Dashboard Button (webhub2811@gmail.com strictly) */}
+              {user?.email?.toLowerCase() === 'webhub2811@gmail.com' && (
                 <Link
                   to="/owner/developer"
                   title="Developer Operations Center"

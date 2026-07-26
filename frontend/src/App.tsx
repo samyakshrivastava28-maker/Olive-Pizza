@@ -323,6 +323,8 @@ function AppContent() {
 
               {/* Developer Routes */}
               <Route element={<DeveloperGuard />}>
+                <Route path="/owner/developer" element={<DeveloperDashboard />} />
+                <Route path="/developer" element={<DeveloperDashboard />} />
                 <Route path="/developer/devops" element={<DeveloperDashboard />} />
               </Route>
 

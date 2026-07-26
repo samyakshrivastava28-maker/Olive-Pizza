@@ -15,6 +15,7 @@ import { logActivity } from "../../lib/logger";
 import { useNotificationDebugger } from "../../hooks/useNotificationDebugger";
 import toast from "react-hot-toast";
 import CancelOrderReasonModal from "../../components/owner/CancelOrderReasonModal";
+import OwnerLiveMapModal from "../../components/owner/OwnerLiveMapModal";
 
 
 export default function OwnerOrders() {
@@ -24,6 +25,9 @@ export default function OwnerOrders() {
     Record<string, string>
   >({});
   const [loading, setLoading] = useState(true);
+
+  // Live map tracking modal state
+  const [trackingOrder, setTrackingOrder] = useState<Order | null>(null);
 
   // Firestore Real-time Listener for ALL orders
   useEffect(() => {
@@ -402,6 +406,15 @@ export default function OwnerOrders() {
                     </button>
                   </div>
                 )}
+                {/* Track Live Button — shown when delivery is active */}
+                {['partner_assigned', 'picked_up', 'out_for_delivery'].includes(order.status) && order.deliveryPartnerId && (
+                  <button
+                    onClick={() => setTrackingOrder(order)}
+                    className="w-full bg-primary-600 hover:bg-primary-500 text-white p-3 rounded-xl font-bold shadow-md transition-all hover:-translate-y-1 flex items-center justify-center gap-2"
+                  >
+                    <span>🗺️</span> Track Live
+                  </button>
+                )}
                 <button
                   disabled={processingId === order.id}
                   onClick={() => requestCancel(order)}
@@ -587,6 +600,21 @@ export default function OwnerOrders() {
         onConfirm={cancelWithReason}
         onClose={() => !cancelSubmitting && setCancelTarget(null)}
       />
+
+      {/* ─── Owner Live Map Tracking Modal ─── */}
+      {trackingOrder && (
+        <OwnerLiveMapModal
+          isOpen={!!trackingOrder}
+          onClose={() => setTrackingOrder(null)}
+          order={{
+            id: trackingOrder.id!,
+            dailyOrderNumber: trackingOrder.dailyOrderNumber,
+            deliveryPartnerId: trackingOrder.deliveryPartnerId,
+            deliveryAddress: trackingOrder.deliveryAddress,
+            status: trackingOrder.status,
+          }}
+        />
+      )}
     </div>
   );
 }

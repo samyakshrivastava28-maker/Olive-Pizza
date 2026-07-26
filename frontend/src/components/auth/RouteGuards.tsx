@@ -142,37 +142,19 @@ export function AdminGuard() {
   return <Outlet />;
 }
 
-// 6. Developer Guard (webhub2811@gmail.com + `developer: true` custom claim)
+// 6. Developer Guard (strictly webhub2811@gmail.com)
 export function DeveloperGuard() {
   const { isAuthenticated, user, isLoading } = useAuthStore();
   const location = useLocation();
-  const [claimChecked, setClaimChecked] = React.useState(false);
-  const [hasClaim, setHasClaim] = React.useState(false);
 
-  React.useEffect(() => {
-    if (!isAuthenticated || !user) {
-      setClaimChecked(true);
-      return;
-    }
-    const currentUser = auth.currentUser;
-    if (!currentUser) { setClaimChecked(true); return; }
-
-    currentUser.getIdTokenResult(false).then((result) => {
-      setHasClaim(result.claims.developer === true);
-      setClaimChecked(true);
-    }).catch(() => {
-      setClaimChecked(true);
-    });
-  }, [isAuthenticated, user]);
-
-  if (isLoading || !claimChecked) {
-    return <div className="h-screen flex items-center justify-center text-slate-400 text-sm">Verifying developer access...</div>;
+  if (isLoading) {
+    return <div className="h-screen flex items-center justify-center text-slate-400 text-sm font-bold bg-dark-950">Verifying developer access...</div>;
   }
 
   const DEVELOPER_EMAIL = 'webhub2811@gmail.com';
   const emailOk = user?.email?.toLowerCase() === DEVELOPER_EMAIL;
 
-  if (!isAuthenticated || !emailOk || !hasClaim) {
+  if (!isAuthenticated || !emailOk) {
     if (isAuthenticated && user) {
       logSecurityEvent({
         action: 'unauthorized_developer_access_attempt',
@@ -180,7 +162,7 @@ export function DeveloperGuard() {
         uid: user?.uid,
         email: user?.email,
       });
-      toast.error('Developer access only.');
+      toast.error('Developer access restricted to webhub2811@gmail.com');
     }
     return <Navigate to="/" replace />;
   }

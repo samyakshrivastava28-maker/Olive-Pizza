@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { db } from "../../lib/firebase";
 import { collection, query, where, onSnapshot, doc, updateDoc } from "firebase/firestore";
-import { restaurantIcon } from "../../lib/mapIcons";
 import { getCurrentAuthToken } from "../../lib/firebase";
 import { supabase } from "../../lib/supabase";
 import { Order } from "../../types/models";
@@ -9,7 +8,7 @@ import { useAuthStore } from "../../lib/store";
 import toast from "react-hot-toast";
 import { uploadMediaToCloudinary } from "../../lib/cloudinary";
 import { useNotificationDebugger } from "../../hooks/useNotificationDebugger";
-import { MapPin, Package, Map as MapIcon, Power, Wifi, WifiOff, AlertTriangle, ShieldAlert, Clock, Navigation2, Zap, Battery, Crosshair, HelpCircle, Utensils, MessageSquare, AlertCircle, Star, PhoneCall, Navigation, PackageOpen, CheckCircle2, Camera } from "lucide-react";
+import { MapPin, Package, Map as MapIcon, Power, Wifi, WifiOff, AlertTriangle, ShieldAlert, Clock, Navigation2, Zap, Battery, Crosshair, HelpCircle, Utensils, MessageSquare, AlertCircle, Star, PhoneCall, Navigation, PackageOpen, CheckCircle2, Camera, Volume2, VolumeX } from "lucide-react";
 import { RESTAURANT_LOCATION } from "../../lib/config";
 
 import { GlassCard, GlassButton } from "../../components/ui/glass/GlassSystem";
@@ -19,8 +18,11 @@ import { useTrackingStore } from "../../lib/trackingStore";
 import { Capacitor } from '@capacitor/core';
 import { DeliveryPlugin } from "../../lib/DeliveryPlugin";
 import { useShallow } from 'zustand/react/shallow';
-import DeliveryMap from "../../components/delivery/DeliveryMap";
-
+import UniversalMap3D from "../../components/map/UniversalMap3D";
+import type { MapMarker } from "../../components/map/UniversalMap3D";
+import { fetchRoute } from "../../services/navigationRouting.service";
+import { buildInstruction } from "../../services/navigationInstructions";
+import * as TTS from "../../services/TextToSpeech.service";
 
 import { Search } from "lucide-react";
 
@@ -42,7 +44,17 @@ export default function DeliveryDashboard() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [supabaseConnected, setSupabaseConnected] = useState(false);
-  const { setLocation, setDebugData: setStoreDebugData } = useTrackingStore(useShallow(state => ({
+
+  // ── Navigation State ──────────────────────────────────────────────────────
+  const [navRoute, setNavRoute] = useState<GeoJSON.Feature<GeoJSON.LineString> | null>(null);
+  const [currentInstruction, setCurrentInstruction] = useState<string>('');
+  const [isMuted, setIsMuted] = useState(false);
+
+  // Warm TTS voices on mount
+  useEffect(() => { TTS.warmVoices(); }, []);
+
+  const { location, setLocation, setDebugData: setStoreDebugData } = useTrackingStore(useShallow(state => ({
+    location: state.location,
     setLocation: state.setLocation,
     setDebugData: state.setDebugData
   })));
@@ -428,22 +440,99 @@ export default function DeliveryDashboard() {
         {activeTask ? (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-dark-900 border border-dark-800 rounded-[32px] overflow-hidden shadow-2xl relative">
             
-            {/* Live Map Header */}
-            <div className="h-56 w-full relative bg-dark-950">
-              <DeliveryMap 
-                destinationLat={activeTask.deliveryAddress?.lat} 
-                destinationLng={activeTask.deliveryAddress?.lng} 
+            {/* Live Map Header — MapLibre GL JS 3D */}
+            <div className="h-64 w-full relative bg-dark-950">
+              <UniversalMap3D
+                mode="delivery"
+                center={location ? { lat: location.lat, lng: location.lng } : { lat: RESTAURANT_LOCATION.lat, lng: RESTAURANT_LOCATION.lng }}
+                markers={[
+                  // Restaurant pickup
+                  {
+                    id: 'restaurant',
+                    position: { lat: RESTAURANT_LOCATION.lat, lng: RESTAURANT_LOCATION.lng },
+                    type: 'restaurant',
+                  },
+                  // Customer destination
+                  ...(activeTask.deliveryAddress?.lat && activeTask.deliveryAddress?.lng ? [{
+                    id: 'customer',
+                    position: { lat: activeTask.deliveryAddress.lat, lng: activeTask.deliveryAddress.lng },
+                    type: 'customer' as const,
+                  }] : []),
+                  // Rider (self)
+                  ...(location ? [{
+                    id: 'rider',
+                    position: { lat: location.lat, lng: location.lng },
+                    type: 'rider' as const,
+                    heading: (location as any).heading || 0,
+                  }] : []),
+                ] satisfies MapMarker[]}
+                routeGeoJSON={navRoute}
+                zoom={15}
+                className="w-full h-full rounded-none"
+                onMapReady={async () => {
+                  // Fetch route when map is ready and we have a destination
+                  if (activeTask.deliveryAddress?.lat && activeTask.deliveryAddress?.lng && location) {
+                    try {
+                      const routeData = await fetchRoute(
+                        { lat: location.lat, lng: location.lng },
+                        { lat: activeTask.deliveryAddress.lat, lng: activeTask.deliveryAddress.lng }
+                      );
+                      if (routeData) {
+                        setNavRoute(routeData.geojson);
+                        const instruction = buildInstruction(routeData.steps[0], 'en');
+                        setCurrentInstruction(instruction);
+                        if (!isMuted) TTS.speak(instruction);
+                      }
+                    } catch { /* routing optional */ }
+                  }
+                }}
               />
-              
-              <div className="absolute top-4 left-4 z-[400] bg-dark-950/80 backdrop-blur-xl px-4 py-2 rounded-full border border-dark-700 flex items-center gap-2 shadow-lg">
+
+              {/* Status badge */}
+              <div className="absolute top-3 left-3 z-[400] bg-dark-950/80 backdrop-blur-xl px-4 py-2 rounded-full border border-dark-700 flex items-center gap-2 shadow-lg">
                 <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-ping" />
                 <span className="text-xs font-black text-white uppercase tracking-wider">{activeTask.status.replace(/_/g, " ")}</span>
               </div>
-              <div className="absolute bottom-4 right-4 z-[400] bg-primary-500 px-4 py-2 rounded-2xl shadow-xl border border-primary-400/50">
+
+              {/* Payout badge */}
+              <div className="absolute bottom-3 right-3 z-[400] bg-primary-500 px-4 py-2 rounded-2xl shadow-xl border border-primary-400/50">
                 <span className="block text-[10px] font-bold text-white/80 uppercase">Est. Payout</span>
                 <span className="text-xl font-black text-white">₹{activeTask.deliveryFee || 40}</span>
               </div>
+
+              {/* Voice mute toggle */}
+              <button
+                onClick={() => { const m = TTS.toggleMute(); setIsMuted(m); }}
+                className="absolute bottom-3 left-3 z-[400] w-9 h-9 rounded-full bg-dark-900/80 backdrop-blur-md border border-dark-700 flex items-center justify-center text-white hover:bg-dark-800 transition-colors shadow-lg"
+                title={isMuted ? 'Unmute voice navigation' : 'Mute voice navigation'}
+              >
+                {isMuted ? <VolumeX size={15} /> : <Volume2 size={15} className="text-primary-400" />}
+              </button>
             </div>
+
+            {/* Turn-by-Turn Instruction Banner */}
+            <AnimatePresence>
+              {currentInstruction && activeTask.status === 'out_for_delivery' && (
+                <motion.div
+                  initial={{ opacity: 0, y: -8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  className="mx-4 mt-3 bg-primary-600/20 border border-primary-500/40 rounded-2xl px-4 py-3 flex items-center gap-3"
+                >
+                  <div className="w-8 h-8 rounded-full bg-primary-500/20 flex items-center justify-center flex-shrink-0">
+                    <Navigation2 size={16} className="text-primary-400" />
+                  </div>
+                  <p className="text-sm font-semibold text-primary-200 flex-1">{currentInstruction}</p>
+                  <button
+                    onClick={() => !isMuted && TTS.speak(currentInstruction, true)}
+                    className="w-8 h-8 rounded-full bg-primary-500/20 flex items-center justify-center text-primary-400 hover:bg-primary-500/40 transition-colors flex-shrink-0"
+                    title="Repeat instruction"
+                  >
+                    <Volume2 size={14} />
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             <div className="p-6">
               {/* Customer Info */}

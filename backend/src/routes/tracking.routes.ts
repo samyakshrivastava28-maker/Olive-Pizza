@@ -1,7 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { pgPool } from '../config/postgres.js';
 import { adminDb } from '../config/firebase.js';
-import { verifyToken, requireRole, AuthRequest } from '../middleware/auth.middleware.js';
+import { verifyToken, requireRole, optionalAuth, AuthRequest } from '../middleware/auth.middleware.js';
+import { generateTrackingToken, verifyTrackingToken } from '../utils/trackingToken.js';
 
 const router = Router();
 
@@ -140,8 +141,35 @@ router.get('/active', verifyToken, requireRole(['owner']), async (req: Request, 
   }
 });
 
+// ─── Tracking Token Endpoint — Generate signed token for an order ────────────
+// Called by authenticated clients to get a token for embedding in shareable links.
+router.get('/token/:orderId', verifyToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const { orderId } = req.params;
+    const orderDoc = await adminDb.collection('orders').doc(orderId).get();
+    if (!orderDoc.exists) return res.status(404).json({ error: 'Order not found' });
+    const order = orderDoc.data()!;
+
+    const isOwner = req.user?.role === 'owner' || req.user?.role === 'admin';
+    const isCustomer = req.user?.uid === order.userId || req.user?.uid === order.customerId;
+    const isPartner = req.user?.uid === order.deliveryPartnerId;
+
+    if (!isOwner && !isCustomer && !isPartner) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const token = generateTrackingToken(orderId);
+    return res.json({ token, expiresInHours: 4 });
+  } catch (error) {
+    console.error('Error generating tracking token:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Returns Partner location, ETA, Distance for an order
-router.get('/order/:orderId', verifyToken, async (req: AuthRequest, res: Response) => {
+// Accepts EITHER a valid signed trackingToken query param (unauthenticated deep links)
+// OR an authenticated session where the user is the order customer/owner/partner.
+router.get('/order/:orderId', optionalAuth, async (req: AuthRequest, res: Response) => {
   try {
     const { orderId } = req.params;
 
@@ -156,7 +184,12 @@ router.get('/order/:orderId', verifyToken, async (req: AuthRequest, res: Respons
     const isAssignedPartner = req.user?.uid === order?.deliveryPartnerId;
     const isCustomer = req.user?.uid === order?.userId || req.user?.uid === order?.customerId;
 
-    if (!isOwner && !isAssignedPartner && !isCustomer) {
+    // Also allow access via a valid signed tracking token (push notification deep links)
+    const rawToken = req.query.trackingToken as string | undefined;
+    const tokenOrderId = rawToken ? verifyTrackingToken(rawToken) : null;
+    const hasValidToken = tokenOrderId === orderId;
+
+    if (!isOwner && !isAssignedPartner && !isCustomer && !hasValidToken) {
       return res.status(403).json({ error: 'Forbidden: You do not have permission to track this order' });
     }
 

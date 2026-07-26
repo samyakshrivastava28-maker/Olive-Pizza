@@ -27,20 +27,25 @@ const BACKEND = import.meta.env.VITE_BACKEND_URL || 'https://olive-pizza-backend
 
 async function devGet(path: string) {
   const token = await auth.currentUser?.getIdToken();
-  const res = await fetch(`${BACKEND}/devops${path}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const headers = { Authorization: `Bearer ${token}` };
+  try {
+    const res = await fetch(`/api/devops${path}`, { headers });
+    if (res.ok) return res.json();
+  } catch {}
+  const res = await fetch(`${BACKEND}/devops${path}`, { headers });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
 
 async function devPost(path: string, body?: any) {
   const token = await auth.currentUser?.getIdToken();
-  const res = await fetch(`${BACKEND}/devops${path}`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+  const payload = body ? JSON.stringify(body) : undefined;
+  try {
+    const res = await fetch(`/api/devops${path}`, { method: 'POST', headers, body: payload });
+    if (res.ok) return res.json();
+  } catch {}
+  const res = await fetch(`${BACKEND}/devops${path}`, { method: 'POST', headers, body: payload });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }

@@ -55,7 +55,7 @@ export default function OwnerLayout() {
     { name: 'AI Monitor', path: '/owner/ai-monitor', icon: '🤖' },
     { name: 'Notification Diagnostics', path: '/owner/notification-diagnostics', icon: '📡' },
     { name: 'Verification Diagnostics', path: '/owner/verification-metrics', icon: '🛡️' },
-    { name: 'Developer Ops Center', path: '/owner/developer', icon: '💻' },
+    ...(user?.email?.toLowerCase() === 'webhub2811@gmail.com' ? [{ name: 'Developer Ops Center', path: '/owner/developer', icon: '💻' }] : []),
     { name: 'Settings', path: '/owner/settings', icon: '⚙️' },
   ];
 
@@ -127,8 +127,8 @@ export default function OwnerLayout() {
           </div>
 
           <div className="flex items-center gap-4">
-            {/* 3-Lines Developer Dashboard Button */}
-            {(user?.email === 'webhub2811@gmail.com' || user?.email === 'olivepizzarjn@gmail.com') && (
+            {/* 3-Lines Developer Dashboard Button (strictly for webhub2811@gmail.com) */}
+            {user?.email?.toLowerCase() === 'webhub2811@gmail.com' && (
               <Link
                 to="/owner/developer"
                 title="Developer Operations & Control Center"

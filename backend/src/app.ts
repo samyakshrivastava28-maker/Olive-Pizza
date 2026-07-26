@@ -20,6 +20,7 @@ import versionRoutes from './routes/version.routes.js';
 import githubRoutes from './routes/github.routes.js';
 import phoneVerificationRoutes from './routes/phoneVerification.routes.js';
 import devopsRoutes from './routes/devops.routes.js';
+import ttsRoutes from './routes/tts.routes.js';
 import { versionCheck } from './middleware/versionCheck.js';
 import { 
   authLimiter, 
@@ -42,7 +43,7 @@ app.use(helmet({
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
       imgSrc: ["'self'", "data:", "blob:", "https://res.cloudinary.com", "https://*.googleusercontent.com"],
-      connectSrc: ["'self'", "https://*.firebaseio.com", "https://*.googleapis.com", "https://*.supabase.co", "wss://*.supabase.co"],
+      connectSrc: ["'self'", "https://*.firebaseio.com", "https://*.googleapis.com", "https://*.supabase.co", "wss://*.supabase.co", "https://integrate.api.nvidia.com"],
     },
   },
   hsts: {
@@ -125,6 +126,8 @@ app.use('/api/ai', expensiveLimiter);
 app.use('/reports', expensiveLimiter);
 app.use('/google-drive', expensiveLimiter);
 app.use('/notifications/send-custom', expensiveLimiter);
+app.use('/tts', expensiveLimiter);
+app.use('/api/tts', expensiveLimiter);
 
 
 app.get('/health', (req, res) => {
@@ -195,6 +198,9 @@ app.use('/api/data-manager', dataManagerRoutes);
 
 app.use('/devops', devopsRoutes);
 app.use('/api/devops', devopsRoutes);
+
+app.use('/tts', ttsRoutes);
+app.use('/api/tts', ttsRoutes);
 
 // SEO Routes
 app.use('/', seoRoutes);
