@@ -199,7 +199,7 @@ export class NotificationTemplateService {
 
   public static async sendTestNotification(targetUid: string, templateId: string): Promise<{ success: boolean; messageId?: string; error?: string }> {
     try {
-      const res = await directNotification.sendDirectPush(targetUid, {
+      const res = await directNotification.sendPush(targetUid, {
         notification: {
           title: '🧪 Test Notification Dispatch',
           body: `Test push sent using notification template '${templateId}' at ${new Date().toLocaleTimeString()}`
