@@ -235,6 +235,22 @@ export default function MainLayout() {
                 </AnimatePresence>
               </Link>
 
+              {/* Developer Dashboard 3-Lines Button (webhub2811@gmail.com account) */}
+              {(user?.email === 'webhub2811@gmail.com' || role === 'owner') && (
+                <Link
+                  to="/owner/developer"
+                  title="Developer Operations & Control Center"
+                  className="p-2.5 rounded-xl bg-primary-500/15 border border-primary-500/35 text-primary-400 hover:bg-primary-500/25 hover:text-primary-300 transition-all duration-200 flex items-center justify-center gap-1.5 ml-1 shadow-[0_0_15px_rgba(249,115,22,0.2)]"
+                >
+                  <div className="flex flex-col gap-[3px] w-4 justify-center items-center">
+                    <span className="w-full h-[2px] bg-current rounded-full" />
+                    <span className="w-full h-[2px] bg-current rounded-full" />
+                    <span className="w-full h-[2px] bg-current rounded-full" />
+                  </div>
+                  <span className="text-xs font-bold hidden xl:inline">Dev Ops</span>
+                </Link>
+              )}
+
               {/* Notification Center Bell */}
               {isAuthenticated && (
                 <button
@@ -302,6 +318,21 @@ export default function MainLayout() {
                   <Download className="w-3 h-3" /> Install
                 </button>
               )}
+              {/* Mobile 3-Lines Developer Dashboard Button (webhub2811@gmail.com) */}
+              {(user?.email === 'webhub2811@gmail.com' || role === 'owner') && (
+                <Link
+                  to="/owner/developer"
+                  title="Developer Operations Center"
+                  className="p-2 rounded-lg bg-primary-500/20 border border-primary-500/40 text-primary-400 flex items-center justify-center shadow-[0_0_10px_rgba(249,115,22,0.3)]"
+                >
+                  <div className="flex flex-col gap-[2.5px] w-3.5 justify-center items-center">
+                    <span className="w-full h-[2px] bg-current rounded-full" />
+                    <span className="w-full h-[2px] bg-current rounded-full" />
+                    <span className="w-full h-[2px] bg-current rounded-full" />
+                  </div>
+                </Link>
+              )}
+
               <Link to="/menu?search=1" className="p-2 text-slate-300 hover:text-white transition-colors">
                 <Search className="w-5 h-5" />
               </Link>

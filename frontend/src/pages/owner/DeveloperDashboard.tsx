@@ -18,7 +18,7 @@ import {
   Activity, Bell, Mail, Database, Cpu, RefreshCw,
   CheckCircle2, XCircle, AlertTriangle, Clock, Search,
   ShieldCheck, Zap, Terminal, BarChart3, HardDrive, Wifi,
-  ChevronDown, ChevronRight, Copy, Check
+  ChevronDown, ChevronRight, Copy, Check, Bot
 } from 'lucide-react';
 import { auth } from '../../lib/firebase';
 import toast from 'react-hot-toast';
@@ -168,8 +168,45 @@ export default function DeveloperDashboard() {
   const [fcmLogs, setFcmLogs] = useState<any[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
   const [claimLoading, setClaimLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'health' | 'email' | 'monitor' | 'diagnostics' | 'logs' | 'security'>('health');
+  const [activeTab, setActiveTab] = useState<'health' | 'email' | 'audit' | 'databases' | 'configs' | 'notif_templates' | 'ai' | 'errors' | 'scheduler' | 'monitor' | 'diagnostics' | 'logs' | 'security'>('health');
   const [autoRefresh, setAutoRefresh] = useState(false);
+
+  // Operations Center States
+  const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [databases, setDatabases] = useState<any[]>([]);
+  const [configs, setConfigs] = useState<any[]>([]);
+  const [notifTemplates, setNotifTemplates] = useState<any[]>([]);
+  const [aiProviders, setAiProviders] = useState<any[]>([]);
+  const [errorsList, setErrorsList] = useState<any[]>([]);
+  const [cronJobs, setCronJobs] = useState<any[]>([]);
+
+  const fetchAuditLogs = useCallback(async () => {
+    try { const res = await devGet('/audit-logs'); setAuditLogs(res.data?.logs || []); } catch {}
+  }, []);
+
+  const fetchDatabases = useCallback(async () => {
+    try { const res = await devGet('/databases'); setDatabases(res.data || []); } catch {}
+  }, []);
+
+  const fetchConfigs = useCallback(async () => {
+    try { const res = await devGet('/configs'); setConfigs(res.data || []); } catch {}
+  }, []);
+
+  const fetchNotifTemplates = useCallback(async () => {
+    try { const res = await devGet('/notification-templates'); setNotifTemplates(res.data || []); } catch {}
+  }, []);
+
+  const fetchAiProviders = useCallback(async () => {
+    try { const res = await devGet('/ai-providers'); setAiProviders(res.data || []); } catch {}
+  }, []);
+
+  const fetchErrorsList = useCallback(async () => {
+    try { const res = await devGet('/error-center'); setErrorsList(res.data?.errors || []); } catch {}
+  }, []);
+
+  const fetchCronJobs = useCallback(async () => {
+    try { const res = await devGet('/scheduler/jobs'); setCronJobs(res.data || []); } catch {}
+  }, []);
 
   const fetchHealth = useCallback(async () => {
     setHealthLoading(true); setHealthError(null);
@@ -212,10 +249,17 @@ export default function DeveloperDashboard() {
 
   useEffect(() => { fetchHealth(); }, [fetchHealth]);
   useEffect(() => {
+    if (activeTab === 'audit') fetchAuditLogs();
+    if (activeTab === 'databases') fetchDatabases();
+    if (activeTab === 'configs') fetchConfigs();
+    if (activeTab === 'notif_templates') fetchNotifTemplates();
+    if (activeTab === 'ai') fetchAiProviders();
+    if (activeTab === 'errors') fetchErrorsList();
+    if (activeTab === 'scheduler') fetchCronJobs();
     if (activeTab === 'monitor') fetchMonitor();
     if (activeTab === 'diagnostics') fetchDiagnostics();
     if (activeTab === 'logs') fetchLogs();
-  }, [activeTab, fetchMonitor, fetchDiagnostics, fetchLogs]);
+  }, [activeTab, fetchAuditLogs, fetchDatabases, fetchConfigs, fetchNotifTemplates, fetchAiProviders, fetchErrorsList, fetchCronJobs, fetchMonitor, fetchDiagnostics, fetchLogs]);
 
   useEffect(() => {
     if (!autoRefresh) return;
@@ -400,6 +444,185 @@ export default function DeveloperDashboard() {
                   </button>
                 </div>
               </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Audit Logs Tab */}
+        {activeTab === 'audit' && (
+          <motion.div key="audit" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
+            <SectionTitle icon={ShieldCheck} title="Immutable Developer Action Audit Trail" />
+            <div className="bg-slate-900/60 border border-white/[0.08] rounded-2xl overflow-hidden">
+              <div className="divide-y divide-white/5">
+                {auditLogs.map((log: any, idx: number) => (
+                  <div key={log.id || idx} className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-primary-400 font-mono font-bold text-xs">{log.action_type}</span>
+                        <span className="text-slate-400 text-xs font-mono">[{log.target_module}]</span>
+                        <StatusPill status={log.status || 'SUCCESS'} />
+                      </div>
+                      <p className="text-slate-300 text-xs mt-1">
+                        By: <strong className="text-white">{log.developer_email}</strong> • IP: {log.ip_address}
+                      </p>
+                    </div>
+                    <span className="text-slate-500 text-xs">{new Date(log.created_at).toLocaleString()}</span>
+                  </div>
+                ))}
+                {auditLogs.length === 0 && <div className="p-8 text-center text-slate-500 text-sm">No developer audit logs recorded yet.</div>}
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Database Manager Tab */}
+        {activeTab === 'databases' && (
+          <motion.div key="databases" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
+            <SectionTitle icon={Database} title="Database Management Center" />
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {databases.map((db: any) => (
+                <div key={db.id} className="bg-slate-900/60 border border-white/[0.08] rounded-2xl p-5 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-white font-bold text-sm truncate">{db.name}</span>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${db.healthStatus === 'HEALTHY' ? 'bg-green-500/15 text-green-400 border-green-500/30' : 'bg-red-500/15 text-red-400 border-red-500/30'}`}>
+                      {db.healthStatus}
+                    </span>
+                  </div>
+                  <p className="text-slate-400 text-xs font-mono truncate">{db.connectionUriMasked}</p>
+                  <div className="flex items-center justify-between text-xs text-slate-500 pt-2 border-t border-white/5">
+                    <span>Type: <strong className="text-slate-300 uppercase">{db.type}</strong></span>
+                    <span>Latency: <strong className="text-teal-400">{db.latencyMs}ms</strong></span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+
+        {/* Visual Configuration Center */}
+        {activeTab === 'configs' && (
+          <motion.div key="configs" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
+            <SectionTitle icon={HardDrive} title="Visual No-Code Platform Configuration Center" />
+            <div className="space-y-4">
+              {configs.map((c: any) => (
+                <div key={c.key} className="bg-slate-900/60 border border-white/[0.08] rounded-2xl p-5">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-primary-400 font-bold font-mono text-sm">{c.key}</span>
+                    <span className="text-slate-500 text-xs">v{c.version} • Updated by {c.updatedBy}</span>
+                  </div>
+                  <pre className="bg-black/40 border border-white/5 p-3 rounded-xl text-xs text-slate-300 overflow-x-auto font-mono">
+                    {JSON.stringify(c.valueJson, null, 2)}
+                  </pre>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+
+        {/* Notification Templates */}
+        {activeTab === 'notif_templates' && (
+          <motion.div key="notif_templates" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
+            <SectionTitle icon={Bell} title="Notification Template & Dispatch Manager" />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {notifTemplates.map((t: any) => (
+                <div key={t.id} className="bg-slate-900/60 border border-white/[0.08] rounded-2xl p-5 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-white font-bold text-sm">{t.name}</span>
+                    <StatusPill status={t.priority} />
+                  </div>
+                  <p className="text-primary-300 font-semibold text-xs">{t.titlePattern}</p>
+                  <p className="text-slate-400 text-xs">{t.bodyPattern}</p>
+                  <div className="text-[10px] text-slate-500 font-mono pt-2 border-t border-white/5 flex justify-between">
+                    <span>Sound: {t.sound}</span>
+                    <span>Channel: {t.channelId}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+
+        {/* AI Providers Vault */}
+        {activeTab === 'ai' && (
+          <motion.div key="ai" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
+            <SectionTitle icon={Bot} title="AI Provider Vault & Automatic Failover Engine" />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {aiProviders.map((ai: any) => (
+                <div key={ai.id} className="bg-slate-900/60 border border-white/[0.08] rounded-2xl p-5 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-white font-bold text-sm">{ai.name}</span>
+                    <span className="text-xs text-primary-400 font-mono">Priority #{ai.priorityOrder}</span>
+                  </div>
+                  <p className="text-slate-400 text-xs font-mono">API Key: {ai.apiKeyMasked}</p>
+                  <div className="text-xs text-slate-300">
+                    Default Model: <strong className="text-orange-400">{ai.defaultModel}</strong>
+                  </div>
+                  <div className="flex justify-between items-center text-xs text-slate-500 pt-2 border-t border-white/5">
+                    <span>Latency: <strong className="text-teal-400">{ai.latencyMs}ms</strong></span>
+                    <span>Health: <strong className="text-green-400">{ai.healthStatus}</strong></span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+
+        {/* Error Center */}
+        {activeTab === 'errors' && (
+          <motion.div key="errors" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
+            <SectionTitle icon={AlertTriangle} title="Platform Exception & Failure Operations Center" />
+            <div className="space-y-3">
+              {errorsList.map((err: any) => (
+                <div key={err.id} className="bg-slate-900/60 border border-red-500/20 rounded-2xl p-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-red-400 font-bold text-xs uppercase tracking-wide">{err.rootCauseCategory}</span>
+                    <span className="text-slate-500 text-xs">{new Date(err.createdAt).toLocaleString()}</span>
+                  </div>
+                  <p className="text-white text-sm font-semibold">{err.errorMessage}</p>
+                  <div className="bg-black/40 border border-white/5 p-3 rounded-xl text-xs text-green-300 font-mono">
+                    💡 Suggested Fix: {err.suggestedFix}
+                  </div>
+                </div>
+              ))}
+              {errorsList.length === 0 && <div className="p-8 text-center text-slate-500 text-sm">Zero system exceptions recorded. Systems healthy.</div>}
+            </div>
+          </motion.div>
+        )}
+
+        {/* Cron Scheduler */}
+        {activeTab === 'scheduler' && (
+          <motion.div key="scheduler" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
+            <SectionTitle icon={Clock} title="Cron Job & Background Task Scheduler" />
+            <div className="space-y-3">
+              {cronJobs.map((job: any) => (
+                <div key={job.id} className="bg-slate-900/60 border border-white/[0.08] rounded-2xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-white font-bold text-sm">{job.name}</span>
+                      <StatusPill status={job.status} />
+                    </div>
+                    <p className="text-slate-400 text-xs mt-1">{job.description}</p>
+                    <p className="text-slate-500 text-xs font-mono mt-0.5">Schedule: {job.schedulePattern}</p>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      try {
+                        const token = await auth.currentUser?.getIdToken();
+                        const res = await fetch(`${BACKEND}/devops/scheduler/jobs/trigger/${job.id}`, {
+                          method: 'POST',
+                          headers: { Authorization: `Bearer ${token}` }
+                        });
+                        const data = await res.json();
+                        if (data.success) toast.success(data.message || 'Job triggered!');
+                        else toast.error(data.error || 'Failed to trigger job');
+                      } catch (e: any) { toast.error(e.message); }
+                    }}
+                    className="px-4 py-2 rounded-xl bg-primary-600 hover:bg-primary-500 text-white text-xs font-semibold transition-all shrink-0"
+                  >
+                    Run Job Now
+                  </button>
+                </div>
+              ))}
             </div>
           </motion.div>
         )}

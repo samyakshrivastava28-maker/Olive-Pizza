@@ -55,6 +55,7 @@ export default function OwnerLayout() {
     { name: 'AI Monitor', path: '/owner/ai-monitor', icon: '🤖' },
     { name: 'Notification Diagnostics', path: '/owner/notification-diagnostics', icon: '📡' },
     { name: 'Verification Diagnostics', path: '/owner/verification-metrics', icon: '🛡️' },
+    { name: 'Developer Ops Center', path: '/owner/developer', icon: '💻' },
     { name: 'Settings', path: '/owner/settings', icon: '⚙️' },
   ];
 
@@ -125,10 +126,24 @@ export default function OwnerLayout() {
             </div>
           </div>
 
-          <div className="flex items-center gap-6">
-            {/* Notification Center goes here if added back later */}
-            
-            <div className="flex items-center gap-3 border-l border-white/10 pl-6">
+          <div className="flex items-center gap-4">
+            {/* 3-Lines Developer Dashboard Button */}
+            {(user?.email === 'webhub2811@gmail.com' || user?.email === 'olivepizzarjn@gmail.com') && (
+              <Link
+                to="/owner/developer"
+                title="Developer Operations & Control Center"
+                className="p-2.5 rounded-xl bg-primary-500/20 border border-primary-500/50 text-primary-400 hover:bg-primary-500/30 hover:text-white transition-all duration-200 flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(249,115,22,0.25)]"
+              >
+                <div className="flex flex-col gap-[3px] w-4 justify-center items-center">
+                  <span className="w-full h-[2px] bg-current rounded-full" />
+                  <span className="w-full h-[2px] bg-current rounded-full" />
+                  <span className="w-full h-[2px] bg-current rounded-full" />
+                </div>
+                <span className="text-xs font-bold hidden md:inline">Dev Ops</span>
+              </Link>
+            )}
+
+            <div className="flex items-center gap-3 border-l border-white/10 pl-4">
               <div className="text-right hidden sm:block">
                 <p className="text-sm font-black text-white">{ownerName}</p>
                 <p className="text-xs font-bold text-slate-400">Store Owner</p>
