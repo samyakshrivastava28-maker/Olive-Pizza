@@ -249,7 +249,7 @@ function PremiumFlyingBox({ anim, onComplete }: { anim: AnimationData; onComplet
             boxShadow: 'inset 0 0 20px rgba(0,0,0,0.5)',
             display: 'flex',
             alignItems: 'center',
-            justify: 'center',
+            justifyContent: 'center',
             overflow: 'hidden'
           }}>
             {/* White Corrugated Pizza Pad */}
