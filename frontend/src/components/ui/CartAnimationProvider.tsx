@@ -140,18 +140,25 @@ function PremiumFlyingBox({ anim, onComplete }: { anim: AnimationData; onComplet
       await flyingPizzaControls.start({
         x: centerX - PIZZA_SIZE / 2,
         y: centerY - PIZZA_SIZE / 2,
-        scale: 1,
+        scale: 0.9,
         rotateZ: 360,
         rotateX: 45,
         transition: { duration: 0.4, ease: [0.34, 1.56, 0.64, 1] }
       });
       if (!isMounted) return;
 
-      // 4. Lid closes tightly with Olive Pizza logo cover on top
-      await lidControls.start({
-        rotateY: 0,
-        transition: { type: 'spring', stiffness: 350, damping: 22 }
-      });
+      // 4. Lid closes tightly & Product image hides inside the box
+      await Promise.all([
+        flyingPizzaControls.start({
+          opacity: 0,
+          scale: 0.7,
+          transition: { duration: 0.15 }
+        }),
+        lidControls.start({
+          rotateY: 0,
+          transition: { type: 'spring', stiffness: 350, damping: 22 }
+        })
+      ]);
       
       if (!isMounted) return;
       
@@ -203,39 +210,61 @@ function PremiumFlyingBox({ anim, onComplete }: { anim: AnimationData; onComplet
     position: 'absolute' as const,
     inset: 0,
     transform: 'rotate(45deg) scaleY(0.577)',
-    borderRadius: 12,
+    borderRadius: 10,
   };
 
   return (
     <>
-      {/* ── 3D Box Assembly ── */}
+      {/* ── 3D Realistic Pizza Box Assembly ── */}
       <motion.div
         className="absolute z-[10000] pointer-events-none"
         style={{ width: BOX_SIZE, height: BOX_SIZE }}
         animate={boxControls}
       >
-        {/* Ambient Glow */}
+        {/* Ambient Warm Glow */}
         <motion.div 
           animate={glowControls}
           initial={{ opacity: 0 }}
-          className="absolute inset-[-50px] bg-gradient-to-r from-amber-500 to-orange-500 rounded-full blur-2xl z-0"
+          className="absolute inset-[-50px] bg-gradient-to-r from-orange-500 to-red-600 rounded-full blur-2xl z-0"
         />
 
-        {/* Box Base */}
+        {/* Box Base (Red Cardboard Outer + Corrugated White Liner Inside) */}
         <div style={{
           ...isoStyle,
-          backgroundColor: '#451a03',
-          border: '3px solid #78350f',
+          backgroundColor: '#ea580c', // Bright Red-Orange Cardboard Outer
+          border: '3px solid #c2410c',
           boxShadow: `
-            -1px 1px 0 #270e02, -2px 2px 0 #270e02, -3px 3px 0 #270e02,
-            -4px 4px 0 #270e02, -5px 5px 0 #270e02, -15px 15px 35px rgba(0,0,0,0.7)
+            -1px 1px 0 #9a3412, -2px 2px 0 #9a3412, -3px 3px 0 #9a3412,
+            -4px 4px 0 #9a3412, -5px 5px 0 #9a3412, -15px 15px 35px rgba(0,0,0,0.7)
           `,
           zIndex: 1
         }}>
-          <div style={{ position: 'absolute', inset: 0, boxShadow: 'inset 0 0 40px rgba(0,0,0,0.9)', borderRadius: 10 }} />
+          {/* Internal Kraft Cardboard Base & White Corrugated Sheet */}
+          <div style={{
+            position: 'absolute',
+            inset: 8,
+            backgroundColor: '#d97706', // Kraft interior
+            borderRadius: 6,
+            border: '2px solid #b45309',
+            boxShadow: 'inset 0 0 20px rgba(0,0,0,0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justify: 'center',
+            overflow: 'hidden'
+          }}>
+            {/* White Corrugated Pizza Pad */}
+            <div style={{
+              width: '85%',
+              height: '85%',
+              backgroundColor: '#f8fafc',
+              borderRadius: 4,
+              backgroundImage: 'repeating-linear-gradient(90deg, #e2e8f0, #e2e8f0 3px, #f8fafc 3px, #f8fafc 8px)',
+              boxShadow: 'inset 0 0 10px rgba(0,0,0,0.2)'
+            }} />
+          </div>
         </div>
 
-        {/* Box Lid */}
+        {/* Box Lid (Hinged Top) */}
         <div style={{ ...isoStyle, zIndex: 3, perspective: 1200 }}>
           <motion.div
             animate={lidControls}
@@ -245,20 +274,20 @@ function PremiumFlyingBox({ anim, onComplete }: { anim: AnimationData; onComplet
               transformStyle: 'preserve-3d',
             }}
           >
-            {/* Inside Face */}
+            {/* Inside Kraft Face of Lid */}
             <div style={{
               position: 'absolute', inset: 0,
-              backgroundColor: '#78350f', border: '3px solid #451a03', borderRadius: 12,
-              boxShadow: 'inset 0 0 25px rgba(0,0,0,0.6)'
+              backgroundColor: '#d97706', border: '3px solid #c2410c', borderRadius: 10,
+              boxShadow: 'inset 0 0 20px rgba(0,0,0,0.4)'
             }} />
 
-            {/* Outside Cover (Branded with Olive Pizza Logo) */}
+            {/* Outside Branded Red Cover (With Olive Pizza Logo) */}
             <div style={{
               position: 'absolute', inset: 0,
-              backgroundColor: '#451a03', border: '3px solid #b45309', borderRadius: 12,
+              backgroundColor: '#ea580c', border: '3px solid #c2410c', borderRadius: 10,
               backfaceVisibility: 'hidden',
               display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-              boxShadow: 'inset 0 0 30px rgba(251,191,36,0.2)',
+              boxShadow: 'inset 0 0 25px rgba(254,215,170,0.25)',
               padding: 12
             }}>
               <img 
@@ -267,9 +296,9 @@ function PremiumFlyingBox({ anim, onComplete }: { anim: AnimationData; onComplet
                 onError={(e) => {
                   (e.target as HTMLImageElement).src = "https://res.cloudinary.com/ditkqli2i/image/upload/v1782113833/olive-pizza-logo_nsoh49.webp";
                 }}
-                style={{ width: 75, height: 75, objectFit: 'contain', zIndex: 2, filter: 'drop-shadow(0 6px 12px rgba(0,0,0,0.6))' }}
+                style={{ width: 75, height: 75, objectFit: 'contain', zIndex: 2, filter: 'drop-shadow(0 6px 12px rgba(0,0,0,0.5))' }}
               />
-              <span style={{ fontSize: 10, fontWeight: 900, color: '#fbbf24', letterSpacing: '0.15em', marginTop: 4, textTransform: 'uppercase' }}>
+              <span style={{ fontSize: 10, fontWeight: 900, color: '#ffffff', letterSpacing: '0.15em', marginTop: 4, textTransform: 'uppercase', textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>
                 Olive Pizza
               </span>
             </div>
