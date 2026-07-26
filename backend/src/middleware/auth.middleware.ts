@@ -41,13 +41,33 @@ export const verifyToken = async (req: AuthRequest, res: Response, next: NextFun
     const decodedToken = await adminAuth.verifyIdToken(token);
     const uid = decodedToken.uid;
     
-    // Read role from custom claims, default to customer
-    const role = (decodedToken.role as string) || 'customer';
+    // Read role from custom claims first, fallback to Firestore if missing or customer
+    let role = (decodedToken.role as string);
+
+    if (!role || role === 'customer') {
+      if (decodedToken.email?.toLowerCase() === 'olivepizzarjn@gmail.com' || decodedToken.email?.toLowerCase() === 'webhub2811@gmail.com') {
+        role = 'owner';
+      } else {
+        try {
+          const userDoc = await adminDb.collection('users').doc(uid).get();
+          if (userDoc.exists) {
+            const userData = userDoc.data()!;
+            if (userData.role) {
+              role = userData.role;
+            } else if (userData.isDeliveryPartner || userData.vehicleType || userData.vehicleNumber) {
+              role = 'delivery_partner';
+            }
+          }
+        } catch (dbErr) {
+          console.warn('[AuthMiddleware] Failed to read fallback role from Firestore:', dbErr);
+        }
+      }
+    }
 
     req.user = {
       uid,
       email: decodedToken.email,
-      role
+      role: role || 'customer'
     };
     
     next();

@@ -33,12 +33,12 @@ router.get('/orders/:id/location', async (req: AuthRequest, res: Response) => {
 });
 
 // Delivery partner gets their active tasks
-router.get('/tasks', requireRole(['delivery']), async (req: AuthRequest, res: Response) => {
+router.get('/tasks', requireRole(['delivery', 'delivery_partner']), async (req: AuthRequest, res: Response) => {
   try {
     const deliveryPartnerId = req.user?.uid;
     const snapshot = await adminDb.collection('orders')
       .where('deliveryPartnerId', '==', deliveryPartnerId)
-      .where('status', 'in', ['out_for_delivery', 'preparing', 'ready'])
+      .where('status', 'in', ['partner_assigned', 'out_for_delivery', 'preparing', 'ready', 'picked_up'])
       .get();
       
     const tasks = snapshot.docs.map(doc => ({
@@ -53,13 +53,13 @@ router.get('/tasks', requireRole(['delivery']), async (req: AuthRequest, res: Re
 });
 
 // Update order status (used by delivery dashboard)
-router.patch('/orders/:id/status', requireRole(['owner', 'delivery']), async (req: AuthRequest, res: Response) => {
+router.patch('/orders/:id/status', requireRole(['owner', 'delivery', 'delivery_partner']), async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
     
-    // Only allow setting to 'delivered' or 'out_for_delivery'
-    if (status !== 'delivered' && status !== 'out_for_delivery') {
+    const allowedStatuses = ['delivered', 'out_for_delivery', 'picked_up', 'partner_assigned', 'ready'];
+    if (!allowedStatuses.includes(status)) {
       res.status(400).json({ error: 'Invalid status update for delivery partner' });
       return;
     }

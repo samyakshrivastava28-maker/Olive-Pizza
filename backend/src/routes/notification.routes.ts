@@ -496,11 +496,12 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
         });
         responseData = { message: 'Delivery declined — order returned to ready pool' };
 
-      } else if (action === 'picked_up') {
-        if (currentStatus !== 'partner_assigned') {
+      } else if (action === 'picked_up' || action === 'out_for_delivery') {
+        const allowedFrom = ['partner_assigned', 'ready', 'preparing', 'accepted'];
+        if (!allowedFrom.includes(currentStatus)) {
           await releaseOrderLock(orderId);
           lockReleased = true;
-          res.status(409).json({ error: `Cannot pick up order with status "${currentStatus}". Must be "partner_assigned".`, requestId });
+          res.status(409).json({ error: `Cannot pick up order with status "${currentStatus}". Allowed: [${allowedFrom.join(', ')}]`, requestId });
           return;
         }
         newStatus = 'out_for_delivery';
@@ -521,10 +522,11 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
 
         responseData = { message: 'Picked up — out for delivery' };
       } else if (action === 'delivered') {
-        if (currentStatus !== 'out_for_delivery') {
+        const allowedFrom = ['out_for_delivery', 'picked_up', 'partner_assigned', 'ready'];
+        if (!allowedFrom.includes(currentStatus)) {
           await releaseOrderLock(orderId);
           lockReleased = true;
-          res.status(409).json({ error: `Cannot deliver order with status "${currentStatus}". Must be "out_for_delivery".`, requestId });
+          res.status(409).json({ error: `Cannot deliver order with status "${currentStatus}". Allowed: [${allowedFrom.join(', ')}]`, requestId });
           return;
         }
         const { deliveryProof } = req.body;
@@ -548,7 +550,7 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
       } else {
         await releaseOrderLock(orderId);
         lockReleased = true;
-        res.status(400).json({ error: `Unknown delivery action "${action}"`, allowedActions: ['accept_delivery', 'reject_delivery', 'picked_up', 'delivered'], requestId });
+        res.status(400).json({ error: `Unknown delivery action "${action}"`, allowedActions: ['accept_delivery', 'reject_delivery', 'picked_up', 'out_for_delivery', 'delivered'], requestId });
         return;
       }
     }
