@@ -449,7 +449,7 @@ export default function DeliveryDashboard() {
             onClick={async () => {
               try {
                 const tokenModule = await import('../../lib/firebase');
-                const token = await tokenModule.getAuthToken();
+                const token = await tokenModule.getCurrentAuthToken();
                 const res = await fetch('/api/notifications/send-custom', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
