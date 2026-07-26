@@ -149,6 +149,15 @@ export class NotificationEngine {
 
     // ── 3. Sanitize data block & APNs headers (MUST be string values) ──────
     const sanitizedData: Record<string, string> = {};
+
+    // Ensure title and body are populated in data block for native handling
+    if (payload.notification?.title && !sanitizedData.title) {
+      sanitizedData.title = payload.notification.title;
+    }
+    if (payload.notification?.body && !sanitizedData.body) {
+      sanitizedData.body = payload.notification.body;
+    }
+
     if (payload.data && typeof payload.data === 'object') {
       for (const [k, v] of Object.entries(payload.data)) {
         if (v !== undefined && v !== null) {
@@ -162,6 +171,13 @@ export class NotificationEngine {
     // Strict APNs header sanitization & validation (Firebase requires EVERY APNs header to be a string)
     const sanitizedApns = sanitizeApnsConfig(payload.apns, options.category || 'push');
 
+    // Category Payload Rule (§2.1):
+    // - alarm_actionable & pinned_live MUST BE DATA-ONLY (NO top-level notification block).
+    //   Otherwise, Android OS intercepts the notification when app is closed/backgrounded,
+    //   renders a default tray banner, and SUPPRESSES onMessageReceived().
+    // - simple_informational uses HYBRID payload (notification + data).
+    const isDataOnlyCategory = options.category === 'alarm_actionable' || options.category === 'pinned_live';
+
     // ── 4. Chunk and send ────────────────────────────────────────────────────
     const chunkSize = 500;
     const chunks: string[][] = [];
@@ -171,7 +187,7 @@ export class NotificationEngine {
 
     console.log(
       `[NotificationEngine] Sending category=${options.category || 'order'} | ` +
-      `targets=${firebaseUserIds.length} | tokens=${tokens.length} | chunks=${chunks.length}`
+      `dataOnly=${isDataOnlyCategory} | targets=${firebaseUserIds.length} | tokens=${tokens.length} | chunks=${chunks.length}`
     );
 
     let totalSuccess = 0;
@@ -183,12 +199,16 @@ export class NotificationEngine {
       try {
         const message: admin.messaging.MulticastMessage = {
           tokens: chunk,
-          notification: payload.notification,
           data: sanitizedData,
           android: payload.android,
           apns: sanitizedApns,
           webpush: payload.webpush,
         };
+
+        // Attach top-level notification ONLY for simple_informational / non-custom categories
+        if (!isDataOnlyCategory && payload.notification) {
+          message.notification = payload.notification;
+        }
 
         const response = await adminMessaging.sendEachForMulticast(message);
         const elapsedMs = Date.now() - startTime;
