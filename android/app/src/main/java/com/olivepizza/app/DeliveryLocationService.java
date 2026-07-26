@@ -82,9 +82,9 @@ public class DeliveryLocationService extends Service {
     }
 
     private void startLocationUpdates() {
-        LocationRequest locationRequest = new LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 10000)
-                .setMinUpdateIntervalMillis(5000)
-                .setMinUpdateDistanceMeters(10) // 10 meters threshold for performance
+        LocationRequest locationRequest = new LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 3000)
+                .setMinUpdateIntervalMillis(1500)
+                .setMinUpdateDistanceMeters(0) // Exact real-time tracking
                 .build();
 
         locationCallback = new LocationCallback() {
@@ -112,7 +112,7 @@ public class DeliveryLocationService extends Service {
     }
 
     private void sendLocationToBackend(Location location) {
-        if (orderId == null || token == null) return;
+        if (token == null) return;
 
         new Thread(() -> {
             HttpURLConnection conn = null;
@@ -127,11 +127,14 @@ public class DeliveryLocationService extends Service {
                 conn.setDoOutput(true);
 
                 JSONObject jsonParam = new JSONObject();
-                jsonParam.put("orderId", orderId);
+                if (orderId != null) {
+                    jsonParam.put("orderId", orderId);
+                }
                 jsonParam.put("lat", location.getLatitude());
                 jsonParam.put("lng", location.getLongitude());
                 jsonParam.put("accuracy", location.getAccuracy());
                 jsonParam.put("speed", location.getSpeed());
+                jsonParam.put("heading", location.getBearing());
                 jsonParam.put("timestamp", System.currentTimeMillis());
 
                 String payload = jsonParam.toString();

@@ -57,8 +57,33 @@ export interface UniversalMap3DRef {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-// OpenFreeMap — 100% free, unlimited vector tiles, 3D buildings included
+// OpenFreeMap vector tiles with automatic CartoDB raster tile fallback
 const TILE_STYLE = 'https://tiles.openfreemap.org/styles/liberty';
+const CARTO_RASTER_STYLE: maplibregl.StyleSpecification = {
+  version: 8,
+  sources: {
+    'carto-tiles': {
+      type: 'raster',
+      tiles: [
+        'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
+        'https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
+        'https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
+      ],
+      tileSize: 256,
+      attribution: '© OpenStreetMap contributors © CARTO',
+    },
+  },
+  layers: [
+    {
+      id: 'carto-tiles-layer',
+      type: 'raster',
+      source: 'carto-tiles',
+      minzoom: 0,
+      maxzoom: 22,
+    },
+  ],
+};
+
 const DEFAULT_PITCH = 50;
 const LERP_ALPHA = 0.12; // smooth interpolation factor (higher = snappier)
 const LERP_HEADING_ALPHA = 0.08;
@@ -214,7 +239,32 @@ const UniversalMap3D = forwardRef<UniversalMap3DRef, UniversalMap3DProps>(
 
       map.addControl(new maplibregl.NavigationControl({ showCompass: true }), 'top-right');
 
+      let fallbackTriggered = false;
+      const triggerFallbackStyle = () => {
+        if (fallbackTriggered) return;
+        fallbackTriggered = true;
+        console.warn('[UniversalMap3D] Primary tile server failed or timed out. Switching to CartoDB Voyager raster tiles.');
+        try {
+          map.setStyle(CARTO_RASTER_STYLE);
+        } catch (err) {
+          console.error('[UniversalMap3D] Fallback style error:', err);
+        }
+      };
+
+      map.on('error', (e: any) => {
+        if (!mapLoaded && (!map.isStyleLoaded() || String(e?.error?.message || '').includes('tiles.openfreemap'))) {
+          triggerFallbackStyle();
+        }
+      });
+
+      const fallbackTimer = setTimeout(() => {
+        if (!map.isStyleLoaded()) {
+          triggerFallbackStyle();
+        }
+      }, 3500);
+
       map.on('load', () => {
+        clearTimeout(fallbackTimer);
         // Add route source + layer
         map.addSource('route-source', {
           type: 'geojson',
