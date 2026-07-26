@@ -55,26 +55,27 @@ export default function LuxuryProductCard({ product, wishlistIds, index }: Luxur
     (e: React.MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      triggerAnimation(e, product.imageUrl || "");
-      addItem({
-        id: product.id,
-        productId: product.id,
-        productName: product.productName,
-        price: product.basePrice,
-        quantity: 1,
-        imageUrl: product.imageUrl || "",
-      } as any);
-      trackEvent({ type: "product_view", productId: product.id });
-      toast.success(`${product.productName} added!`, {
-        style: {
-          background: "#1e1e1e",
-          color: "#fff",
-          border: "1px solid rgba(255,255,255,0.1)",
-          borderRadius: "16px",
-        },
+      triggerAnimation(e, product.imageUrl || "", () => {
+        addItem({
+          id: product.id,
+          productId: product.id,
+          productName: product.productName,
+          price: product.basePrice,
+          quantity: 1,
+          imageUrl: product.imageUrl || "",
+        } as any);
+        trackEvent({ type: "product_view", productId: product.id });
+        toast.success(`${product.productName} added!`, {
+          style: {
+            background: "#1e1e1e",
+            color: "#fff",
+            border: "1px solid rgba(255,255,255,0.1)",
+            borderRadius: "16px",
+          },
+        });
       });
     },
-    [addItem, product]
+    [addItem, product, triggerAnimation]
   );
 
   const imageUrl = product.imageUrl

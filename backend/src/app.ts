@@ -21,6 +21,7 @@ import githubRoutes from './routes/github.routes.js';
 import phoneVerificationRoutes from './routes/phoneVerification.routes.js';
 import devopsRoutes from './routes/devops.routes.js';
 import ttsRoutes from './routes/tts.routes.js';
+import pageBuilderRoutes from './routes/pageBuilder.routes.js';
 import { versionCheck } from './middleware/versionCheck.js';
 import { 
   authLimiter, 
@@ -144,6 +145,9 @@ app.use('/api/orders', orderRoutes);
 
 app.use('/admin', adminRoutes);
 app.use('/api/admin', adminRoutes);
+
+app.use('/page-builder', pageBuilderRoutes);
+app.use('/api/page-builder', pageBuilderRoutes);
 
 app.use('/ai', aiRoutes);
 app.use('/api/ai', aiKnowledgeRoutes);

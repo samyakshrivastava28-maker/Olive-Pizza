@@ -9,12 +9,14 @@ interface AnimationData {
   endX: number;
   endY: number;
   image: string;
+  onComplete?: () => void;
 }
 
 interface CartAnimationContextType {
   triggerAnimation: (
     e: React.MouseEvent | React.TouchEvent | { clientX: number; clientY: number },
-    image: string
+    image: string,
+    onComplete?: () => void
   ) => void;
 }
 
@@ -40,7 +42,11 @@ export function CartAnimationProvider({ children }: { children: React.ReactNode 
   const idCounter = useRef(0);
 
   const triggerAnimation = useCallback(
-    (e: React.MouseEvent | React.TouchEvent | { clientX: number; clientY: number }, image: string) => {
+    (
+      e: React.MouseEvent | React.TouchEvent | { clientX: number; clientY: number },
+      image: string,
+      onCompleteCallback?: () => void
+    ) => {
       const newId = idCounter.current++;
       const target = getCartTarget();
       let clientX = window.innerWidth / 2;
@@ -56,7 +62,7 @@ export function CartAnimationProvider({ children }: { children: React.ReactNode 
 
       setQueue((prev) => [
         ...prev,
-        { id: newId, startX: clientX, startY: clientY, endX: target.x, endY: target.y, image },
+        { id: newId, startX: clientX, startY: clientY, endX: target.x, endY: target.y, image, onComplete: onCompleteCallback },
       ]);
     },
     []
@@ -198,6 +204,9 @@ function PremiumFlyingBox({ anim, onComplete }: { anim: AnimationData; onComplet
       }
       
       window.dispatchEvent(new CustomEvent('cart-item-added'));
+      if (anim.onComplete) {
+        try { anim.onComplete(); } catch (e) {}
+      }
       
       onComplete();
     };

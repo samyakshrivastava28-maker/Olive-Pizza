@@ -31,18 +31,19 @@ export default memo(function ComboCard({ combo, wishlistIds = [], index = 0 }: C
 
   const handleAddToCart = (e: React.MouseEvent) => {
     if (!combo.isAvailable) return;
-    triggerAnimation(e, combo.image || '');
-    addItem({
-      id: `combo_${combo.id}`,
-      productId: combo.id,
-      productName: combo.name,
-      price: combo.price,
-      quantity: 1,
-      imageUrl: combo.image || '',
-      isCombo: true,
-    } as any);
-    trackEvent({ type: 'combo_purchase', comboId: combo.id });
-    toast.success(`${combo.name} added to cart!`);
+    triggerAnimation(e, combo.image || '', () => {
+      addItem({
+        id: `combo_${combo.id}`,
+        productId: combo.id,
+        productName: combo.name,
+        price: combo.price,
+        quantity: 1,
+        imageUrl: combo.image || '',
+        isCombo: true,
+      } as any);
+      trackEvent({ type: 'combo_purchase', comboId: combo.id });
+      toast.success(`${combo.name} added to cart!`);
+    });
   };
 
   return (
