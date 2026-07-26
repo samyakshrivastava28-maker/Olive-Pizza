@@ -428,6 +428,51 @@ export default function DeliveryDashboard() {
           />
         </div>
         
+        {/* ── Alert Diagnostics ── */}
+        <div className="bg-dark-900 border border-dark-800 rounded-2xl p-4 flex gap-2 shadow-lg">
+          <button 
+            onClick={async () => {
+              const { Capacitor } = await import('@capacitor/core');
+              if (!Capacitor.isNativePlatform()) {
+                alert('Alarm permissions are native Android 14+ only.');
+                return;
+              }
+              const { AlarmPermission } = await import('../../plugins/AlarmPermission');
+              await AlarmPermission.setupPermissions().catch(err => alert(`Error: ${err.message}`));
+              alert('Permission prompt triggered natively');
+            }}
+            className="flex-1 bg-primary-600 hover:bg-primary-500 text-white text-xs font-bold py-2.5 rounded-xl transition-colors shadow-lg"
+          >
+            🔔 Enable Alarm System
+          </button>
+          <button 
+            onClick={async () => {
+              try {
+                const tokenModule = await import('../../lib/firebase');
+                const token = await tokenModule.getAuthToken();
+                const res = await fetch('/api/notifications/send-custom', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                  body: JSON.stringify({
+                    title: '🔔 Alarm Test',
+                    body: 'Testing continuous alarm for Delivery Partner.',
+                    audience: 'delivery',
+                    category: 'alarm_actionable',
+                    priority: 'critical'
+                  }),
+                });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                alert('Alarm test sent!');
+              } catch (err: any) {
+                alert(`Alarm test failed: ${err.message}`);
+              }
+            }}
+            className="flex-1 bg-red-600/80 hover:bg-red-500 text-white text-xs font-bold py-2.5 rounded-xl transition-colors shadow-lg"
+          >
+            🚨 Test Alarm System
+          </button>
+        </div>
+
         {/* ── Warning Alerts ── */}
         {user?.status === "online" && gpsPermission !== "granted" && (
           <div className="bg-red-500/10 border border-red-500/30 p-3 rounded-2xl flex items-center gap-3 text-red-400 text-sm font-bold">

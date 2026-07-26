@@ -200,6 +200,47 @@ export default function OwnerDashboard() {
           Overview
         </h1>
         <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
+          <button
+            onClick={async () => {
+              const { Capacitor } = await import('@capacitor/core');
+              if (!Capacitor.isNativePlatform()) {
+                alert('Alarm permissions are native Android 14+ only.');
+                return;
+              }
+              const { AlarmPermission } = await import('../../plugins/AlarmPermission');
+              await AlarmPermission.setupPermissions().catch(err => alert(`Error: ${err.message}`));
+              alert('Permission prompt triggered natively');
+            }}
+            className="w-full md:w-auto bg-primary-500 text-white border border-primary-500 hover:bg-primary-600 px-4 py-2.5 rounded-full font-bold text-sm transition-all backdrop-blur-md shadow-lg flex items-center justify-center gap-2 hover:scale-105 active:scale-95"
+          >
+            🔔 Enable Alarm System
+          </button>
+          <button
+            onClick={async () => {
+              try {
+                const tokenModule = await import('../../lib/firebase');
+                const token = await tokenModule.getAuthToken();
+                const res = await fetch('/api/notifications/send-custom', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                  body: JSON.stringify({
+                    title: '🔔 Alarm Test',
+                    body: 'Testing continuous alarm. Tap Stop Alert to dismiss.',
+                    audience: 'owner',
+                    category: 'alarm_actionable',
+                    priority: 'critical'
+                  }),
+                });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                alert('Alarm test sent!');
+              } catch (err: any) {
+                alert(`Alarm test failed: ${err.message}`);
+              }
+            }}
+            className="w-full md:w-auto bg-red-500 text-white border border-red-500 hover:bg-red-600 px-4 py-2.5 rounded-full font-bold text-sm transition-all backdrop-blur-md shadow-lg flex items-center justify-center gap-2 hover:scale-105 active:scale-95"
+          >
+            🚨 Test Alarm System
+          </button>
           <a
             href="/owner/reports"
             className="w-full md:w-auto bg-white/10 text-white border border-white/20 hover:bg-white/20 px-4 py-2.5 rounded-full font-bold text-sm transition-all backdrop-blur-md shadow-lg flex items-center justify-center gap-2 hover:scale-105 active:scale-95"
