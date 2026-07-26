@@ -149,7 +149,14 @@ public class OliveMessagingService extends MessagingService {
         if (title == null && body == null && orderId == null) return;
 
         boolean isOngoing = "true".equals(data.get("ongoing"));
-        boolean isContinuous = "continuous".equals(data.get("alert"));
+        String alertType = data.get("alert");
+        String stage = data.get("stage");
+        String category = data.get("category");
+
+        boolean isContinuous = "continuous".equals(alertType) || 
+                               "alarm_actionable".equals(category) || 
+                               "new_order".equals(stage) || 
+                               "delivery_assigned".equals(stage);
 
         int notificationId = (orderId != null) 
             ? (isOngoing ? orderId.hashCode() : (orderId.hashCode() + 1000))
@@ -157,10 +164,7 @@ public class OliveMessagingService extends MessagingService {
 
         String channelId = data.get("channelId");
         if (channelId == null || channelId.isEmpty()) {
-            channelId = isOngoing ? "olive_order_status" : "olive_order_new";
-        }
-        if (channelId.endsWith("_v4")) {
-            channelId = channelId.substring(0, channelId.length() - 3);
+            channelId = isContinuous ? "olive_order_alarm_v5" : (isOngoing ? "olive_order_status" : "olive_order_new_v5");
         }
 
         NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);

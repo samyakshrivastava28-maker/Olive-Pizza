@@ -48,10 +48,10 @@ export type NotificationCategory =
 
 // ─── Android Channel IDs ──────────────────────────────────────────────────────
 export const ANDROID_CHANNELS = {
-  ORDER_NEW: 'olive_order_new',
+  ORDER_NEW: 'olive_order_alarm_v5',
   ORDER_STATUS: 'olive_order_status',
   ORDER_COMPLETED: 'olive_order_completed',
-  DELIVERY_ASSIGNMENT: 'olive_delivery_assignment',
+  DELIVERY_ASSIGNMENT: 'olive_delivery_alarm_v5',
   DELIVERY_UPDATES: 'olive_delivery_updates',
   MARKETING: 'olive_marketing',
   SYSTEM: 'olive_system',
