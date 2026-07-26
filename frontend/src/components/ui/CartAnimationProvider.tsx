@@ -20,24 +20,24 @@ interface CartAnimationContextType {
 
 const CartAnimationContext = createContext<CartAnimationContextType | undefined>(undefined);
 
+const getCartTarget = (): { x: number; y: number } => {
+  let el = document.getElementById('cart-icon-target');
+  if (typeof window !== 'undefined' && window.innerWidth < 768) {
+     const mobileNav = document.getElementById('mobile-cart-nav-target');
+     if (mobileNav) el = mobileNav;
+  }
+  if (el) {
+    const rect = el.getBoundingClientRect();
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+  }
+  return { x: typeof window !== 'undefined' ? window.innerWidth / 2 : 200, y: typeof window !== 'undefined' ? window.innerHeight - 40 : 600 };
+};
+
 // ─── Provider ─────────────────────────────────────────────────────────────────
 export function CartAnimationProvider({ children }: { children: React.ReactNode }) {
   const [queue, setQueue] = useState<AnimationData[]>([]);
   const [activeAnim, setActiveAnim] = useState<AnimationData | null>(null);
   const idCounter = useRef(0);
-
-  const getCartTarget = (): { x: number; y: number } => {
-    let el = document.getElementById('cart-icon-target');
-    if (window.innerWidth < 768) {
-       const mobileNav = document.getElementById('mobile-cart-nav-target');
-       if (mobileNav) el = mobileNav;
-    }
-    if (el) {
-      const rect = el.getBoundingClientRect();
-      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
-    }
-    return { x: window.innerWidth / 2, y: window.innerHeight - 40 };
-  };
 
   const triggerAnimation = useCallback(
     (e: React.MouseEvent | React.TouchEvent | { clientX: number; clientY: number }, image: string) => {
