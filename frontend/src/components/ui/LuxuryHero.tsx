@@ -211,6 +211,9 @@ export default function LuxuryHero({ isStoreOpen, showIntro }: LuxuryHeroProps) 
         ))}
       </div>
 
+      {/* ─── 3D Hero Animation (Pizza Box → Floating Cart) ────────────────────── */}
+      <Hero3DPizzaBoxAnimation isMobile={isMobile} delay={delay} />
+
       {/* ─── Hero Content ────────────────────────────────────────────────────── */}
       <div className="absolute inset-0 z-30 flex flex-col justify-end md:justify-center items-start">
         {/* Mobile layout: bottom-aligned */}
@@ -352,3 +355,232 @@ export default function LuxuryHero({ isStoreOpen, showIntro }: LuxuryHeroProps) 
     </div>
   );
 }
+
+// ─── 3D Pizza Box to Floating Cart Hero Animation Component ───────────────────
+function Hero3DPizzaBoxAnimation({ isMobile, delay }: { isMobile: boolean; delay: number }) {
+  const [phase, setPhase] = useState<
+    'entrance' | 'opening' | 'reveal' | 'lift' | 'flight' | 'absorbed' | 'floating'
+  >('entrance');
+  const [particles, setParticles] = useState<Array<{ id: number; x: number; y: number; color: string }>>([]);
+
+  useEffect(() => {
+    let active = true;
+
+    const runTimeline = async () => {
+      // Phase 1 & 2: Entrance & Box drop (0 - 800ms)
+      await new Promise((res) => setTimeout(res, delay * 1000 + 400));
+      if (!active) return;
+      setPhase('opening');
+
+      // Phase 3: Box lid hinges open (800ms - 1500ms)
+      await new Promise((res) => setTimeout(res, 700));
+      if (!active) return;
+      setPhase('reveal');
+
+      // Phase 4 & 5: Pizza reveal & Lift out of box (1500ms - 2200ms)
+      await new Promise((res) => setTimeout(res, 700));
+      if (!active) return;
+      setPhase('lift');
+
+      // Phase 6: Flying along arc curve to bag (2200ms - 3100ms)
+      await new Promise((res) => setTimeout(res, 600));
+      if (!active) return;
+      setPhase('flight');
+
+      await new Promise((res) => setTimeout(res, 700));
+      if (!active) return;
+      setPhase('absorbed');
+
+      // Phase 7 & 8: Particle burst
+      const burst = Array.from({ length: 12 }, (_, i) => ({
+        id: Date.now() + i,
+        x: (Math.random() - 0.5) * 80,
+        y: (Math.random() - 0.5) * 80,
+        color: ['#fbbf24', '#f97316', '#22c55e', '#ef4444'][i % 4],
+      }));
+      setParticles(burst);
+
+      // Phase 9: Continuous Floating State
+      await new Promise((res) => setTimeout(res, 500));
+      if (!active) return;
+      setPhase('floating');
+    };
+
+    runTimeline();
+
+    return () => {
+      active = false;
+    };
+  }, [delay]);
+
+  // Position settings
+  const containerStyle: React.CSSProperties = isMobile
+    ? { position: 'absolute', top: '12%', right: '5%', width: 220, height: 260, zIndex: 25 }
+    : { position: 'absolute', top: '22%', right: '8%', width: 440, height: 480, zIndex: 25 };
+
+  return (
+    <div style={containerStyle} className="pointer-events-none select-none flex items-center justify-center">
+      {/* Ambient Radial Glow */}
+      <div
+        className="absolute inset-0 rounded-full blur-3xl opacity-20 pointer-events-none"
+        style={{ background: 'radial-gradient(circle, #f97316 0%, transparent 70%)' }}
+      />
+
+      {/* ─── 1. Isometric 3D Pizza Box ────────────────────────────────────── */}
+      <motion.div
+        initial={{ opacity: 0, y: -120, scale: 0.7, rotateX: 25, rotateY: -15 }}
+        animate={{ opacity: 1, y: 0, scale: 1, rotateX: 20, rotateY: -10 }}
+        transition={{ type: 'spring', stiffness: 180, damping: 18, delay: delay + 0.2 }}
+        className="relative w-44 h-44 md:w-64 md:h-64"
+        style={{ transformStyle: 'preserve-3d', perspective: 1000 }}
+      >
+        {/* Box Shadow */}
+        <motion.div
+          animate={{ scale: [1, 1.05, 1], opacity: [0.3, 0.5, 0.3] }}
+          transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+          className="absolute -bottom-6 left-4 right-4 h-8 bg-black/60 rounded-full blur-lg"
+        />
+
+        {/* Box Base (Bottom & Sides) */}
+        <div
+          className="absolute inset-0 rounded-2xl border border-amber-900/40 shadow-2xl flex items-center justify-center overflow-hidden"
+          style={{
+            background: 'linear-gradient(135deg, #78350f 0%, #451a03 100%)',
+            boxShadow: 'inset 0 2px 10px rgba(251, 191, 36, 0.2), 0 20px 40px rgba(0,0,0,0.6)',
+          }}
+        >
+          {/* Internal Pizza Base Shadow */}
+          <div className="w-36 h-36 md:w-52 md:h-52 rounded-full bg-black/40 blur-md" />
+        </div>
+
+        {/* ─── Fresh Pizza Component Inside ─────────────────────────────── */}
+        <AnimatePresence>
+          {phase !== 'absorbed' && phase !== 'floating' && (
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0, y: 0 }}
+              animate={
+                phase === 'opening' || phase === 'reveal'
+                  ? { scale: 1, opacity: 1, y: 0 }
+                  : phase === 'lift'
+                  ? { scale: 1.08, opacity: 1, y: -40, rotateZ: 12 }
+                  : phase === 'flight'
+                  ? {
+                      scale: [1.08, 0.6, 0.2],
+                      x: [0, isMobile ? -60 : -140, isMobile ? -110 : -240],
+                      y: [-40, -120, -60],
+                      rotateZ: [12, 180, 360],
+                      opacity: [1, 1, 0],
+                    }
+                  : { scale: 0.9, opacity: 1 }
+              }
+              transition={
+                phase === 'flight'
+                  ? { duration: 0.7, ease: [0.25, 0.1, 0.25, 1] }
+                  : { type: 'spring', stiffness: 220, damping: 16 }
+              }
+              className="absolute inset-0 m-auto w-36 h-36 md:w-52 md:h-52 rounded-full z-20 flex items-center justify-center"
+            >
+              {/* Realistic Pizza SVG / Layer */}
+              <div className="relative w-full h-full rounded-full shadow-2xl overflow-hidden border-4 border-amber-600/80 bg-amber-500">
+                <img
+                  src="https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=400&q=80"
+                  alt="Artisan Pizza"
+                  className="w-full h-full object-cover rounded-full transform scale-105"
+                />
+                {/* Pizza Crust & Cheese Steam Glow */}
+                <div className="absolute inset-0 bg-gradient-to-t from-amber-900/30 via-transparent to-yellow-400/20 mix-blend-overlay" />
+              </div>
+
+              {/* Steam Particles */}
+              {(phase === 'reveal' || phase === 'lift') && (
+                <div className="absolute inset-0 flex justify-center items-center pointer-events-none">
+                  {[...Array(5)].map((_, i) => (
+                    <motion.div
+                      key={i}
+                      initial={{ opacity: 0, y: 0, scale: 0.5 }}
+                      animate={{ opacity: [0, 0.6, 0], y: -60, scale: 1.5 }}
+                      transition={{ duration: 1.5, repeat: Infinity, delay: i * 0.3 }}
+                      className="absolute w-6 h-6 rounded-full bg-white/20 blur-md"
+                    />
+                  ))}
+                </div>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* ─── Box Lid (Hinged Top) ───────────────────────────────────────── */}
+        <motion.div
+          initial={{ rotateX: 0 }}
+          animate={
+            phase === 'entrance'
+              ? { rotateX: 0 }
+              : { rotateX: -115, y: -10 }
+          }
+          transition={{ type: 'spring', stiffness: 140, damping: 14 }}
+          className="absolute inset-0 rounded-2xl border border-amber-600/50 shadow-2xl flex flex-col items-center justify-center z-30"
+          style={{
+            background: 'linear-gradient(135deg, #b45309 0%, #78350f 100%)',
+            transformOrigin: 'top center',
+            transformStyle: 'preserve-3d',
+          }}
+        >
+          <div className="p-3 border border-amber-400/30 rounded-xl bg-black/20 text-center">
+            <span className="text-amber-200 font-black tracking-widest text-xs uppercase block">
+              Olive Pizza
+            </span>
+            <span className="text-[9px] text-amber-300/80 font-bold tracking-wider">
+              HOT & FRESH
+            </span>
+          </div>
+        </motion.div>
+      </motion.div>
+
+      {/* ─── 2. Floating Shopping Bag / Cart Target ──────────────────────── */}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.6, x: isMobile ? -90 : -200, y: -40 }}
+        animate={{
+          opacity: 1,
+          scale: phase === 'flight' ? 1.15 : phase === 'absorbed' ? 1.3 : 1,
+          x: isMobile ? -90 : -200,
+          y: phase === 'floating' ? [-40, -52, -40] : -40,
+        }}
+        transition={
+          phase === 'floating'
+            ? { duration: 3, repeat: Infinity, ease: 'easeInOut' }
+            : { type: 'spring', stiffness: 200, damping: 15 }
+        }
+        className="absolute z-40 flex items-center justify-center"
+      >
+        {/* Floating Cart Bag Container */}
+        <div className="relative w-24 h-28 md:w-32 md:h-36 bg-gradient-to-b from-primary-500 to-primary-700 rounded-3xl p-3 shadow-2xl border border-primary-400/40 flex flex-col items-center justify-between">
+          {/* Bag Handles */}
+          <div className="w-12 h-6 md:w-16 md:h-8 border-4 border-amber-300 rounded-t-full -mt-6 bg-transparent" />
+
+          {/* Bag Logo */}
+          <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20">
+            <span className="text-xl md:text-2xl">🛍️</span>
+          </div>
+
+          {/* Bag Label */}
+          <span className="text-[10px] md:text-xs font-black tracking-widest text-white uppercase">
+            Cart
+          </span>
+
+          {/* Burst Particles */}
+          {particles.map((p) => (
+            <motion.div
+              key={p.id}
+              initial={{ x: 0, y: 0, opacity: 1, scale: 1 }}
+              animate={{ x: p.x, y: p.y, opacity: 0, scale: 0 }}
+              transition={{ duration: 0.6, ease: 'easeOut' }}
+              style={{ background: p.color }}
+              className="absolute w-2.5 h-2.5 rounded-full shadow-md z-50"
+            />
+          ))}
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
