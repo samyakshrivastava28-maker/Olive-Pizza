@@ -43,8 +43,10 @@ app.use(helmet({
       scriptSrc: ["'self'", "'unsafe-inline'", "https://apis.google.com"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
-      imgSrc: ["'self'", "data:", "blob:", "https://res.cloudinary.com", "https://*.googleusercontent.com"],
-      connectSrc: ["'self'", "https://*.firebaseio.com", "https://*.googleapis.com", "https://*.supabase.co", "wss://*.supabase.co", "https://integrate.api.nvidia.com"],
+      workerSrc: ["'self'", "blob:"],
+      childSrc: ["'self'", "blob:"],
+      imgSrc: ["'self'", "data:", "blob:", "https://res.cloudinary.com", "https://*.googleusercontent.com", "https://tiles.openfreemap.org", "https://*.cartocdn.com", "https://*.tile.openstreetmap.org"],
+      connectSrc: ["'self'", "https://*.firebaseio.com", "https://*.googleapis.com", "https://*.supabase.co", "wss://*.supabase.co", "https://integrate.api.nvidia.com", "https://tiles.openfreemap.org", "https://*.cartocdn.com", "https://*.tile.openstreetmap.org"],
     },
   },
   hsts: {

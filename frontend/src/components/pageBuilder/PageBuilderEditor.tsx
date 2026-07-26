@@ -565,7 +565,7 @@ function getDefaultPropsForType(type: BlockType): Record<string, any> {
             id: '1',
             title: '50% OFF Your First Order',
             subtitle: 'Use code FIRST50 at checkout.',
-            image: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=1200&q=80',
+            image: 'https://res.cloudinary.com/diwh22z4a/image/upload/v1711200000/olive-pizza/hero_banner.png',
             link: '/menu',
             tag: 'Limited Offer',
           },

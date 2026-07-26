@@ -219,7 +219,7 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
     }
     const orderData = orderDoc.data()!;
     const currentStatus = orderData.status as string;
-    const customerFirebaseUid = orderData.userId;
+    const customerFirebaseUid = orderData.customerUid || orderData.firebaseUid || orderData.customerId || orderData.userId || orderData.user_id;
     const shortId = orderData.dailyOrderNumber || `#${orderId.slice(-6).toUpperCase()}`;
     trace.steps.push({ step: 'Firestore Read', status: 'success', currentStatus, ms: Date.now() - startTime });
     console.log(`[Action][${requestId}] Order read. currentStatus=${currentStatus}`);

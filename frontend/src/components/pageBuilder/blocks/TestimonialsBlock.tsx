@@ -19,19 +19,19 @@ interface TestimonialsBlockProps {
 const DEFAULT_TESTIMONIALS: TestimonialItem[] = [
   {
     id: 't1',
-    quote: 'Without a doubt the best artisan wood-fired pizza in the city. The crust has the perfect char!',
-    author: 'Rohan Sharma',
-    role: 'Food Critic',
+    quote: 'The wood-fired sourdough crust is incredible! Hands down the best artisanal pizza in Jaipur.',
+    author: 'Aarav Sharma',
+    role: 'Verified Customer',
     rating: 5,
-    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80',
+    avatar: 'https://res.cloudinary.com/diwh22z4a/image/upload/v1711200000/olive-pizza/avatar_placeholder.png',
   },
   {
     id: 't2',
-    quote: 'The delivery is always shockingly fast and piping hot. The truffle pizza is an absolute masterpiece.',
-    author: 'Priya Ananth',
-    role: 'Loyal Customer',
+    quote: 'Super fast delivery and the Truffle Mushroom Pizza arrived piping hot inside the 3D box!',
+    author: 'Priya Mehta',
+    role: 'Food Blogger',
     rating: 5,
-    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80',
+    avatar: 'https://res.cloudinary.com/diwh22z4a/image/upload/v1711200000/olive-pizza/avatar_placeholder.png',
   },
 ];
 

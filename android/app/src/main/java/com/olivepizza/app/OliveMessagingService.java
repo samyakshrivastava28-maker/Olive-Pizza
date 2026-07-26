@@ -141,17 +141,33 @@ public class OliveMessagingService extends MessagingService {
     }
 
     private void showNativeNotification(Map<String, String> data) {
-        String title = data.get("title");
-        String body = data.get("body");
+        String category = data.get("category");
+        String stage = data.get("stage");
+
+        String defaultTitle = "Olive Pizza";
+        String defaultBody = "You have a new update";
+
+        if ("alarm_actionable".equals(category) || "new_order".equals(stage)) {
+            defaultTitle = "🍕 New Order Received";
+            defaultBody = "New high-priority order alert";
+        } else if ("delivery_assigned".equals(stage) || "partner_assigned".equals(stage)) {
+            defaultTitle = "🛵 Delivery Partner Assigned";
+            defaultBody = "New delivery route assignment ready";
+        } else if ("pinned_live".equals(category) || "order_update".equals(stage)) {
+            defaultTitle = "🛵 Live Order Update";
+            defaultBody = "Your order status has been updated";
+        } else if ("marketing".equals(category)) {
+            defaultTitle = "🎁 Olive Pizza Offer";
+            defaultBody = "Check out today's special deal";
+        }
+
+        String title = data.get("title") != null ? data.get("title") : defaultTitle;
+        String body = data.get("body") != null ? data.get("body") : defaultBody;
         String orderId = data.get("orderId");
         String soundName = data.get("sound");
 
-        if (title == null && body == null && orderId == null) return;
-
         boolean isOngoing = "true".equals(data.get("ongoing"));
         String alertType = data.get("alert");
-        String stage = data.get("stage");
-        String category = data.get("category");
 
         boolean isContinuous = "continuous".equals(alertType) || 
                                "alarm_actionable".equals(category) || 

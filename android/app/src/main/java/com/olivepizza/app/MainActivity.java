@@ -68,12 +68,8 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
-        // 1. Create ALL notification channels BEFORE super.onCreate so they exist
-        //    before any FCM message could arrive. This is the critical fix for
-        //    killed-app delivery: when the app is killed and FCM falls back to the
-        //    system tray using the manifest default channel (olive_order_new), that
-        //    channel must already exist or Android 8+ silently drops the notification.
-        createAllNotificationChannels();
+        // 1. Create STANDARD notification channels (customer-safe) at startup
+        createStandardNotificationChannels();
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true);
@@ -88,28 +84,38 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(DeliveryPlugin.class);
         super.onCreate(savedInstanceState);
 
-        // 2. Register FCM token natively. The web JS bridge (frontend/src/lib/fcm.ts)
-        //    also registers, but it only runs when the WebView is loaded. If the app
-        //    is killed, only the native registration guarantees a valid token exists.
+        // 2. Register FCM token natively.
         registerFcmTokenNatively();
-
-        // 3. Prompt for battery-optimization exemption (owner/delivery only)
-        promptBatteryOptimizationExemption();
-
-        // 4. Android 14+ Full-Screen Intent Permission Verification
-        checkFullScreenIntentPermission();
     }
 
-    private void checkFullScreenIntentPermission() {
+    /**
+     * Role-Gated Alarm Permission Initialization
+     * ONLY invoked when the logged-in user's role is owner or delivery_partner.
+     * Customers will NEVER receive full-screen alarm prompts or channels.
+     */
+    public static void setupAlarmPermissionsForStaffRole(Activity activity) {
+        if (activity == null) return;
+        
+        // 1. Create Alarm-grade channels (MAX importance, USAGE_ALARM, bypassDnd)
+        createStaffAlarmChannels(activity);
+
+        // 2. Prompt for battery-optimization exemption
+        promptBatteryOptimizationExemption(activity);
+
+        // 3. Android 14+ Full-Screen Intent Permission Prompt
+        checkFullScreenIntentPermission(activity);
+    }
+
+    private static void checkFullScreenIntentPermission(Activity activity) {
         if (Build.VERSION.SDK_INT >= 34) { // Android 14+ (API 34)
-            NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            NotificationManager nm = (NotificationManager) activity.getSystemService(Context.NOTIFICATION_SERVICE);
             if (nm != null && !nm.canUseFullScreenIntent()) {
-                Log.w(TAG, "Full-screen intent permission not granted on Android 14+");
+                Log.w(TAG, "Full-screen intent permission not granted on Android 14+ for staff role");
                 try {
                     Intent intent = new Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT);
-                    intent.setData(Uri.parse("package:" + getPackageName()));
+                    intent.setData(Uri.parse("package:" + activity.getPackageName()));
                     intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                    startActivity(intent);
+                    activity.startActivity(intent);
                 } catch (Exception e) {
                     Log.w(TAG, "Could not launch ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT: " + e.getMessage());
                 }
@@ -118,25 +124,68 @@ public class MainActivity extends BridgeActivity {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // NOTIFICATION CHANNELS — created at startup, never lazily
+    // NOTIFICATION CHANNELS — Role-Gated Separation
     // ═══════════════════════════════════════════════════════════════════════════
 
-    private void createAllNotificationChannels() {
+    private void createStandardNotificationChannels() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
 
         NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         if (nm == null) return;
 
-        // Each channel: (id, importance, soundRawName, bypassDnd)
-        createChannel(nm, CHANNEL_ORDER_NEW,        "Olive New Orders",        NotificationManager.IMPORTANCE_MAX,    "order_alert",     true,  AudioAttributes.USAGE_ALARM);
+        // Customer-safe standard channels
         createChannel(nm, CHANNEL_ORDER_STATUS,     "Olive Order Updates",      NotificationManager.IMPORTANCE_HIGH,    "soft_pop",        false, AudioAttributes.USAGE_NOTIFICATION);
         createChannel(nm, CHANNEL_ORDER_COMPLETED,  "Olive Order Complete",     NotificationManager.IMPORTANCE_HIGH,    "success_ding",    false, AudioAttributes.USAGE_NOTIFICATION);
-        createChannel(nm, CHANNEL_DELIVERY_ASSIGN,  "Olive Delivery Assign",    NotificationManager.IMPORTANCE_MAX,    "delivery_chime",  true,  AudioAttributes.USAGE_ALARM);
         createChannel(nm, CHANNEL_DELIVERY_UPDATES, "Olive Delivery Updates",   NotificationManager.IMPORTANCE_HIGH,    "default",         false, AudioAttributes.USAGE_NOTIFICATION);
         createChannel(nm, CHANNEL_MARKETING,        "Olive Promotions",         NotificationManager.IMPORTANCE_DEFAULT, "soft_pop",        false, AudioAttributes.USAGE_NOTIFICATION);
         createChannel(nm, CHANNEL_SYSTEM,          "Olive System Alerts",       NotificationManager.IMPORTANCE_HIGH,    "system_alert",    false, AudioAttributes.USAGE_NOTIFICATION);
 
-        Log.i(TAG, "✅ All notification channels created at startup.");
+        Log.i(TAG, "✅ Standard customer notification channels created.");
+    }
+
+    public static void createStaffAlarmChannels(Context context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
+
+        NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+        if (nm == null) return;
+
+        // Alarm channels for owner & delivery partner ONLY
+        createChannelStatic(context, nm, CHANNEL_ORDER_NEW, "Olive New Orders", NotificationManager.IMPORTANCE_MAX, "order_alert", true, AudioAttributes.USAGE_ALARM);
+        createChannelStatic(context, nm, CHANNEL_DELIVERY_ASSIGN, "Olive Delivery Assign", NotificationManager.IMPORTANCE_MAX, "delivery_chime", true, AudioAttributes.USAGE_ALARM);
+
+        Log.i(TAG, "✅ Staff alarm notification channels created.");
+    }
+
+    private static void createChannelStatic(Context context, NotificationManager nm, String id, String name,
+                                       int importance, String soundRawName,
+                                       boolean bypassDnd, int audioUsage) {
+        if (nm.getNotificationChannel(id) != null) return;
+
+        NotificationChannel channel = new NotificationChannel(id, name, importance);
+        channel.enableVibration(true);
+
+        Uri soundUri = null;
+        if (soundRawName != null && !"default".equals(soundRawName)) {
+            int resId = context.getResources().getIdentifier(soundRawName, "raw", context.getPackageName());
+            if (resId != 0) {
+                soundUri = Uri.parse("android.resource://" + context.getPackageName() + "/" + resId);
+            }
+        }
+        if (soundUri == null) {
+            soundUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION);
+        }
+
+        AudioAttributes audioAttributes = new AudioAttributes.Builder()
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .setUsage(audioUsage)
+                .build();
+        channel.setSound(soundUri, audioAttributes);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && bypassDnd) {
+            channel.setBypassDnd(true);
+        }
+
+        nm.createNotificationChannel(channel);
     }
 
     private void createChannel(NotificationManager nm, String id, String name,
@@ -286,37 +335,27 @@ public class MainActivity extends BridgeActivity {
      * flag "battery_prompt_role_set" once the user's role is known (owner/delivery),
      * so we only prompt for roles that need emergency alarms.
      */
-    private void promptBatteryOptimizationExemption() {
-        if (batteryPromptShown) return;
+    private static void promptBatteryOptimizationExemption(Activity activity) {
+        if (batteryPromptShown || activity == null) return;
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return;
 
-        PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+        PowerManager pm = (PowerManager) activity.getSystemService(Context.POWER_SERVICE);
         if (pm == null) return;
 
         // Already exempted — nothing to do
-        if (pm.isIgnoringBatteryOptimizations(getPackageName())) {
+        if (pm.isIgnoringBatteryOptimizations(activity.getPackageName())) {
             Log.d(TAG, "App already exempted from battery optimization.");
-            return;
-        }
-
-        boolean roleGated = getSharedPreferences("olive_native", MODE_PRIVATE)
-                .getBoolean("battery_prompt_role_set", false);
-        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
-
-        // Prompt if role-gated by web layer OR if a signed-in Firebase user exists
-        if (!roleGated && user == null) {
-            Log.d(TAG, "Battery prompt skipped — waiting for sign-in or role set.");
             return;
         }
 
         batteryPromptShown = true;
         try {
             Intent intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
-            intent.setData(Uri.parse("package:" + getPackageName()));
+            intent.setData(Uri.parse("package:" + activity.getPackageName()));
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            startActivity(intent);
-            Toast.makeText(this, "Please allow Olive Pizza to run in background for order alarms", Toast.LENGTH_LONG).show();
-            Log.i(TAG, "Battery optimization exemption prompt shown.");
+            activity.startActivity(intent);
+            Toast.makeText(activity, "Please allow Olive Pizza to run in background for order alarms", Toast.LENGTH_LONG).show();
+            Log.i(TAG, "Battery optimization exemption prompt shown for staff role.");
         } catch (Exception e) {
             Log.w(TAG, "Could not show battery optimization prompt: " + e.getMessage());
         }

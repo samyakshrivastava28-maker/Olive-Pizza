@@ -199,9 +199,13 @@ export class FirestoreListener {
 
   private static async sendOrderEmail(orderData: any, status: string) {
     try {
-      const customerDoc = await db.collection('users').doc(orderData.userId || orderData.firebaseUid).get();
-      const customerData = customerDoc.exists ? customerDoc.data() : null;
-      const email = customerData?.email;
+      const customerUid = orderData.customerUid || orderData.firebaseUid || orderData.customerId || orderData.userId || orderData.user_id;
+      let email = orderData.customerEmail || orderData.email || orderData.contactEmail;
+      
+      if (!email && customerUid) {
+        const customerDoc = await db.collection('users').doc(customerUid).get();
+        if (customerDoc.exists) email = customerDoc.data()?.email;
+      }
       if (!email) return;
 
       const shortId = orderData.id.slice(-6).toUpperCase();
