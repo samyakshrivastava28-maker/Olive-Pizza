@@ -892,21 +892,41 @@ router.post('/send-custom', verifyToken, async (req: AuthRequest, res: Response)
 
     // Build common payload
     let payload: any;
+    const isAlarmTest = category === 'alarm_actionable' || req.body.priority === 'critical' || req.body.alert === 'continuous';
+
     if (category === 'coupon' && couponCode) {
       payload = MarketingTemplates.couponAlert({ title, body, couponCode, expiryDate: expiryDate || 'soon' });
     } else if (category === 'announcement') {
       payload = MarketingTemplates.announcement({ title, body, url });
+    } else if (isAlarmTest) {
+      payload = buildPayload(title || '🚨 TEST ALARM ALERT', body || 'Test alarm received. Tap Stop Alert to dismiss.', {
+        tag: `test_alarm_${Date.now()}`,
+        channelId: ANDROID_CHANNELS.ORDER_NEW,
+        url: url || '/owner/orders',
+        sound: 'new_order',
+        category: 'alarm_actionable' as any,
+        priority: 'critical',
+        role: audience === 'delivery' ? 'delivery' : 'owner',
+        requireInteraction: true,
+        stage: 'new_order',
+        alert: 'continuous',
+        notificationId: `test_alarm_${Date.now()}`,
+        vibrate: [300, 200, 300, 200, 300],
+        actions: [
+          { action: 'stop_alert', title: '🔕 Stop Alert' },
+        ],
+      });
     } else {
       payload = {
         notification: { title, body },
-        data: { url: url || '/', category: category || 'marketing', source: 'owner_broadcast' }
+        data: { title, body, url: url || '/', category: category || 'marketing', source: 'owner_broadcast' }
       };
     }
 
     // Dispatch a single bulk push (fire and forget for massive blasts so the HTTP response is instant)
     notificationEngine.sendBulk(targetUids, payload, {
-      priority: 'normal',
-      category: category || 'marketing',
+      priority: isAlarmTest ? 'critical' : 'normal',
+      category: isAlarmTest ? 'alarm_actionable' : (category || 'marketing'),
     }).catch(err => console.error('[NotificationRoutes] sendBulk failed:', err));
 
     res.json({ success: true, message: `Dispatched notifications to ${targetUids.length} users` });

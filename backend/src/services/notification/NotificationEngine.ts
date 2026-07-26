@@ -205,10 +205,15 @@ export class NotificationEngine {
 
     await Promise.all(chunks.map(async (chunk) => {
       try {
+        const androidConfig = payload.android ? { ...payload.android } : undefined;
+        if (isDataOnlyCategory && androidConfig) {
+          delete androidConfig.notification;
+        }
+
         const message: admin.messaging.MulticastMessage = {
           tokens: chunk,
           data: sanitizedData,
-          android: payload.android,
+          android: androidConfig,
           apns: sanitizedApns,
           webpush: payload.webpush,
         };
