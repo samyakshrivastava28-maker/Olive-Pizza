@@ -258,7 +258,7 @@ export default function Checkout() {
                    navigator.geolocation.getCurrentPosition(
                      async (pos) => {
                        const { latitude, longitude } = pos.coords;
-                       setMapCenter([latitude, longitude]);
+                       setMapCenter({lat: latitude, lng: longitude});
                        toast.success('Location found!', { id: t });
                      },
                      () => toast.error('Location access denied', { id: t })

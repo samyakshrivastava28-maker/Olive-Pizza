@@ -13,11 +13,11 @@
  *  - Camera auto-follow with pitch 50° + manual drag override → floating "Re-center" button
  */
 
-import { useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle } from 'react';
-import * as maplibregl from 'maplibre-gl';
+import React, { useEffect, useRef, useState, useImperativeHandle, forwardRef } from 'react';
+import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Navigation2, Crosshair, RotateCcw } from 'lucide-react';
+import { Navigation2, User, Crosshair, Package, Navigation, MapPin } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
