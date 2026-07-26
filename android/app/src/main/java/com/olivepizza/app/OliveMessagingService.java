@@ -51,6 +51,8 @@ public class OliveMessagingService extends MessagingService {
             wakeLock.acquire(15000); // 15 seconds max for message processing
         }
 
+        boolean handledNatively = false;
+
         try {
             Map<String, String> data = new HashMap<>(remoteMessage.getData());
 
@@ -76,11 +78,13 @@ public class OliveMessagingService extends MessagingService {
 
                 if ("stop_alert".equals(action)) {
                     stopNativeAlarm(data);
+                    handledNatively = true;
                 } else {
                     if ("continuous".equals(alert)) {
                         wakeScreenOnEmergency(powerManager);
                     }
                     showNativeNotification(data);
+                    handledNatively = true;
                 }
             }
         } catch (Exception e) {
@@ -91,11 +95,31 @@ public class OliveMessagingService extends MessagingService {
             }
         }
 
-        try {
-            super.onMessageReceived(remoteMessage);
-        } catch (Exception e) {
-            Log.e(TAG, "Capacitor MessagingService call safe catch (expected if app is closed)", e);
+        // Only pass to super if NOT handled natively AND a notification block exists
+        if (!handledNatively && remoteMessage.getNotification() != null) {
+            try {
+                super.onMessageReceived(remoteMessage);
+            } catch (Exception e) {
+                Log.e(TAG, "Capacitor MessagingService call safe catch (expected if app is closed)", e);
+            }
         }
+    }
+
+    /**
+     * Resolves valid notification small icon resource ID, avoiding 0 which causes blank notifications.
+     */
+    private int getSmallIconResId() {
+        int resId = getResources().getIdentifier("ic_stat_icon_config_sample", "drawable", getPackageName());
+        if (resId == 0) {
+            resId = getResources().getIdentifier("ic_launcher", "mipmap", getPackageName());
+        }
+        if (resId == 0) {
+            resId = getResources().getIdentifier("ic_launcher_round", "mipmap", getPackageName());
+        }
+        if (resId == 0) {
+            resId = android.R.drawable.ic_dialog_info;
+        }
+        return resId;
     }
 
     /**
@@ -162,10 +186,10 @@ public class OliveMessagingService extends MessagingService {
         );
 
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this, channelId)
-                .setSmallIcon(getResources().getIdentifier("ic_stat_icon_config_sample", "drawable", getPackageName()))
-                .setContentTitle(title != null ? title : "Olive Pizza")
-                .setContentText(body != null ? body : "You have a new update")
-                .setStyle(new NotificationCompat.BigTextStyle().bigText(body != null ? body : ""))
+                .setSmallIcon(getSmallIconResId())
+                .setContentTitle(title != null && !title.isEmpty() ? title : "Olive Pizza")
+                .setContentText(body != null && !body.isEmpty() ? body : "You have a new update")
+                .setStyle(new NotificationCompat.BigTextStyle().bigText(body != null && !body.isEmpty() ? body : (title != null ? title : "")))
                 .setContentIntent(pendingIntent)
                 .setDefaults(Notification.DEFAULT_VIBRATE | Notification.DEFAULT_LIGHTS)
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC);

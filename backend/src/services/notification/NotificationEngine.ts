@@ -150,14 +150,6 @@ export class NotificationEngine {
     // ── 3. Sanitize data block & APNs headers (MUST be string values) ──────
     const sanitizedData: Record<string, string> = {};
 
-    // Ensure title and body are populated in data block for native handling
-    if (payload.notification?.title && !sanitizedData.title) {
-      sanitizedData.title = payload.notification.title;
-    }
-    if (payload.notification?.body && !sanitizedData.body) {
-      sanitizedData.body = payload.notification.body;
-    }
-
     if (payload.data && typeof payload.data === 'object') {
       for (const [k, v] of Object.entries(payload.data)) {
         if (v !== undefined && v !== null) {
@@ -167,6 +159,22 @@ export class NotificationEngine {
         }
       }
     }
+
+    // Ensure title and body are populated in data block for native handling
+    if (!sanitizedData.title && payload.notification?.title) {
+      sanitizedData.title = payload.notification.title;
+    }
+    if (!sanitizedData.body && payload.notification?.body) {
+      sanitizedData.body = payload.notification.body;
+    }
+    if (!sanitizedData.title && payload.android?.notification?.title) {
+      sanitizedData.title = payload.android.notification.title;
+    }
+    if (!sanitizedData.body && payload.android?.notification?.body) {
+      sanitizedData.body = payload.android.notification.body;
+    }
+    if (!sanitizedData.title) sanitizedData.title = 'Olive Pizza';
+    if (!sanitizedData.body) sanitizedData.body = 'New update received';
 
     // Strict APNs header sanitization & validation (Firebase requires EVERY APNs header to be a string)
     const sanitizedApns = sanitizeApnsConfig(payload.apns, options.category || 'push');
