@@ -117,7 +117,13 @@ router.post('/publish', async (req, res) => {
       if (tokens.length > 0) {
         tokens = [...new Set(tokens)];
         const payload = {
+          notification: {
+            title: 'Olive Pizza Update Available 🍕',
+            body: `Version ${version_string} is now available! Update now for new features.`,
+          },
           data: {
+            title: 'Olive Pizza Update Available 🍕',
+            body: `Version ${version_string} is now available! Update now for new features.`,
             type: 'APP_UPDATE',
             version: version_string,
             mode: update_mode || currentSettings.update_mode || 'optional',

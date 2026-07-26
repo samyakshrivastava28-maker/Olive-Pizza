@@ -122,6 +122,14 @@ export class DirectNotificationService {
             }
           }
 
+          // Normalize title & body into data payload so Android & Web push receivers never get blank notifications
+          if (payload.notification?.title && !sanitizedData.title) {
+            sanitizedData.title = String(payload.notification.title);
+          }
+          if (payload.notification?.body && !sanitizedData.body) {
+            sanitizedData.body = String(payload.notification.body);
+          }
+
           const sanitizedApns = sanitizeApnsConfig(payload.apns, 'direct_push');
 
           const message: admin.messaging.MulticastMessage = {
