@@ -5,10 +5,12 @@ import toast from 'react-hot-toast';
 
 interface CancelOrderReasonModalProps {
   isOpen: boolean;
-  orderId: string;
+  orderId?: string;
   orderNumber: string;
   onClose: () => void;
-  onSubmit: (reason: string) => Promise<void>;
+  onSubmit?: (reason: string) => Promise<void>;
+  onConfirm?: (reason: string) => Promise<void>;
+  isSubmitting?: boolean;
 }
 
 const PRESET_REASONS = [
@@ -25,11 +27,14 @@ export const CancelOrderReasonModal: React.FC<CancelOrderReasonModalProps> = ({
   orderId,
   orderNumber,
   onClose,
-  onSubmit
+  onSubmit,
+  onConfirm,
+  isSubmitting: externalSubmitting
 }) => {
   const [selectedPreset, setSelectedPreset] = useState<string>('');
   const [customReason, setCustomReason] = useState<string>('');
-  const [submitting, setSubmitting] = useState(false);
+  const [internalSubmitting, setInternalSubmitting] = useState(false);
+  const submitting = externalSubmitting ?? internalSubmitting;
 
   if (!isOpen) return null;
 
@@ -40,14 +45,17 @@ export const CancelOrderReasonModal: React.FC<CancelOrderReasonModalProps> = ({
       return;
     }
 
-    setSubmitting(true);
+    setInternalSubmitting(true);
     try {
-      await onSubmit(finalReason);
+      const handler = onConfirm || onSubmit;
+      if (handler) {
+        await handler(finalReason);
+      }
       onClose();
     } catch (err: any) {
       toast.error(err.message || 'Failed to cancel order');
     } finally {
-      setSubmitting(false);
+      setInternalSubmitting(false);
     }
   };
 
@@ -138,3 +146,5 @@ export const CancelOrderReasonModal: React.FC<CancelOrderReasonModalProps> = ({
     </AnimatePresence>
   );
 };
+
+export default CancelOrderReasonModal;

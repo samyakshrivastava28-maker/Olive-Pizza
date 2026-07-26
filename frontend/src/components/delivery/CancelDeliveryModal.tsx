@@ -142,3 +142,5 @@ export const CancelDeliveryModal: React.FC<CancelDeliveryModalProps> = ({
     </AnimatePresence>
   );
 };
+
+export default CancelDeliveryModal;
