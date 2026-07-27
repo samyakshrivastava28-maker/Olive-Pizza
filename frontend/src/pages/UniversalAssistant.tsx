@@ -167,7 +167,12 @@ export default function UniversalAssistant() {
         break;
       case 'APPLY_COUPON':
         if (action.payload?.code) {
-          useCartStore.getState().applyCoupon(action.payload.code);
+          localStorage.setItem('olive_applied_coupon', action.payload.code);
+          const store = useCartStore.getState() as any;
+          if (typeof store.applyCoupon === 'function') {
+            store.applyCoupon(action.payload.code);
+          }
+          window.dispatchEvent(new CustomEvent('coupon-applied', { detail: action.payload.code }));
           toast.success(`Applied coupon code ${action.payload.code}! 🎉`);
         }
         break;

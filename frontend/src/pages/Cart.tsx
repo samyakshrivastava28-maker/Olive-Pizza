@@ -65,6 +65,25 @@ export default function Cart() {
     };
     
     fetchRecommendations();
+
+    const savedCoupon = localStorage.getItem('olive_applied_coupon');
+    if (savedCoupon) {
+      const discount = savedCoupon.toUpperCase() === "BEST50" ? 50 : 30;
+      setAppliedCoupon({ code: savedCoupon.toUpperCase(), discount });
+      setCouponCode(savedCoupon.toUpperCase());
+    }
+
+    const handleCouponAppliedEvent = (e: any) => {
+      const code = e.detail || localStorage.getItem('olive_applied_coupon');
+      if (code) {
+        const discount = code.toUpperCase() === "BEST50" ? 50 : 30;
+        setAppliedCoupon({ code: code.toUpperCase(), discount });
+        setCouponCode(code.toUpperCase());
+      }
+    };
+
+    window.addEventListener('coupon-applied', handleCouponAppliedEvent);
+    return () => window.removeEventListener('coupon-applied', handleCouponAppliedEvent);
   }, [items]);
 
   const handleApplyCoupon = () => {
