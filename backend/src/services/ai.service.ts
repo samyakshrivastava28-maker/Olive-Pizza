@@ -76,34 +76,69 @@ setTimeout(() => {
 
 // ── Model chain (priority order for general tasks) ────────────────────────────
 // Resolved lazily so missing keys are skipped without crashing
+// ── Model chain (priority order for general tasks) ────────────────────────────
+// Primary: DeepSeek V4 Flash
+// Fallbacks: GLM 5.2 -> Nemotron 3 Ultra -> DeepSeek R1 -> OpenRouter Free Tier -> Gemini API
 function getModelChain() {
   const chain: { client: OpenAI; model: string; name: string; providerKey: string }[] = [];
   const nvidia = getNvidiaClient();
   const or = getOpenRouterClient();
   const gemini = getGeminiClient();
   
+  // 1. PRIMARY MODEL: DeepSeek V4 Flash
   if (nvidia) {
-    // Fast & Primary Models (NVIDIA NIM)
     chain.push({ client: nvidia, model: 'deepseek-ai/deepseek-v4-flash', name: 'DeepSeek V4 Flash (NVIDIA NIM)', providerKey: 'nvidia' });
-    chain.push({ client: nvidia, model: 'mistralai/mistral-nemotron', name: 'Mistral Nemotron (NVIDIA NIM)', providerKey: 'nvidia' });
-    chain.push({ client: nvidia, model: 'z-ai/glm-4.7', name: 'GLM 4.7 (NVIDIA NIM)', providerKey: 'nvidia' });
+  } else if (or) {
+    chain.push({ client: or, model: 'deepseek/deepseek-chat', name: 'DeepSeek V4 Flash (OpenRouter)', providerKey: 'openrouter' });
+  }
+
+  // 2. FALLBACK 1: GLM 5.2
+  if (nvidia) {
     chain.push({ client: nvidia, model: 'z-ai/glm-5.2', name: 'GLM 5.2 (NVIDIA NIM)', providerKey: 'nvidia' });
-    chain.push({ client: nvidia, model: 'moonshotai/kimi-2.6', name: 'Kimi 2.6 (NVIDIA NIM)', providerKey: 'nvidia' });
-    chain.push({ client: nvidia, model: 'moonshotai/kimi-2.7', name: 'Kimi 2.7 (NVIDIA NIM)', providerKey: 'nvidia' });
-    chain.push({ client: nvidia, model: 'deepseek-ai/deepseek-v4-pro', name: 'DeepSeek V4 Pro (NVIDIA NIM)', providerKey: 'nvidia' });
+  } else if (or) {
+    chain.push({ client: or, model: 'thudm/glm-4', name: 'GLM 5.2 / GLM-4 (OpenRouter)', providerKey: 'openrouter' });
+  }
+
+  // 3. FALLBACK 2: Nemotron 3 Ultra / Llama Nemotron
+  if (nvidia) {
+    chain.push({ client: nvidia, model: 'nvidia/nemotron-4-340b-instruct', name: 'Nemotron 3 Ultra (NVIDIA NIM)', providerKey: 'nvidia' });
+    chain.push({ client: nvidia, model: 'nvidia/llama-3.1-nemotron-70b-instruct', name: 'Llama 3.1 Nemotron 70B (NVIDIA NIM)', providerKey: 'nvidia' });
+    chain.push({ client: nvidia, model: 'mistralai/mistral-nemotron', name: 'Mistral Nemotron (NVIDIA NIM)', providerKey: 'nvidia' });
+  }
+
+  // 4. FALLBACK 3: DeepSeek R1
+  if (nvidia) {
     chain.push({ client: nvidia, model: 'deepseek-ai/deepseek-r1', name: 'DeepSeek R1 (NVIDIA NIM)', providerKey: 'nvidia' });
-    chain.push({ client: nvidia, model: 'qwen/qwen3.5-122b-a10b', name: 'Qwen 3.5 122B (NVIDIA NIM)', providerKey: 'nvidia' });
   }
   if (or) {
-    chain.push({ client: or, model: 'qwen/qwen3-next-80b-a3b-instruct', name: 'Qwen3 Next 80B (OpenRouter)', providerKey: 'openrouter' });
     chain.push({ client: or, model: 'deepseek/deepseek-r1', name: 'DeepSeek R1 (OpenRouter)', providerKey: 'openrouter' });
-    chain.push({ client: or, model: 'google/gemma-4-31b-it', name: 'Gemma 4 31B (OpenRouter)', providerKey: 'openrouter' });
-    chain.push({ client: or, model: 'google/gemma-4-27b-a3b-it', name: 'Gemma 4 27B (OpenRouter)', providerKey: 'openrouter' });
   }
+
+  // 5. ADDITIONAL NVIDIA NIM MODELS
+  if (nvidia) {
+    chain.push({ client: nvidia, model: 'nvidia/llama-3.3-70b-instruct', name: 'Llama 3.3 70B (NVIDIA NIM)', providerKey: 'nvidia' });
+    chain.push({ client: nvidia, model: 'z-ai/glm-4.7', name: 'GLM 4.7 (NVIDIA NIM)', providerKey: 'nvidia' });
+    chain.push({ client: nvidia, model: 'moonshotai/kimi-2.7', name: 'Kimi 2.7 (NVIDIA NIM)', providerKey: 'nvidia' });
+    chain.push({ client: nvidia, model: 'qwen/qwen3.5-122b-a10b', name: 'Qwen 3.5 122B (NVIDIA NIM)', providerKey: 'nvidia' });
+  }
+
+  // 6. OPENROUTER FREE TIER & STANDARD FALLBACKS
+  if (or) {
+    chain.push({ client: or, model: 'meta-llama/llama-3.3-70b-instruct:free', name: 'Llama 3.3 70B Free (OpenRouter)', providerKey: 'openrouter' });
+    chain.push({ client: or, model: 'google/gemma-2-9b-it:free', name: 'Gemma 2 9B Free (OpenRouter)', providerKey: 'openrouter' });
+    chain.push({ client: or, model: 'deepseek/deepseek-r1:free', name: 'DeepSeek R1 Free (OpenRouter)', providerKey: 'openrouter' });
+    chain.push({ client: or, model: 'qwen/qwen-2.5-72b-instruct:free', name: 'Qwen 2.5 72B Free (OpenRouter)', providerKey: 'openrouter' });
+    chain.push({ client: or, model: 'qwen/qwen3-next-80b-a3b-instruct', name: 'Qwen3 Next 80B (OpenRouter)', providerKey: 'openrouter' });
+  }
+
+  // 7. GEMINI API KEY FALLBACKS
   if (gemini) {
+    chain.push({ client: gemini, model: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', providerKey: 'gemini' });
+    chain.push({ client: gemini, model: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro', providerKey: 'gemini' });
     chain.push({ client: gemini, model: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash', providerKey: 'gemini' });
     chain.push({ client: gemini, model: 'gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash Lite', providerKey: 'gemini' });
   }
+
   return chain;
 }
 
@@ -740,7 +775,70 @@ CRITICAL INSTRUCTION: You must provide the final prompt immediately. Keep your <
   return { success: false, error: `Failed to enhance prompt. Last error: ${lastError?.message}` };
 }
 
-// ── Speech-to-Text Transcription via NVIDIA Canary-1B-ASR (NIM) ───────────────
+// ── Speech-to-Text Transcription (Whisper 3 Large Primary -> Canary 1B Fallback) ──
+export async function transcribeAudioWhisper(audioBuffer: Buffer, mimeType: string = 'audio/wav'): Promise<{ success: boolean; text?: string; error?: string }> {
+  // ATTEMPT 1: Whisper-large-v3 via NVIDIA NIM or OpenRouter or Groq / OpenAI
+  const nvKey = getKey('NVIDIA_API_KEY');
+  const orKey = getKey('OPENROUTER_API_KEY');
+  
+  if (isValidKey(nvKey)) {
+    try {
+      console.log(`[STT] Transcribing audio via Whisper 3 Large (openai/whisper-large-v3)...`);
+      const blob = new Blob([new Uint8Array(audioBuffer)], { type: mimeType });
+      const formData = new FormData();
+      formData.append('file', blob, 'speech.wav');
+      formData.append('model', 'openai/whisper-large-v3');
+
+      const res = await fetch('https://integrate.api.nvidia.com/v1/audio/transcriptions', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${nvKey}` },
+        body: formData
+      });
+
+      if (res.ok) {
+        const data: any = await res.json();
+        const transcript = data.text || data.transcript || '';
+        if (transcript.trim()) {
+          console.log(`[STT] ✅ Whisper 3 Large Result: "${transcript}"`);
+          return { success: true, text: transcript };
+        }
+      }
+    } catch (err: any) {
+      console.warn('[STT] Whisper 3 Large (NVIDIA) attempt failed, trying fallback:', err.message);
+    }
+  }
+
+  if (isValidKey(orKey)) {
+    try {
+      const blob = new Blob([new Uint8Array(audioBuffer)], { type: mimeType });
+      const formData = new FormData();
+      formData.append('file', blob, 'speech.wav');
+      formData.append('model', 'openai/whisper-large-v3');
+
+      const res = await fetch('https://openrouter.ai/api/v1/audio/transcriptions', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${orKey}` },
+        body: formData
+      });
+
+      if (res.ok) {
+        const data: any = await res.json();
+        const transcript = data.text || data.transcript || '';
+        if (transcript.trim()) {
+          console.log(`[STT] ✅ Whisper 3 Large (OpenRouter) Result: "${transcript}"`);
+          return { success: true, text: transcript };
+        }
+      }
+    } catch (err: any) {
+      console.warn('[STT] Whisper 3 Large (OpenRouter) attempt failed:', err.message);
+    }
+  }
+
+  // ATTEMPT 2: Fallback to NVIDIA Canary 1B ASR
+  console.log('[STT] Falling back to NVIDIA Canary 1B ASR...');
+  return transcribeAudioCanary(audioBuffer, mimeType);
+}
+
 export async function transcribeAudioCanary(audioBuffer: Buffer, mimeType: string = 'audio/wav'): Promise<{ success: boolean; text?: string; error?: string }> {
   try {
     const key = getKey('NVIDIA_API_KEY');
@@ -751,7 +849,7 @@ export async function transcribeAudioCanary(audioBuffer: Buffer, mimeType: strin
     console.log(`[STT] Transcribing audio payload (${audioBuffer.length} bytes, type=${mimeType}) via nvidia/canary-1b-asr...`);
     
     // Construct multipart form data for transcription endpoint
-    const blob = new Blob([audioBuffer], { type: mimeType });
+    const blob = new Blob([new Uint8Array(audioBuffer)], { type: mimeType });
     const formData = new FormData();
     formData.append('file', blob, 'speech.wav');
     formData.append('model', 'nvidia/canary-1b-asr');

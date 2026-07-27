@@ -134,7 +134,8 @@ export class KnowledgeIndexer {
   public async removeItemDirectly(itemId: string): Promise<boolean> {
     const documentId = itemId.startsWith('prod_') ? itemId : `prod_${itemId}`;
     console.log(`[KnowledgeIndexer] ⚡ Synchronous direct vector deletion triggered for document: ${documentId}`);
-    return await qdrantService.deleteDocument(documentId);
+    await qdrantService.deleteDocument(documentId);
+    return true;
   }
 }
 

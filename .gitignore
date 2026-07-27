@@ -28,3 +28,4 @@ android/local.properties
 *.aab
 *.jks
 backend/logs/
+coverage/

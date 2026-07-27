@@ -210,9 +210,9 @@ router.post('/enhance-prompt', async (req, res) => {
   } catch (error: any) { res.status(500).json({ error: 'Internal server error' }); }
 });
 
-// ─── STT Transcription Endpoint (NVIDIA Canary-1B-ASR) ───────────────────────
+// ─── STT Transcription Endpoint (Whisper 3 Large -> Canary 1B ASR) ───────────
 import multer from 'multer';
-import { transcribeAudioCanary } from '../services/ai.service.js';
+import { transcribeAudioWhisper } from '../services/ai.service.js';
 import { evaluateLLMs } from '../services/ai/ModelEvaluationService.js';
 
 const audioUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -222,7 +222,7 @@ router.post('/stt', audioUpload.single('file'), async (req: any, res: any) => {
     if (!req.file) {
       return res.status(400).json({ success: false, error: 'Audio file is required for STT' });
     }
-    const result = await transcribeAudioCanary(req.file.buffer, req.file.mimetype || 'audio/wav');
+    const result = await transcribeAudioWhisper(req.file.buffer, req.file.mimetype || 'audio/wav');
     if (result.success) {
       res.json({ success: true, text: result.text });
     } else {
