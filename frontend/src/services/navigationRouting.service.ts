@@ -88,10 +88,11 @@ function decodePolyline(encoded: string): [number, number][] {
  * Fetches a driving route between two coordinates.
  * Uses full steps annotation to extract turn-by-turn maneuvers.
  */
-export async function fetchRoute(origin: LatLng, destination: LatLng): Promise<RouteResult | null> {
+export async function fetchRoute(origin: LatLng, destination: LatLng, orderId?: string): Promise<RouteResult | null> {
+  const cacheKey = orderId ? `cached_route_${orderId}` : null;
   try {
     const url = `${OSRM_BASE}/${origin.lng},${origin.lat};${destination.lng},${destination.lat}?overview=full&geometries=polyline&steps=true&annotations=false`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
+    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
     if (!res.ok) throw new Error(`OSRM ${res.status}`);
 
     const json = await res.json();
@@ -126,15 +127,33 @@ export async function fetchRoute(origin: LatLng, destination: LatLng): Promise<R
       },
     };
 
-    return {
+    const result: RouteResult = {
       coordinates,
       distanceMetres: route.distance,
       durationSeconds: route.duration,
       steps,
       geojson,
     };
+
+    if (cacheKey) {
+      try {
+        localStorage.setItem(cacheKey, JSON.stringify(result));
+        console.log(`[NavigationRouting] Pre-cached route for order ${orderId} offline playback.`);
+      } catch (e) {}
+    }
+
+    return result;
   } catch (err) {
-    console.warn('[NavigationRouting] OSRM fetch failed:', err);
+    console.warn('[NavigationRouting] OSRM fetch failed. Checking offline cached route:', err);
+    if (cacheKey) {
+      try {
+        const cached = localStorage.getItem(cacheKey);
+        if (cached) {
+          console.log(`[NavigationRouting] Offline route retrieved from cache for order ${orderId}`);
+          return JSON.parse(cached);
+        }
+      } catch (e) {}
+    }
     return null;
   }
 }

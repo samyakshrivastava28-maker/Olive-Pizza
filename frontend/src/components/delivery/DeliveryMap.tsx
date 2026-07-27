@@ -17,10 +17,12 @@ interface DeliveryMapProps {
   destinationLng?: number;
 }
 
+import { RESTAURANT_LOCATION } from "../../lib/config";
+
 const DeliveryMap = React.memo(({ destinationLat, destinationLng }: DeliveryMapProps) => {
   const location = useTrackingStore((state) => state.location);
-  const targetLat = destinationLat || 19.076;
-  const targetLng = destinationLng || 72.8777;
+  const targetLat = destinationLat || RESTAURANT_LOCATION.lat;
+  const targetLng = destinationLng || RESTAURANT_LOCATION.lng;
 
   return (
     <MapContainer 

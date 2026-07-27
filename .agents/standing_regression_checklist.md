@@ -1,48 +1,42 @@
-# Standing Regression Checklist — Olive Pizza
+# Standing Regression Checklist — Olive Pizza Infrastructure & Live Updates
 
-This runbook defines the mandatory verification suite that MUST be executed after every major change, feature release, or security hardening round before calling work completed.
-
----
-
-## 1. Recipient Isolation & Target Resolution Matrix (BUG-5 Safeguard)
-
-- [ ] **Customer Isolation**: Confirm customer push notifications and emails land ONLY on the genuine customer account's device/inbox.
-- [ ] **No Admin Sweeping**: Confirm customer update routes (`/api/notifications/action`) do NOT query `role == owner` or default to `webhub2811@gmail.com` when customer UID is specified.
-- [ ] **Order UIDs**: Confirm `customerFirebaseUid` resolves via fallback chain (`customerUid` || `firebaseUid` || `customerId` || `userId`).
+This document serves as the permanent, standing regression checklist for Olive Pizza. Any structural change to notifications, reporting, live updates, or database sync MUST be validated against this checklist before release.
 
 ---
 
-## 2. Notification & Alarm Payload Matrix (BUG-2 & BUG-4 Safeguard)
+## 1. Google Drive Business Report Sync
 
-Test FCM pushes across all 12 combinations:
-
-| Role | State | Category / Stage | Expected Behavior |
-| :--- | :--- | :--- | :--- |
-| **Owner** | Foreground | `alarm_actionable` | Non-empty Title/Body in tray + Full-screen `AlarmActivity` popup with ringing sound. |
-| **Owner** | Background | `alarm_actionable` | Non-empty Title/Body in tray + Full-screen `AlarmActivity` popup with ringing sound. |
-| **Owner** | Killed | `alarm_actionable` | Non-empty Title/Body in tray + Full-screen `AlarmActivity` popup with ringing sound. |
-| **Delivery** | Foreground | `alarm_actionable` | Non-empty Title/Body + Full-screen assignment alert. |
-| **Delivery** | Background | `alarm_actionable` | Non-empty Title/Body + Full-screen assignment alert. |
-| **Delivery** | Killed | `alarm_actionable` | Non-empty Title/Body + Full-screen assignment alert. |
-| **Customer** | Foreground | `pinned_live` | Tray banner + live tracking card update (NO alarm ringing). |
-| **Customer** | Background | `pinned_live` | Tray banner + live tracking card update (NO alarm ringing). |
-| **Customer** | Killed | `pinned_live` | System tray notification with non-empty Title and Body (NO alarm ringing). |
-| **Customer** | Foreground | `marketing` | Promotional notification in tray. |
-| **Customer** | Background | `marketing` | Promotional notification in tray. |
-| **Customer** | Killed | `marketing` | Promotional notification in tray. |
+- [ ] **Credentials Path Resolution**: Check that `GOOGLE_DRIVE_SERVICE_ACCOUNT_PATH` in `backend/.env` resolves correctly regardless of whether `process.cwd()` is project root or `backend/` directory.
+- [ ] **Service Account Auth**: Verify `googleDriveService.getHealthStatus()` returns `connected: true` with valid user email (`olive-pizza-drive-handler@olive-pizza-08.iam.gserviceaccount.com`).
+- [ ] **Folder Access**: Verify target `GOOGLE_DRIVE_FOLDER_ID` is shared with the Service Account email with Editor/Writer access.
+- [ ] **Report Generation**: Execute manual report trigger `POST /api/reports/generate-weekly` and verify PDF file is created, stored in Firestore `reports`, uploaded to Google Drive, and emailed to owner.
 
 ---
 
-## 3. Role-Gated Permissions & Channel Verification (New Requirement)
+## 2. Real-Time Live Update Reliability (Per Surface)
 
-- [ ] **Customer App Download**: Open app on fresh install without logging in. Confirm NO full-screen alarm permission prompt (`ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT`) appears.
-- [ ] **Customer Login**: Login as Customer. Confirm only standard notification channels (`olive_order_status`, `olive_marketing`) are registered. NO alarm channels (`olive_order_alarm_v5`) registered.
-- [ ] **Staff Login**: Login as Owner or Delivery Partner. Confirm role resolution triggers full-screen alarm permission prompt and registers staff alarm channels (`olive_order_alarm_v5`, `olive_delivery_alarm_v5`).
+### A. Customer Order Tracking (`/order-tracking/:orderId`)
+- [ ] **Firestore Status Listener**: Verify `onSnapshot(doc(db, "orders", orderId))` fires on status transitions (`pending` → `accepted` → `preparing` → `ready` → `out_for_delivery` → `delivered`).
+- [ ] **Supabase GPS Realtime**: Verify `supabase.channel("tracking-ORDER_ID").on("postgres_changes")` receives live latitude/longitude/heading updates from `delivery_locations`.
+- [ ] **Pinned Live Notification**: Verify Android pinned notification updates in-place without creating duplicate notification cards.
+
+### B. Owner Control Center (`/owner/live-order` & `LiveOrdersTable.tsx`)
+- [ ] **Multi-Device Realtime Sync**: Accepting/updating an order on Owner Device A updates the UI on Owner Device B instantly via `onSnapshot(query(collection(db, 'orders'), orderBy('createdAt', 'desc')))` without page refresh.
+- [ ] **Sound & Toast Trigger**: Verify audio chime plays when a new order lands in `pending` state.
+
+### C. Owner Live Map Modal (`OwnerLiveMapModal.tsx`)
+- [ ] **Supabase Rider Subscription**: Verify opening the Track Live modal subscribes to `supabase.channel("owner-track-ORDER_ID")` and moves the 3D rider marker in real time.
+- [ ] **Stale Indicator**: Verify stale position indicator triggers if no GPS update is received for >30 seconds.
+
+### D. Delivery Partner Dashboard (`DeliveryDashboard.tsx`)
+- [ ] **Assignment Listener**: Verify `onSnapshot(query(collection(db, "orders"), where("deliveryPartnerId", "==", user.uid)))` pops up new assignment card and plays audio alert.
+- [ ] **GPS Location Publishing**: Verify active delivery partner updates `public.delivery_locations` in Supabase (or native background service) every 3–5 seconds.
 
 ---
 
-## 4. Map & Live Tracking Matrix (BUG-1 & BUG-3 Safeguard)
+## 3. Production Automatic Notification Pipeline
 
-- [ ] **Browser Dev Console**: Inspect map pages (`/`, `/tracking/:id`, `/owner/live-map`) for CSP violation errors. Zero CSP errors allowed.
-- [ ] **Tile Server Failover**: Verify vector tiles (`tiles.openfreemap.org`) load seamlessly. Test failover by simulating network drop to confirm CartoDB Voyager tiles load as automatic backup.
-- [ ] **Live Location Streaming**: Verify delivery partner GPS updates stream to PostgreSQL `delivery_locations` and Supabase Realtime at 3-second sub-meter intervals.
+- [ ] **Owner Alarm (New Order)**: Verify `firestore.listener.ts` triggers fast direct FCM push + queue backup on new order addition.
+- [ ] **Customer Push (Status Update)**: Verify customer receives push notifications on `accepted`, `preparing`, `out_for_delivery`, `delivered`, and `cancelled`.
+- [ ] **Delivery Alarm (New Assignment)**: Verify delivery partner receives high-priority alarm notification when assigned to an order.
+- [ ] **FCM Token Cleanup**: Verify invalid tokens (`messaging/registration-token-not-registered`) are deactivated in Postgres `fcm_tokens` and removed from Firestore `users.fcmTokens` without throwing uncaught errors.

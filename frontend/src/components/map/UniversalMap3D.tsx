@@ -84,7 +84,9 @@ const CARTO_RASTER_STYLE: maplibregl.StyleSpecification = {
   ],
 };
 
-const DEFAULT_PITCH = 50;
+import { RESTAURANT_LOCATION } from '../../lib/config';
+
+const DEFAULT_PITCH = 0;
 const LERP_ALPHA = 0.12; // smooth interpolation factor (higher = snappier)
 const LERP_HEADING_ALPHA = 0.08;
 
@@ -224,13 +226,14 @@ const UniversalMap3D = forwardRef<UniversalMap3DRef, UniversalMap3DProps>(
       if (!containerRef.current || mapRef.current) return;
       injectCSS('universal-map-3d-css', MAP_CSS);
 
-      const initialCenter = center || { lat: 26.9124, lng: 75.7873 }; // Jaipur default
+      const initialCenter = center || { lat: RESTAURANT_LOCATION.lat, lng: RESTAURANT_LOCATION.lng }; // Rajnandgaon, Chhattisgarh default
+      const initialPitch = mode === 'delivery' ? 45 : 0;
       const map = new maplibregl.Map({
         container: containerRef.current,
         style: TILE_STYLE,
         center: [initialCenter.lng, initialCenter.lat],
         zoom,
-        pitch: DEFAULT_PITCH,
+        pitch: initialPitch,
         bearing: 0,
         // antialias enables WebGL MSAA for smoother 3D building edges
         // Cast needed as some maplibre-gl type versions omit this valid option
@@ -317,10 +320,13 @@ const UniversalMap3D = forwardRef<UniversalMap3DRef, UniversalMap3DProps>(
         onMapReady?.(map);
       });
 
-      // Detect manual drag — disengage auto-follow
+      // Detect manual drag — disengage auto-follow and switch rider map to top view
       map.on('dragstart', () => {
         autoFollowRef.current = false;
         setAutoFollow(false);
+        if (mode === 'delivery') {
+          map.easeTo({ pitch: 0, duration: 400 });
+        }
         onUserDrag?.();
       });
       
@@ -395,7 +401,9 @@ const UniversalMap3D = forwardRef<UniversalMap3DRef, UniversalMap3DProps>(
 
           // Auto-follow rider
           if (marker.type === 'rider' && autoFollowRef.current) {
-            map.easeTo({ center: [targetPos.lng, targetPos.lat], duration: 800 });
+            const targetPitch = mode === 'delivery' ? 45 : 0;
+            const targetBearing = mode === 'delivery' ? (marker.heading || 0) : 0;
+            map.easeTo({ center: [targetPos.lng, targetPos.lat], pitch: targetPitch, bearing: targetBearing, duration: 800 });
           }
         } else {
           // Create new marker
@@ -432,9 +440,11 @@ const UniversalMap3D = forwardRef<UniversalMap3DRef, UniversalMap3DProps>(
       const riderMarker = markers.find((m) => m.type === 'rider');
       const target = riderMarker?.position || center;
       if (target && mapRef.current) {
-        mapRef.current.flyTo({ center: [target.lng, target.lat], zoom, pitch: DEFAULT_PITCH, duration: 800 });
+        const targetPitch = mode === 'delivery' ? 45 : 0;
+        const targetBearing = mode === 'delivery' ? (riderMarker?.heading || 0) : 0;
+        mapRef.current.flyTo({ center: [target.lng, target.lat], zoom, pitch: targetPitch, bearing: targetBearing, duration: 800 });
       }
-    }, [markers, center, zoom]);
+    }, [markers, center, zoom, mode]);
 
     return (
       <div className={`relative overflow-hidden rounded-2xl ${className}`} style={{ minHeight: 320 }}>
@@ -504,4 +514,5 @@ const UniversalMap3D = forwardRef<UniversalMap3DRef, UniversalMap3DProps>(
   }
 );
 
-export default UniversalMap3D;
+const MemoizedUniversalMap3D = React.memo(UniversalMap3D);
+export default MemoizedUniversalMap3D;

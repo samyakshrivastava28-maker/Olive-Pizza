@@ -27,3 +27,4 @@ android/local.properties
 *.apk
 *.aab
 *.jks
+backend/logs/

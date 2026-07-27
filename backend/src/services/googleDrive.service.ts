@@ -65,17 +65,24 @@ class GoogleDriveService {
       // 2. Fall back to file path
       if (!credentials && process.env.GOOGLE_DRIVE_SERVICE_ACCOUNT_PATH) {
         const serviceAccountPath = process.env.GOOGLE_DRIVE_SERVICE_ACCOUNT_PATH;
-        let absolutePath = path.resolve(process.cwd(), serviceAccountPath);
-        if (!fs.existsSync(absolutePath)) {
-          absolutePath = path.resolve(__dirname, '../../', serviceAccountPath);
-        }
+        const normalizedPath = serviceAccountPath.replace(/^backend[\/\\]/, '');
 
-        if (fs.existsSync(absolutePath)) {
+        const candidatePaths = [
+          path.resolve(process.cwd(), serviceAccountPath),
+          path.resolve(process.cwd(), normalizedPath),
+          path.resolve(__dirname, '../../', serviceAccountPath),
+          path.resolve(__dirname, '../../credentials/google-drive-service-account.json'),
+          path.resolve(__dirname, '../credentials/google-drive-service-account.json'),
+        ];
+
+        let absolutePath = candidatePaths.find(p => fs.existsSync(p));
+
+        if (absolutePath && fs.existsSync(absolutePath)) {
           const content = fs.readFileSync(absolutePath, 'utf8');
           credentials = JSON.parse(content);
           console.log(`[Google Drive] Loaded Service Account from file: ${absolutePath}`);
         } else {
-          console.warn(`[Google Drive] Service account file not found at: ${absolutePath}`);
+          console.warn(`[Google Drive] Service account file not found in candidates: ${candidatePaths.join(', ')}`);
         }
       }
 

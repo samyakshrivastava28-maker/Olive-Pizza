@@ -41,15 +41,23 @@ export default function Checkout() {
   const [showProcessing, setShowProcessing] = useState(false);
   const [processingStatus, setProcessingStatus] = useState('idle'); // idle, processing, success
   const [orderId, setOrderId] = useState('');
-  const [mapCenter, setMapCenter] = useState<{lat: number, lng: number}>({lat: 19.0760, lng: 72.8777});
+  const [mapCenter, setMapCenter] = useState<{lat: number, lng: number}>({
+    lat: (user as any)?.lat || RESTAURANT_LOCATION.lat,
+    lng: (user as any)?.lng || RESTAURANT_LOCATION.lng
+  });
 
-  // Auto-fetch location if empty
+  // Auto-sync customer onboarding location or fetch GPS if address empty
   useEffect(() => {
-    if (!address && navigator.geolocation) {
+    if ((user as any)?.lat && (user as any)?.lng) {
+      setMapCenter({ lat: (user as any).lat, lng: (user as any).lng });
+    }
+    if ((user as any)?.fullAddress || (user as any)?.full_address) {
+      setAddress((user as any).fullAddress || (user as any).full_address);
+    } else if (!address && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         async (position) => {
           const { latitude, longitude } = position.coords;
-          setMapCenter({lat: latitude, lng: longitude});
+          setMapCenter({ lat: latitude, lng: longitude });
           try {
             const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
             const data = await res.json();
@@ -59,7 +67,7 @@ export default function Checkout() {
         () => {}
       );
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     if (!isAuthenticated) {
