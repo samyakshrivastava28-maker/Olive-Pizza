@@ -31,10 +31,12 @@ export interface CartItem {
   name: string;
   price: number;
   quantity: number;
+  size?: string;
   variant?: string;
   crust?: string;
   addons?: string[];
   image: string;
+  isVegetarian?: boolean;
 }
 
 export interface User {

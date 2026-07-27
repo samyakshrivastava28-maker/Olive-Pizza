@@ -83,12 +83,20 @@ function getModelChain() {
   const gemini = getGeminiClient();
   
   if (nvidia) {
-    chain.push({ client: nvidia, model: 'deepseek-ai/deepseek-v4-flash', name: 'DeepSeek V4 Flash (NVIDIA)', providerKey: 'nvidia' });
-    chain.push({ client: nvidia, model: 'qwen/qwen3.5-122b-a10b', name: 'Qwen 3 (NVIDIA)', providerKey: 'nvidia' });
-    chain.push({ client: nvidia, model: 'z-ai/glm-5.2', name: 'GLM 5.2 (NVIDIA)', providerKey: 'nvidia' });
+    // Fast & Primary Models (NVIDIA NIM)
+    chain.push({ client: nvidia, model: 'deepseek-ai/deepseek-v4-flash', name: 'DeepSeek V4 Flash (NVIDIA NIM)', providerKey: 'nvidia' });
+    chain.push({ client: nvidia, model: 'mistralai/mistral-nemotron', name: 'Mistral Nemotron (NVIDIA NIM)', providerKey: 'nvidia' });
+    chain.push({ client: nvidia, model: 'z-ai/glm-4.7', name: 'GLM 4.7 (NVIDIA NIM)', providerKey: 'nvidia' });
+    chain.push({ client: nvidia, model: 'z-ai/glm-5.2', name: 'GLM 5.2 (NVIDIA NIM)', providerKey: 'nvidia' });
+    chain.push({ client: nvidia, model: 'moonshotai/kimi-2.6', name: 'Kimi 2.6 (NVIDIA NIM)', providerKey: 'nvidia' });
+    chain.push({ client: nvidia, model: 'moonshotai/kimi-2.7', name: 'Kimi 2.7 (NVIDIA NIM)', providerKey: 'nvidia' });
+    chain.push({ client: nvidia, model: 'deepseek-ai/deepseek-v4-pro', name: 'DeepSeek V4 Pro (NVIDIA NIM)', providerKey: 'nvidia' });
+    chain.push({ client: nvidia, model: 'deepseek-ai/deepseek-r1', name: 'DeepSeek R1 (NVIDIA NIM)', providerKey: 'nvidia' });
+    chain.push({ client: nvidia, model: 'qwen/qwen3.5-122b-a10b', name: 'Qwen 3.5 122B (NVIDIA NIM)', providerKey: 'nvidia' });
   }
   if (or) {
-    chain.push({ client: or, model: 'qwen/qwen3-next-80b-a3b-instruct', name: 'Qwen3-Next-80B (OpenRouter)', providerKey: 'openrouter' });
+    chain.push({ client: or, model: 'qwen/qwen3-next-80b-a3b-instruct', name: 'Qwen3 Next 80B (OpenRouter)', providerKey: 'openrouter' });
+    chain.push({ client: or, model: 'deepseek/deepseek-r1', name: 'DeepSeek R1 (OpenRouter)', providerKey: 'openrouter' });
     chain.push({ client: or, model: 'google/gemma-4-31b-it', name: 'Gemma 4 31B (OpenRouter)', providerKey: 'openrouter' });
     chain.push({ client: or, model: 'google/gemma-4-27b-a3b-it', name: 'Gemma 4 27B (OpenRouter)', providerKey: 'openrouter' });
   }
@@ -731,3 +739,45 @@ CRITICAL INSTRUCTION: You must provide the final prompt immediately. Keep your <
   }
   return { success: false, error: `Failed to enhance prompt. Last error: ${lastError?.message}` };
 }
+
+// ── Speech-to-Text Transcription via NVIDIA Canary-1B-ASR (NIM) ───────────────
+export async function transcribeAudioCanary(audioBuffer: Buffer, mimeType: string = 'audio/wav'): Promise<{ success: boolean; text?: string; error?: string }> {
+  try {
+    const key = getKey('NVIDIA_API_KEY');
+    if (!isValidKey(key)) {
+      return { success: false, error: 'NVIDIA API key not configured for Canary ASR' };
+    }
+
+    console.log(`[STT] Transcribing audio payload (${audioBuffer.length} bytes, type=${mimeType}) via nvidia/canary-1b-asr...`);
+    
+    // Construct multipart form data for transcription endpoint
+    const blob = new Blob([audioBuffer], { type: mimeType });
+    const formData = new FormData();
+    formData.append('file', blob, 'speech.wav');
+    formData.append('model', 'nvidia/canary-1b-asr');
+    formData.append('language', 'hi'); // Hindi + English multilingual STT
+
+    const res = await fetch('https://integrate.api.nvidia.com/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${key}`
+      },
+      body: formData
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      console.warn(`[STT] Canary ASR NIM error (${res.status}): ${errText}`);
+      throw new Error(`Canary ASR error ${res.status}: ${errText}`);
+    }
+
+    const data: any = await res.json();
+    const transcript = data.text || data.transcript || '';
+    console.log(`[STT] ✅ Canary ASR Result: "${transcript}"`);
+    return { success: true, text: transcript };
+  } catch (error: any) {
+    console.error('[STT] Canary ASR failed:', error.message);
+    return { success: false, error: error.message };
+  }
+}
+

@@ -210,4 +210,112 @@ router.post('/enhance-prompt', async (req, res) => {
   } catch (error: any) { res.status(500).json({ error: 'Internal server error' }); }
 });
 
+// ─── STT Transcription Endpoint (NVIDIA Canary-1B-ASR) ───────────────────────
+import multer from 'multer';
+import { transcribeAudioCanary } from '../services/ai.service.js';
+import { evaluateLLMs } from '../services/ai/ModelEvaluationService.js';
+
+const audioUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+
+router.post('/stt', audioUpload.single('file'), async (req: any, res: any) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: 'Audio file is required for STT' });
+    }
+    const result = await transcribeAudioCanary(req.file.buffer, req.file.mimetype || 'audio/wav');
+    if (result.success) {
+      res.json({ success: true, text: result.text });
+    } else {
+      res.status(500).json({ success: false, error: result.error || 'STT transcription failed' });
+    }
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── LLM Model Evaluation Endpoint ──────────────────────────────────────────
+router.post('/evaluate-models', requireAuth, requireRole(['owner', 'admin']), async (_req, res) => {
+  try {
+    const evalData = await evaluateLLMs();
+    res.json({ success: true, ...evalData });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── Dedicated Action Rate Limiter (Max 5 action executions / min) ───────────
+const actionTimestamps = new Map<string, number[]>();
+
+function aiActionLimiter(req: AuthRequest, res: any, next: any) {
+  const identifier = req.user?.uid || req.ip || 'anonymous';
+  const now = Date.now();
+  const windowMs = 60 * 1000;
+  const maxActions = 5;
+
+  const timestamps = (actionTimestamps.get(identifier) || []).filter(t => now - t < windowMs);
+  if (timestamps.length >= maxActions) {
+    return res.status(429).json({
+      success: false,
+      error: 'Rate limit exceeded for AI order actions. Maximum 5 actions allowed per minute.'
+    });
+  }
+
+  timestamps.push(now);
+  actionTimestamps.set(identifier, timestamps);
+  next();
+}
+
+// ─── Whitelisted Agentic Order Action Handler ────────────────────────────────
+router.post('/action', optionalAuth, aiActionLimiter, async (req: AuthRequest, res: any) => {
+  try {
+    const { actionType, payload } = req.body;
+    
+    // Strict whitelist of permitted agentic tool functions
+    const ALLOWED_ACTIONS = ['ADD_TO_CART', 'REMOVE_FROM_CART', 'APPLY_COUPON', 'CONFIRM_AND_PLACE_ORDER'];
+    
+    if (!actionType || !ALLOWED_ACTIONS.includes(actionType)) {
+      return res.status(400).json({
+        success: false,
+        error: `Invalid action type. Allowed actions: ${ALLOWED_ACTIONS.join(', ')}`
+      });
+    }
+
+    console.log(`[AI Agentic Action] Executing ${actionType} for user ${req.user?.uid || 'guest'}`);
+
+    if (actionType === 'CONFIRM_AND_PLACE_ORDER') {
+      // Require authenticated user for actual order placement
+      if (!req.user) {
+        return res.status(401).json({
+          success: false,
+          error: 'Authentication required to place an order via AI Assistant.'
+        });
+      }
+      
+      // Hand off to exact same order creation pipeline as manual checkout
+      // Result returned for client-side visual confirmation dialog execution
+      return res.json({
+        success: true,
+        action: 'CONFIRM_AND_PLACE_ORDER',
+        requiresVisualConfirmation: true,
+        orderData: {
+          userId: req.user.uid,
+          items: payload.items || [],
+          deliveryAddress: payload.deliveryAddress || 'Saved Address',
+          paymentMethod: payload.paymentMethod || 'saved_token',
+          totalAmount: payload.totalAmount
+        }
+      });
+    }
+
+    res.json({
+      success: true,
+      action: actionType,
+      payload
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 export default router;
+

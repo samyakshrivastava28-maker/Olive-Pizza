@@ -16,6 +16,10 @@ interface DataState {
     isLoading: boolean;
     isWithinBusinessHours: boolean;
     deliveryRadiusKm: number;
+    openingHour: number;
+    closingHour: number;
+    openingTime: string;
+    closingTime: string;
   };
   isInitialized: boolean;
   isInitializing: boolean;
@@ -51,7 +55,11 @@ export const useDataStore = create<DataState>()(
         isDeliveryAvailable: true,
         isLoading: true,
         isWithinBusinessHours: true,
-        deliveryRadiusKm: 5
+        deliveryRadiusKm: 5,
+        openingHour: 12,
+        closingHour: 24,
+        openingTime: "12:00",
+        closingTime: "24:00"
       },
       isInitialized: false,
       isInitializing: false,
@@ -61,7 +69,6 @@ export const useDataStore = create<DataState>()(
         isInitializingLock = true;
         set({ isInitializing: true });
 
-        // Clear existing to prevent leaks in React Strict Mode double-invocations
         unsubscribers.forEach((unsub) => unsub());
         unsubscribers = [];
 
@@ -77,7 +84,7 @@ export const useDataStore = create<DataState>()(
         const handleError = (key: string, setupFn: () => void) => (error: any) => {
           console.warn(`[dataStore] Firebase listener failed for ${key}:`, error);
           const currentBackoff = backoffMap[key] || 1000;
-          backoffMap[key] = Math.min(currentBackoff * 2, 30000); // Max 30s
+          backoffMap[key] = Math.min(currentBackoff * 2, 30000);
           
           if (retryTimers[key]) clearTimeout(retryTimers[key]);
           retryTimers[key] = setTimeout(() => {
@@ -88,24 +95,28 @@ export const useDataStore = create<DataState>()(
 
         const setupSettings = () => {
           const unsubSettings = onSnapshot(doc(db, 'settings', 'global'), (snap) => {
-            import('./config').then(({ OPENING_HOUR, CLOSING_HOUR }) => {
+            if (snap.exists()) {
+              const data = snap.data();
+              const openH = data.openingHour !== undefined ? Number(data.openingHour) : (data.openingTime ? parseInt(data.openingTime.split(':')[0]) : 12);
+              const closeH = data.closingHour !== undefined ? Number(data.closingHour) : (data.closingTime ? parseInt(data.closingTime.split(':')[0]) : 24);
               const currentHour = new Date().getHours();
-              const isWithinHours = currentHour >= OPENING_HOUR && currentHour < CLOSING_HOUR;
-              
-              if (snap.exists()) {
-                const data = snap.data();
-                set({ storeStatus: {
-                  isRestaurantOpen: data.isRestaurantOpen ?? true,
-                  isDeliveryAvailable: data.isDeliveryAvailable ?? true,
-                  isLoading: false,
-                  isWithinBusinessHours: isWithinHours,
-                  deliveryRadiusKm: data.deliveryRadiusKm ?? 5
-                }});
-              } else {
-                set((state) => ({ storeStatus: { ...state.storeStatus, isLoading: false, isWithinBusinessHours: isWithinHours }}));
-              }
-            });
-            backoffMap['settings'] = 1000; // Reset on success
+              const isWithinHours = currentHour >= openH && currentHour < closeH;
+
+              set({ storeStatus: {
+                isRestaurantOpen: data.isRestaurantOpen ?? true,
+                isDeliveryAvailable: data.isDeliveryAvailable ?? true,
+                isLoading: false,
+                isWithinBusinessHours: isWithinHours,
+                deliveryRadiusKm: data.deliveryRadiusKm ?? 5,
+                openingHour: openH,
+                closingHour: closeH,
+                openingTime: data.openingTime || "12:00",
+                closingTime: data.closingTime || "24:00"
+              }});
+            } else {
+              set((state) => ({ storeStatus: { ...state.storeStatus, isLoading: false }}));
+            }
+            backoffMap['settings'] = 1000;
           }, handleError('settings', setupSettings));
           unsubscribers.push(unsubSettings);
         };

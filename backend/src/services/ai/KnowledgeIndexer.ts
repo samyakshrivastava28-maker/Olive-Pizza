@@ -109,6 +109,34 @@ export class KnowledgeIndexer {
       return false;
     }
   }
+
+  /**
+   * Synchronously re-indexes a public menu item or policy document directly upon owner edits.
+   */
+  public async upsertItemDirectly(item: { id: string; name: string; description?: string; price?: number; category?: string; isVeg?: boolean; tags?: string[] }): Promise<boolean> {
+    const textContent = `Product: ${item.name}. Category: ${item.category || 'menu'}. Price: ₹${item.price ?? 'N/A'}. ${item.isVeg ? 'Vegetarian.' : ''} Description: ${item.description || ''}.`;
+    const metadata: DocumentMetadata = {
+      documentId: `prod_${item.id}`,
+      documentType: 'menu_item',
+      source: 'owner_dashboard_direct',
+      category: item.category || 'menu',
+      tags: item.tags || ['menu', 'public'],
+      lastUpdated: new Date().toISOString()
+    };
+
+    console.log(`[KnowledgeIndexer] ⚡ Synchronous direct re-indexing triggered for menu item: ${item.name} (id: ${item.id})`);
+    return await this.indexText(textContent, metadata);
+  }
+
+  /**
+   * Synchronously removes a deleted public item from Qdrant vector index directly upon owner deletion.
+   */
+  public async removeItemDirectly(itemId: string): Promise<boolean> {
+    const documentId = itemId.startsWith('prod_') ? itemId : `prod_${itemId}`;
+    console.log(`[KnowledgeIndexer] ⚡ Synchronous direct vector deletion triggered for document: ${documentId}`);
+    return await qdrantService.deleteDocument(documentId);
+  }
 }
 
 export const knowledgeIndexer = new KnowledgeIndexer();
+

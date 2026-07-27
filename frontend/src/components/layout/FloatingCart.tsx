@@ -98,7 +98,8 @@ export default function FloatingCart() {
           animate={{ y: 0, opacity: 1, scale: 1 }}
           exit={{ y: 150, opacity: 0, scale: 0.8 }}
           transition={{ type: 'spring', damping: 20, stiffness: 200 }}
-          className="fixed bottom-20 md:bottom-6 left-4 right-4 md:left-1/2 md:-translate-x-1/2 md:w-full md:max-w-md z-[60] pointer-events-none"
+          className="fixed left-4 right-4 md:left-1/2 md:-translate-x-1/2 md:w-full md:max-w-md z-[70] pointer-events-none"
+          style={{ bottom: 'var(--app-floating-bottom-offset, calc(72px + env(safe-area-inset-bottom, 0px) + 12px))' }}
         >
           {/* Continuous Idle Animation Wrapper */}
           <motion.div

@@ -206,7 +206,8 @@ export default function FloatingTracker() {
         animate={{ y: 0, opacity: 1, scale: 1 }}
         exit={{ y: 100, opacity: 0, scale: 0.9 }}
         transition={{ type: 'spring', damping: 22, stiffness: 220 }}
-        className="fixed bottom-20 md:bottom-6 left-4 right-4 md:left-auto md:right-6 md:w-[420px] z-[55] cursor-pointer"
+        className="fixed left-4 right-4 md:left-auto md:right-6 md:w-[420px] z-[65] cursor-pointer"
+        style={{ bottom: 'var(--app-floating-bottom-offset, calc(72px + env(safe-area-inset-bottom, 0px) + 12px))' }}
         onClick={() => navigate(`/order-tracking/${activeOrder.id}`)}
       >
         <div className={`relative overflow-hidden rounded-3xl border border-white/15 bg-gradient-to-r ${config.bgColor} backdrop-blur-2xl shadow-[0_30px_60px_rgba(0,0,0,0.6)]`}>

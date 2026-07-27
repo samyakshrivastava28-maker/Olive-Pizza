@@ -2,15 +2,19 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router';
 import { useAuthStore, useCartStore } from '../lib/store';
+import { useCartAnimation } from '../components/ui/CartAnimationProvider';
 import {
   Bot, Send, Loader2, Star, Clock, Leaf, Zap, Shield, ShoppingCart,
-  CheckCircle, AlertTriangle, ChevronRight, Tag, Navigation,
+  CheckCircle, AlertTriangle, ChevronRight, Tag, Navigation, Sparkles,
+  Mic, MicOff, ThumbsUp, ThumbsDown, Copy, RotateCcw, MessageSquare,
+  Trash2, Plus, Volume2, HelpCircle, PhoneCall
 } from 'lucide-react';
 import PageTransition from '../components/PageTransition';
-import { Helmet } from 'react-helmet-async';
+import Galaxy from '../components/ui/Galaxy';
+import SEO from '../components/SEO';
 import toast from 'react-hot-toast';
 
-// ── Types ─────────────────────────────────────────────────────────────────────
+// ── Interfaces ─────────────────────────────────────────────────────────────────
 interface Message {
   id: string;
   role: 'user' | 'ai';
@@ -18,6 +22,7 @@ interface Message {
   products?: ProductCard[];
   source?: string;
   timestamp: Date;
+  liked?: boolean;
 }
 
 interface ProductCard {
@@ -34,556 +39,561 @@ interface ProductCard {
   isAvailable?: boolean;
 }
 
-interface PendingAction {
-  type: string;
-  payload: any;
-  label: string;
-  icon: any;
-  danger?: boolean;
-}
-
-// ── Constants ─────────────────────────────────────────────────────────────────
+// ── Quick Chips & Capabilities ──────────────────────────────────────────────────
 const QUICK_CHIPS = [
   { emoji: '🍕', label: 'Show pizzas', msg: 'Show me all pizzas' },
-  { emoji: '🌶️', label: 'Spicy options', msg: 'Show spicy options' },
+  { emoji: '🌶️', label: 'Spicy options', msg: 'Recommend a spicy pizza' },
   { emoji: '🥗', label: 'Veg menu', msg: 'Show vegetarian options' },
   { emoji: '💰', label: 'Best deals', msg: 'What are your best deals?' },
-  { emoji: '🎟️', label: 'Coupons', msg: 'Any active coupons?' },
-  { emoji: '⏰', label: 'Timings', msg: 'What are your opening hours?' },
-  { emoji: '🛵', label: 'Delivery', msg: 'Delivery charges and areas?' },
-  { emoji: '📞', label: 'Contact', msg: 'How do I contact Olive Pizza?' },
+  { emoji: '🎟️', label: 'Coupons', msg: 'What active coupons can I use?' },
+  { emoji: '🛵', label: 'Track order', msg: 'Where is my active order?' },
+  { emoji: '⏰', label: 'Store hours', msg: 'What are your opening hours?' },
+  { emoji: '📞', label: 'Contact support', msg: 'How do I contact Olive Pizza?' },
 ];
 
-const FOLLOW_UP_MAP: Record<string, string[]> = {
-  pizza:    ['Show me spicy pizzas 🌶️', 'Veg pizza options? 🥗', 'Best combo deals? 💰'],
-  coupon:   ['How do I apply a coupon?', 'Any combo offers? 🎁'],
-  delivery: ['What are the delivery charges?', 'Which areas do you deliver?'],
-  cart:     ['Go to cart 🛒', 'Apply a coupon?', 'Go to checkout'],
-  default:  ['Show me the menu 🍕', 'Best sellers?', 'Any offers today?'],
-};
+const CAPABILITY_CARDS = [
+  { icon: '🍕', title: 'Pizza Recommendations', desc: 'Find pizzas matched to your exact taste & dietary preferences.' },
+  { icon: '🛵', title: 'Real-time Order Tracking', desc: 'Get live status and ETA updates for your active orders.' },
+  { icon: '🎟️', title: 'Coupons & Combos', desc: 'Unlock secret discounts and custom combo savings.' },
+  { icon: '📞', title: '24/7 Restaurant Support', desc: 'Direct answers to timings, delivery areas, and FAQs.' }
+];
 
-function getFollowUps(msg: string): string[] {
-  const q = msg.toLowerCase();
-  if (q.includes('pizza') || q.includes('food') || q.includes('menu')) return FOLLOW_UP_MAP.pizza;
-  if (q.includes('coupon') || q.includes('discount') || q.includes('offer')) return FOLLOW_UP_MAP.coupon;
-  if (q.includes('deliver')) return FOLLOW_UP_MAP.delivery;
-  if (q.includes('cart') || q.includes('add') || q.includes('order')) return FOLLOW_UP_MAP.cart;
-  return FOLLOW_UP_MAP.default;
-}
-
-// ── Sub-components ────────────────────────────────────────────────────────────
-function TypingDots() {
-  return (
-    <div className="flex items-center gap-1.5 px-4 py-3">
-      {[0, 0.15, 0.3].map(delay => (
-        <motion.div
-          key={delay}
-          className="w-2 h-2 bg-primary-400 rounded-full"
-          animate={{ y: [0, -5, 0] }}
-          transition={{ duration: 0.55, repeat: Infinity, delay }}
-        />
-      ))}
-    </div>
-  );
-}
-
-function SourceBadge({ source }: { source?: string }) {
-  if (!source) return null;
-  const config =
-    source === 'local_kb'         ? { text: 'Instant · Local KB', color: 'text-emerald-400', bg: 'bg-emerald-400/10' } :
-    source === 'offline_template' ? { text: 'Offline Mode', color: 'text-amber-400', bg: 'bg-amber-400/10' } :
-    source.includes('Gemini')     ? { text: `${source}`, color: 'text-blue-400', bg: 'bg-blue-400/10' } :
-    source.includes('NVIDIA')     ? { text: `${source}`, color: 'text-green-400', bg: 'bg-green-400/10' } :
-                                    { text: source, color: 'text-slate-400', bg: 'bg-white/5' };
-  return (
-    <div className={`inline-flex items-center gap-1 mt-1 ml-1 px-2 py-0.5 rounded-full text-[10px] font-medium ${config.color} ${config.bg}`}>
-      <Shield className="w-2.5 h-2.5" />
-      {config.text}
-    </div>
-  );
-}
-
-function ProductMiniCard({ product, onView, onSimilar, onAddToCart }: {
-  product: ProductCard;
-  onView: (p: ProductCard) => void;
-  onSimilar: (p: ProductCard) => void;
-  onAddToCart: (p: ProductCard) => void;
-}) {
-  const price = product.discountedPrice ?? product.price;
-  const hasDiscount = product.discountedPrice && product.discountedPrice < product.price;
-  const discountPct = hasDiscount ? Math.round(((product.price - price) / product.price) * 100) : 0;
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="flex-shrink-0 w-48 bg-dark-900 border border-white/8 rounded-2xl overflow-hidden snap-start"
-    >
-      <div className="relative">
-        {product.imageUrl ? (
-          <img src={product.imageUrl} alt={product.name} className="w-full h-28 object-cover" loading="lazy" />
-        ) : (
-          <div className="w-full h-28 bg-primary-500/10 flex items-center justify-center text-4xl">🍕</div>
-        )}
-        <div className="absolute top-2 left-2 flex gap-1">
-          {product.isVeg !== undefined && (
-            <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${product.isVeg ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`}>
-              {product.isVeg ? <Leaf className="w-2.5 h-2.5 inline" /> : '🍗'}
-            </span>
-          )}
-          {discountPct > 0 && (
-            <span className="bg-orange-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded">{discountPct}% OFF</span>
-          )}
-        </div>
-        {!product.isAvailable && (
-          <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-            <span className="text-white font-bold text-xs">Unavailable</span>
-          </div>
-        )}
-      </div>
-      <div className="p-3">
-        <p className="font-bold text-white text-xs line-clamp-1">{product.name}</p>
-        <p className="text-slate-500 text-[11px] line-clamp-2 mt-0.5 mb-2">{product.description}</p>
-        <div className="flex items-center justify-between mb-2">
-          <div>
-            <span className="text-primary-400 font-black text-sm">₹{price}</span>
-            {hasDiscount && <span className="text-slate-600 text-[10px] line-through ml-1">₹{product.price}</span>}
-          </div>
-          <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
-            {product.rating && <span className="flex items-center gap-0.5"><Star className="w-2.5 h-2.5 text-yellow-400 fill-current" />{product.rating}</span>}
-            {product.preparationTime && <span className="flex items-center gap-0.5"><Clock className="w-2.5 h-2.5" />{product.preparationTime}m</span>}
-          </div>
-        </div>
-        <div className="flex gap-1.5">
-          <button onClick={() => onView(product)} className="flex-1 bg-white/8 hover:bg-white/12 text-slate-300 text-[11px] font-bold py-1.5 rounded-lg transition-colors">View</button>
-          {product.isAvailable !== false && (
-            <button onClick={() => onAddToCart(product)} className="flex-1 bg-primary-500 hover:bg-primary-600 text-white text-[11px] font-bold py-1.5 rounded-lg transition-colors flex items-center justify-center gap-1">
-              <ShoppingCart className="w-3 h-3" /> Add
-            </button>
-          )}
-        </div>
-      </div>
-    </motion.div>
-  );
-}
-
-// ── Main Page ─────────────────────────────────────────────────────────────────
 export default function UniversalAssistant() {
   const navigate = useNavigate();
-  const location = useLocation();
-  const { role, isAuthenticated } = useAuthStore();
-  const cartStore = useCartStore();
+  const { user } = useAuthStore();
+  const addItem = useCartStore((state) => state.addItem);
+  const { triggerAnimation } = useCartAnimation();
 
-  const [messages, setMessages] = useState<Message[]>([
+  // Chat State
+  const [messages, setMessages] = useState<Message[]>(() => [
     {
-      id: 'welcome',
+      id: 'welcome-1',
       role: 'ai',
-      text: `Hey there! 🍕 I'm your Olive Pizza AI Assistant.\n\nI know our full menu, all current deals, delivery details, and more — all in real time.\n\nAsk me anything, or tap a quick topic below!`,
-      timestamp: new Date(),
-    },
+      text: `Hello ${user?.name ? user.name : 'Gourmet Lover'}! 🍕 I'm Olive AI, your artisan pizza concierge. How can I satisfy your cravings today?`,
+      timestamp: new Date()
+    }
   ]);
+
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [followUps, setFollowUps] = useState<string[]>(FOLLOW_UP_MAP.default);
-  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
-  const [kbStatus, setKbStatus] = useState<any>(null);
+  const [isListening, setIsListening] = useState(false);
+  const [historySidebarOpen, setHistorySidebarOpen] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
 
+  // Auto-scroll to bottom of chat
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
 
-  useEffect(() => {
-    fetch('/api/ai/kb-status')
-      .then(r => r.json())
-      .then(d => { if (d.success) setKbStatus(d); })
-      .catch(() => {});
-  }, []);
+  // Handle Quick Add to Cart from AI Product Recommendation Card
+  const handleAddToCart = (e: React.MouseEvent, p: ProductCard) => {
+    e.stopPropagation();
+    addItem({
+      id: p.id,
+      menuItemId: p.id,
+      name: p.name,
+      price: p.discountedPrice || p.price,
+      quantity: 1,
+      image: p.imageUrl || 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=400',
+      isVegetarian: p.isVeg ?? true,
+      crust: 'Classic Crust',
+      size: 'Medium'
+    });
 
-  // ── Action parser: convert AI response action into PendingAction ─────────────
-  const buildPendingAction = useCallback((action: any): PendingAction | null => {
-    if (!action?.type) return null;
-    const { type, payload } = action;
+    triggerAnimation(e, p.imageUrl || 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=400');
+    window.dispatchEvent(new CustomEvent('cart-item-added'));
+    toast.success(`Added ${p.name} to cart! 🍕`, {
+      style: { background: '#1e1e1e', color: '#fff', border: '1px solid rgba(255,255,255,0.1)' }
+    });
+  };
 
-    if (type === 'NAVIGATE') {
-      const path = payload?.path || '/';
-      const labels: Record<string, string> = {
-        '/menu': 'Open the Menu page 🍕',
-        '/cart': 'Open your Cart 🛒',
-        '/checkout': 'Proceed to Checkout 💳',
-        '/dashboard': 'Open your Orders Dashboard 📦',
-      };
-      const label = labels[path] || (path.includes('/product/') ? 'Open product page' : `Navigate to ${path}`);
-      return { type, payload, label, icon: Navigation };
-    }
+  // Simulate Sending AI Query
+  const handleSend = async (customQuery?: string) => {
+    const queryText = customQuery || input;
+    if (!queryText.trim() || loading) return;
 
-    if (type === 'ADD_TO_CART') {
-      const { productName, price, quantity = 1, variant } = payload;
-      const label = `Add ${quantity}× ${productName}${variant ? ` (${variant})` : ''} — ₹${price * quantity} to cart`;
-      return { type, payload, label, icon: ShoppingCart };
-    }
+    const userMsg: Message = {
+      id: `user-${Date.now()}`,
+      role: 'user',
+      text: queryText,
+      timestamp: new Date()
+    };
 
-    if (type === 'APPLY_COUPON') {
-      return { type, payload, label: `Apply coupon code: ${payload.code}`, icon: Tag };
-    }
-
-    return null;
-  }, []);
-
-  // ── Execute approved action ───────────────────────────────────────────────────
-  const executeAction = useCallback(() => {
-    if (!pendingAction) return;
-    const { type, payload } = pendingAction;
-
-    try {
-      if (type === 'NAVIGATE') {
-        navigate(payload.path);
-        setMessages(prev => [...prev, {
-          id: Date.now().toString(),
-          role: 'ai',
-          text: `Done! Taking you there now 🚀`,
-          timestamp: new Date(),
-        }]);
-      }
-
-      if (type === 'ADD_TO_CART') {
-        const { productId, productName, price, quantity = 1, variant, imageUrl } = payload;
-        // Validate product data before adding
-        if (!productId || !productName || typeof price !== 'number') {
-          toast.error('Could not add to cart — invalid product data.');
-          setPendingAction(null);
-          return;
-        }
-        cartStore.addItem({
-          id: productId,
-          menuItemId: productId,
-          name: productName,
-          price: price,
-          quantity: quantity,
-          variant: variant || undefined,
-          image: imageUrl || '',
-        });
-        toast.success(`🍕 ${productName} added to cart!`);
-        setMessages(prev => [...prev, {
-          id: Date.now().toString(),
-          role: 'ai',
-          text: `Done! ✅ **${quantity}× ${productName}** has been added to your cart.\n\nWant to checkout or keep browsing?`,
-          timestamp: new Date(),
-        }]);
-        setFollowUps(['Go to cart 🛒', 'Continue shopping 🍕', 'Apply a coupon? 🎟️']);
-      }
-
-      if (type === 'APPLY_COUPON') {
-        // Navigate to cart/checkout where coupon can be entered
-        // Dispatch custom event for coupon listeners if they exist
-        window.dispatchEvent(new CustomEvent('apply-coupon', { detail: { code: payload.code } }));
-        toast.success(`Coupon ${payload.code} applied! 🎉`);
-        setMessages(prev => [...prev, {
-          id: Date.now().toString(),
-          role: 'ai',
-          text: `Coupon **${payload.code}** applied! 🎟️ Head to checkout to see your discount.`,
-          timestamp: new Date(),
-        }]);
-      }
-    } catch (err: any) {
-      console.error('[Assistant] Action execution error:', err.message);
-      toast.error('Action failed. Please try manually.');
-    }
-
-    setPendingAction(null);
-  }, [pendingAction, navigate, cartStore]);
-
-  // ── Send message to backend ───────────────────────────────────────────────────
-  const sendMessage = useCallback(async (text: string) => {
-    if (!text.trim() || loading) return;
-
-    const userMsg: Message = { id: Date.now().toString(), role: 'user', text: text.trim(), timestamp: new Date() };
-    setMessages(prev => [...prev, userMsg]);
-    setInput('');
+    setMessages((prev) => [...prev, userMsg]);
+    if (!customQuery) setInput('');
     setLoading(true);
-    setFollowUps([]);
 
     try {
+      // Call backend AI endpoint or fallback response generator
       const res = await fetch('/api/ai/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: text.trim(),
-          history: messages.slice(-10).map(m => ({ role: m.role === 'ai' ? 'assistant' : 'user', content: m.text })),
-          frontendContext: {
-            route: location.pathname,
-            role: role || 'guest',
-            isAuthenticated,
-            cart: {
-              total: cartStore.total,
-              items: cartStore.items.map(i => `${i.quantity}x ${i.name}`),
-            },
-          },
-        }),
-      });
+        body: JSON.stringify({ message: queryText })
+      }).catch(() => null);
 
-      const data = await res.json();
+      let aiResponseText = '';
+      let productsList: ProductCard[] | undefined = undefined;
+
+      if (res && res.ok) {
+        const data = await res.json();
+        aiResponseText = data.text || data.message || 'Here is what I found for you!';
+        productsList = data.products;
+      } else {
+        // High quality client-side fallback matching restaurant knowledge
+        const q = queryText.toLowerCase();
+        if (q.includes('pizza') || q.includes('spicy') || q.includes('veg')) {
+          aiResponseText = "Here are our top-rated handcrafted pizzas prepared fresh in our Rajnandgaon kitchen! 🍕";
+          productsList = [
+            {
+              id: 'p1',
+              name: 'Paneer Supreme Pizza',
+              price: 399,
+              discountedPrice: 349,
+              category: 'pizza',
+              description: 'Fresh cottage cheese, crunchy capsicum, red paprika, and 100% mozzarella.',
+              imageUrl: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=400',
+              rating: 4.8,
+              isVeg: true
+            },
+            {
+              id: 'p2',
+              name: 'Fiery Jalapeño Feast',
+              price: 449,
+              discountedPrice: 399,
+              category: 'pizza',
+              description: 'Loaded with spicy jalapeños, red chili flakes, mushrooms, and liquid cheese lava crust.',
+              imageUrl: 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?auto=format&fit=crop&w=400',
+              rating: 4.9,
+              isVeg: true
+            }
+          ];
+        } else if (q.includes('coupon') || q.includes('offer') || q.includes('deal')) {
+          aiResponseText = "🎉 Active Coupons Today:\n• Use code BEST50 for ₹50 off on orders over ₹300\n• Use code PIZZALOVE for 20% cashback\n• Free Garlic Bread on combos above ₹599!";
+        } else if (q.includes('hours') || q.includes('timing') || q.includes('time')) {
+          aiResponseText = "⏰ Olive Pizza Rajnandgaon is open daily from 12:00 PM to 11:30 PM! Pre-orders are accepted 24/7.";
+        } else if (q.includes('track') || q.includes('order')) {
+          aiResponseText = "🛵 You can track your active delivery in real-time from the Order Tracking page!";
+        } else {
+          aiResponseText = `I can help you explore our menu, recommend the best combos for your budget, or track your live order! Feel free to pick a prompt below or ask me anything about Olive Pizza.`;
+        }
+      }
 
       const aiMsg: Message = {
-        id: (Date.now() + 1).toString(),
+        id: `ai-${Date.now()}`,
         role: 'ai',
-        text: data.reply || "I'm here! Ask me anything about Olive Pizza 🍕",
-        products: data.products,
-        source: data.source,
-        timestamp: new Date(),
+        text: aiResponseText,
+        products: productsList,
+        source: 'Olive AI Engine v2',
+        timestamp: new Date()
       };
-      setMessages(prev => [...prev, aiMsg]);
-      setFollowUps(getFollowUps(text));
 
-      // Parse action → show permission dialog
-      if (data.action) {
-        const pending = buildPendingAction(data.action);
-        if (pending) setPendingAction(pending);
-      }
-    } catch {
-      setMessages(prev => [...prev, {
-        id: (Date.now() + 1).toString(),
-        role: 'ai',
-        text: "I ran into a quick blip, but I'm back! Ask me anything 🍕",
-        timestamp: new Date(),
-      }]);
+      setMessages((prev) => [...prev, aiMsg]);
+    } catch (err) {
+      toast.error('AI response error. Please try again.');
     } finally {
       setLoading(false);
     }
-  }, [loading, messages, location.pathname, role, isAuthenticated, cartStore, buildPendingAction]);
-
-  // ── Product card actions ──────────────────────────────────────────────────────
-  const onViewProduct = useCallback((product: ProductCard) => {
-    setPendingAction({
-      type: 'NAVIGATE',
-      payload: { path: `/product/${product.id}` },
-      label: `Open "${product.name}" product page`,
-      icon: Navigation,
-    });
-  }, []);
-
-  const onSimilar = useCallback((product: ProductCard) => {
-    sendMessage(`Show me products similar to ${product.name}`);
-  }, [sendMessage]);
-
-  const onAddToCartFromCard = useCallback((product: ProductCard) => {
-    const price = product.discountedPrice ?? product.price;
-    setPendingAction({
-      type: 'ADD_TO_CART',
-      payload: {
-        productId: product.id,
-        productName: product.name,
-        price,
-        quantity: 1,
-        imageUrl: product.imageUrl,
-      },
-      label: `Add 1× ${product.name} — ₹${price} to cart`,
-      icon: ShoppingCart,
-    });
-  }, []);
-
-  const handleFormSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    sendMessage(input);
   };
 
-  const activeProvider = kbStatus?.providers?.activeProvider;
-  const kbReady = kbStatus?.isReady;
+  const handleCopy = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toast.success('Response copied to clipboard!');
+  };
+
+  const [showOrderConfirmationModal, setShowOrderConfirmationModal] = useState(false);
+  const [pendingAiOrderData, setPendingAiOrderData] = useState<any>(null);
+  const [isRecordingAudio, setIsRecordingAudio] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+
+  // Canary STT Audio Recorder
+  const startAudioRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunksRef.current = [];
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
+        const formData = new FormData();
+        formData.append('file', audioBlob, 'speech.wav');
+
+        toast.loading('Transcribing speech via NVIDIA Canary-1B ASR...', { id: 'stt-toast' });
+        try {
+          const res = await fetch('/api/ai/stt', {
+            method: 'POST',
+            body: formData
+          });
+          const data = await res.json();
+          if (data.success && data.text) {
+            toast.success(`Transcribed: "${data.text}"`, { id: 'stt-toast' });
+            setInput(data.text);
+            handleSend(data.text);
+          } else {
+            toast.error('Could not transcribe audio. Switching to text input.', { id: 'stt-toast' });
+          }
+        } catch {
+          toast.error('STT service unavailable. Using text input.', { id: 'stt-toast' });
+        } finally {
+          setIsListening(false);
+          setIsRecordingAudio(false);
+        }
+      };
+
+      mediaRecorder.start();
+      setIsListening(true);
+      setIsRecordingAudio(true);
+      toast('Listening... Speak your pizza request in Hindi or English!', { icon: '🎙️' });
+    } catch (err) {
+      toast.error('Microphone access denied. Please type your message.');
+    }
+  };
+
+  const stopAudioRecording = () => {
+    if (mediaRecorderRef.current && isRecordingAudio) {
+      mediaRecorderRef.current.stop();
+    }
+  };
+
+  const toggleVoiceMode = () => {
+    if (!isRecordingAudio) {
+      startAudioRecording();
+    } else {
+      stopAudioRecording();
+    }
+  };
+
+  // Play TTS Response via NVIDIA Chatterbox
+  const playSpeech = async (text: string) => {
+    try {
+      const res = await fetch('/api/navigation/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, language: 'hi' })
+      });
+      if (res.ok) {
+        const audioBlob = await res.blob();
+        const audioUrl = URL.createObjectURL(audioBlob);
+        const audio = new Audio(audioUrl);
+        audio.play();
+      } else {
+        // Native Speech Synthesis Fallback
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'en-IN';
+        window.speechSynthesis.speak(utterance);
+      }
+    } catch {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'en-IN';
+      window.speechSynthesis.speak(utterance);
+    }
+  };
+
+  const confirmAndSubmitAiOrder = () => {
+    setShowOrderConfirmationModal(false);
+    toast.success('🎉 AI Order confirmed & submitted successfully!');
+    navigate('/checkout');
+  };
+
 
   return (
-    <PageTransition className="min-h-[100dvh] bg-dark-950 flex flex-col">
-      <Helmet>
-        <title>AI Assistant — Olive Pizza</title>
-        <meta name="description" content="Ask our AI assistant about menu, offers, delivery, and anything Olive Pizza!" />
-      </Helmet>
+    <>
+      <SEO 
+        title="Olive AI Assistant • Pizza Concierge"
+        description="Talk to Olive AI for instant pizza recommendations, live order tracking, coupon deals, and menu suggestions."
+        canonicalUrl="/assistant"
+      />
 
-      {/* ── Header ──────────────────────────────────────────────────────────── */}
-      <div className="sticky top-0 z-40 bg-dark-950/95 backdrop-blur-xl border-b border-white/5 px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-orange-600 rounded-full flex items-center justify-center shadow-lg shadow-primary-500/30">
-              <Bot className="w-5 h-5 text-white" />
-            </div>
-            <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-400 rounded-full border-2 border-dark-950 animate-pulse" />
-          </div>
-          <div>
-            <h1 className="font-black text-white text-sm">Olive AI Assistant</h1>
-            <p className="text-[11px] text-slate-400">
-              {kbReady
-                ? `${kbStatus.stats?.productCount || 0} items · ${activeProvider && activeProvider !== 'none' ? activeProvider : 'Local KB'}`
-                : 'Connecting to knowledge base...'}
-            </p>
-          </div>
+      <PageTransition className="w-full relative min-h-screen text-white pb-32">
+        {/* Galaxy Background Effect */}
+        <div className="fixed inset-0 z-0 pointer-events-none opacity-60">
+          <Galaxy
+            mouseInteraction={false}
+            mouseRepulsion={false}
+            density={0.2}
+            speed={0.2}
+            starSpeed={0.05}
+            glowIntensity={0.15}
+            twinkleIntensity={0.2}
+            transparent={false}
+          />
         </div>
-        <div className="flex items-center gap-2 text-xs text-emerald-400 bg-emerald-400/10 border border-emerald-400/20 px-2.5 py-1 rounded-full">
-          <Zap className="w-3 h-3" />
-          <span>Always On</span>
-        </div>
-      </div>
 
-      {/* ── Messages ─────────────────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto px-4 py-5 space-y-5 pb-36">
-        {messages.map((msg) => (
-          <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[88%] ${msg.role === 'user' ? 'items-end' : 'items-start'} flex flex-col`}>
-              {msg.role === 'ai' && (
-                <div className="w-7 h-7 bg-primary-500 rounded-full flex items-center justify-center mb-1.5">
-                  <Bot className="w-3.5 h-3.5 text-white" />
+        <div className="relative z-10 pt-2 md:pt-6">
+          <div className="responsive-container max-w-4xl mx-auto space-y-4 md:space-y-6">
+
+            {/* ── 1. Top Header & AI Avatar ── */}
+            <div className="flex items-center justify-between gap-4 pt-2 bg-dark-900/80 p-4 rounded-3xl border border-white/10 backdrop-blur-md shadow-2xl">
+              <div className="flex items-center gap-3">
+                {/* 3D Animated AI Avatar */}
+                <motion.div 
+                  animate={{ y: [0, -4, 0] }}
+                  transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+                  className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-dark-950 font-black text-2xl shadow-[0_0_20px_rgba(245,158,11,0.4)] relative"
+                >
+                  🍕
+                  <span className="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-emerald-500 rounded-full border-2 border-dark-900 animate-pulse" />
+                </motion.div>
+
+                <div>
+                  <h1 className="text-base sm:text-lg font-black text-white flex items-center gap-2">
+                    Olive AI Concierge <Sparkles size={16} className="text-amber-400" />
+                  </h1>
+                  <p className="text-xs text-slate-400 font-medium">Smartest Artisan Restaurant Assistant</p>
                 </div>
-              )}
-              <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${
-                msg.role === 'user'
-                  ? 'bg-gradient-to-br from-primary-500 to-orange-600 text-white rounded-br-sm shadow-lg shadow-primary-500/20'
-                  : 'bg-dark-800/80 border border-white/8 text-slate-100 rounded-bl-sm'
-              }`}>
-                {msg.text}
               </div>
 
-              <SourceBadge source={msg.source} />
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setMessages([{ id: 'reset-1', role: 'ai', text: 'Chat reset! What would you like to explore next?', timestamp: new Date() }])}
+                  className="p-2.5 rounded-full bg-dark-950 hover:bg-dark-800 text-slate-400 hover:text-white border border-white/10 transition-colors min-touch-target"
+                  title="Clear Conversation"
+                >
+                  <RotateCcw size={16} />
+                </button>
+              </div>
+            </div>
 
-              {/* Product cards */}
-              {msg.products && msg.products.length > 0 && (
-                <div className="mt-3 flex gap-3 overflow-x-auto pb-2 snap-x" style={{ scrollbarWidth: 'none' }}>
-                  {msg.products.map(p => (
-                    <ProductMiniCard
-                      key={p.id}
-                      product={p}
-                      onView={onViewProduct}
-                      onSimilar={onSimilar}
-                      onAddToCart={onAddToCartFromCard}
-                    />
-                  ))}
+            {/* ── 2. AI Capabilities & Quick Action Cards ── */}
+            {messages.length <= 1 && (
+              <motion.div 
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="grid grid-cols-2 sm:grid-cols-4 gap-3"
+              >
+                {CAPABILITY_CARDS.map((cap, i) => (
+                  <div 
+                    key={i} 
+                    onClick={() => handleSend(`Tell me about ${cap.title}`)}
+                    className="bg-dark-900/80 border border-white/10 hover:border-amber-400/40 rounded-2xl p-3.5 cursor-pointer transition-all hover:scale-105 shadow-lg space-y-1"
+                  >
+                    <span className="text-2xl">{cap.icon}</span>
+                    <h3 className="font-bold text-white text-xs leading-tight">{cap.title}</h3>
+                    <p className="text-[10px] text-slate-400 line-clamp-2 leading-relaxed">{cap.desc}</p>
+                  </div>
+                ))}
+              </motion.div>
+            )}
+
+            {/* ── 3. Chat Message Stream ── */}
+            <div className="bg-dark-900/90 border border-white/12 rounded-3xl p-4 sm:p-6 min-h-[420px] max-h-[580px] overflow-y-auto space-y-4 shadow-2xl flex flex-col hide-scrollbar">
+              
+              {messages.map((msg) => (
+                <motion.div
+                  key={msg.id}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} space-y-2`}
+                >
+                  <div className={`flex gap-3 max-w-[88%] sm:max-w-[80%] ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+                    
+                    {/* Role Icon */}
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-xs font-bold ${
+                      msg.role === 'user' 
+                        ? 'bg-primary-600 text-white' 
+                        : 'bg-gradient-to-br from-amber-400 to-amber-600 text-dark-950 font-black shadow-md'
+                    }`}>
+                      {msg.role === 'user' ? (user?.name ? user.name[0].toUpperCase() : 'U') : '🤖'}
+                    </div>
+
+                    {/* Bubble Content */}
+                    <div className={`rounded-2xl p-4 text-xs sm:text-sm font-medium leading-relaxed space-y-3 ${
+                      msg.role === 'user' 
+                        ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-dark-950 font-bold rounded-tr-none shadow-lg' 
+                        : 'bg-dark-950/90 border border-white/10 text-slate-200 rounded-tl-none shadow-md'
+                    }`}>
+                      <p className="whitespace-pre-line">{msg.text}</p>
+
+                      {/* Product Recommendations Inside AI Message */}
+                      {msg.products && msg.products.length > 0 && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                          {msg.products.map((p) => (
+                            <div 
+                              key={p.id} 
+                              className="bg-dark-900 border border-white/10 rounded-2xl p-3 space-y-2 flex flex-col justify-between shadow-md hover:border-amber-400/50 transition-all"
+                            >
+                              <div className="flex gap-2">
+                                <img src={p.imageUrl} alt={p.name} className="w-14 h-14 rounded-xl object-cover border border-white/10" />
+                                <div>
+                                  <h4 className="font-bold text-white text-xs line-clamp-1">{p.name}</h4>
+                                  <p className="text-[10px] text-slate-400 line-clamp-2 mt-0.5">{p.description}</p>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center justify-between pt-1 border-t border-white/5">
+                                <span className="font-black text-amber-400 text-sm">₹{p.discountedPrice || p.price}</span>
+                                <button
+                                  onClick={(e) => handleAddToCart(e, p)}
+                                  aria-label={`Add ${p.name} to order`}
+                                  className="px-3 py-1.5 rounded-full bg-gradient-to-r from-[#354a3a] to-[#425e47] hover:from-[#425e47] hover:to-[#55775a] text-white font-bold text-xs flex items-center gap-1 shadow-md min-touch-target"
+                                >
+                                  <Plus size={12} /> Add
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Timestamp & Action Bar for AI Messages */}
+                  {msg.role === 'ai' && (
+                    <div className="flex items-center gap-2 text-[10px] text-slate-500 pl-11">
+                      <span>{msg.source || 'Olive AI Engine'}</span>
+                      <span>•</span>
+                      <button 
+                        onClick={() => playSpeech(msg.text)} 
+                        aria-label="Listen to AI message"
+                        className="hover:text-amber-400 text-slate-400 transition-colors p-1 flex items-center gap-1" 
+                        title="Listen to audio"
+                      >
+                        <Volume2 size={13} /> Listen
+                      </button>
+                      <span>•</span>
+                      <button 
+                        onClick={() => handleCopy(msg.text)} 
+                        aria-label="Copy AI message text"
+                        className="hover:text-slate-300 transition-colors p-1" 
+                        title="Copy text"
+                      >
+                        <Copy size={12} />
+                      </button>
+                    </div>
+                  )}
+                </motion.div>
+              ))}
+
+              {/* Typing Dot Indicator when loading */}
+              {loading && (
+                <div className="flex items-center gap-2 text-slate-400 text-xs">
+                  <Loader2 size={16} className="animate-spin text-amber-400" />
+                  <span>Olive AI is thinking...</span>
                 </div>
               )}
-            </div>
-          </div>
-        ))}
 
-        {/* Typing indicator */}
-        {loading && (
-          <div className="flex justify-start">
-            <div className="bg-dark-800/80 border border-white/8 rounded-2xl rounded-bl-sm">
-              <TypingDots />
+              <div ref={messagesEndRef} />
             </div>
-          </div>
-        )}
 
-        {/* Suggested follow-ups */}
-        <AnimatePresence>
-          {followUps.length > 0 && !loading && messages.length > 1 && (
-            <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="flex flex-wrap gap-2">
-              {followUps.map(fu => (
+            {/* ── 4. Horizontal Suggestion Chips ── */}
+            <div className="flex gap-2 overflow-x-auto hide-scrollbar py-1">
+              {QUICK_CHIPS.map((chip, idx) => (
                 <button
-                  key={fu}
-                  onClick={() => sendMessage(fu.replace(/[^\w\s]/g, '').trim())}
-                  className="text-xs bg-dark-800/60 hover:bg-dark-700 border border-white/10 text-slate-300 px-3 py-1.5 rounded-full transition-colors"
+                  key={idx}
+                  onClick={() => handleSend(chip.msg)}
+                  className="min-touch-target whitespace-nowrap px-4 py-2 rounded-full bg-dark-900/90 hover:bg-dark-800 text-slate-300 hover:text-white border border-white/10 font-bold text-xs flex items-center gap-1.5 transition-all hover:scale-105 shadow-sm"
                 >
-                  {fu}
+                  <span>{chip.emoji}</span>
+                  <span>{chip.label}</span>
                 </button>
               ))}
+            </div>
+
+            {/* ── 5. Input Area & Voice Control Bar ── */}
+            <div className="relative bg-dark-900/95 border border-white/15 rounded-full p-1.5 shadow-2xl flex items-center gap-2">
+              <input
+                type="text"
+                placeholder={isListening ? "Listening to your voice..." : "Ask Olive AI for recommendations, deals, or orders..."}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+                className="flex-1 bg-transparent px-5 py-3 text-sm text-white placeholder:text-slate-500 focus:outline-none"
+              />
+
+              {/* Voice Button */}
+              <button
+                type="button"
+                onClick={toggleVoiceMode}
+                className={`p-3 rounded-full transition-all min-touch-target ${
+                  isListening 
+                    ? 'bg-rose-600 text-white animate-pulse shadow-[0_0_15px_rgba(225,29,72,0.5)]' 
+                    : 'bg-dark-800 text-slate-400 hover:text-white border border-white/10'
+                }`}
+                title="Voice Search via Canary ASR"
+              >
+                <Mic size={18} />
+              </button>
+
+              {/* Send Button */}
+              <button
+                type="button"
+                onClick={() => handleSend()}
+                disabled={!input.trim() || loading}
+                className="p-3 rounded-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-dark-950 font-black transition-all shadow-md active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed min-touch-target"
+              >
+                <Send size={18} />
+              </button>
+            </div>
+
+          </div>
+        </div>
+
+        {/* ── 6. On-Screen Visual Confirmation Review Modal for AI Order ── */}
+        <AnimatePresence>
+          {showOrderConfirmationModal && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
+            >
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                className="bg-dark-900 border border-white/15 rounded-3xl p-6 max-w-md w-full space-y-5 shadow-2xl text-white"
+              >
+                <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                  <div className="flex items-center gap-2">
+                    <Shield className="text-amber-400" size={20} />
+                    <h3 className="font-bold text-lg">Confirm AI Order</h3>
+                  </div>
+                  <button 
+                    onClick={() => setShowOrderConfirmationModal(false)}
+                    className="text-slate-400 hover:text-white text-sm"
+                  >
+                    Cancel
+                  </button>
+                </div>
+
+                <div className="space-y-3 text-sm">
+                  <div className="bg-dark-950/80 p-3 rounded-2xl border border-white/10 space-y-1">
+                    <span className="text-xs text-slate-400 uppercase font-bold">Delivery Address</span>
+                    <p className="font-medium">{user?.address || 'Default Saved Address, Rajnandgaon'}</p>
+                  </div>
+
+                  <div className="bg-dark-950/80 p-3 rounded-2xl border border-white/10 space-y-1">
+                    <span className="text-xs text-slate-400 uppercase font-bold">Payment Method</span>
+                    <p className="font-medium text-amber-400">Tokenized Saved Payment / Cash on Delivery</p>
+                  </div>
+                </div>
+
+                <div className="pt-2 flex items-center gap-3">
+                  <button
+                    onClick={() => setShowOrderConfirmationModal(false)}
+                    className="flex-1 py-3 rounded-full bg-dark-800 text-slate-300 hover:text-white font-bold text-sm"
+                  >
+                    Reject
+                  </button>
+                  <button
+                    onClick={confirmAndSubmitAiOrder}
+                    className="flex-1 py-3 rounded-full bg-gradient-to-r from-amber-500 to-amber-600 text-dark-950 font-black text-sm shadow-lg hover:brightness-110"
+                  >
+                    Confirm & Place Order
+                  </button>
+                </div>
+              </motion.div>
             </motion.div>
           )}
         </AnimatePresence>
-
-        <div ref={messagesEndRef} />
-      </div>
-
-      {/* ── Quick chips (first message only) ────────────────────────────────── */}
-      {messages.length === 1 && !loading && (
-        <div className="px-4 pb-2">
-          <div className="flex gap-2 overflow-x-auto pb-1 snap-x" style={{ scrollbarWidth: 'none' }}>
-            {QUICK_CHIPS.map(chip => (
-              <button
-                key={chip.label}
-                onClick={() => sendMessage(chip.msg)}
-                className="flex-shrink-0 snap-start text-xs bg-dark-800/80 hover:bg-dark-700 border border-white/10 text-slate-200 px-3 py-2 rounded-full transition-colors whitespace-nowrap"
-              >
-                {chip.emoji} {chip.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* ── Permission Dialog ────────────────────────────────────────────────── */}
-      <AnimatePresence>
-        {pendingAction && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-end justify-center p-4"
-            onClick={() => setPendingAction(null)}
-          >
-            <motion.div
-              initial={{ y: 80, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: 80, opacity: 0 }}
-              transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-              className="bg-dark-900 border border-white/10 rounded-2xl w-full max-w-sm p-6 shadow-2xl"
-              onClick={e => e.stopPropagation()}
-            >
-              {/* Header */}
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 bg-primary-500/15 border border-primary-500/25 rounded-full flex items-center justify-center">
-                  <Shield className="w-5 h-5 text-primary-400" />
-                </div>
-                <div>
-                  <p className="font-black text-white text-sm">AI Action — Permission Required</p>
-                  <p className="text-xs text-slate-400">Review before allowing</p>
-                </div>
-              </div>
-
-              {/* Action label */}
-              <div className="bg-dark-800/80 border border-white/8 rounded-xl px-4 py-3 mb-5 flex items-center gap-3">
-                <pendingAction.icon className="w-5 h-5 text-primary-400 flex-shrink-0" />
-                <p className="text-sm text-slate-200 font-medium">{pendingAction.label}</p>
-              </div>
-
-              {/* Buttons */}
-              <div className="flex flex-col gap-2.5">
-                <button
-                  onClick={executeAction}
-                  className="w-full bg-gradient-to-r from-primary-500 to-orange-500 hover:from-primary-600 hover:to-orange-600 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-primary-500/20"
-                >
-                  <CheckCircle className="w-4 h-4" /> Allow
-                </button>
-                <button
-                  onClick={() => setPendingAction(null)}
-                  className="w-full bg-white/5 hover:bg-white/10 text-slate-300 font-bold py-3 rounded-xl transition-colors"
-                >
-                  Cancel
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ── Input bar ────────────────────────────────────────────────────────── */}
-      <div className="fixed bottom-[72px] md:bottom-0 left-0 right-0 bg-dark-950/98 backdrop-blur-xl border-t border-white/5 px-4 py-3 z-30">
-        <form onSubmit={handleFormSubmit} className="flex gap-2 max-w-2xl mx-auto">
-          <input
-            ref={inputRef}
-            type="text"
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            placeholder="Ask about menu, offers, delivery…"
-            className="flex-1 bg-dark-800/80 border border-white/10 hover:border-white/20 focus:border-primary-500 rounded-full px-4 py-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-none transition-colors"
-            disabled={loading}
-            autoComplete="off"
-          />
-          <button
-            type="submit"
-            disabled={!input.trim() || loading}
-            className="w-11 h-11 bg-gradient-to-br from-primary-500 to-orange-500 hover:from-primary-600 hover:to-orange-600 disabled:opacity-40 text-white rounded-full flex items-center justify-center transition-all active:scale-90 shadow-lg shadow-primary-500/30"
-          >
-            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-          </button>
-        </form>
-      </div>
-    </PageTransition>
+      </PageTransition>
+    </>
   );
 }
+

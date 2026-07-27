@@ -39,9 +39,20 @@
   --color-error: #f87171;
 }
 
+:root {
+  /* Dynamic Safe Area & Layout Tokens */
+  --app-safe-top: env(safe-area-inset-top, 0px);
+  --app-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --app-safe-left: env(safe-area-inset-left, 0px);
+  --app-safe-right: env(safe-area-inset-right, 0px);
+  --app-bottom-nav-height: 72px;
+  --app-header-height: 70px;
+  --app-floating-bottom-offset: calc(var(--app-bottom-nav-height) + var(--app-safe-bottom) + 12px);
+}
+
 @layer utilities {
   .premium-card {
-    @apply bg-dark-800 border border-dark-700 shadow-md rounded-2xl overflow-hidden;
+    @apply bg-dark-900 border border-dark-800 shadow-md rounded-2xl overflow-hidden;
   }
   .hide-scrollbar::-webkit-scrollbar {
     display: none;
@@ -51,7 +62,44 @@
     scrollbar-width: none;
   }
   .pb-safe {
-    padding-bottom: env(safe-area-inset-bottom, 20px);
+    padding-bottom: calc(var(--app-safe-bottom) + 20px);
+  }
+  .pt-safe {
+    padding-top: calc(var(--app-safe-top) + 20px);
+  }
+  .min-touch-target {
+    min-width: 44px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .responsive-container {
+    width: 100%;
+    max-width: 1440px;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: clamp(1rem, 4vw, 2.5rem);
+    padding-right: clamp(1rem, 4vw, 2.5rem);
+  }
+  /* Fluid Typography Clamps */
+  .text-fluid-h1 {
+    font-size: clamp(1.75rem, 5vw, 3rem);
+    line-height: 1.15;
+    letter-spacing: -0.025em;
+  }
+  .text-fluid-h2 {
+    font-size: clamp(1.35rem, 3.5vw, 2.25rem);
+    line-height: 1.2;
+    letter-spacing: -0.015em;
+  }
+  .text-fluid-h3 {
+    font-size: clamp(1.1rem, 2.5vw, 1.5rem);
+    line-height: 1.25;
+  }
+  .text-fluid-body {
+    font-size: clamp(0.875rem, 1.2vw, 1rem);
+    line-height: 1.5;
   }
 }
 

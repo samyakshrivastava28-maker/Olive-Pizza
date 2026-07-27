@@ -101,4 +101,30 @@ router.delete('/document/:id', requireAuth, requireRole(['owner', 'admin']), asy
   }
 });
 
+// ── DIRECT LIVE RE-INDEXING TRIGGER (Owner Edit/Delete) ──────────
+router.post('/upsert-item', requireAuth, requireRole(['owner', 'admin']), async (req, res) => {
+  try {
+    const { id, name, description, price, category, isVeg, tags } = req.body;
+    if (!id || !name) {
+      return res.status(400).json({ success: false, error: 'Item id and name are required' });
+    }
+
+    const success = await knowledgeIndexer.upsertItemDirectly({ id, name, description, price, category, isVeg, tags });
+    res.json({ success, message: `Menu item ${name} (id: ${id}) live re-indexed in Qdrant synchronously.` });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.delete('/item/:id', requireAuth, requireRole(['owner', 'admin']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const success = await knowledgeIndexer.removeItemDirectly(id);
+    res.json({ success, message: `Item ${id} synchronously removed from Qdrant.` });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 export default router;
+

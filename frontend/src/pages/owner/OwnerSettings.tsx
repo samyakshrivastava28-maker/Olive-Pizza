@@ -21,7 +21,11 @@ export default function OwnerSettings() {
     minOrderAmount: 0,
     deliveryCharge: 0,
     taxPercentage: 5,
-    businessHours: "10:00 AM - 11:00 PM",
+    businessHours: "12:00 PM - 11:30 PM",
+    openingTime: "12:00",
+    closingTime: "23:30",
+    openingHour: 12,
+    closingHour: 24,
     logoUrl: "",
     bannerUrl: "",
     isRestaurantOpen: true,
@@ -34,7 +38,15 @@ export default function OwnerSettings() {
         const docRef = doc(db, "settings", "global");
         const snap = await getDoc(docRef);
         if (snap.exists()) {
-          setSettings((prev) => ({ ...prev, ...snap.data() }));
+          const data = snap.data();
+          setSettings((prev) => ({ 
+            ...prev, 
+            ...data,
+            openingTime: data.openingTime || "12:00",
+            closingTime: data.closingTime || "23:30",
+            openingHour: data.openingHour !== undefined ? data.openingHour : 12,
+            closingHour: data.closingHour !== undefined ? data.closingHour : 24,
+          }));
         }
       } catch (error) {
         console.error("Error fetching settings:", error);
@@ -58,7 +70,17 @@ export default function OwnerSettings() {
         finalLogoUrl = uploadRes.secureUrl;
       }
 
-      const updatedSettings = { ...settings, logoUrl: finalLogoUrl };
+      // Calculate numeric opening and closing hours from openingTime & closingTime
+      const openH = settings.openingTime ? parseInt(settings.openingTime.split(":")[0], 10) : 12;
+      const closeH = settings.closingTime ? parseInt(settings.closingTime.split(":")[0], 10) : 24;
+
+      const updatedSettings = { 
+        ...settings, 
+        logoUrl: finalLogoUrl,
+        openingHour: openH,
+        closingHour: closeH,
+        businessHours: `${settings.openingTime} - ${settings.closingTime}`
+      };
 
       await setDoc(doc(db, "settings", "global"), updatedSettings, {
         merge: true,
@@ -66,10 +88,10 @@ export default function OwnerSettings() {
 
       setSettings(updatedSettings);
       setLogoFile(null);
-      alert("Settings saved successfully!");
+      toast.success("Restaurant settings & operating hours saved successfully! 🍕");
     } catch (error) {
       console.error("Error saving settings:", error);
-      alert("Failed to save settings.");
+      toast.error("Failed to save settings.");
     } finally {
       setSaving(false);
     }
@@ -82,16 +104,113 @@ export default function OwnerSettings() {
       </div>
     );
 
+  // Compute live current store open status
+  const currentH = new Date().getHours();
+  const isWithinHours = currentH >= settings.openingHour && currentH < settings.closingHour;
+  const isLiveOpen = settings.isRestaurantOpen && isWithinHours;
+
   return (
     <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4">
-      <div>
-        <h1 className="text-3xl font-black text-white">Restaurant Settings</h1>
-        <p className="text-slate-400">
-          Manage global configurations for your business.
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-black text-white">Restaurant Settings</h1>
+          <p className="text-slate-400">
+            Manage store operating hours, delivery radius, and branding.
+          </p>
+        </div>
+
+        {/* Live Operating Status Badge */}
+        <div className={`px-4 py-2 rounded-2xl border flex items-center gap-2 shadow-lg ${
+          isLiveOpen ? 'bg-emerald-950/60 border-emerald-500/30 text-emerald-400' : 'bg-rose-950/60 border-rose-500/30 text-rose-400'
+        }`}>
+          <span className={`w-2.5 h-2.5 rounded-full ${isLiveOpen ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
+          <span className="font-bold text-xs uppercase tracking-wider">
+            {isLiveOpen ? 'Restaurant is Live & Open' : 'Restaurant is Closed'}
+          </span>
+        </div>
       </div>
 
       <form onSubmit={handleSave} className="space-y-6">
+
+        {/* 🕒 Operating Hours & Schedule (NEW OWNER CONTROL) */}
+        <div className="bg-[#1E293B] border border-white/10 shadow-xl rounded-2xl p-6 space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-700 pb-2">
+            <h2 className="text-xl font-bold text-amber-400 flex items-center gap-2">
+              <Store className="w-5 h-5" /> Operating Hours & Schedule
+            </h2>
+            <span className="text-xs font-bold text-slate-400">
+              Current: {settings.openingTime} to {settings.closingTime}
+            </span>
+          </div>
+
+          <p className="text-xs text-slate-400">
+            Set the exact daily opening and closing hours for Olive Pizza. Customers will see real-time store availability based on these hours.
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-bold text-slate-300 mb-1">
+                Opening Time
+              </label>
+              <input
+                type="time"
+                value={settings.openingTime}
+                onChange={(e) => setSettings({ ...settings, openingTime: e.target.value })}
+                className="w-full p-3 rounded-xl border border-slate-700 bg-slate-900 text-white font-bold focus:outline-none focus:border-amber-400"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-bold text-slate-300 mb-1">
+                Closing Time
+              </label>
+              <input
+                type="time"
+                value={settings.closingTime}
+                onChange={(e) => setSettings({ ...settings, closingTime: e.target.value })}
+                className="w-full p-3 rounded-xl border border-slate-700 bg-slate-900 text-white font-bold focus:outline-none focus:border-amber-400"
+              />
+            </div>
+          </div>
+
+          {/* Quick Timing Presets */}
+          <div>
+            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+              Quick Presets
+            </label>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setSettings({ ...settings, openingTime: "12:00", closingTime: "23:30", openingHour: 12, closingHour: 24 })}
+                className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold border border-white/10 transition-colors"
+              >
+                12:00 PM – 11:30 PM (Standard)
+              </button>
+              <button
+                type="button"
+                onClick={() => setSettings({ ...settings, openingTime: "11:00", closingTime: "23:00", openingHour: 11, closingHour: 23 })}
+                className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold border border-white/10 transition-colors"
+              >
+                11:00 AM – 11:00 PM (Early Bird)
+              </button>
+              <button
+                type="button"
+                onClick={() => setSettings({ ...settings, openingTime: "10:00", closingTime: "00:00", openingHour: 10, closingHour: 24 })}
+                className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold border border-white/10 transition-colors"
+              >
+                10:00 AM – 12:00 AM (Late Night)
+              </button>
+              <button
+                type="button"
+                onClick={() => setSettings({ ...settings, openingTime: "00:00", closingTime: "23:59", openingHour: 0, closingHour: 24 })}
+                className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-400 text-xs font-bold border border-amber-400/30 transition-colors"
+              >
+                24 Hours Open 🚀
+              </button>
+            </div>
+          </div>
+        </div>
+
         {/* Branding */}
         <div className="bg-[#1E293B] border border-white/10 shadow-xl rounded-2xl p-6 space-y-4">
           <h2 className="text-xl font-bold text-primary-600 border-b border-slate-100 dark:border-slate-800 pb-2">
