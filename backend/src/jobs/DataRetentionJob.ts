@@ -8,10 +8,10 @@ export class DataRetentionJob {
     const client = await pgPool.connect();
     
     try {
-      // 1. Notification Cleanup: Keep only today & yesterday
+      // 1. Notification Cleanup: Keep only a week
       await client.query(`
         DELETE FROM notification_history 
-        WHERE created_at < CURRENT_DATE - INTERVAL '1 day';
+        WHERE created_at < CURRENT_DATE - INTERVAL '7 days';
       `);
       
       // 2. Clear stuck notification queue items older than 6 hours
@@ -44,8 +44,27 @@ export class DataRetentionJob {
       
       // Note: order_items deleted via CASCADE
 
-      // 6. Firebase temporary data cleanup (if any)
-      // E.g., expired sessions or anything left in firestore.
+      // 6. Firestore Reports & History Cleanup: Remove docs older than 2 months
+      try {
+        const twoMonthsAgo = Date.now() - (60 * 24 * 60 * 60 * 1000); // approx 60 days
+        const batches = [];
+        
+        for (const collectionName of ['reports', 'monthly_reports']) {
+          const snap = await db.collection(collectionName)
+            .where('generatedAt', '<', twoMonthsAgo)
+            .get();
+            
+          if (!snap.empty) {
+            const batch = db.batch();
+            snap.docs.forEach(doc => batch.delete(doc.ref));
+            batches.push(batch.commit());
+          }
+        }
+        await Promise.all(batches);
+        console.log('[DataRetentionJob] Firestore reports & history cleaned up.');
+      } catch (err) {
+        console.error('[DataRetentionJob] Firestore cleanup failed:', err);
+      }
       
       console.log(`[DataRetentionJob] Cleanup completed successfully.`);
     } catch (err) {

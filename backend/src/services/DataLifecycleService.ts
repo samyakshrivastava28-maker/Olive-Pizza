@@ -7,6 +7,11 @@ export class DataLifecycleService {
   }
 
   private initCronJobs() {
+    // Run every minute for highly time-sensitive data
+    cron.schedule('* * * * *', () => {
+      this.runMinutelyCleanup();
+    });
+
     // Run every hour
     cron.schedule('0 * * * *', () => {
       this.runHourlyCleanup();
@@ -19,25 +24,37 @@ export class DataLifecycleService {
   }
 
   /**
-   * Cleans up GPS data and temporary state
+   * Cleans up GPS data and navigation data strictly every minute
    */
-  public async runHourlyCleanup() {
+  public async runMinutelyCleanup() {
     const client = await pgPool.connect();
     try {
-      // 1. Delete GPS data for orders delivered more than 5 minutes ago
+      // Delete SQL live navigation data for orders that were updated/finished > 5 mins ago
       await client.query(`
         DELETE FROM active_deliveries 
         WHERE order_id IN (
           SELECT order_id as id FROM background_tasks WHERE status = 'completed' AND finished_at < NOW() - INTERVAL '5 minutes'
-        )
+        ) OR updated_at < NOW() - INTERVAL '5 minutes'
       `);
+    } catch (error) {
+      console.error('[DataLifecycle] Error during minutely cleanup:', error);
+    } finally {
+      client.release();
+    }
+  }
 
-      // 2. Clear old heartbeats (older than 24 hours)
+  /**
+   * Cleans up temporary state
+   */
+  public async runHourlyCleanup() {
+    const client = await pgPool.connect();
+    try {
+      // 1. Clear old heartbeats (older than 24 hours)
       await client.query(`
         DELETE FROM device_heartbeats WHERE last_seen < NOW() - INTERVAL '24 hours'
       `);
       
-      // 3. Clear failed queue items older than 24 hours
+      // 2. Clear failed queue items older than 24 hours
       await client.query(`
         DELETE FROM notification_queue WHERE status = 'failed' AND updated_at < NOW() - INTERVAL '24 hours'
       `);
@@ -56,10 +73,9 @@ export class DataLifecycleService {
   public async runNightlyCleanup() {
     const client = await pgPool.connect();
     try {
-      // Keep only Today and Yesterday's notifications (delete older than 1 day from start of yesterday)
-      // For safety we just delete older than 2 days
+      // Keep only 1 week's worth of notifications
       await client.query(`
-        DELETE FROM notification_history WHERE created_at < CURRENT_DATE - INTERVAL '1 day'
+        DELETE FROM notification_history WHERE created_at < CURRENT_DATE - INTERVAL '7 days'
       `);
       
       console.log('[DataLifecycle] Nightly history pruning completed.');

@@ -50,13 +50,18 @@ export const useLiveMetricsStore = create<MetricsState>((set, get) => ({
         let revenue = 0, count = 0, pending = 0, preparing = 0, outForDelivery = 0, completed = 0, cancelled = 0;
         snapshot.docs.forEach(doc => {
           const data = doc.data();
-          count++;
-          revenue += data.totalAmount || 0;
-          if (data.status === 'pending') pending++;
-          else if (data.status === 'preparing') preparing++;
-          else if (data.status === 'out_for_delivery') outForDelivery++;
-          else if (data.status === 'delivered') completed++;
-          else if (data.status === 'cancelled') cancelled++;
+          const status = data.status || '';
+          
+          if (status !== 'cancelled' && status !== 'payment_failed' && status !== 'failed') {
+            count++;
+            revenue += data.totalAmount || 0;
+          }
+
+          if (status === 'pending') pending++;
+          else if (status === 'preparing') preparing++;
+          else if (status === 'out_for_delivery') outForDelivery++;
+          else if (status === 'delivered' || status === 'completed') completed++;
+          else if (status === 'cancelled') cancelled++;
         });
         set({ 
           todayRevenue: revenue, 

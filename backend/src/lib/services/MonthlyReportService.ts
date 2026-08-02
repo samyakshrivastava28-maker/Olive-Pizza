@@ -258,8 +258,11 @@ export class MonthlyReportService {
             if (!dailyMap[dateStr]) dailyMap[dateStr] = { revenue: 0, orders: 0 };
             dailyMap[dateStr].orders++;
 
-            if (status === 'delivered' || status === 'completed') {
-                completedOrders++;
+            const activeStatuses = ['pending', 'accepted', 'preparing', 'ready', 'picked_up', 'out_for_delivery', 'delivered', 'completed'];
+            if (activeStatuses.includes(status)) {
+                if (status === 'delivered' || status === 'completed') {
+                    completedOrders++;
+                }
                 const amount = Number(o.totalAmount || o.total_amount || 0);
                 totalRevenue += amount;
                 dailyMap[dateStr].revenue += amount;

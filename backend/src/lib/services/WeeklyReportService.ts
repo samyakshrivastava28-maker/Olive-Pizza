@@ -331,8 +331,11 @@ export class WeeklyReportService {
       const hourStr = `${orderDate.getHours().toString().padStart(2, '0')}:00`;
       hourMap[hourStr] = (hourMap[hourStr] || 0) + 1;
 
-      if (status === 'delivered' || status === 'completed') {
-        completedOrders++;
+      const activeStatuses = ['pending', 'accepted', 'preparing', 'ready', 'picked_up', 'out_for_delivery', 'delivered', 'completed'];
+      if (activeStatuses.includes(status)) {
+        if (status === 'delivered' || status === 'completed') {
+            completedOrders++;
+        }
         const amount = Number(o.totalAmount || o.total_amount || 0);
         totalRevenue += amount;
         dailyMap[dayName].orders++;

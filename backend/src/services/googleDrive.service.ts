@@ -183,6 +183,21 @@ class GoogleDriveService {
       });
 
       console.log(`[Google Drive] Created folder "${folderName}" (ID: ${folder.data.id})`);
+
+      // Auto-share root folders created by the service account with the owner
+      if (parentFolderId === 'root' && process.env.OWNER_EMAIL) {
+        try {
+          await this.drive.permissions.create({
+            fileId: folder.data.id!,
+            requestBody: { role: 'writer', type: 'user', emailAddress: process.env.OWNER_EMAIL },
+            sendNotificationEmail: true,
+          });
+          console.log(`[Google Drive] Shared folder "${folderName}" with ${process.env.OWNER_EMAIL}`);
+        } catch (e: any) {
+          console.warn(`[Google Drive] Failed to share folder "${folderName}" with ${process.env.OWNER_EMAIL}:`, e.message);
+        }
+      }
+
       return folder.data.id!;
     } catch (createErr: any) {
       if (parentFolderId !== 'root') {
