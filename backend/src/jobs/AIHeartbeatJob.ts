@@ -1,6 +1,5 @@
 import cron from 'node-cron';
 import crypto from 'crypto';
-import { v4 as uuidv4 } from 'uuid';
 import fetch from 'node-fetch';
 
 const AI_BACKEND_URL = process.env.AI_BACKEND_URL || 'https://olive-pizza-ai.onrender.com';
@@ -21,7 +20,7 @@ export class AIHeartbeatJob {
 
   private static async sendHeartbeat() {
     const timestamp = Date.now().toString();
-    const nonce = uuidv4();
+    const nonce = crypto.randomUUID();
     const payload = `${timestamp}:${nonce}`;
     
     const signature = crypto
@@ -30,12 +29,16 @@ export class AIHeartbeatJob {
       .digest('hex');
 
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+
       const response = await fetch(`${AI_BACKEND_URL}/api/internal/heartbeat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ timestamp, nonce, signature }),
-        timeout: 10000 // 10 second timeout
+        signal: controller.signal as any
       });
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         throw new Error(`AI Backend returned ${response.status}`);

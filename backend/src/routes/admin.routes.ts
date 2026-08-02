@@ -18,7 +18,7 @@ router.post('/products', async (req: AuthRequest, res: Response) => {
     const docRef = await adminDb.collection('products').add(data);
     
     // Live Qdrant Embedding Upsert (Fire-and-forget promise)
-    kb.embedAndUpsert('products', docRef.id, data).catch(err => console.error('[Admin] embedAndUpsert error:', err));
+    (kb as any).embedAndUpsert('products', docRef.id, data).catch((err: any) => console.error('[Admin] embedAndUpsert error:', err));
 
     res.status(201).json({ id: docRef.id, success: true });
   } catch (error) {
@@ -36,7 +36,7 @@ router.put('/products/:id', async (req: AuthRequest, res: Response) => {
     await adminDb.collection('products').doc(docId).update(data);
     
     // Live Qdrant Embedding Upsert
-    kb.embedAndUpsert('products', docId, data).catch(err => console.error('[Admin] embedAndUpsert error:', err));
+    (kb as any).embedAndUpsert('products', docId, data).catch((err: any) => console.error('[Admin] embedAndUpsert error:', err));
 
     res.json({ success: true });
   } catch (error) {
@@ -50,7 +50,7 @@ router.delete('/products/:id', async (req: AuthRequest, res: Response) => {
     await adminDb.collection('products').doc(docId).delete();
     
     // Delete embedding vector
-    kb.deleteEmbedding('products', docId).catch(err => console.error('[Admin] deleteEmbedding error:', err));
+    (kb as any).deleteEmbedding('products', docId).catch((err: any) => console.error('[Admin] deleteEmbedding error:', err));
 
     res.json({ success: true });
   } catch (error) {
@@ -63,7 +63,7 @@ router.post('/coupons', async (req: AuthRequest, res: Response) => {
   try {
     const data = { ...req.body, createdAt: new Date().toISOString() };
     const docRef = await adminDb.collection('coupons').add(data);
-    kb.embedAndUpsert('coupons', docRef.id, data).catch(err => console.error('[Admin] embedAndUpsert error:', err));
+    (kb as any).embedAndUpsert('coupons', docRef.id, data).catch((err: any) => console.error('[Admin] embedAndUpsert error:', err));
     res.status(201).json({ id: docRef.id, success: true });
   } catch (error) {
     res.status(500).json({ error: 'Failed to create coupon' });
@@ -75,7 +75,7 @@ router.put('/coupons/:id', async (req: AuthRequest, res: Response) => {
     const docId = req.params.id;
     const data = { ...req.body, updatedAt: new Date().toISOString() };
     await adminDb.collection('coupons').doc(docId).update(data);
-    kb.embedAndUpsert('coupons', docId, data).catch(err => console.error('[Admin] embedAndUpsert error:', err));
+    (kb as any).embedAndUpsert('coupons', docId, data).catch((err: any) => console.error('[Admin] embedAndUpsert error:', err));
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'Failed to update coupon' });
@@ -86,7 +86,7 @@ router.delete('/coupons/:id', async (req: AuthRequest, res: Response) => {
   try {
     const docId = req.params.id;
     await adminDb.collection('coupons').doc(docId).delete();
-    kb.deleteEmbedding('coupons', docId).catch(err => console.error('[Admin] deleteEmbedding error:', err));
+    (kb as any).deleteEmbedding('coupons', docId).catch((err: any) => console.error('[Admin] deleteEmbedding error:', err));
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete coupon' });
@@ -98,7 +98,7 @@ router.post('/combos', async (req: AuthRequest, res: Response) => {
   try {
     const data = { ...req.body, createdAt: new Date().toISOString() };
     const docRef = await adminDb.collection('combos').add(data);
-    kb.embedAndUpsert('combos', docRef.id, data).catch(err => console.error('[Admin] embedAndUpsert error:', err));
+    (kb as any).embedAndUpsert('combos', docRef.id, data).catch((err: any) => console.error('[Admin] embedAndUpsert error:', err));
     res.status(201).json({ id: docRef.id, success: true });
   } catch (error) {
     res.status(500).json({ error: 'Failed to create combo' });
@@ -110,7 +110,7 @@ router.put('/combos/:id', async (req: AuthRequest, res: Response) => {
     const docId = req.params.id;
     const data = { ...req.body, updatedAt: new Date().toISOString() };
     await adminDb.collection('combos').doc(docId).update(data);
-    kb.embedAndUpsert('combos', docId, data).catch(err => console.error('[Admin] embedAndUpsert error:', err));
+    (kb as any).embedAndUpsert('combos', docId, data).catch((err: any) => console.error('[Admin] embedAndUpsert error:', err));
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'Failed to update combo' });
@@ -121,7 +121,7 @@ router.delete('/combos/:id', async (req: AuthRequest, res: Response) => {
   try {
     const docId = req.params.id;
     await adminDb.collection('combos').doc(docId).delete();
-    kb.deleteEmbedding('combos', docId).catch(err => console.error('[Admin] deleteEmbedding error:', err));
+    (kb as any).deleteEmbedding('combos', docId).catch((err: any) => console.error('[Admin] deleteEmbedding error:', err));
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete combo' });
