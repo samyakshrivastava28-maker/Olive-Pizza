@@ -19,7 +19,6 @@ router.get('/health', requireAuth, requireRole(['owner', 'admin']), async (req, 
       pinecone: pineconeStatus,
       providers: aiProviderStats,
     });
-    });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
