@@ -167,6 +167,31 @@ router.post('/transactional', async (req, res) => {
   }
 });
 
+// 2. AI Alerts
+router.post('/ai-alert', async (req, res) => {
+  try {
+    const { to, subject, htmlBody } = req.body;
+    
+    // Very basic security: Only accept internal AI alerts
+    if (!subject || !htmlBody) {
+      res.status(400).json({ error: 'Missing subject or htmlBody' });
+      return;
+    }
+
+    const recipients = Array.isArray(to) ? to : [to];
+    for (const recipient of recipients) {
+      if (recipient) {
+        await queueEmail(recipient, subject, htmlBody, 'system');
+      }
+    }
+    
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error(`[Email] AI Alert Error: ${error.message}`);
+    res.status(500).json({ success: false, error: 'Failed to queue AI alert' });
+  }
+});
+
 // ─── Owner Tools ──────────────────────────────────────────────────────────────
 
 router.get('/debug', async (req, res) => {
