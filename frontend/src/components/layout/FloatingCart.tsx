@@ -95,9 +95,13 @@ export default function FloatingCart() {
       {count > 0 && (
         <motion.div
           initial={{ y: 150, opacity: 0, scale: 0.8 }}
-          animate={{ y: 0, opacity: 1, scale: 1 }}
+          animate={{ y: [-3, 3, -3], opacity: 1, scale: 1 }}
           exit={{ y: 150, opacity: 0, scale: 0.8 }}
-          transition={{ type: 'spring', damping: 20, stiffness: 200 }}
+          transition={{ 
+            y: { duration: 4, repeat: Infinity, ease: 'easeInOut' },
+            opacity: { duration: 0.3 },
+            scale: { type: 'spring', damping: 20, stiffness: 200 }
+          }}
           className="fixed left-4 right-4 md:left-1/2 md:-translate-x-1/2 md:w-full md:max-w-md z-[70] pointer-events-none"
           style={{ bottom: 'var(--app-floating-bottom-offset, calc(72px + env(safe-area-inset-bottom, 0px) + 12px))' }}
         >

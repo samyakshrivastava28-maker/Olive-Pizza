@@ -1,20 +1,105 @@
 import { Router, Request, Response } from 'express';
 import { adminDb } from '../config/firebase.js';
 import { verifyToken, requireRole, AuthRequest } from '../middleware/auth.middleware.js';
+import kb from '../services/KnowledgeBaseService.js';
 
 const router = Router();
 
 router.use(verifyToken);
 router.use(requireRole(['owner', 'admin']));
 
-// --- Combos / Offers ---
-router.post('/combos', async (req: AuthRequest, res: Response) => {
+// ─── Products CRUD ──────────────────────────────────────────────────────────
+router.post('/products', async (req: AuthRequest, res: Response) => {
   try {
-    const docRef = await adminDb.collection('combos').add({
+    const data = {
       ...req.body,
       createdAt: new Date().toISOString()
-    });
-    res.status(201).json({ id: docRef.id });
+    };
+    const docRef = await adminDb.collection('products').add(data);
+    
+    // Live Qdrant Embedding Upsert (Fire-and-forget promise)
+    kb.embedAndUpsert('products', docRef.id, data).catch(err => console.error('[Admin] embedAndUpsert error:', err));
+
+    res.status(201).json({ id: docRef.id, success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to create product' });
+  }
+});
+
+router.put('/products/:id', async (req: AuthRequest, res: Response) => {
+  try {
+    const docId = req.params.id;
+    const data = {
+      ...req.body,
+      updatedAt: new Date().toISOString()
+    };
+    await adminDb.collection('products').doc(docId).update(data);
+    
+    // Live Qdrant Embedding Upsert
+    kb.embedAndUpsert('products', docId, data).catch(err => console.error('[Admin] embedAndUpsert error:', err));
+
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update product' });
+  }
+});
+
+router.delete('/products/:id', async (req: AuthRequest, res: Response) => {
+  try {
+    const docId = req.params.id;
+    await adminDb.collection('products').doc(docId).delete();
+    
+    // Delete embedding vector
+    kb.deleteEmbedding('products', docId).catch(err => console.error('[Admin] deleteEmbedding error:', err));
+
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete product' });
+  }
+});
+
+// ─── Coupons CRUD ───────────────────────────────────────────────────────────
+router.post('/coupons', async (req: AuthRequest, res: Response) => {
+  try {
+    const data = { ...req.body, createdAt: new Date().toISOString() };
+    const docRef = await adminDb.collection('coupons').add(data);
+    kb.embedAndUpsert('coupons', docRef.id, data).catch(err => console.error('[Admin] embedAndUpsert error:', err));
+    res.status(201).json({ id: docRef.id, success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to create coupon' });
+  }
+});
+
+router.put('/coupons/:id', async (req: AuthRequest, res: Response) => {
+  try {
+    const docId = req.params.id;
+    const data = { ...req.body, updatedAt: new Date().toISOString() };
+    await adminDb.collection('coupons').doc(docId).update(data);
+    kb.embedAndUpsert('coupons', docId, data).catch(err => console.error('[Admin] embedAndUpsert error:', err));
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update coupon' });
+  }
+});
+
+router.delete('/coupons/:id', async (req: AuthRequest, res: Response) => {
+  try {
+    const docId = req.params.id;
+    await adminDb.collection('coupons').doc(docId).delete();
+    kb.deleteEmbedding('coupons', docId).catch(err => console.error('[Admin] deleteEmbedding error:', err));
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete coupon' });
+  }
+});
+
+// ─── Combos / Offers ────────────────────────────────────────────────────────
+router.post('/combos', async (req: AuthRequest, res: Response) => {
+  try {
+    const data = { ...req.body, createdAt: new Date().toISOString() };
+    const docRef = await adminDb.collection('combos').add(data);
+    kb.embedAndUpsert('combos', docRef.id, data).catch(err => console.error('[Admin] embedAndUpsert error:', err));
+    res.status(201).json({ id: docRef.id, success: true });
   } catch (error) {
     res.status(500).json({ error: 'Failed to create combo' });
   }
@@ -22,10 +107,10 @@ router.post('/combos', async (req: AuthRequest, res: Response) => {
 
 router.put('/combos/:id', async (req: AuthRequest, res: Response) => {
   try {
-    await adminDb.collection('combos').doc(req.params.id).update({
-      ...req.body,
-      updatedAt: new Date().toISOString()
-    });
+    const docId = req.params.id;
+    const data = { ...req.body, updatedAt: new Date().toISOString() };
+    await adminDb.collection('combos').doc(docId).update(data);
+    kb.embedAndUpsert('combos', docId, data).catch(err => console.error('[Admin] embedAndUpsert error:', err));
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'Failed to update combo' });
@@ -34,14 +119,16 @@ router.put('/combos/:id', async (req: AuthRequest, res: Response) => {
 
 router.delete('/combos/:id', async (req: AuthRequest, res: Response) => {
   try {
-    await adminDb.collection('combos').doc(req.params.id).delete();
+    const docId = req.params.id;
+    await adminDb.collection('combos').doc(docId).delete();
+    kb.deleteEmbedding('combos', docId).catch(err => console.error('[Admin] deleteEmbedding error:', err));
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete combo' });
   }
 });
 
-// --- Settings ---
+// ─── Settings ───────────────────────────────────────────────────────────────
 router.put('/settings/:id', async (req: AuthRequest, res: Response) => {
   try {
     await adminDb.collection('settings').doc(req.params.id).set(req.body, { merge: true });
@@ -51,7 +138,7 @@ router.put('/settings/:id', async (req: AuthRequest, res: Response) => {
   }
 });
 
-// --- User Roles ---
+// ─── User Roles ──────────────────────────────────────────────────────────────
 import { adminAuth } from '../config/firebase.js';
 router.put('/users/:id/role', async (req: AuthRequest, res: Response) => {
   try {

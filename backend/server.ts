@@ -69,13 +69,15 @@ import { initKeepAlive } from './src/scripts/keepAlive.js';
 import { dynamicHtmlInjector } from './src/middleware/dynamicHtml.js';
 import { webSocketServer } from './src/services/websocket/WebSocketServer.js';
 import { AIHeartbeatJob } from './src/jobs/AIHeartbeatJob.js';
+import { AiHealthMonitorService } from './src/services/AiHealthMonitorService.js';
 
 // Setup Vite in development or static files in production
 async function setupVite() {
   await initPostgres();
   initScheduler();
   DataRetentionJob.schedule();
-  AIHeartbeatJob.schedule(); // Start AI Keep-Alive
+  AIHeartbeatJob.schedule(); // Keeps THIS backend alive on Render
+  AiHealthMonitorService.start(); // Watches Olive Pizza AI heartbeat — alerts on failure
 
   // Auto-sync all Firestore FCM tokens into PostgreSQL fcm_tokens on boot
   (async () => {

@@ -7,7 +7,15 @@
  */
 
 import { knowledgeSync } from './ai/KnowledgeSync.js';
+import crypto from 'crypto';
 import { adminDb } from '../config/firebase.js';
+import { EmbeddingService } from './ai/EmbeddingService.js';
+import { pineconeService } from './ai/PineconeService.js';
+import { embeddingCache } from './ai/embeddingCache.js';
+import { staticKB } from './ai/StaticKnowledgeLoader.js';
+import { syncWorker } from './ai/PineconeSyncWorker.js';
+
+const embeddingService = new EmbeddingService();
 
 export interface KBProduct {
   id: string;
@@ -215,14 +223,34 @@ class KnowledgeBaseService {
     if (this.isInitialized) return;
     console.log('[KB] Initializing Knowledge Base...');
 
-    // Load static knowledge
-    STATIC_POLICIES.forEach(p => this.policies.set(p.id, p));
-    STATIC_FAQ.forEach(f => this.faqs.set(f.id, f));
+    // 1. Pre-warm static JSON knowledge base
+    staticKB.preload();
+
+    // 2. Seed static policies from JSON files (richer content than the inline STATIC_POLICIES)
+    const jsonPolicies = staticKB.getAllStaticPolicies();
+    if (jsonPolicies.length > 0) {
+      // JSON policies override inline STATIC_POLICIES for the same IDs
+      jsonPolicies.forEach(p => this.policies.set(p.id, { ...p, _indexedAt: Date.now() }));
+      console.log(`[KB] Seeded ${jsonPolicies.length} policies from static JSON knowledge base`);
+    } else {
+      // Fallback to inline static policies
+      STATIC_POLICIES.forEach(p => this.policies.set(p.id, p));
+    }
+
+    // 3. Seed static FAQs from JSON files (merged at runtime with Firestore FAQs)
+    const jsonFaqs = staticKB.getAllStaticFaqs();
+    jsonFaqs.forEach(f => this.faqs.set(f.id, { ...f, _indexedAt: Date.now() }));
+    if (jsonFaqs.length > 0) {
+      console.log(`[KB] Seeded ${jsonFaqs.length} FAQs from static JSON knowledge base`);
+    } else {
+      STATIC_FAQ.forEach(f => this.faqs.set(f.id, f));
+    }
 
     await this.fullSync();
     this.attachFirestoreListeners();
     this.isInitialized = true;
-    console.log(`[KB] ✅ Initialized — ${this.products.size} products, ${this.categories.size} categories`);
+    syncWorker.start(); // Start background Pinecone queue processing
+    console.log(`[KB] ✅ Initialized — ${this.products.size} products, ${this.categories.size} categories, ${this.faqs.size} FAQs, ${this.policies.size} policies`);
   }
 
   // ─── Full Sync from Firestore ─────────────────────────────────────────────
@@ -283,6 +311,13 @@ class KnowledgeBaseService {
       this.stats.lastSyncTime = Date.now();
       this.stats.version++;
       console.log(`[KB] Full sync complete — ${this.products.size} products indexed`);
+
+      // Automatically sync all Firestore records and store pages/flows into Qdrant Vector DB
+      knowledgeSync.syncAll().then(res => {
+        console.log(`[KB] Qdrant Vector DB Sync Complete — ${res.stats?.syncedRecords || 0} records vector indexed`);
+      }).catch(err => {
+        console.warn('[KB] Qdrant Vector DB Sync Error:', err.message);
+      });
     } catch (err: any) {
       console.error('[KB] Full sync error:', err.message);
       this.stats.recoveryCount++;
@@ -298,11 +333,12 @@ class KnowledgeBaseService {
         if (change.type === 'removed' || data.isDeleted) {
           this.products.delete(change.doc.id);
           console.log(`[KB] Product removed: ${change.doc.id}`);
+          syncWorker.enqueueDelete('products', change.doc.id);
         } else {
           this.indexProduct(change.doc.id, data);
           console.log(`[KB] Product updated: ${data.name}`);
+          syncWorker.enqueue('products', change.doc.id, data);
         }
-        knowledgeSync.syncProduct(change.doc.id).catch(err => console.error('[KB] Failed to sync product to Qdrant:', err));
       });
       this.stats.lastProductUpdate = Date.now();
       this.updateStats();
@@ -314,8 +350,10 @@ class KnowledgeBaseService {
         const data = change.doc.data();
         if (change.type === 'removed') {
           this.categories.delete(change.doc.id);
+          syncWorker.enqueueDelete('categories', change.doc.id);
         } else {
           this.categories.set(change.doc.id, { id: change.doc.id, name: data.name, description: data.description, _indexedAt: Date.now() });
+          syncWorker.enqueue('categories', change.doc.id, data);
         }
       });
       this.updateStats();
@@ -324,10 +362,11 @@ class KnowledgeBaseService {
     // Settings listener
     const unsubSettings = adminDb.collection('settings').doc('store').onSnapshot(snap => {
       if (snap.exists) {
-        this.indexSettings(snap.data()!);
+        const data = snap.data()!;
+        this.indexSettings(data);
         this.stats.lastSettingsUpdate = Date.now();
         console.log('[KB] Settings updated');
-        knowledgeSync.syncSetting().catch(err => console.error('[KB] Failed to sync settings to Qdrant:', err));
+        syncWorker.enqueue('settings', 'store', data);
       }
     }, err => console.warn('[KB] Settings listener error:', err.message));
 
@@ -344,8 +383,8 @@ class KnowledgeBaseService {
             minOrder: data.minOrderAmount, isActive: data.isActive, expiresAt: data.expiresAt,
             _indexedAt: Date.now(),
           });
+          syncWorker.enqueue('coupons', change.doc.id, data);
         }
-        knowledgeSync.syncCoupon(change.doc.id).catch(err => console.error('[KB] Failed to sync coupon to Qdrant:', err));
       });
       this.updateStats();
     }, err => console.warn('[KB] Coupons listener error:', err.message));
@@ -361,8 +400,8 @@ class KnowledgeBaseService {
             id: change.doc.id, question: data.question || '', answer: data.answer || '',
             category: data.category, _indexedAt: Date.now(),
           });
+          syncWorker.enqueue('faqs', change.doc.id, data);
         }
-        knowledgeSync.syncFaq(change.doc.id).catch(err => console.error('[KB] Failed to sync FAQ to Qdrant:', err));
       });
       this.updateStats();
     }, err => console.warn('[KB] FAQs listener error:', err.message));
@@ -655,6 +694,7 @@ class KnowledgeBaseService {
   destroy() {
     this.unsubscribers.forEach(u => u());
     this.unsubscribers = [];
+    syncWorker.stop();
   }
 }
 

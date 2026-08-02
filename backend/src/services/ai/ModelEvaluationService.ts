@@ -23,7 +23,7 @@ const TEST_PROMPTS = [
   {
     type: 'tool_calling' as const,
     lang: 'Hinglish Tool Trigger',
-    prompt: 'Paneer Supreme Pizza ko mere cart me add kar do aur medium size select kar do.'
+    prompt: 'Ek badiya spicy veg pizza ko mere cart me add kar do aur medium size select kar do.'
   },
   {
     type: 'conversation' as const,

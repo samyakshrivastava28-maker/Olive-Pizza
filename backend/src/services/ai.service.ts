@@ -1,11 +1,20 @@
 import OpenAI from 'openai';
 import dotenv from 'dotenv';
 import cloudinary from '../config/cloudinary.js';
+import { resolveProductContext } from './ai/productContextResolver.js';
+import { detectLanguage, getMultilingualPromptInstruction } from './ai/languageDetector.js';
+import { AI_TOOLS, TOOL_SCHEMAS_OPENAI } from './ai/toolSchemas.js';
+import { conversationMemory } from './ai/conversationMemory.js';
+import { executeBackendTool } from './ai/toolExecutor.js';
+import { catalogGuard } from './ai/CatalogGuard.js';
 
 dotenv.config();
 
 // ── API key helpers ───────────────────────────────────────────────────────────
-function getKey(name: string): string { return process.env[name] || ''; }
+function getKey(name: string): string {
+  const assistantKey = `ASSISTANT_${name}`;
+  return process.env[assistantKey] || process.env[name] || '';
+}
 function isValidKey(key: string): boolean { return typeof key === 'string' && key.trim().length > 10; }
 
 // ── AI Provider Health Stats (exported for /api/ai/kb-status) ────────────────
@@ -74,69 +83,68 @@ setTimeout(() => {
   if (!nv && !or && !gm) console.warn('[AI] ⚠️  No AI provider keys configured. All chat will use Local KB + Offline templates.');
 }, 1000);
 
+// ── Bad Model Blacklist (in-memory cache for 10 mins on 404/410/not-found) ─────
+const badModelBlacklist = new Map<string, number>();
+
+function isModelBlacklisted(modelKey: string): boolean {
+  const expiry = badModelBlacklist.get(modelKey);
+  if (!expiry) return false;
+  if (Date.now() > expiry) {
+    badModelBlacklist.delete(modelKey);
+    return false;
+  }
+  return true;
+}
+
+function blacklistModel(modelKey: string, durationMs: number = 600000) {
+  badModelBlacklist.set(modelKey, Date.now() + durationMs);
+}
+
 // ── Model chain (priority order for general tasks) ────────────────────────────
-// Resolved lazily so missing keys are skipped without crashing
-// ── Model chain (priority order for general tasks) ────────────────────────────
-// Primary: DeepSeek V4 Flash
-// Fallbacks: GLM 5.2 -> Nemotron 3 Ultra -> DeepSeek R1 -> OpenRouter Free Tier -> Gemini API
+// ── Production Model Router Chain ──────────────────────────────────────────────
+// Primary: NVIDIA NIM (DeepSeek V4 Flash default -> GLM 5.2 -> Nemotron 3 Super -> Kimi 2.6)
+// Fallback: OpenRouter (Kimi 2.7 -> Gemma 4 31B -> GPT OSS 120B -> Ling 3.0 Flash -> Gemini 3.6 Flash -> Gemini 3.5 Flash Lite)
 function getModelChain() {
   const chain: { client: OpenAI; model: string; name: string; providerKey: string }[] = [];
   const nvidia = getNvidiaClient();
   const or = getOpenRouterClient();
-  const gemini = getGeminiClient();
-  
-  // 1. PRIMARY MODEL: DeepSeek V4 Flash
+
+  // 1. PRIMARY TIER: NVIDIA NIM
   if (nvidia) {
-    chain.push({ client: nvidia, model: 'deepseek-ai/deepseek-v4-flash', name: 'DeepSeek V4 Flash (NVIDIA NIM)', providerKey: 'nvidia' });
-  } else if (or) {
-    chain.push({ client: or, model: 'deepseek/deepseek-chat', name: 'DeepSeek V4 Flash (OpenRouter)', providerKey: 'openrouter' });
+    if (!isModelBlacklisted('nvidia:deepseek-ai/deepseek-v4-flash')) {
+      chain.push({ client: nvidia, model: 'deepseek-ai/deepseek-v4-flash', name: 'DeepSeek V4 Flash (NVIDIA Primary Default)', providerKey: 'nvidia' });
+    }
+    if (!isModelBlacklisted('nvidia:z-ai/glm-5.2')) {
+      chain.push({ client: nvidia, model: 'z-ai/glm-5.2', name: 'GLM 5.2 (NVIDIA)', providerKey: 'nvidia' });
+    }
+    if (!isModelBlacklisted('nvidia:nvidia/nemotron-3-super-120b-a12b')) {
+      chain.push({ client: nvidia, model: 'nvidia/nemotron-3-super-120b-a12b', name: 'Nemotron 3 Super (NVIDIA)', providerKey: 'nvidia' });
+    }
+    if (!isModelBlacklisted('nvidia:moonshotai/kimi-k2.6')) {
+      chain.push({ client: nvidia, model: 'moonshotai/kimi-k2.6', name: 'Kimi 2.6 (NVIDIA)', providerKey: 'nvidia' });
+    }
   }
 
-  // 2. FALLBACK 1: GLM 5.2
-  if (nvidia) {
-    chain.push({ client: nvidia, model: 'z-ai/glm-5.2', name: 'GLM 5.2 (NVIDIA NIM)', providerKey: 'nvidia' });
-  } else if (or) {
-    chain.push({ client: or, model: 'thudm/glm-4', name: 'GLM 5.2 / GLM-4 (OpenRouter)', providerKey: 'openrouter' });
-  }
-
-  // 3. FALLBACK 2: Nemotron 3 Ultra / Llama Nemotron
-  if (nvidia) {
-    chain.push({ client: nvidia, model: 'nvidia/nemotron-4-340b-instruct', name: 'Nemotron 3 Ultra (NVIDIA NIM)', providerKey: 'nvidia' });
-    chain.push({ client: nvidia, model: 'nvidia/llama-3.1-nemotron-70b-instruct', name: 'Llama 3.1 Nemotron 70B (NVIDIA NIM)', providerKey: 'nvidia' });
-    chain.push({ client: nvidia, model: 'mistralai/mistral-nemotron', name: 'Mistral Nemotron (NVIDIA NIM)', providerKey: 'nvidia' });
-  }
-
-  // 4. FALLBACK 3: DeepSeek R1
-  if (nvidia) {
-    chain.push({ client: nvidia, model: 'deepseek-ai/deepseek-r1', name: 'DeepSeek R1 (NVIDIA NIM)', providerKey: 'nvidia' });
-  }
+  // 2. SECONDARY TIER: OpenRouter Fallback Chain
   if (or) {
-    chain.push({ client: or, model: 'deepseek/deepseek-r1', name: 'DeepSeek R1 (OpenRouter)', providerKey: 'openrouter' });
-  }
-
-  // 5. ADDITIONAL NVIDIA NIM MODELS
-  if (nvidia) {
-    chain.push({ client: nvidia, model: 'nvidia/llama-3.3-70b-instruct', name: 'Llama 3.3 70B (NVIDIA NIM)', providerKey: 'nvidia' });
-    chain.push({ client: nvidia, model: 'z-ai/glm-4.7', name: 'GLM 4.7 (NVIDIA NIM)', providerKey: 'nvidia' });
-    chain.push({ client: nvidia, model: 'moonshotai/kimi-2.7', name: 'Kimi 2.7 (NVIDIA NIM)', providerKey: 'nvidia' });
-    chain.push({ client: nvidia, model: 'qwen/qwen3.5-122b-a10b', name: 'Qwen 3.5 122B (NVIDIA NIM)', providerKey: 'nvidia' });
-  }
-
-  // 6. OPENROUTER FREE TIER & STANDARD FALLBACKS
-  if (or) {
-    chain.push({ client: or, model: 'meta-llama/llama-3.3-70b-instruct:free', name: 'Llama 3.3 70B Free (OpenRouter)', providerKey: 'openrouter' });
-    chain.push({ client: or, model: 'google/gemma-2-9b-it:free', name: 'Gemma 2 9B Free (OpenRouter)', providerKey: 'openrouter' });
-    chain.push({ client: or, model: 'deepseek/deepseek-r1:free', name: 'DeepSeek R1 Free (OpenRouter)', providerKey: 'openrouter' });
-    chain.push({ client: or, model: 'qwen/qwen-2.5-72b-instruct:free', name: 'Qwen 2.5 72B Free (OpenRouter)', providerKey: 'openrouter' });
-    chain.push({ client: or, model: 'qwen/qwen3-next-80b-a3b-instruct', name: 'Qwen3 Next 80B (OpenRouter)', providerKey: 'openrouter' });
-  }
-
-  // 7. GEMINI API KEY FALLBACKS
-  if (gemini) {
-    chain.push({ client: gemini, model: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', providerKey: 'gemini' });
-    chain.push({ client: gemini, model: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro', providerKey: 'gemini' });
-    chain.push({ client: gemini, model: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash', providerKey: 'gemini' });
-    chain.push({ client: gemini, model: 'gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash Lite', providerKey: 'gemini' });
+    if (!isModelBlacklisted('openrouter:moonshotai/kimi-2.7')) {
+      chain.push({ client: or, model: 'moonshotai/kimi-2.7', name: 'Kimi 2.7 (OpenRouter)', providerKey: 'openrouter' });
+    }
+    if (!isModelBlacklisted('openrouter:google/gemma-4-31b-it')) {
+      chain.push({ client: or, model: 'google/gemma-4-31b-it', name: 'Gemma 4 31B (OpenRouter)', providerKey: 'openrouter' });
+    }
+    if (!isModelBlacklisted('openrouter:openai/gpt-oss-120b')) {
+      chain.push({ client: or, model: 'openai/gpt-oss-120b', name: 'GPT OSS 120B (OpenRouter)', providerKey: 'openrouter' });
+    }
+    if (!isModelBlacklisted('openrouter:inclusionai/ling-3.0-flash')) {
+      chain.push({ client: or, model: 'inclusionai/ling-3.0-flash', name: 'Ling 3.0 Flash (OpenRouter)', providerKey: 'openrouter' });
+    }
+    if (!isModelBlacklisted('openrouter:google/gemini-3.6-flash')) {
+      chain.push({ client: or, model: 'google/gemini-3.6-flash', name: 'Gemini 3.6 Flash (OpenRouter)', providerKey: 'openrouter' });
+    }
+    if (!isModelBlacklisted('openrouter:google/gemini-3.5-flash-lite')) {
+      chain.push({ client: or, model: 'google/gemini-3.5-flash-lite', name: 'Gemini 3.5 Flash Lite (OpenRouter)', providerKey: 'openrouter' });
+    }
   }
 
   return chain;
@@ -240,53 +248,115 @@ export async function generateChatReply(
   message: string,
   history: { role: string; content: string }[],
   frontendContext: any
-): Promise<{ success: boolean; reply?: string; action?: any; source?: string; error?: string }> {
+): Promise<{
+  success: boolean;
+  reply?: string;
+  action?: any;
+  source?: string;
+  error?: string;
+  telemetry?: {
+    llmLatencyMs: number;
+    modelUsed: string;
+    providerUsed: string;
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+    estimatedCostUsd: number;
+  };
+}> {
   aiProviderStats.totalRequests++;
   const requestStart = Date.now();
 
   try {
     const kbContext = frontendContext?.kbContext || '';
-    const cartSummary = (frontendContext?.cart?.items || []).length > 0
-      ? `Cart: ${(frontendContext.cart.items as string[]).join(', ')} | Total: ₹${frontendContext.cart.total}`
-      : 'Cart is empty';
+    const cartItems = frontendContext?.cart?.items || [];
+    const cartSummary = cartItems.length > 0
+      ? `Cart (${cartItems.length} items): ${cartItems.map((i: any) => `${i.name} (qty: ${i.quantity}, ₹${i.price})`).join(', ')} | Subtotal: ₹${frontendContext.cart.total || 0}`
+      : 'Cart is currently empty';
+    const currentRoute = frontendContext?.route || '/';
+    const checkoutStep = frontendContext?.checkoutStep || 'none';
+    const activeModal = frontendContext?.activeModal || 'none';
+    const selectedAddress = frontendContext?.selectedAddress || 'Not selected';
+    const paymentMode = frontendContext?.paymentMode || 'Not selected';
+    const activeOrder = frontendContext?.activeOrder ? JSON.stringify(frontendContext.activeOrder) : 'No active order';
+    const userRole = frontendContext?.role || 'guest';
+    const isAuth = frontendContext?.isAuthenticated ?? false;
+    const livePageContext = frontendContext?.livePageContext || '';
+    const pageHint = frontendContext?.pageHint || '';
+    const visibleProducts = frontendContext?.visibleProducts || [];
+    const activeSearchQuery = frontendContext?.activeSearchQuery || '';
 
-    const systemPrompt = `You are a premium AI Assistant for Olive Pizza (Rajnandgaon, Chhattisgarh). Your primary goal is to provide fast, accurate, conversational, and highly personalized responses while guiding users through the website.
+    // ── WORKSTREAM 1: Strict Product Context Resolution ──────────────────────
+    const { strictPromptBlock } = await resolveProductContext(message);
 
-== ABSOLUTE RULES ==
-1. NEVER hallucinate products, prices, or availability. If a product is not in the KB, say it is currently unavailable.
-2. Provide ChatGPT-level quality: natural, friendly, professional, helpful, short when possible, detailed when required. Never be robotic.
-3. Understand context: remember budget, address, selected products, and previous questions. Don't repeatedly ask the same questions.
-4. Intelligent Search: If the user searches by taste, budget, or ingredient, use semantic reasoning to recommend exactly what they need from the KB.
-5. NEVER expose passwords, API keys, internal errors, stack traces, or AI provider names (NVIDIA, OpenRouter, Gemini, etc.).
+    // ── WORKSTREAM 3: Multilingual Detection & Instructions ──────────────────
+    const detectedLang = detectLanguage(message);
+    const langInstruction = getMultilingualPromptInstruction(detectedLang);
 
-== WEBSITE CONTROLLER & ACTION GRAMMAR ==
-You can control the website by emitting ONE JSON action per message.
-However, YOU MUST ALWAYS ASK FOR EXPLICIT PERMISSION BEFORE EXECUTING ANY ACTION (unless the user explicitly commanded it in their previous message).
-When you want to execute an action:
-1. Recommend the action and ask "Would you like me to add this to your cart?" or "Should I open the menu for you?".
-2. Wait for the user to confirm.
-3. If they confirm, emit the ACTION block.
+    const systemPrompt = `You are Olive AI, the premium 24/7 artisan pizza concierge for Olive Pizza (Rajnandgaon, Chhattisgarh). You are polite, food-passionate, clear, helpful, and grounded.
 
-ACTION FORMAT (Must be exactly in this format on its own line):
-ACTION:{"type":"NAVIGATE","payload":{"path":"/menu"}}
-ACTION:{"type":"NAVIGATE","payload":{"path":"/cart"}}
-ACTION:{"type":"NAVIGATE","payload":{"path":"/checkout"}}
-ACTION:{"type":"ADD_TO_CART","payload":{"productId":"ID","productName":"NAME","price":PRICE,"quantity":1,"variant":"VARIANT_OR_EMPTY","imageUrl":"URL_OR_EMPTY"}}
-ACTION:{"type":"APPLY_COUPON","payload":{"code":"CODE"}}
+== MULTILINGUAL RULES ==
+${langInstruction}
 
-== CART INTELLIGENCE ==
-Before emitting ADD_TO_CART:
-- Check if the product has size variants. If it does, YOU MUST ask the user which size they want BEFORE adding it.
-- Verify the product ID, name, and exact price from the KB.
-- Never add the wrong product.
+== 100% PURE VEGETARIAN RESTAURANT POLICY ==
+- Olive Pizza is a 100% PURE VEGETARIAN restaurant 🟢!
+- We serve ONLY 100% Pure Veg pizzas, garlic breads, sides, desserts, and beverages.
+- We DO NOT serve any Non-Veg food (No Chicken, Meat, Mutton, Eggs, or Seafood).
+- If a user asks for non-veg options (e.g., "Do you have chicken pizza?", "Show non-veg items"), politely inform them in the detected language.
 
-== LIVE KNOWLEDGE BASE ==
-${kbContext || 'Knowledge base syncing. Answer gracefully from general knowledge.'}
+== ROLE-BASED PERMISSIONS ==
+User Role: ${userRole.toUpperCase()} (${isAuth ? 'Authenticated' : 'Guest'})
+- Guest: Can search menu, view deals, store info, FAQs, restaurant policies.
+- Customer: Can modify cart, checkout, apply coupons, track active orders, repeat past orders.
+- Owner/Admin: Can view business analytics & reports.
 
-== LIVE CONTEXT ==
-- Page: ${frontendContext?.route || '/'}
-- User: ${frontendContext?.role || 'guest'}${frontendContext?.isAuthenticated ? ' (logged in)' : ' (not logged in)'}
-- ${cartSummary}`;
+== LIVE PAGE CONTEXT (What the customer currently sees) ==
+${livePageContext || `Route: ${currentRoute} | Checkout Step: ${checkoutStep} | Modal: ${activeModal}`}
+${visibleProducts.length > 0 ? `Products visible on page: ${(visibleProducts as string[]).join(', ')}` : ''}
+${activeSearchQuery ? `Customer searched for: "${activeSearchQuery}"` : ''}
+${pageHint ? `Page hint: ${pageHint}` : ''}
+
+== LIVE CART STATE ==
+${cartSummary}
+Delivery Address: ${selectedAddress}
+Payment Mode: ${paymentMode}
+
+== STEP-BY-STEP ORDER PLACEMENT GUIDE ==
+When a customer asks to order or needs help placing an order, guide them step by step:
+1. BROWSE → Ask what they'd like (pizza, sides, drinks, combo).
+2. CUSTOMISE → Ask size (Small 7", Medium 10", Large 12"), crust (Classic/Cheese Burst/Thin/Pan), extra toppings.
+3. ADD TO CART → Confirm, then emit ACTION using ONLY real product data from the knowledge base.
+4. COUPON → Offer to apply an active coupon from the knowledge base.
+5. CHECKOUT → Guide to /checkout. Must be logged in.
+6. ADDRESS → Confirm delivery address (8km radius of Rajnandgaon).
+7. PAYMENT → UPI (GPay, PhonePe, Paytm), Card, Net Banking, or Cash on Delivery (COD).
+8. PLACE ORDER → COD: emit ACTION:PLACE_ORDER. UPI/Card: emit ACTION:START_CHECKOUT.
+9. TRACK → Offer /order-tracking after order is placed.
+
+CRITICAL: ONLY use product names, IDs, and prices EXACTLY as they appear in the LIVE KNOWLEDGE BASE below.
+
+== ABSOLUTE MENU RULES ==
+1. Use exact product names, IDs, and prices from the LIVE KNOWLEDGE BASE. Never fabricate.
+2. NEVER hallucinate toppings, crusts, sizes, or prices not in the knowledge base.
+3. Payment: COD → emit ACTION:PLACE_ORDER. UPI/Card → emit ACTION:START_CHECKOUT.
+
+${strictPromptBlock ? `\n== STRICT MENU & ADDON CONSTRAINTS ==\n${strictPromptBlock}\n` : ''}
+
+== ACTION GRAMMAR (Append exactly ONE at end of response when needed) ==
+Add item:     ACTION:{"type":"ADD_TO_CART","payload":{"productId":"<id from KB>","productName":"<name from KB>","price":<price from KB>,"quantity":1,"size":"Medium","crust":"Classic Hand Tossed"}}
+Apply coupon: ACTION:{"type":"APPLY_COUPON","payload":{"code":"<COUPON_CODE>"}}
+Navigate:     ACTION:{"type":"NAVIGATE","payload":{"path":"/menu"}}
+Track order:  ACTION:{"type":"TRACK_ORDER"}
+Checkout:     ACTION:{"type":"START_CHECKOUT"}
+Place order:  ACTION:{"type":"PLACE_ORDER"}
+Search menu:  ACTION:{"type":"SEARCH_MENU","payload":{"query":"spicy pizza"}}
+
+== ACTIVE ORDER ==
+${activeOrder}
+
+== LIVE KNOWLEDGE BASE (Products, Prices, Coupons, Settings + Static Policies & FAQs) ==
+${kbContext || 'Knowledge base loading... Use general Olive Pizza knowledge to help the customer.'}`;
+
 
     const messages: any[] = [
       { role: 'system', content: systemPrompt },
@@ -304,69 +374,243 @@ ${kbContext || 'Knowledge base syncing. Answer gracefully from general knowledge
 
     for (const config of chatChain) {
       const stat = aiProviderStats[config.providerKey as keyof typeof aiProviderStats] as any;
-      
-      // Try up to 2 times (initial + 1 retry) per model before falling back to the next model
-      for (let attempt = 1; attempt <= 2; attempt++) {
-        if (stat) stat.attempts++;
+      const modelKey = `${config.providerKey}:${config.model}`;
+
+      if (stat) stat.attempts++;
+      try {
+        console.log(`[AI Chat] Trying ${config.name}...`);
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 4500);
+
+        let response: any;
         try {
-          console.log(`[AI Chat] Trying ${config.name} (Attempt ${attempt})...`);
-          const controller = new AbortController();
-          const timeout = setTimeout(() => controller.abort(), 10000);
+          response = await config.client.chat.completions.create({
+            model: config.model,
+            messages,
+            temperature: 0.6,
+            max_tokens: 500,
+          }, { signal: controller.signal as any });
+        } finally {
+          clearTimeout(timeout);
+        }
 
-          let response: any;
+        let reply = response?.choices?.[0]?.message?.content || '';
+        if (!reply) throw new Error('Empty response from model');
+
+        reply = reply.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+        if (!reply) throw new Error('Reply was only <think> content');
+
+        let action: any = null;
+        // Robust extraction matching ACTION: {...} across singleline or multiline JSON
+        const actionMatch = reply.match(/ACTION:\s*(\{[\s\S]*?\})/i);
+        if (actionMatch) {
           try {
-            response = await config.client.chat.completions.create({
-              model: config.model,
-              messages,
-              temperature: 0.65,
-              max_tokens: 500,
-            }, { signal: controller.signal as any });
-          } finally {
-            clearTimeout(timeout);
+            action = JSON.parse(actionMatch[1]);
+          } catch {
+            console.warn('[AI Chat] Could not parse action JSON:', actionMatch[1]);
           }
+          // Remove ACTION line from the clean user response
+          reply = reply.replace(/ACTION:\s*\{[\s\S]*?\}/gi, '').trim();
+        }
 
-          let reply = response?.choices?.[0]?.message?.content || '';
-          if (!reply) throw new Error('Empty response from model');
+        // Phase 17 & 24: Catalog Guard & Zero-Hallucination Validator
+        const validation = catalogGuard.validateResponse(reply);
+        if (!validation.isValid) {
+          console.warn(`[CatalogGuard Intercept] Discarding response due to: ${validation.reason}`);
+          reply = validation.sanitizedReply || catalogGuard.sanitizeWithVerifiedCatalog(message);
+        }
 
-          reply = reply.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
-          if (!reply) throw new Error('Reply was only <think> content');
+        if (stat) { stat.ok = true; stat.lastUsed = Date.now(); stat.successes++; }
+        aiProviderStats.activeProvider = config.name;
+        const elapsed = Date.now() - requestStart;
+        aiProviderStats.avgResponseMs = Math.round((aiProviderStats.avgResponseMs * (aiProviderStats.totalRequests - 1) + elapsed) / aiProviderStats.totalRequests);
 
-          let action: any = null;
-          const actionMatch = reply.match(/ACTION:(\{[^\n]+\})/);
-          if (actionMatch) {
-            try {
-              action = JSON.parse(actionMatch[1]);
-              reply = reply.replace(/ACTION:\{[^\n]+\}/, '').trim();
-            } catch { /* malformed action */ }
+        const promptTokens = Math.ceil((systemPrompt.length + message.length) / 4);
+        const completionTokens = Math.ceil(reply.length / 4);
+        const totalTokens = promptTokens + completionTokens;
+        const estimatedCostUsd = (totalTokens / 1000) * 0.0002;
+
+        console.log(`[AI Chat] ✅ ${config.name} (${elapsed}ms)`);
+        return {
+          success: true,
+          reply,
+          action,
+          source: config.name,
+          telemetry: {
+            llmLatencyMs: elapsed,
+            modelUsed: config.model,
+            providerUsed: config.providerKey,
+            promptTokens,
+            completionTokens,
+            totalTokens,
+            estimatedCostUsd,
           }
+        };
+      } catch (err: any) {
+        const errMsg = err?.message || 'Unknown error';
+        console.warn(`[AI Chat] ❌ ${config.name}: ${errMsg}`);
+        lastError = err;
 
-          if (stat) { stat.ok = true; stat.lastUsed = Date.now(); stat.successes++; }
-          aiProviderStats.activeProvider = config.name;
-          const elapsed = Date.now() - requestStart;
-          aiProviderStats.avgResponseMs = Math.round((aiProviderStats.avgResponseMs * (aiProviderStats.totalRequests - 1) + elapsed) / aiProviderStats.totalRequests);
-
-          console.log(`[AI Chat] ✅ ${config.name} (${elapsed}ms)`);
-          return { success: true, reply, action, source: config.name };
-        } catch (err: any) {
-          const errMsg = err?.message || 'Unknown error';
-          console.warn(`[AI Chat] ❌ ${config.name} Attempt ${attempt}: ${errMsg}`);
-          lastError = err;
-          // If this is the last attempt for this model, we'll break and try the next model
+        // Auto-blacklist 404, 410, page not found, aborted, or unavailable models for 10 minutes
+        if (
+          errMsg.includes('404') ||
+          errMsg.includes('410') ||
+          errMsg.includes('page not found') ||
+          errMsg.includes('unavailable') ||
+          errMsg.includes('aborted')
+        ) {
+          console.warn(`[AI Chat] 🚫 Blacklisting model ${modelKey} for 10 minutes due to error: ${errMsg}`);
+          blacklistModel(modelKey);
         }
       }
-      
+
       if (stat) { stat.ok = false; stat.lastError = lastError?.message || 'Failed'; }
       aiProviderStats.totalFailovers++;
     }
-    
-    // If we reach here, all AI providers failed
+
     throw new Error(`All AI providers failed. Last: ${lastError?.message}`);
   } catch (error: any) {
-    console.error('[AI Chat] Fatal error (returning to offline mode):', error.message);
+    console.error('[AI Chat] Fatal error:', error.message);
     return { success: false, error: error.message };
   }
 }
 
+
+// ── Streaming Chat Reply (for SSE endpoint) ────────────────────────────────────
+export async function generateChatReplyStream(
+  message: string,
+  history: { role: string; content: string }[],
+  frontendContext: any,
+  onToken: (token: string) => void,
+  onComplete: (fullReply: string, action: any, source: string) => void,
+): Promise<void> {
+  const requestStart = Date.now();
+  aiProviderStats.totalRequests++;
+
+  try {
+    const kbContext = frontendContext?.kbContext || '';
+    const userRole = frontendContext?.role || 'guest';
+    const isAuth = frontendContext?.isAuthenticated ?? false;
+    const cartItems = frontendContext?.cart?.items || [];
+    const cartSummary = cartItems.length > 0
+      ? `Cart (${cartItems.length} items): ${cartItems.map((i: any) => `${i.name} x${i.quantity}`).join(', ')}`
+      : 'Cart is empty';
+
+    const { resolveProductContext } = await import('./ai/productContextResolver.js');
+    const { strictPromptBlock } = await resolveProductContext(message);
+    const { detectLanguage: dl, getMultilingualPromptInstruction: gmp } = await import('./ai/languageDetector.js');
+    const detectedLang = dl(message);
+    const langInstruction = gmp(detectedLang);
+
+    const systemPrompt = `You are Olive AI, the premium 24/7 artisan pizza concierge for Olive Pizza (Rajnandgaon, Chhattisgarh).
+
+== MULTILINGUAL RULES ==
+${langInstruction}
+
+== 100% PURE VEGETARIAN RESTAURANT POLICY ==
+Olive Pizza is 100% PURE VEGETARIAN. We serve ONLY veg pizzas, sides, desserts, and beverages.
+
+== ROLE ==
+User Role: ${userRole.toUpperCase()} (${isAuth ? 'Authenticated' : 'Guest'})
+
+${strictPromptBlock ? `== STRICT MENU CONSTRAINTS ==\n${strictPromptBlock}\n` : ''}
+
+== CART ==
+${cartSummary}
+
+== KNOWLEDGE BASE ==
+${kbContext || 'Knowledge base syncing...'}`;
+
+    const messages: any[] = [
+      { role: 'system', content: systemPrompt },
+      ...history.slice(-10),
+      { role: 'user', content: message },
+    ];
+
+    const chatChain = getModelChain();
+    if (chatChain.length === 0) {
+      onComplete('No AI providers configured. Please try again later.', null, 'error');
+      return;
+    }
+
+    let lastError: Error | null = null;
+
+    for (const config of chatChain) {
+      const stat = aiProviderStats[config.providerKey as keyof typeof aiProviderStats] as any;
+      if (stat) stat.attempts++;
+
+      try {
+        console.log(`[AI Stream] Trying ${config.name}...`);
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 8000);
+
+        let fullReply = '';
+        try {
+          const stream = await config.client.chat.completions.create({
+            model: config.model,
+            messages,
+            temperature: 0.6,
+            max_tokens: 600,
+            stream: true,
+          } as any, { signal: controller.signal as any });
+
+          for await (const chunk of stream as any) {
+            const token = chunk.choices?.[0]?.delta?.content || '';
+            if (token) {
+              fullReply += token;
+              onToken(token);
+            }
+          }
+        } finally {
+          clearTimeout(timeout);
+        }
+
+        if (!fullReply) throw new Error('Empty streamed response');
+
+        // Strip <think> tags
+        fullReply = fullReply.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+
+        // Extract ACTION
+        let action: any = null;
+        const actionMatch = fullReply.match(/ACTION:\s*(\{[\s\S]*?\})/i);
+        if (actionMatch) {
+          try { action = JSON.parse(actionMatch[1]); } catch {}
+          fullReply = fullReply.replace(/ACTION:\s*\{[\s\S]*?\}/gi, '').trim();
+        }
+
+        // Phase 17 & 24: Catalog Guard & Zero-Hallucination Validator
+        const validation = catalogGuard.validateResponse(fullReply);
+        if (!validation.isValid) {
+          console.warn(`[CatalogGuard Stream Intercept] Discarding streamed response due to: ${validation.reason}`);
+          fullReply = validation.sanitizedReply || catalogGuard.sanitizeWithVerifiedCatalog(message);
+        }
+
+        if (stat) { stat.ok = true; stat.lastUsed = Date.now(); stat.successes++; }
+        aiProviderStats.activeProvider = config.name;
+        const elapsed = Date.now() - requestStart;
+        aiProviderStats.avgResponseMs = Math.round((aiProviderStats.avgResponseMs * (aiProviderStats.totalRequests - 1) + elapsed) / aiProviderStats.totalRequests);
+
+        console.log(`[AI Stream] ✅ ${config.name} (${elapsed}ms, ${fullReply.length} chars)`);
+        onComplete(fullReply, action, config.name);
+        return;
+      } catch (err: any) {
+        const errMsg = err?.message || 'Unknown error';
+        console.warn(`[AI Stream] ❌ ${config.name}: ${errMsg}`);
+        lastError = err;
+        if (errMsg.includes('404') || errMsg.includes('410') || errMsg.includes('unavailable') || errMsg.includes('aborted')) {
+          blacklistModel(`${config.providerKey}:${config.model}`);
+        }
+        if (stat) { stat.ok = false; stat.lastError = errMsg; }
+        aiProviderStats.totalFailovers++;
+      }
+    }
+
+    onComplete(`I'm having trouble connecting right now. Please try again in a moment. 🍕`, null, 'error');
+  } catch (error: any) {
+    console.error('[AI Stream] Fatal error:', error.message);
+    onComplete('An error occurred. Please try again.', null, 'error');
+  }
+}
 
 // ── Build optimized food photography prompt from product details ───────────────
 function buildProductImagePrompt(

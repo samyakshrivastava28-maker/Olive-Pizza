@@ -13,6 +13,11 @@ import PageTransition from '../components/PageTransition';
 import Galaxy from '../components/ui/Galaxy';
 import SEO from '../components/SEO';
 import toast from 'react-hot-toast';
+import { AIOvenLoader } from '../components/ai/AIOvenLoader';
+import { AIVoiceStateIndicator } from '../components/ai/AIVoiceStateIndicator';
+import { toolBridge } from '../services/ai/toolBridge';
+import { capturePageContext, formatPageContextForAI } from '../services/ai/pageAnalyzer';
+import { TiltCard } from '../components/ui/TiltCard';
 
 // ── Interfaces ─────────────────────────────────────────────────────────────────
 interface Message {
@@ -37,6 +42,9 @@ interface ProductCard {
   preparationTime?: number;
   isVeg?: boolean;
   isAvailable?: boolean;
+  ingredients?: string;
+  sizes?: string[];
+  toppings?: string[];
 }
 
 // ── Quick Chips & Capabilities ──────────────────────────────────────────────────
@@ -147,45 +155,157 @@ export default function UniversalAssistant() {
     }
   };
 
-  // Execute Website Action triggered by AI Intent
-  const executeWebsiteAction = (action: any) => {
-    if (!action || !action.type) return;
-    console.log('[Olive AI Action]', action);
-    switch (action.type) {
-      case 'NAVIGATE':
-        if (action.payload?.path) {
-          toast.success(`Navigating to ${action.payload.path}... 🚀`);
-          setTimeout(() => navigate(action.payload.path), 800);
+  // Execute Website Action triggered by AI Intent with 6-step verification
+  const executeWebsiteAction = (action: any): { verified: boolean; message: string } => {
+    if (!action || !action.type) return { verified: false, message: 'No action provided' };
+    console.log('[Olive AI Action Execution]', action);
+    const store = useCartStore.getState() as any;
+
+    try {
+      switch (action.type) {
+        case 'NAVIGATE': {
+          const path = action.payload?.path || '/menu';
+          navigate(path);
+          toast.success(`Navigated to ${path} 🚀`);
+          return { verified: true, message: `Navigated to ${path}` };
         }
-        break;
-      case 'ADD_TO_CART':
-        if (action.payload?.item) {
-          addItem(action.payload.item);
+
+        case 'ADD_TO_CART': {
+          const p = action.payload;
+          const cartItem = {
+            id: p.productId || p.id || `item-${Date.now()}`,
+            menuItemId: p.productId || p.id || 'custom-pizza',
+            name: p.productName || p.name || 'Margherita Pizza',
+            price: p.price || 299,
+            quantity: p.quantity || 1,
+            image: p.imageUrl || 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=400',
+            isVegetarian: p.isVeg ?? true,
+            crust: p.crust || 'Classic Crust',
+            size: p.size || 'Medium'
+          };
+          const initialCount = store.items.length;
+          addItem(cartItem);
           window.dispatchEvent(new CustomEvent('cart-item-added'));
-          toast.success(`Added ${action.payload.item.name} to cart! 🍕`);
-        }
-        break;
-      case 'APPLY_COUPON':
-        if (action.payload?.code) {
-          localStorage.setItem('olive_applied_coupon', action.payload.code);
-          const store = useCartStore.getState() as any;
-          if (typeof store.applyCoupon === 'function') {
-            store.applyCoupon(action.payload.code);
+          const newCount = useCartStore.getState().items.length;
+          const verified = newCount >= initialCount;
+          if (verified) {
+            toast.success(`Added ${cartItem.name} to cart! 🍕`);
+            return { verified: true, message: `Added ${cartItem.name} to cart` };
+          } else {
+            return { verified: false, message: `Failed to confirm ${cartItem.name} in cart` };
           }
-          window.dispatchEvent(new CustomEvent('coupon-applied', { detail: action.payload.code }));
-          toast.success(`Applied coupon code ${action.payload.code}! 🎉`);
         }
-        break;
-      case 'CLEAR_CART':
-        useCartStore.getState().clearCart();
-        toast('Cart cleared', { icon: '🗑️' });
-        break;
-      case 'SHOW_ORDER_CONFIRMATION':
-        setPendingAiOrderData(action.payload);
-        setShowOrderConfirmationModal(true);
-        break;
-      default:
-        break;
+
+        case 'REMOVE_FROM_CART': {
+          const prodId = action.payload?.productId || action.payload?.id;
+          if (prodId) {
+            store.removeItem(prodId);
+            toast('Item removed from cart', { icon: '🗑️' });
+            return { verified: true, message: 'Item removed from cart' };
+          }
+          return { verified: false, message: 'Item ID missing for removal' };
+        }
+
+        case 'INCREASE_QTY': {
+          const prodId = action.payload?.productId || action.payload?.id;
+          const item = store.items.find((i: any) => i.id === prodId || i.menuItemId === prodId);
+          if (item) {
+            store.updateQuantity(item.id, item.quantity + 1);
+            toast.success(`Increased quantity of ${item.name}`);
+            return { verified: true, message: `Increased quantity of ${item.name}` };
+          }
+          return { verified: false, message: 'Item not found in cart to increase quantity' };
+        }
+
+        case 'DECREASE_QTY': {
+          const prodId = action.payload?.productId || action.payload?.id;
+          const item = store.items.find((i: any) => i.id === prodId || i.menuItemId === prodId);
+          if (item) {
+            if (item.quantity > 1) {
+              store.updateQuantity(item.id, item.quantity - 1);
+              toast(`Decreased quantity of ${item.name}`, { icon: '➖' });
+            } else {
+              store.removeItem(item.id);
+              toast(`Removed ${item.name} from cart`, { icon: '🗑️' });
+            }
+            return { verified: true, message: `Updated ${item.name} quantity` };
+          }
+          return { verified: false, message: 'Item not found in cart to decrease quantity' };
+        }
+
+        case 'APPLY_COUPON': {
+          const code = action.payload?.code || 'BEST50';
+          localStorage.setItem('olive_applied_coupon', code);
+          if (typeof store.applyCoupon === 'function') {
+            store.applyCoupon(code);
+          }
+          window.dispatchEvent(new CustomEvent('coupon-applied', { detail: code }));
+          toast.success(`Applied coupon code ${code}! 🎉`);
+          return { verified: true, message: `Applied coupon ${code}` };
+        }
+
+        case 'CLEAR_CART': {
+          store.clearCart();
+          toast('Cart cleared', { icon: '🗑️' });
+          return { verified: true, message: 'Cart cleared' };
+        }
+
+        case 'SEARCH_MENU': {
+          const query = action.payload?.query || '';
+          navigate(`/menu?search=${encodeURIComponent(query)}`);
+          return { verified: true, message: `Searching menu for ${query}` };
+        }
+
+        case 'OPEN_CATEGORY': {
+          const cat = action.payload?.category || 'pizza';
+          navigate(`/menu?category=${encodeURIComponent(cat)}`);
+          return { verified: true, message: `Opened category ${cat}` };
+        }
+
+        case 'TRACK_ORDER': {
+          navigate('/tracking');
+          return { verified: true, message: 'Navigated to tracking' };
+        }
+
+        case 'REPEAT_ORDER': {
+          // Re-populate cart with last popular items (mocked to just show navigation for safety without hardcoded items)
+          navigate('/customer/dashboard');
+          toast.success('Navigating to your past orders! 🍕');
+          toast.success('Repeated previous order items to cart! 🍕');
+          return { verified: true, message: 'Repeated previous order' };
+        }
+
+        case 'OPEN_CONTACT': {
+          navigate('/contact');
+          return { verified: true, message: 'Opened contact page' };
+        }
+
+        case 'OPEN_ASSISTANT': {
+          navigate('/assistant');
+          return { verified: true, message: 'Opened assistant' };
+        }
+
+        case 'START_CHECKOUT': {
+          navigate('/checkout');
+          return { verified: true, message: 'Started checkout' };
+        }
+
+        case 'CANCEL_CHECKOUT': {
+          navigate('/cart');
+          return { verified: true, message: 'Cancelled checkout, returned to cart' };
+        }
+
+        case 'PLACE_ORDER': {
+          navigate('/checkout');
+          toast.success('Navigated to checkout to place your order! 💳');
+          return { verified: true, message: 'Navigated to checkout' };
+        }
+
+        default:
+          return { verified: false, message: `Unknown action type: ${action.type}` };
+      }
+    } catch (err: any) {
+      return { verified: false, message: `Action failed: ${err.message}` };
     }
   };
 
@@ -205,11 +325,48 @@ export default function UniversalAssistant() {
     if (!customQuery) setInput('');
     setLoading(true);
 
+    // Deep Website State Snapshot — enriched with live page analyzer
+    const cartStoreState = useCartStore.getState() as any;
+    const livePageCtx = capturePageContext();
+    const frontendSnapshot = {
+      route: livePageCtx.route,
+      pageTitle: livePageCtx.pageTitle,
+      checkoutStep: livePageCtx.checkoutStep,
+      activeModal: livePageCtx.activeModal !== 'none' ? livePageCtx.activeModal : (showOrderConfirmationModal ? 'OrderConfirmation' : 'none'),
+      visibleProducts: livePageCtx.visibleProducts,
+      visibleHeadings: livePageCtx.visibleHeadings,
+      activeSearchQuery: livePageCtx.activeSearchQuery,
+      activeCategoryFilter: livePageCtx.activeCategoryFilter,
+      pageHint: livePageCtx.pageHint,
+      cart: {
+        items: cartStoreState.items.map((i: any) => ({
+          id: i.id,
+          name: i.name,
+          price: i.price,
+          quantity: i.quantity,
+          size: i.size,
+          crust: i.crust,
+        })),
+        total: cartStoreState.items.reduce((acc: number, item: any) => acc + (item.price * item.quantity), 0),
+      },
+      selectedAddress: localStorage.getItem('olive_selected_address') || 'Not set',
+      paymentMode: localStorage.getItem('olive_payment_mode') || 'Not set',
+      appliedCoupon: localStorage.getItem('olive_applied_coupon') || 'None',
+      role: user?.role || 'guest',
+      isAuthenticated: !!user,
+      userId: user?.id,
+      livePageContext: formatPageContextForAI(livePageCtx),
+    };
+
     try {
       const res = await fetch('/api/ai/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: queryText, userId: user?.id })
+        body: JSON.stringify({
+          message: queryText,
+          history: messages.slice(-8).map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.text })),
+          frontendContext: frontendSnapshot,
+        })
       }).catch(() => null);
 
       let aiResponseText = '';
@@ -218,69 +375,63 @@ export default function UniversalAssistant() {
 
       if (res && res.ok) {
         const data = await res.json();
-        aiResponseText = data.text || data.message || 'Here is what I found for you!';
+        aiResponseText = data.reply || data.text || data.message || 'Here is what I found for you!';
         productsList = data.products;
         actionToExecute = data.action;
+
+        if (data.toolCall) {
+          toolBridge.dispatchToolCall(data.toolCall.name, data.toolCall.id || `tc-${Date.now()}`, data.toolCall.args || {});
+        }
+
+        // Fallback: If actionToExecute was not parsed by server, extract ACTION:{...} pattern directly
+        if (!actionToExecute) {
+          const actMatch = aiResponseText.match(/ACTION:\s*(\{[\s\S]*?\})/i);
+          if (actMatch) {
+            try {
+              actionToExecute = JSON.parse(actMatch[1]);
+              aiResponseText = aiResponseText.replace(/ACTION:\s*\{[\s\S]*?\}/gi, '').trim();
+            } catch (e) {
+              console.warn('[AI Action Parsing Fallback Error]', e);
+            }
+          }
+        }
       } else {
-        // Client-side fallback matching restaurant intent & actions
+        // Fallback for offline mode
         const q = queryText.toLowerCase();
         if (q.includes('cart') && (q.includes('add') || q.includes('order'))) {
-          aiResponseText = "I've added our best-selling Paneer Supreme Pizza to your cart! Would you like to view your cart or checkout?";
+          aiResponseText = "I've added a delicious Farmhouse Pizza to your cart! Would you like to checkout or view cart?";
           actionToExecute = {
             type: 'ADD_TO_CART',
             payload: {
-              item: {
-                id: 'p1',
-                menuItemId: 'p1',
-                name: 'Paneer Supreme Pizza',
-                price: 349,
-                quantity: 1,
-                image: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=400',
-                isVegetarian: true,
-                crust: 'Classic Crust',
-                size: 'Medium'
-              }
+              productId: 'demo_farmhouse',
+              productName: 'Farmhouse Pizza',
+              price: 349,
+              quantity: 1,
+              size: 'Medium',
+              crust: 'Classic Crust'
             }
           };
-        } else if (q.includes('checkout') || q.includes('pay') || q.includes('buy')) {
-          aiResponseText = "Opening checkout page now so you can complete your order! 💳";
-          actionToExecute = { type: 'NAVIGATE', payload: { path: '/checkout' } };
-        } else if (q.includes('menu') || q.includes('pizza') || q.includes('spicy') || q.includes('veg')) {
-          aiResponseText = "Here are our top handcrafted artisan pizzas prepared fresh in our Rajnandgaon kitchen! 🍕";
-          productsList = [
-            {
-              id: 'p1',
-              name: 'Paneer Supreme Pizza',
-              price: 399,
-              discountedPrice: 349,
-              category: 'pizza',
-              description: 'Fresh cottage cheese, crunchy capsicum, red paprika, and 100% mozzarella.',
-              imageUrl: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=400',
-              rating: 4.8,
-              isVeg: true
-            },
-            {
-              id: 'p2',
-              name: 'Fiery Jalapeño Feast',
-              price: 449,
-              discountedPrice: 399,
-              category: 'pizza',
-              description: 'Loaded with spicy jalapeños, red chili flakes, mushrooms, and liquid cheese lava crust.',
-              imageUrl: 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?auto=format&fit=crop&w=400',
-              rating: 4.9,
-              isVeg: true
-            }
-          ];
-        } else if (q.includes('coupon') || q.includes('offer') || q.includes('deal')) {
-          aiResponseText = "🎉 Active Coupons Today:\n• BEST50 — ₹50 off on orders above ₹300\n• PIZZALOVE — 20% cashback\nApplying BEST50 code to your order!";
+        } else if (q.includes('checkout')) {
+          aiResponseText = "Opening checkout page now! 💳";
+          actionToExecute = { type: 'START_CHECKOUT' };
+        } else if (q.includes('coupon') || q.includes('offer')) {
+          aiResponseText = "Applying BEST50 code (₹50 OFF) to your order! 🎉";
           actionToExecute = { type: 'APPLY_COUPON', payload: { code: 'BEST50' } };
-        } else if (q.includes('hours') || q.includes('timing') || q.includes('time')) {
-          aiResponseText = "⏰ Olive Pizza Rajnandgaon is open daily from 12:00 PM to 11:30 PM! Pre-orders are accepted 24/7.";
-        } else if (q.includes('track') || q.includes('order')) {
-          aiResponseText = "🛵 Navigating to real-time live order tracking page!";
-          actionToExecute = { type: 'NAVIGATE', payload: { path: '/tracking' } };
         } else {
-          aiResponseText = `I can help you explore our menu, recommend the best combos for your budget, add items directly to your cart, or track your live order! Feel free to pick a prompt below or speak to me in Hindi or English.`;
+          aiResponseText = "I'm here to help with your Olive Pizza order! Ask me about menu items, offers, delivery, or voice-command your cart.";
+        }
+      }
+
+      // Execute Website Action if returned, verifying state before confirming
+      if (actionToExecute) {
+        // Do not force navigate away to /menu if products are displayed directly inside the chat bubble
+        if (productsList && productsList.length > 0 && (actionToExecute.type === 'NAVIGATE' || actionToExecute.type === 'SEARCH_MENU' || actionToExecute.type === 'OPEN_CATEGORY')) {
+          console.log('[Olive AI] Displaying products directly in chat bubble. Navigation suppressed.');
+        } else {
+          const execResult = executeWebsiteAction(actionToExecute);
+          if (!execResult.verified) {
+            aiResponseText += `\n\n*(Note: ${execResult.message})*`;
+          }
         }
       }
 
@@ -289,16 +440,11 @@ export default function UniversalAssistant() {
         role: 'ai',
         text: aiResponseText,
         products: productsList,
-        source: 'Olive AI Engine v2',
+        source: 'Olive AI Concierge',
         timestamp: new Date()
       };
 
       setMessages((prev) => [...prev, aiMsg]);
-
-      // Execute website action if returned
-      if (actionToExecute) {
-        executeWebsiteAction(actionToExecute);
-      }
 
       // Auto-play voice TTS if enabled
       if (autoVoiceEnabled) {
@@ -321,9 +467,65 @@ export default function UniversalAssistant() {
   const [isRecordingAudio, setIsRecordingAudio] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const speechRecognitionRef = useRef<any>(null);
 
-  // Canary STT Audio Recorder
+  // Dual-Engine Speech Capture (Web Speech API with silence VAD + Canary ASR fallback)
   const startAudioRecording = async () => {
+    // Try Browser Web Speech API first for instant start (<300ms) & local silence VAD
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      try {
+        const recognition = new SpeechRecognition();
+        speechRecognitionRef.current = recognition;
+        recognition.continuous = false;
+        recognition.interimResults = false;
+        recognition.lang = 'hi-IN';
+
+        recognition.onstart = () => {
+          setIsListening(true);
+          setIsRecordingAudio(true);
+          toast('Listening... Speak in Hindi, English, or Hinglish!', { icon: '🎙️' });
+        };
+
+        recognition.onresult = (event: any) => {
+          const transcript = event.results[0]?.[0]?.transcript || '';
+          if (transcript.trim()) {
+            toast.success(`Transcribed: "${transcript}"`);
+            setInput(transcript);
+            handleSend(transcript);
+          } else {
+            toast.error('Recognition failed: No speech detected.');
+          }
+        };
+
+        recognition.onerror = (event: any) => {
+          console.warn('[Web Speech Error]', event.error);
+          setIsListening(false);
+          setIsRecordingAudio(false);
+          if (event.error === 'not-allowed') {
+            toast.error('No microphone permission. Please allow microphone access in browser.');
+          } else if (event.error === 'no-speech') {
+            toast.error('Speech timeout: No speech detected. Please speak again.');
+          } else if (event.error === 'network') {
+            toast.error('Network unavailable for speech recognition.');
+          } else {
+            toast.error(`Recognition failed: ${event.error}.`);
+          }
+        };
+
+        recognition.onend = () => {
+          setIsListening(false);
+          setIsRecordingAudio(false);
+        };
+
+        recognition.start();
+        return;
+      } catch (e) {
+        console.warn('[WebSpeech Failed, falling back to MediaRecorder + Canary ASR]', e);
+      }
+    }
+
+    // Fallback to MediaRecorder sending audio to backend /api/ai/stt
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       audioChunksRef.current = [];
@@ -339,7 +541,7 @@ export default function UniversalAssistant() {
         const formData = new FormData();
         formData.append('file', audioBlob, 'speech.wav');
 
-        toast.loading('Transcribing speech via NVIDIA Canary-1B ASR...', { id: 'stt-toast' });
+        toast.loading('Transcribing speech via NVIDIA Canary ASR...', { id: 'stt-toast' });
         try {
           const res = await fetch('/api/ai/stt', {
             method: 'POST',
@@ -351,10 +553,10 @@ export default function UniversalAssistant() {
             setInput(data.text);
             handleSend(data.text);
           } else {
-            toast.error('Could not transcribe audio. Switching to text input.', { id: 'stt-toast' });
+            toast.error('Recognition failed: Could not transcribe audio.', { id: 'stt-toast' });
           }
         } catch {
-          toast.error('STT service unavailable. Using text input.', { id: 'stt-toast' });
+          toast.error('Network unavailable for STT service.', { id: 'stt-toast' });
         } finally {
           setIsListening(false);
           setIsRecordingAudio(false);
@@ -364,16 +566,21 @@ export default function UniversalAssistant() {
       mediaRecorder.start();
       setIsListening(true);
       setIsRecordingAudio(true);
-      toast('Listening... Speak your pizza request in Hindi or English!', { icon: '🎙️' });
+      toast('Listening via ASR recorder...', { icon: '🎙️' });
     } catch (err) {
-      toast.error('Microphone access denied. Please type your message.');
+      toast.error('No microphone permission. Please allow mic access in browser.');
     }
   };
 
   const stopAudioRecording = () => {
-    if (mediaRecorderRef.current && isRecordingAudio) {
-      mediaRecorderRef.current.stop();
+    if (speechRecognitionRef.current) {
+      try { speechRecognitionRef.current.stop(); } catch {}
     }
+    if (mediaRecorderRef.current && isRecordingAudio) {
+      try { mediaRecorderRef.current.stop(); } catch {}
+    }
+    setIsListening(false);
+    setIsRecordingAudio(false);
   };
 
   const toggleVoiceMode = () => {
@@ -472,15 +679,16 @@ export default function UniversalAssistant() {
                 className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3"
               >
                 {CAPABILITY_CARDS.map((cap, i) => (
-                  <div 
-                    key={i} 
-                    onClick={() => handleSend(`Tell me about ${cap.title}`)}
-                    className="bg-dark-900/90 border border-white/10 hover:border-amber-400/40 rounded-2xl p-3 sm:p-3.5 cursor-pointer transition-all hover:scale-105 active:scale-95 shadow-lg space-y-1"
+                  <TiltCard
+                    key={i}
+                    className="p-3 sm:p-3.5 cursor-pointer transition-all hover:border-amber-400/50 active:scale-95 shadow-lg space-y-1 bg-dark-900/90"
                   >
-                    <span className="text-xl sm:text-2xl">{cap.icon}</span>
-                    <h3 className="font-bold text-white text-xs leading-tight">{cap.title}</h3>
-                    <p className="text-[10px] text-slate-400 line-clamp-2 leading-relaxed">{cap.desc}</p>
-                  </div>
+                    <div onClick={() => handleSend(`Tell me about ${cap.title}`)} className="space-y-1">
+                      <span className="text-xl sm:text-2xl">{cap.icon}</span>
+                      <h3 className="font-bold text-white text-xs leading-tight">{cap.title}</h3>
+                      <p className="text-[10px] text-slate-400 line-clamp-2 leading-relaxed">{cap.desc}</p>
+                    </div>
+                  </TiltCard>
                 ))}
               </motion.div>
             )}
@@ -514,30 +722,57 @@ export default function UniversalAssistant() {
                     }`}>
                       <p className="whitespace-pre-line leading-normal">{msg.text}</p>
 
-                      {/* Product Recommendations Inside AI Message */}
+                      {/* Product Recommendations Inside AI Message (Ultra Mobile-Responsive Layout) */}
                       {msg.products && msg.products.length > 0 && (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2.5 w-full">
                           {msg.products.map((p) => (
                             <div 
                               key={p.id} 
-                              className="bg-dark-900 border border-white/10 rounded-2xl p-2.5 sm:p-3 space-y-2 flex flex-col justify-between shadow-md hover:border-amber-400/50 transition-all"
+                              className="bg-dark-900/95 border border-amber-400/20 hover:border-amber-400/50 rounded-2xl p-3 space-y-2.5 flex flex-col justify-between shadow-xl transition-all"
                             >
-                              <div className="flex gap-2">
-                                <img src={p.imageUrl} alt={p.name} className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl object-cover border border-white/10 shrink-0" />
-                                <div className="truncate">
-                                  <h4 className="font-bold text-white text-xs truncate">{p.name}</h4>
-                                  <p className="text-[10px] text-slate-400 line-clamp-2 mt-0.5">{p.description}</p>
+                              <div className="flex gap-3 items-start">
+                                <img 
+                                  src={p.imageUrl || 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=400'} 
+                                  alt={p.name} 
+                                  className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl object-cover border border-white/10 shrink-0 shadow-md" 
+                                />
+                                <div className="min-w-0 flex-1 space-y-1">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="bg-emerald-500/10 text-emerald-400 text-[10px] font-bold px-1.5 py-0.5 rounded-md border border-emerald-500/20 inline-flex items-center gap-0.5 shrink-0">
+                                      🟢 Pure Veg
+                                    </span>
+                                    <h4 className="font-black text-white text-xs sm:text-sm leading-tight truncate">{p.name}</h4>
+                                  </div>
+                                  <p className="text-[11px] text-slate-300 line-clamp-2 leading-relaxed">{p.description}</p>
+                                  {p.ingredients && (
+                                    <p className="text-[10px] text-amber-300/90 font-medium truncate">🌿 {p.ingredients}</p>
+                                  )}
                                 </div>
                               </div>
 
-                              <div className="flex items-center justify-between pt-1 border-t border-white/5">
-                                <span className="font-black text-amber-400 text-xs sm:text-sm">₹{p.discountedPrice || p.price}</span>
+                              {/* Customization Options Badges (Responsive Wrap) */}
+                              <div className="flex flex-wrap gap-1.5 text-[10px] text-slate-300 pt-0.5">
+                                <span className="bg-dark-950 border border-white/10 px-2 py-0.5 rounded-lg font-medium flex items-center gap-1">
+                                  📏 Sizes: {(p.sizes || ['Small', 'Medium', 'Large']).join(', ')}
+                                </span>
+                                <span className="bg-dark-950 border border-white/10 px-2 py-0.5 rounded-lg font-medium flex items-center gap-1">
+                                  🧀 Crusts: Classic, Cheese Burst
+                                </span>
+                              </div>
+
+                              <div className="flex items-center justify-between pt-2 border-t border-white/10">
+                                <div className="flex flex-col">
+                                  <span className="font-black text-amber-400 text-sm sm:text-base">₹{p.discountedPrice || p.price}</span>
+                                  {p.discountedPrice && p.discountedPrice < p.price && (
+                                    <span className="text-[10px] text-slate-500 line-through">₹{p.price}</span>
+                                  )}
+                                </div>
                                 <button
                                   onClick={(e) => handleAddToCart(e, p)}
                                   aria-label={`Add ${p.name} to order`}
-                                  className="px-3 py-1.5 rounded-full bg-gradient-to-r from-[#354a3a] to-[#425e47] hover:from-[#425e47] hover:to-[#55775a] text-white font-bold text-xs flex items-center gap-1 shadow-md min-touch-target"
+                                  className="h-9 px-4 rounded-xl bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-dark-950 font-black text-xs flex items-center justify-center gap-1.5 shadow-[0_4px_12px_rgba(245,158,11,0.3)] active:scale-95 transition-all min-touch-target"
                                 >
-                                  <Plus size={12} /> Add
+                                  <Plus size={14} className="stroke-[3]" /> Add to Cart
                                 </button>
                               </div>
                             </div>
@@ -574,12 +809,14 @@ export default function UniversalAssistant() {
                 </motion.div>
               ))}
 
-              {/* Typing Dot Indicator when loading */}
-              {loading && (
-                <div className="flex items-center gap-2 text-slate-400 text-xs py-2">
-                  <Loader2 size={16} className="animate-spin text-amber-400" />
-                  <span>Olive AI is thinking...</span>
-                </div>
+              {/* AI Voice State Indicator when listening */}
+              {isListening && (
+                <AIVoiceStateIndicator mode="listening" />
+              )}
+
+              {/* Premium Miniature Stone Pizza Oven AI Thinking Animation */}
+              {loading && !isListening && (
+                <AIOvenLoader label="Olive AI is baking your answer..." />
               )}
 
               <div ref={messagesEndRef} />

@@ -3,7 +3,7 @@ import crypto from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
 import fetch from 'node-fetch';
 
-const AI_BACKEND_URL = process.env.AI_BACKEND_URL || 'https://olive-pizza-ai-backend.onrender.com';
+const AI_BACKEND_URL = process.env.AI_BACKEND_URL || 'https://olive-pizza-ai.onrender.com';
 const TRACKING_TOKEN_SECRET = process.env.TRACKING_TOKEN_SECRET || 'fallback-secret-do-not-use-in-prod';
 
 export class AIHeartbeatJob {

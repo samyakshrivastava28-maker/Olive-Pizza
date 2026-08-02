@@ -242,6 +242,92 @@ export const initPostgres = async () => {
       console.warn('[PostgreSQL] LISTEN/NOTIFY setup skipped (table may not exist yet):', e.message);
     }
 
+    // ── Payment System Tables Setup ──────────────────────────────────────────
+    try {
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS payments (
+          id VARCHAR(255) PRIMARY KEY,
+          payment_session_id VARCHAR(255),
+          provider_payment_id VARCHAR(255),
+          user_id VARCHAR(255) NOT NULL,
+          order_id VARCHAR(255),
+          provider VARCHAR(50) NOT NULL,
+          amount NUMERIC(10, 2) NOT NULL,
+          currency VARCHAR(10) DEFAULT 'INR',
+          status VARCHAR(50) NOT NULL DEFAULT 'CREATED',
+          payment_method VARCHAR(50) NOT NULL,
+          metadata JSONB,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          verified_at TIMESTAMP WITH TIME ZONE
+        );
+
+        CREATE TABLE IF NOT EXISTS payment_sessions (
+          id VARCHAR(255) PRIMARY KEY,
+          user_id VARCHAR(255) NOT NULL,
+          amount NUMERIC(10, 2) NOT NULL,
+          items_json JSONB,
+          expires_at TIMESTAMP WITH TIME ZONE,
+          is_used BOOLEAN DEFAULT false,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS payment_webhooks (
+          id VARCHAR(255) PRIMARY KEY,
+          provider VARCHAR(50) NOT NULL,
+          event_type VARCHAR(255),
+          event_id VARCHAR(255) UNIQUE,
+          payload JSONB,
+          signature_verified BOOLEAN DEFAULT false,
+          processed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS refunds (
+          id VARCHAR(255) PRIMARY KEY,
+          payment_id VARCHAR(255) NOT NULL,
+          order_id VARCHAR(255),
+          refund_amount NUMERIC(10, 2) NOT NULL,
+          reason TEXT,
+          status VARCHAR(50) DEFAULT 'PENDING',
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS payment_audit_logs (
+          id VARCHAR(255) PRIMARY KEY,
+          payment_id VARCHAR(255),
+          order_id VARCHAR(255),
+          action VARCHAR(255) NOT NULL,
+          actor_id VARCHAR(255),
+          actor_role VARCHAR(50),
+          details JSONB,
+          ip_address VARCHAR(100),
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS payment_recovery_queue (
+          id VARCHAR(255) PRIMARY KEY,
+          payment_id VARCHAR(255) NOT NULL,
+          provider_payment_id VARCHAR(255),
+          user_id VARCHAR(255) NOT NULL,
+          amount NUMERIC(10, 2) NOT NULL,
+          session_data JSONB,
+          retry_count INTEGER DEFAULT 0,
+          status VARCHAR(50) DEFAULT 'PENDING',
+          last_error TEXT,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_payments_user_id ON payments(user_id);
+        CREATE INDEX IF NOT EXISTS idx_payments_status ON payments(status);
+        CREATE INDEX IF NOT EXISTS idx_payments_provider_id ON payments(provider_payment_id);
+        CREATE INDEX IF NOT EXISTS idx_audit_payment_id ON payment_audit_logs(payment_id);
+      `);
+      console.log('[PostgreSQL] Payment System production tables initialized');
+    } catch (pErr: any) {
+      console.warn('[PostgreSQL] Payment tables initialization warning:', pErr.message);
+    }
+
     client.release();
     console.log('PostgreSQL initialized successfully');
   } catch (error: any) {

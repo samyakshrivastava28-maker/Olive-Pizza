@@ -285,34 +285,20 @@ export class StorageAnalyzerService {
     const startTime = Date.now();
 
     try {
-      const { qdrantService, QDRANT_COLLECTION } = await import('./ai/QdrantService.js');
-      const status = await qdrantService.getStatus();
-      
-      let totalUsedBytes = 0;
-      let vectorCount = 0;
+      const { pineconeService } = await import('./ai/PineconeService.js');
+      const status = await pineconeService.getStatus();
 
-      // Approximate storage: Qdrant doesn't expose byte size easily via REST without telemetry endpoint.
-      // If telemetry fails, we estimate based on vectors (dimensions * 4 bytes + payload).
-      try {
-        // @ts-ignore
-        const telemetry = await qdrantService.fetchQdrant('/telemetry');
-        totalUsedBytes = (telemetry as any)?.result?.collections?.collections?.[0]?.segments_size || 0;
-        vectorCount = (telemetry as any)?.result?.collections?.collections?.[0]?.vectors_count || 0;
-      } catch (e) {
-        // Fallback: estimate from collection info
-        const info: any = status; 
-        vectorCount = info.vectorsCount || info.vectorCount || 0;
-        // ~1536 dim * 4 bytes + payload (~500 bytes) = ~6.6KB per vector roughly
-        totalUsedBytes = vectorCount * 6644; 
-      }
+      const vectorCount = status.vectorCount || 0;
+      // Approximate: 1024 dims * 4 bytes + ~500 bytes payload = ~4.6KB per vector
+      const totalUsedBytes = vectorCount * 4596;
 
-      const result = { totalUsedBytes, vectorCount, status: 'Healthy' };
+      const result = { totalUsedBytes, vectorCount, status: status.ok ? 'Healthy' : 'Offline', indexName: status.indexName };
       cache.set(cacheKey, result);
-      await this.recordSnapshot('qdrant', totalUsedBytes, null, 'Healthy', Date.now() - startTime);
+      await this.recordSnapshot('pinecone', totalUsedBytes, null, 'Healthy', Date.now() - startTime);
       return result;
     } catch (err: any) {
       const result = { totalUsedBytes: 0, status: 'Offline', error: err.message };
-      await this.recordSnapshot('qdrant', 0, null, 'Offline', Date.now() - startTime);
+      await this.recordSnapshot('pinecone', 0, null, 'Offline', Date.now() - startTime);
       return result;
     }
   }

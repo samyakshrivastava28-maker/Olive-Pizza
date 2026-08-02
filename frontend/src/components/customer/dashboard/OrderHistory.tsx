@@ -152,6 +152,16 @@ export default function OrderHistory({ orders }: Props) {
                 </span>
                 
                 <div className="flex items-center gap-2">
+                  <a
+                    href={`/api/payment/invoice/${order.id}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="text-xs font-bold text-slate-300 hover:text-white flex items-center gap-1 bg-white/10 px-3 py-1.5 rounded-lg border border-white/10 transition-colors"
+                    title="Download Official Tax Invoice"
+                  >
+                    📄 Invoice
+                  </a>
                   {order.status === "delivered" && (
                     <GlassButton
                       variant="primary"

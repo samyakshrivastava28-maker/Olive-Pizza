@@ -1,11 +1,15 @@
 import express from 'express';
-import { generateEmailTemplate, generateImage, generateProductDescription, generateProductImage, generateChatReply, enhancePrompt, aiProviderStats } from '../services/ai.service.js';
+import { generateEmailTemplate, generateImage, generateProductDescription, generateProductImage, generateChatReply, generateChatReplyStream, enhancePrompt, aiProviderStats } from '../services/ai.service.js';
 import kb from '../services/KnowledgeBaseService.js';
 import { requireAuth, requireRole } from '../middleware/auth.middleware.js';
 import { aiContextBuilder } from '../services/ai/AIContextBuilder.js';
-import { qdrantService } from '../services/ai/QdrantService.js';
+import { pineconeService } from '../services/ai/PineconeService.js';
 import { recommendationEngine } from '../services/ai/RecommendationEngine.js';
 import { optionalAuth, AuthRequest } from '../middleware/auth.middleware.js';
+import { detectLanguage } from '../services/ai/languageDetector.js';
+import { conversationMemory } from '../services/ai/conversationMemory.js';
+import { executeBackendTool } from '../services/ai/toolExecutor.js';
+import { embeddingCache } from '../services/ai/embeddingCache.js';
 
 const router = express.Router();
 
@@ -43,73 +47,180 @@ router.post('/kb-rebuild', requireAuth, requireRole(['owner', 'admin']), async (
   }
 });
 
-// ─── Primary Chat Route (4-tier priority) ─────────────────────────────────────
+import { aiOperationsStore } from '../services/devOps/AIOperationsService.js';
+
+// ─── Primary Chat Route — Intent-Aware Routing + Full Role Intelligence ────────
 router.post('/chat', optionalAuth, async (req: AuthRequest, res) => {
+  const routeStart = Date.now();
   try {
-    const { message, history, frontendContext } = req.body;
+    const { message, history, frontendContext, sessionId } = req.body;
     if (!message) return res.status(400).json({ error: 'Message is required' });
 
-    // ── TIER 1: Local Knowledge Quick Answer (0 API calls) ───────────────────
-    const quickAnswer = kb.quickAnswer(message);
-    if (quickAnswer) {
+    const userRole = (req.user?.role as 'guest' | 'customer' | 'owner' | 'developer' | 'delivery_partner') || 'guest';
+    const userEmail = req.user?.email || 'guest';
+    const userId = req.user?.uid;
+
+    // ── Session Memory + Language Detection ──────────────────────────────────
+    const activeSessionId = sessionId || `session-${userId || req.ip || 'guest'}`;
+    const detectedLang = detectLanguage(message);
+    conversationMemory.updateLanguage(activeSessionId, detectedLang);
+    conversationMemory.getOrCreateSession(activeSessionId, userId, userRole);
+    conversationMemory.addMessage(activeSessionId, { role: 'user', content: message });
+
+    // ── TIER 0: Security Guardrail (instant block, no LLM call) ──────────────
+    const msgLower = message.toLowerCase();
+    const securityTerms = ['password', 'api key', 'secret', 'firebase_service_account', 'database url', 'jwt secret'];
+    if (securityTerms.some(t => msgLower.includes(t))) {
       return res.json({
         success: true,
-        reply: quickAnswer,
-        source: 'local_kb',
-        products: [],
-      });
-    }
-
-    // Always search for relevant products for any query
-    const products = kb.searchProducts(message, 4);
-    
-    // Retrieve personalized context if user is logged in
-    let userContext = '';
-    if (req.user) {
-      if (req.user.role === 'customer') {
-        userContext = await recommendationEngine.getUserProfileContext(req.user.uid);
-      } else if (req.user.role === 'delivery') {
-        userContext = await recommendationEngine.getDeliveryPartnerContext(req.user.uid);
-      } else if (req.user.role === 'owner' || req.user.role === 'admin') {
-        userContext = await recommendationEngine.getOwnerContext();
-      }
-    }
-    
-    let kbContext = '';
-    const qStatus = await qdrantService.getStatus();
-    if (qStatus.ok && (qStatus.vectorCount ?? 0) > 0) {
-      kbContext = await aiContextBuilder.buildContext(message);
-    } else {
-      kbContext = kb.buildContextForQuery(message);
-    }
-
-    if (userContext) {
-      kbContext += `\n\n${userContext}`;
-    }
-
-    // ── TIER 1.5: Security Hard Block ────────────────────────────────────────
-    if (kbContext.startsWith("I cannot assist with queries regarding system credentials")) {
-      return res.json({
-        success: true,
-        reply: "I cannot assist with queries regarding system credentials, passwords, or internal security configurations. Please ask me about the menu, orders, or restaurant policies!",
+        reply: 'I cannot assist with queries regarding system credentials or internal configurations. Ask me about the menu, orders, or restaurant policies! 🍕',
         source: 'security_guardrail',
         products: [],
       });
     }
 
-    // ── TIER 2 & 3: AI with Knowledge Context ────────────────────────────────
+    // ── TIER 1: Local KB Quick Answer (0 API calls) ───────────────────────────
+    const quickAnswer = kb.quickAnswer(message);
+    if (quickAnswer) {
+      conversationMemory.addMessage(activeSessionId, { role: 'assistant', content: quickAnswer });
+      return res.json({ success: true, reply: quickAnswer, source: 'local_kb', products: [] });
+    }
+
+    // ── Intent Classification + Qdrant Routing ────────────────────────────────
+    // Run Qdrant retrieval and user context in parallel to save latency
+    const [contextRes, userContext] = await Promise.all([
+      aiContextBuilder.buildContextDetailed(message),
+      userId
+        ? (userRole === 'customer'
+            ? recommendationEngine.getUserProfileContext(userId)
+            : (userRole as string) === 'delivery_partner' || (userRole as string) === 'delivery'
+              ? recommendationEngine.getDeliveryPartnerContext(userId)
+              : (userRole as string) === 'owner' || (userRole as string) === 'admin'
+                ? recommendationEngine.getOwnerContext()
+                : userRole === 'developer'
+                  ? Promise.resolve(recommendationEngine.getDeveloperContext())
+                  : Promise.resolve(''))
+        : Promise.resolve(''),
+    ]);
+
+    let kbContext = contextRes.contextStr;
+
+    // For NON_RESTAURANT queries: bypass Pinecone, use pure LLM reasoning
+    if (contextRes.queryIntent === 'NON_RESTAURANT') {
+      kbContext = `You are Olive AI. This appears to be a general knowledge question outside the restaurant domain. Answer it helpfully using your general knowledge. If unsure, say so — never hallucinate.`;
+    } else if (contextRes.groundingStatus === 'UNAVAILABLE') {
+      // Soft fallback: Pinecone is down but we still have local KB + static JSON knowledge
+      // Use live products if available, never block the customer
+      const fallbackProducts = kb.getAllProducts().slice(0, 10);
+      const fallbackSettings = kb.getSettings();
+      kbContext = `--- OLIVE PIZZA KNOWLEDGE (Local Fallback Mode) ---\n`;
+      if (fallbackSettings) {
+        kbContext += `Restaurant: ${fallbackSettings.restaurantName} | Status: ${fallbackSettings.isOpen ? 'OPEN 🟢' : 'CLOSED 🔴'} | Delivery: ${fallbackSettings.estimatedDeliveryTime || '30-45 min'} | Phone: ${fallbackSettings.phone}\n`;
+      }
+      if (fallbackProducts.length > 0) {
+        kbContext += `\nAVAILABLE MENU ITEMS:\n` + fallbackProducts.map(p => `- ${p.name}: ₹${p.discountedPrice || p.price} | ${p.category}`).join('\n');
+      }
+      kbContext += `\n\nOlive Pizza is 100% Pure Vegetarian 🟢. For full menu, visit /menu. For help, contact us via /contact.`;
+    }
+
+    // Append personalized user/role context
+    if (userContext) kbContext += `\n\n${userContext}`;
+
+    // ── Tier 2 & 3: LLM Generation ────────────────────────────────────────────
     const result = await generateChatReply(message, history || [], {
       ...frontendContext,
       kbContext,
+      role: userRole,
+      isAuthenticated: !!req.user,
+      queryIntent: contextRes.queryIntent,
     });
 
-    if (result.success) {
+    const elapsedTotal = Date.now() - routeStart;
+
+    if (result.success && result.reply) {
+      // Store AI reply in session memory
+      conversationMemory.addMessage(activeSessionId, { role: 'assistant', content: result.reply });
+
+      // Match products from reply for card suggestions
+      const replyLower = (result.reply + ' ' + message).toLowerCase();
+      const allProducts = kb.getAllProducts();
+      let matchedProducts = allProducts.filter(p =>
+        p.isAvailable && (replyLower.includes(p.name.toLowerCase()) || replyLower.includes(p.category.toLowerCase()))
+      );
+      if (matchedProducts.length === 0) matchedProducts = kb.searchProducts(message, 4);
+      matchedProducts = matchedProducts.slice(0, 4);
+
+      const cacheStats = embeddingCache.getStats();
+      const memStats = conversationMemory.getStats();
+
+      const debugInfo = {
+        groundingStatus: contextRes.groundingStatus,
+        queryIntent: contextRes.queryIntent,
+        cacheHit: contextRes.cacheHit,
+        modelUsed: result.telemetry?.modelUsed || result.source,
+        providerUsed: result.telemetry?.providerUsed,
+        retrievedChunksCount: contextRes.chunks.length,
+        topSimilarityScore: contextRes.chunks[0]?.score || 0,
+        contextSizeChars: kbContext.length,
+        userRole,
+        userId: userId || null,
+        sessionId: activeSessionId,
+        sessionMessages: memStats.totalMessages,
+        cacheHitRatio: cacheStats.hitRatio,
+        telemetry: {
+          embeddingLatencyMs: contextRes.telemetry.embeddingLatencyMs,
+          embeddingModelUsed: contextRes.telemetry.embeddingModelUsed,
+          qdrantLatencyMs: contextRes.telemetry.qdrantLatencyMs,
+          llmLatencyMs: result.telemetry?.llmLatencyMs || 0,
+          totalLatencyMs: elapsedTotal,
+          slaExceeded: elapsedTotal > 4000,
+        },
+        tokens: {
+          promptTokens: result.telemetry?.promptTokens || 0,
+          completionTokens: result.telemetry?.completionTokens || 0,
+          totalTokens: result.telemetry?.totalTokens || 0,
+          estimatedCostUsd: result.telemetry?.estimatedCostUsd || 0,
+        },
+        similarityScores: contextRes.chunks.map(c => ({ score: c.score, source: c.metadata?.source })),
+      };
+
+      aiOperationsStore.pushLog({
+        id: `log-${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        userRole: userRole as any,
+        userEmail,
+        message,
+        reply: result.reply,
+        actionExecuted: result.action,
+        groundingStatus: contextRes.groundingStatus,
+        isDomainQuery: contextRes.isDomainQuery,
+        modelUsed: result.telemetry?.modelUsed || result.source || 'ai',
+        providerUsed: result.telemetry?.providerUsed || 'ai',
+        retrievedChunks: contextRes.chunks,
+        telemetry: {
+          embeddingLatencyMs: contextRes.telemetry.embeddingLatencyMs,
+          embeddingModelUsed: contextRes.telemetry.embeddingModelUsed,
+          qdrantLatencyMs: contextRes.telemetry.qdrantLatencyMs,
+          llmLatencyMs: result.telemetry?.llmLatencyMs || 0,
+          toolLatencyMs: 0,
+          totalLatencyMs: elapsedTotal,
+          slaExceeded: elapsedTotal > 4000,
+        },
+        promptDebug: {
+          systemPrompt: 'Olive AI Artisan Concierge — Contextual Routing',
+          userPrompt: message,
+          kbContext: kbContext.slice(0, 500),
+        },
+        tokens: debugInfo.tokens,
+      });
+
       return res.json({
         success: true,
         reply: result.reply,
         action: result.action,
         source: result.source || 'ai',
-        products: products.map(p => ({
+        debugInfo,
+        products: matchedProducts.map(p => ({
           id: p.id,
           name: p.name,
           price: p.price,
@@ -121,25 +232,26 @@ router.post('/chat', optionalAuth, async (req: AuthRequest, res) => {
           preparationTime: p.preparationTime,
           isVeg: p.isVeg,
           isAvailable: p.isAvailable,
+          ingredients: p.ingredients,
+          sizes: p.sizes || ['Small', 'Medium', 'Large'],
+          toppings: p.toppings || ['Extra Cheese', 'Jalapenos', 'Paneer'],
         })),
       });
     }
 
-    // ── TIER 4: Offline Template Response ─────────────────────────────────────
-    const q = message.toLowerCase();
+    // ── TIER 4: Offline Template ──────────────────────────────────────────────
+    const products = kb.searchProducts(message, 4);
     const settings = kb.getSettings();
     let offlineReply = '';
 
     if (products.length > 0) {
-      offlineReply = `🍕 Here's what I found for you:\n\n${products.map(p => `**${p.name}** — ₹${p.discountedPrice ?? p.price}\n${p.description}`).join('\n\n')}`;
-    } else if (q.includes('menu') || q.includes('pizza') || q.includes('food')) {
+      offlineReply = `🍕 Here's what I found:\n\n${products.map(p => `**${p.name}** — ₹${p.discountedPrice ?? p.price}\n${p.description}`).join('\n\n')}`;
+    } else if (msgLower.includes('menu') || msgLower.includes('pizza')) {
       offlineReply = `Visit our [Menu page](/menu) to browse our full selection! 🍕`;
-    } else if (q.includes('order')) {
-      offlineReply = `Track your order from your [Dashboard](/dashboard) or browse our [Menu](/menu) for new orders! 🛵`;
     } else if (settings) {
-      offlineReply = `I'm here to help! Olive Pizza is ${settings.isOpen ? 'currently OPEN 🟢' : 'currently CLOSED 🔴'}. Delivery takes ${settings.estimatedDeliveryTime}. Ask me anything!`;
+      offlineReply = `Olive Pizza is ${settings.isOpen ? 'currently OPEN 🟢' : 'currently CLOSED 🔴'}. Delivery: ${settings.estimatedDeliveryTime}. Ask me anything!`;
     } else {
-      offlineReply = `I'm here to help with your Olive Pizza experience! Ask me about our menu, offers, delivery, or anything else! 🍕`;
+      offlineReply = `I'm here to help! Ask me about the menu, offers, delivery, or anything else! 🍕`;
     }
 
     res.json({
@@ -155,6 +267,127 @@ router.post('/chat', optionalAuth, async (req: AuthRequest, res) => {
   } catch (err: any) {
     console.error('[AI Chat Route]', err.message);
     res.status(500).json({ success: false, error: 'Internal server error', reply: `I'm having a brief moment. Please try again! 🍕` });
+  }
+});
+
+// ─── SSE Streaming Chat Route — Sub-1s first-token latency ────────────────────
+router.post('/chat-stream', optionalAuth, async (req: AuthRequest, res: any) => {
+  const routeStart = Date.now();
+  try {
+    const { message, history, frontendContext, sessionId } = req.body;
+    if (!message) { res.status(400).json({ error: 'Message is required' }); return; }
+
+    // Set SSE headers
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders();
+
+    const sendEvent = (event: string, data: any) => {
+      res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    };
+
+    const userRole = (req.user?.role as 'guest' | 'customer' | 'owner' | 'developer') || 'guest';
+    const userId = req.user?.uid;
+    const activeSessionId = sessionId || `session-${userId || req.ip || 'guest'}`;
+
+    const detectedLang = detectLanguage(message);
+    conversationMemory.updateLanguage(activeSessionId, detectedLang);
+    conversationMemory.addMessage(activeSessionId, { role: 'user', content: message });
+
+    // Security block
+    const msgLower = message.toLowerCase();
+    const securityTerms = ['password', 'api key', 'secret', 'firebase_service_account', 'database url'];
+    if (securityTerms.some(t => msgLower.includes(t))) {
+      sendEvent('done', { reply: 'I cannot assist with queries regarding system credentials.', source: 'security_guardrail' });
+      res.end();
+      return;
+    }
+
+    // Parallel: intent + context + user profile
+    const [contextRes, userContext] = await Promise.all([
+      aiContextBuilder.buildContextDetailed(message),
+      userId
+        ? (userRole === 'customer'
+            ? recommendationEngine.getUserProfileContext(userId)
+            : (userRole as string) === 'owner' || (userRole as string) === 'admin'
+              ? recommendationEngine.getOwnerContext()
+              : userRole === 'developer'
+                ? Promise.resolve(recommendationEngine.getDeveloperContext())
+                : Promise.resolve(''))
+        : Promise.resolve(''),
+    ]);
+
+    let kbContext = contextRes.contextStr;
+    if (contextRes.queryIntent === 'NON_RESTAURANT') {
+      kbContext = 'Answer using general knowledge. Do not hallucinate Olive Pizza menu items.';
+    } else if (contextRes.groundingStatus === 'UNAVAILABLE') {
+      const allProds = kb.getAllProducts().slice(0, 10);
+      kbContext = `--- OLIVE PIZZA KB FALLBACK ---\n` +
+        allProds.map(p => `${p.name} | ₹${p.discountedPrice || p.price} | ${p.category}`).join('\n');
+    }
+    if (userContext) kbContext += `\n\n${userContext}`;
+
+    // Emit context-ready event for diagnostics
+    sendEvent('context', {
+      groundingStatus: contextRes.groundingStatus,
+      queryIntent: contextRes.queryIntent,
+      cacheHit: contextRes.cacheHit,
+      chunksRetrieved: contextRes.chunks.length,
+      qdrantLatencyMs: contextRes.telemetry.qdrantLatencyMs,
+    });
+
+    // Stream LLM response
+    try {
+      if (typeof generateChatReplyStream === 'function') {
+        await generateChatReplyStream(
+          message,
+          history || [],
+          { ...frontendContext, kbContext, role: userRole, isAuthenticated: !!req.user },
+          (token: string) => sendEvent('token', { token }),
+          (fullReply: string, action: any, source: string) => {
+            conversationMemory.addMessage(activeSessionId, { role: 'assistant', content: fullReply });
+            sendEvent('done', {
+              reply: fullReply,
+              action,
+              source,
+              totalLatencyMs: Date.now() - routeStart,
+            });
+          }
+        );
+      } else {
+        // Fallback: non-streaming
+        const result = await generateChatReply(message, history || [], {
+          ...frontendContext, kbContext, role: userRole, isAuthenticated: !!req.user,
+        });
+        if (result.reply) {
+          conversationMemory.addMessage(activeSessionId, { role: 'assistant', content: result.reply });
+          sendEvent('done', { reply: result.reply, action: result.action, source: result.source, totalLatencyMs: Date.now() - routeStart });
+        }
+      }
+    } catch (llmErr: any) {
+      sendEvent('error', { message: 'AI generation failed. Please try again.' });
+    }
+
+    res.end();
+  } catch (err: any) {
+    console.error('[AI Stream Route]', err.message);
+    res.write(`event: error\ndata: ${JSON.stringify({ message: err.message })}\n\n`);
+    res.end();
+  }
+});
+
+// ─── Session Memory Clear (call on logout) ────────────────────────────────────
+router.post('/session-clear', optionalAuth, async (req: AuthRequest, res) => {
+  try {
+    const { sessionId } = req.body;
+    const userId = req.user?.uid;
+    if (userId) conversationMemory.clearUserSessions(userId);
+    if (sessionId) conversationMemory.clearSession(sessionId);
+    res.json({ success: true, message: 'Session memory cleared.' });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
@@ -243,74 +476,88 @@ router.post('/evaluate-models', requireAuth, requireRole(['owner', 'admin']), as
   }
 });
 
-// ─── Dedicated Action Rate Limiter (Max 5 action executions / min) ───────────
+// ─── Action Rate Limiter (Max 20 actions / min per user) ─────────────────────
 const actionTimestamps = new Map<string, number[]>();
 
 function aiActionLimiter(req: AuthRequest, res: any, next: any) {
   const identifier = req.user?.uid || req.ip || 'anonymous';
   const now = Date.now();
   const windowMs = 60 * 1000;
-  const maxActions = 5;
+  const maxActions = 20; // Increased for multi-step ordering flows
 
   const timestamps = (actionTimestamps.get(identifier) || []).filter(t => now - t < windowMs);
   if (timestamps.length >= maxActions) {
     return res.status(429).json({
       success: false,
-      error: 'Rate limit exceeded for AI order actions. Maximum 5 actions allowed per minute.'
+      error: 'Rate limit exceeded for AI actions. Maximum 20 actions per minute.'
     });
   }
-
   timestamps.push(now);
   actionTimestamps.set(identifier, timestamps);
   next();
 }
 
-// ─── Whitelisted Agentic Order Action Handler ────────────────────────────────
+// ─── Production Agentic Tool Action Handler — All 24 Tools ───────────────────
 router.post('/action', optionalAuth, aiActionLimiter, async (req: AuthRequest, res: any) => {
+  const actionStart = Date.now();
   try {
-    const { actionType, payload } = req.body;
-    
-    // Strict whitelist of permitted agentic tool functions
-    const ALLOWED_ACTIONS = ['ADD_TO_CART', 'REMOVE_FROM_CART', 'APPLY_COUPON', 'CONFIRM_AND_PLACE_ORDER'];
-    
-    if (!actionType || !ALLOWED_ACTIONS.includes(actionType)) {
-      return res.status(400).json({
-        success: false,
-        error: `Invalid action type. Allowed actions: ${ALLOWED_ACTIONS.join(', ')}`
-      });
+    const { toolName, toolCallId, args } = req.body;
+
+    if (!toolName) {
+      return res.status(400).json({ success: false, error: 'toolName is required.' });
     }
 
-    console.log(`[AI Agentic Action] Executing ${actionType} for user ${req.user?.uid || 'guest'}`);
+    console.log(`[AI Action] ${toolName} | user: ${req.user?.uid || 'guest'} | args:`, JSON.stringify(args).slice(0, 200));
 
-    if (actionType === 'CONFIRM_AND_PLACE_ORDER') {
-      // Require authenticated user for actual order placement
-      if (!req.user) {
-        return res.status(401).json({
-          success: false,
-          error: 'Authentication required to place an order via AI Assistant.'
-        });
-      }
-      
-      // Hand off to exact same order creation pipeline as manual checkout
-      // Result returned for client-side visual confirmation dialog execution
-      return res.json({
-        success: true,
-        action: 'CONFIRM_AND_PLACE_ORDER',
-        requiresVisualConfirmation: true,
-        orderData: {
-          userId: req.user.uid,
-          items: payload.items || [],
-          deliveryAddress: payload.deliveryAddress || 'Saved Address',
-          paymentMethod: payload.paymentMethod || 'saved_token',
-          totalAmount: payload.totalAmount
-        }
-      });
-    }
+    const toolResult = await executeBackendTool(
+      { id: toolCallId || `tc-${Date.now()}`, name: toolName, args: args || {} },
+      req.user ? { uid: req.user.uid, email: req.user.email, role: req.user.role } : undefined
+    );
+
+    res.json({
+      success: toolResult.status !== 'error',
+      ...toolResult,
+      toolLatencyMs: Date.now() - actionStart,
+    });
+  } catch (err: any) {
+    console.error('[AI Action Route]', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── AI Diagnostics — Expanded (Phase 9) ─────────────────────────────────────
+router.get('/diagnostics', requireAuth, requireRole(['owner', 'admin', 'developer']), async (req: AuthRequest, res) => {
+  try {
+    const pineconeStatus = await pineconeService.getStatus();
+    const cacheStats = embeddingCache.getStats();
+    const memStats = conversationMemory.getStats();
+    const opsStats = aiOperationsStore.getStats();
 
     res.json({
       success: true,
-      action: actionType,
-      payload
+      pinecone: {
+        indexName: pineconeStatus.indexName,
+        namespace: '',
+        dimension: pineconeStatus.dimension || 1024,
+        embeddingModel: 'NVIDIA nv-embed-v1 (Canonical 1024-dim)',
+        vectorCount: pineconeStatus.vectorCount || 0,
+        status: pineconeStatus.ok ? 'GREEN' : 'RED',
+        error: pineconeStatus.error || null,
+        connectionStatus: pineconeStatus.ok ? 'CONNECTED' : 'DISCONNECTED',
+      },
+      embeddingCache: cacheStats,
+      conversationMemory: memStats,
+      aiOperations: opsStats,
+      providers: {
+        nvidia: aiProviderStats.nvidia,
+        openrouter: aiProviderStats.openrouter,
+        gemini: aiProviderStats.gemini,
+        activeProvider: aiProviderStats.activeProvider,
+        totalRequests: aiProviderStats.totalRequests,
+        totalFailovers: aiProviderStats.totalFailovers,
+        avgResponseMs: aiProviderStats.avgResponseMs,
+      },
+      timestamp: new Date().toISOString(),
     });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });

@@ -1,7 +1,7 @@
 import express from 'express';
 import multer from 'multer';
 import { requireAuth, requireRole } from '../middleware/auth.middleware.js';
-import { qdrantService } from '../services/ai/QdrantService.js';
+import { pineconeService } from '../services/ai/PineconeService.js';
 import { knowledgeSync } from '../services/ai/KnowledgeSync.js';
 import { semanticSearch } from '../services/ai/SemanticSearch.js';
 import { knowledgeIndexer } from '../services/ai/KnowledgeIndexer.js';
@@ -13,11 +13,50 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 
 // ── HEALTH & STATUS ──────────────────────────────────────────────
 router.get('/health', requireAuth, requireRole(['owner', 'admin']), async (req, res) => {
   try {
-    const qdrantStatus = await qdrantService.getStatus();
+    const pineconeStatus = await pineconeService.getStatus();
     res.json({
       success: true,
-      qdrant: qdrantStatus,
+      pinecone: pineconeStatus,
       providers: aiProviderStats,
+    });
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ── HEALTH & DIAGNOSTICS ─────────────────────────────────────────
+router.get('/diagnostics', requireAuth, requireRole(['owner', 'admin']), async (req, res) => {
+  try {
+    const { adminDb } = await import('../config/firebase.js');
+    
+    // Count queue size
+    const queueSnap = await adminDb.collection('_pinecone_sync_queue_').get();
+    let pendingJobs = 0;
+    let failedJobs = 0;
+    queueSnap.forEach((doc: any) => {
+      const data = doc.data();
+      if (data.status === 'failed' || data.retryCount > 0) failedJobs++;
+      else pendingJobs++;
+    });
+
+    // Count metadata vectors synced
+    const metaSnap = await adminDb.collection('_pinecone_metadata_').count().get();
+    const totalVectors = metaSnap.data().count;
+
+    const pineconeStatus = await pineconeService.getStatus();
+
+    res.json({
+      success: true,
+      diagnostics: {
+        totalVectors,
+        queue: {
+          pendingJobs,
+          failedOrRetryingJobs: failedJobs,
+          totalQueueSize: queueSnap.size
+        },
+        pineconeStatus
+      }
     });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
@@ -27,14 +66,14 @@ router.get('/health', requireAuth, requireRole(['owner', 'admin']), async (req, 
 // ── REBUILD / SYNC ───────────────────────────────────────────────
 router.post('/reindex', requireAuth, requireRole(['owner', 'admin']), async (req, res) => {
   try {
-    // Recreate the collection to clear out old data
-    await qdrantService.rebuildCollection();
-    
-    // Sync from Firestore cache
+    // Clear all existing Pinecone vectors before re-indexing
+    await pineconeService.clearAll();
+
+    // Sync all data from Firestore cache into Pinecone
     const result = await knowledgeSync.syncAll();
-    
+
     if (result.success) {
-      res.json({ success: true, message: 'Qdrant successfully re-indexed with Firestore data.', stats: result.stats });
+      res.json({ success: true, message: 'Pinecone successfully re-indexed with Firestore data.', stats: result.stats });
     } else {
       res.status(500).json({ success: false, error: 'Re-indexing failed during Firestore sync.' });
     }
@@ -48,13 +87,13 @@ router.post('/search', requireAuth, requireRole(['owner', 'admin']), async (req,
   try {
     const { query, topK, category } = req.body;
     if (!query) return res.status(400).json({ success: false, error: 'Query is required' });
-    
+
     const results = await semanticSearch.search(query, {
       topK: topK || 5,
       category: category || undefined,
       minScore: 0.1, // Show more for testing
     });
-    
+
     res.json({ success: true, results });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
@@ -94,8 +133,8 @@ router.post('/index-file', requireAuth, requireRole(['owner', 'admin']), upload.
 router.delete('/document/:id', requireAuth, requireRole(['owner', 'admin']), async (req, res) => {
   try {
     const { id } = req.params;
-    await qdrantService.deleteDocument(id);
-    res.json({ success: true, message: `Document ${id} deleted from Qdrant.` });
+    await pineconeService.deleteDocument(id);
+    res.json({ success: true, message: `Document ${id} deleted from Pinecone.` });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -110,7 +149,7 @@ router.post('/upsert-item', requireAuth, requireRole(['owner', 'admin']), async 
     }
 
     const success = await knowledgeIndexer.upsertItemDirectly({ id, name, description, price, category, isVeg, tags });
-    res.json({ success, message: `Menu item ${name} (id: ${id}) live re-indexed in Qdrant synchronously.` });
+    res.json({ success, message: `Menu item ${name} (id: ${id}) live re-indexed in Pinecone synchronously.` });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -120,11 +159,10 @@ router.delete('/item/:id', requireAuth, requireRole(['owner', 'admin']), async (
   try {
     const { id } = req.params;
     const success = await knowledgeIndexer.removeItemDirectly(id);
-    res.json({ success, message: `Item ${id} synchronously removed from Qdrant.` });
+    res.json({ success, message: `Item ${id} synchronously removed from Pinecone.` });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
 export default router;
-

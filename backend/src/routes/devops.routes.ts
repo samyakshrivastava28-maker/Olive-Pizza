@@ -244,4 +244,102 @@ router.post('/init-claim', async (req: DevRequest, res: Response) => {
   }
 });
 
+// ── 10. AI Assistant Developer Operations & Diagnostics ────────────────────
+import { aiOperationsStore } from '../services/devOps/AIOperationsService.js';
+import { pineconeService, PINECONE_INDEX_NAME } from '../services/ai/PineconeService.js';
+import { semanticSearch } from '../services/ai/SemanticSearch.js';
+import { generateChatReply } from '../services/ai.service.js';
+import { aiContextBuilder } from '../services/ai/AIContextBuilder.js';
+
+router.get('/ai/health', async (_req: DevRequest, res: Response) => {
+  try {
+    const health = await aiOperationsStore.getHealth();
+    res.json({ success: true, data: health });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.get('/ai/logs', async (req: DevRequest, res: Response) => {
+  try {
+    const limit = parseInt((req.query.limit as string) || '50', 10);
+    const offset = parseInt((req.query.offset as string) || '0', 10);
+    const role = (req.query.role as string) || 'all';
+    const search = (req.query.search as string) || '';
+    const logs = aiOperationsStore.getLogs(limit, offset, role, search);
+    res.json({ success: true, data: logs });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.get('/ai/stats', async (_req: DevRequest, res: Response) => {
+  try {
+    const stats = aiOperationsStore.getStats();
+    res.json({ success: true, data: stats });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.post('/ai/qdrant/search-test', async (req: DevRequest, res: Response) => {
+  try {
+    const { query, topK, minScore } = req.body;
+    if (!query) return res.status(400).json({ error: 'Query parameter is required' });
+    const searchResult = await semanticSearch.searchDetailed(query, {
+      topK: topK ? parseInt(topK, 10) : 5,
+      minScore: minScore ? parseFloat(minScore) : 0.5,
+    });
+    res.json({ success: true, data: searchResult });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.post('/ai/qdrant/rebuild', async (_req: DevRequest, res: Response) => {
+  try {
+    await pineconeService.clearAll();
+    const { knowledgeSync } = await import('../services/ai/KnowledgeSync.js');
+    const result = await knowledgeSync.syncAll();
+    res.json({ success: true, message: `Pinecone index ${PINECONE_INDEX_NAME} rebuilt and re-synced.`, result });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.post('/ai/playground', async (req: DevRequest, res: Response) => {
+  try {
+    const { message, enableRag, history, userRole } = req.body;
+    if (!message) return res.status(400).json({ error: 'Message is required' });
+
+    let kbContext = '';
+    let contextRes: any = null;
+
+    if (enableRag !== false) {
+      contextRes = await aiContextBuilder.buildContextDetailed(message);
+      kbContext = contextRes.contextStr;
+    }
+
+    const result = await generateChatReply(message, history || [], {
+      kbContext,
+      role: userRole || 'developer',
+      isAuthenticated: true,
+      route: '/developer/ai-playground',
+    });
+
+    res.json({
+      success: true,
+      data: {
+        reply: result.reply,
+        action: result.action,
+        source: result.source,
+        telemetry: result.telemetry,
+        ragContext: contextRes,
+      }
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 export default router;

@@ -34,6 +34,14 @@ import toast from "react-hot-toast";
 import SEO from "../components/SEO";
 import { generateRestaurantSchema } from "../lib/schema";
 
+import CategoryCapsules from "../components/home/CategoryCapsules";
+import FeaturedShowcase from "../components/home/FeaturedShowcase";
+import PromotionalBanners from "../components/home/PromotionalBanners";
+import StorytellingSection from "../components/home/StorytellingSection";
+import TestimonialsCarousel from "../components/home/TestimonialsCarousel";
+import AppDownloadSection from "../components/home/AppDownloadSection";
+import FlagshipFooter from "../components/home/FlagshipFooter";
+
 // ─── Premium Skeleton ─────────────────────────────────────────────────────────
 function SectionSkeleton({ rows = 3 }: { rows?: number }) {
   return (
@@ -460,144 +468,60 @@ export default function Home() {
           </div>
         )}
 
-        {/* ─── LUXURY HERO ─────────────────────────────────────────────────── */}
+        {/* ─── LUXURY HERO (STRICTLY UNTOUCHED) ─────────────────────────────────── */}
         <LuxuryHero isStoreOpen={isStoreOpen} showIntro={false} />
 
-        {/* ─── Main Content ─────────────────────────────────────────────────── */}
+        {/* ─── Flagship Below-Hero Content ─────────────────────────────────── */}
         <main
-          className="w-full pb-32 md:pb-24 relative overflow-hidden"
-          style={{ background: "#0a0a0a" }}
+          className="w-full pb-16 relative overflow-hidden"
+          style={{ background: "#06070a" }}
         >
-          {/* Subtle ambient background texture */}
+          {/* Subtle ambient background galaxy texture */}
           <div
-            className="absolute inset-0 pointer-events-none opacity-10 z-0"
+            className="absolute inset-0 pointer-events-none opacity-20 z-0"
             style={{
               background:
-                "radial-gradient(ellipse at 20% 50%, rgba(249,115,22,0.08) 0%, transparent 60%), radial-gradient(ellipse at 80% 20%, rgba(85,119,90,0.08) 0%, transparent 60%)",
+                "radial-gradient(ellipse at 20% 30%, rgba(249,115,22,0.12) 0%, transparent 60%), radial-gradient(ellipse at 80% 70%, rgba(16,185,129,0.12) 0%, transparent 60%)",
             }}
           />
 
-          {/* AI Futuristic Section */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.8 }}
-            className="relative z-10 pt-14 md:pt-20 pb-8 md:pb-12 px-4"
-            style={{
-              borderBottom: "1px solid rgba(255,255,255,0.05)",
-            }}
-          >
-            <div className="max-w-7xl mx-auto">
-              <div
-                className="relative overflow-hidden rounded-3xl p-6 md:p-10"
-                style={{
-                  background:
-                    "linear-gradient(135deg, rgba(14,14,24,0.98) 0%, rgba(20,14,30,0.98) 100%)",
-                  border: "1px solid rgba(139,92,246,0.2)",
-                  boxShadow: "0 0 80px rgba(139,92,246,0.08), 0 20px 60px rgba(0,0,0,0.5)",
-                }}
-              >
-                {/* Glowing orb */}
-                <div
-                  className="absolute top-0 right-0 w-64 h-64 rounded-full pointer-events-none"
-                  style={{
-                    background:
-                      "radial-gradient(circle, rgba(139,92,246,0.15) 0%, transparent 70%)",
-                    transform: "translate(30%, -30%)",
-                  }}
-                />
+          {/* 1. 3D Floating Category Capsules */}
+          <CategoryCapsules />
 
-                <div className="relative flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-                  <div>
-                    <div className="flex items-center gap-2 mb-3">
-                      <div
-                        className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black tracking-widest uppercase"
-                        style={{
-                          background: "rgba(139,92,246,0.15)",
-                          border: "1px solid rgba(139,92,246,0.3)",
-                          color: "#a78bfa",
-                        }}
-                      >
-                        <Zap className="w-3 h-3" />
-                        AI-Powered
-                      </div>
-                    </div>
-                    <h2
-                      className="text-2xl md:text-4xl font-black text-white leading-tight mb-2"
-                      style={{ letterSpacing: "-0.02em" }}
-                    >
-                      Meet Your
-                      <span
-                        style={{
-                          background: "linear-gradient(135deg, #a78bfa, #c4b5fd)",
-                          WebkitBackgroundClip: "text",
-                          WebkitTextFillColor: "transparent",
-                          backgroundClip: "text",
-                          marginLeft: "0.35rem",
-                        }}
-                      >
-                        Pizza Assistant
-                      </span>
-                    </h2>
-                    <p className="text-slate-400 text-sm md:text-base max-w-lg">
-                      Personalized recommendations, smart reorders, and AI-crafted combos. Your perfect pizza is one message away.
-                    </p>
-                  </div>
-                  <motion.div
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                  >
-                    <Link
-                      to="/assistant"
-                      className="inline-flex items-center gap-2.5 px-7 py-3.5 rounded-2xl font-bold text-white text-sm whitespace-nowrap transition-all"
-                      style={{
-                        background: "linear-gradient(135deg, #7c3aed, #a855f7)",
-                        boxShadow: "0 8px 32px rgba(139,92,246,0.4)",
-                      }}
-                    >
-                      <Bot className="w-4 h-4" />
-                      Ask AI Assistant
-                    </Link>
-                  </motion.div>
-                </div>
+          {/* 2. 3D Featured Pizza Showcase */}
+          <FeaturedShowcase
+            products={topSelling.length > 0 ? topSelling : allProducts}
+            wishlistIds={wishlistIds}
+          />
 
-                {/* Feature pills */}
-                <div className="flex flex-wrap gap-2 mt-5">
-                  {["Smart Recommendations", "Voice Ordering", "Dietary Preferences", "Order History"].map(
-                    (feat) => (
-                      <span
-                        key={feat}
-                        className="px-3 py-1 rounded-full text-xs font-semibold"
-                        style={{
-                          background: "rgba(139,92,246,0.1)",
-                          border: "1px solid rgba(139,92,246,0.15)",
-                          color: "rgba(196,181,253,0.9)",
-                        }}
-                      >
-                        {feat}
-                      </span>
-                    )
-                  )}
-                </div>
-              </div>
+          {/* 3. Promotional Offers & Coupon Countdown */}
+          <PromotionalBanners />
+
+          {/* 4. Why Choose Olive Pizza Storytelling Cards */}
+          <StorytellingSection />
+
+          {/* 5. Customer Review Testimonial Carousel */}
+          <TestimonialsCarousel />
+
+          {/* 6. Mobile App & Smart AI Showcase */}
+          <AppDownloadSection />
+
+          {/* Dynamic Admin Custom Sections (if enabled) */}
+          {activeSections.length > 0 && (
+            <div className="max-w-7xl mx-auto px-4 py-8 space-y-12 relative z-10">
+              {activeSections
+                .filter((s) => s.type !== "hero" && s.type !== "top_selling" && s.type !== "coupons" && s.type !== "ads")
+                .map((section) => renderSection(section))}
             </div>
-          </motion.div>
+          )}
 
-          {/* Dynamic Sections */}
-          <div className="max-w-7xl mx-auto px-4 pt-12 space-y-14 relative z-10">
-            {activeSections
-              .filter((s) => s.type !== "hero")
-              .map((section) => renderSection(section))}
-          </div>
-
-          {/* ─── Visit Olive Pizza ─────────────────────────────────────────── */}
+          {/* 7. Visit Olive Pizza & Interactive Map */}
           <motion.div
             initial={{ opacity: 0, y: 32 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-            className="py-16 md:py-24 relative z-10 mt-8"
+            className="py-16 md:py-24 relative z-10"
             style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}
           >
             <div className="max-w-7xl mx-auto px-4">
@@ -608,8 +532,8 @@ export default function Home() {
                 >
                   Visit Olive Pizza
                 </h2>
-                <p className="text-slate-400 max-w-xl mx-auto mb-7 text-sm md:text-base">
-                  We deliver fresh to your door, or drop by and grab a hot slice right out of the oven.
+                <p className="text-slate-400 max-w-xl mx-auto mb-7 text-sm md:text-base font-medium">
+                  We deliver fresh to your door, or drop by and grab a hot slice right out of the wood-fired oven.
                 </p>
                 <OpenInMapsButton />
               </div>
@@ -626,6 +550,9 @@ export default function Home() {
             </div>
           </motion.div>
         </main>
+
+        {/* 8. Flagship Footer */}
+        <FlagshipFooter />
       </PageTransition>
     </>
   );

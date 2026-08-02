@@ -36,9 +36,18 @@ export default function FloatingCart() {
       {cartCount > 0 && (
         <motion.div
           initial={{ opacity: 0, y: 100, scale: 0.8, rotateX: 20 }}
-          animate={{ opacity: 1, y: 0, scale: 1, rotateX: 0 }}
+          animate={{ 
+            opacity: 1, 
+            y: [-3, 3, -3], 
+            scale: 1, 
+            rotateX: 0 
+          }}
           exit={{ opacity: 0, y: 100, scale: 0.8, rotateX: -20 }}
-          transition={{ type: 'spring', stiffness: 200, damping: 20 }}
+          transition={{ 
+            y: { duration: 4, repeat: Infinity, ease: "easeInOut" },
+            opacity: { duration: 0.3 },
+            scale: { type: 'spring', stiffness: 200, damping: 20 }
+          }}
           className="fixed z-40 bottom-[85px] left-4 right-4 md:left-auto md:right-8 md:bottom-8 md:w-80 perspective-1000"
         >
           <Link 

@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router';
 import { useCartStore } from '../lib/store';
 import { ChevronRight, ChevronLeft } from 'lucide-react';
+import { toolBridge } from '../services/ai/toolBridge';
 
 export default function AIAssistant() {
   const navigate = useNavigate();
@@ -10,6 +11,16 @@ export default function AIAssistant() {
   const cartStore = useCartStore();
   
   const [isHidden, setIsHidden] = useState(false);
+
+  useEffect(() => {
+    const unsubscribe = toolBridge.subscribe((result) => {
+      console.log('[AIAssistant] Tool executed:', result);
+      if (result.data?.path) {
+        navigate(result.data.path);
+      }
+    });
+    return () => unsubscribe();
+  }, [navigate]);
 
   const cartCount = cartStore.items.reduce((acc, item) => acc + item.quantity, 0);
   const isCartVisible = cartCount > 0 && !['/cart', '/checkout'].includes(location.pathname) && !location.pathname.startsWith('/owner') && !location.pathname.startsWith('/delivery');

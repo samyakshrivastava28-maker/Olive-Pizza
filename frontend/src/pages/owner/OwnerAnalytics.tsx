@@ -293,6 +293,59 @@ export default function OwnerAnalytics() {
           </div>
         </div>
       </div>
+
+      {/* FINANCIAL SETTLEMENTS & CSV EXPORT */}
+      <div className="mt-8 bg-[#1E293B] border border-white/10 shadow-xl rounded-2xl p-6">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 border-b border-white/10 pb-4">
+          <div>
+            <h2 className="text-xl font-bold text-white flex items-center gap-2">
+              💳 Payment Settlements & Tax Breakdown
+            </h2>
+            <p className="text-xs text-slate-400">Net earnings, 5% GST tax calculation, and gateway settlement breakdown</p>
+          </div>
+          <div className="flex gap-2">
+            <a
+              href="/api/payment/reports?period=daily&format=csv"
+              target="_blank"
+              download
+              className="px-4 py-2 bg-primary-600/20 text-primary-400 border border-primary-500/30 rounded-xl font-bold text-xs hover:bg-primary-600/30 transition-all flex items-center gap-1.5"
+            >
+              📥 Export Daily CSV
+            </a>
+            <a
+              href="/api/payment/reports?period=monthly&format=csv"
+              target="_blank"
+              download
+              className="px-4 py-2 bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 rounded-xl font-bold text-xs hover:bg-emerald-600/30 transition-all flex items-center gap-1.5"
+            >
+              📊 Export Monthly CSV
+            </a>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="bg-slate-900/60 p-4 rounded-xl border border-white/5">
+            <div className="text-xs text-slate-400 font-semibold uppercase">Net Sales</div>
+            <div className="text-xl font-black text-white mt-1">₹{analytics.monthlyEarnings.toLocaleString()}</div>
+            <div className="text-[10px] text-slate-500 mt-0.5">This Month</div>
+          </div>
+          <div className="bg-slate-900/60 p-4 rounded-xl border border-white/5">
+            <div className="text-xs text-slate-400 font-semibold uppercase">Estimated 5% GST</div>
+            <div className="text-xl font-black text-orange-400 mt-1">₹{(analytics.monthlyEarnings * 0.05).toFixed(0)}</div>
+            <div className="text-[10px] text-slate-500 mt-0.5">Tax liability</div>
+          </div>
+          <div className="bg-slate-900/60 p-4 rounded-xl border border-white/5">
+            <div className="text-xs text-slate-400 font-semibold uppercase">Est. Gateway Charges (2%)</div>
+            <div className="text-xl font-black text-red-400 mt-1">₹{(analytics.monthlyEarnings * 0.02).toFixed(0)}</div>
+            <div className="text-[10px] text-slate-500 mt-0.5">Payment gateway fees</div>
+          </div>
+          <div className="bg-slate-900/60 p-4 rounded-xl border border-white/5">
+            <div className="text-xs text-slate-400 font-semibold uppercase">Expected Settlement</div>
+            <div className="text-xl font-black text-green-400 mt-1">₹{(analytics.monthlyEarnings * 0.98).toFixed(0)}</div>
+            <div className="text-[10px] text-slate-500 mt-0.5">Net bank deposit</div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

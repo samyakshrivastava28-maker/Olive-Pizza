@@ -383,3 +383,141 @@ npx tsc --noEmit
 - **Multi-Client Realtime Audit**: Verified zero-latency multi-client Firestore event delivery across customer, owner, and delivery partner devices.
 - **Standing QA Checklist**: Created permanent QA checklist at `.agents/standing_regression_checklist.md`.
 
+---
+
+## 12. Exhaustive File & Directory Catalog
+
+### 12.1 Root Workspace Configuration & Build Files
+- [package.json](file:///c:/Users/RYZEN/Downloads/olive-pizza/package.json) - Workspace dependencies, scripts (`dev`, `build`, `preview`, `lint`), and Capacitor CLI scripts.
+- [vite.config.ts](file:///c:/Users/RYZEN/Downloads/olive-pizza/vite.config.ts) - Vite bundler configuration, React plugin, vendor chunk splitting (`vendor-three`, `vendor-react`), and path aliases (`@` -> `./frontend/src`).
+- [tsconfig.json](file:///c:/Users/RYZEN/Downloads/olive-pizza/tsconfig.json) - Root TypeScript compiler options, path mappings, DOM/ESNext targets.
+- [firestore.rules](file:///c:/Users/RYZEN/Downloads/olive-pizza/firestore.rules) - Production Firebase Firestore security rules for role-based collections (`users`, `orders`, `menu`, `coupons`).
+- [capacitor.config.json](file:///c:/Users/RYZEN/Downloads/olive-pizza/capacitor.config.json) - Capacitor 6 native Android app configuration (`com.olivepizza.app`), app name, web dir (`dist`), and Android plugin configuration.
+- [vercel.json](file:///c:/Users/RYZEN/Downloads/olive-pizza/vercel.json) - Vercel deployment routing, SPA rewrite rules (`/*` -> `/index.html`), and API proxy definitions.
+- [README.md](file:///c:/Users/RYZEN/Downloads/olive-pizza/README.md) - Main repository GitHub documentation covering architecture, setup, Capacitor build instructions, and environment variables.
+- [projectoverview.md](file:///c:/Users/RYZEN/Downloads/olive-pizza/projectoverview.md) - Master technical architecture specification and system documentation (BRAIN.md).
+- [.env](file:///c:/Users/RYZEN/Downloads/olive-pizza/.env) / [.env.example](file:///c:/Users/RYZEN/Downloads/olive-pizza/.env.example) - Environment configuration variables for Firebase, Supabase, Cloudinary, NVIDIA NIM, Google Drive, and Qdrant.
+- [index.html](file:///c:/Users/RYZEN/Downloads/olive-pizza/index.html) - HTML5 SPA entry point, meta tags, Google Fonts, and root DOM container `#root`.
+- [email-verification.html](file:///c:/Users/RYZEN/Downloads/olive-pizza/email-verification.html) - Static email verification landing template for Firebase auth link redirects.
+- [firebase-applet-config.json](file:///c:/Users/RYZEN/Downloads/olive-pizza/firebase-applet-config.json) - Firebase client project configuration.
+- [pizza-loader-animation_5673819.htm](file:///c:/Users/RYZEN/Downloads/olive-pizza/pizza-loader-animation_5673819.htm) - Embedded Lottie/SVG animation asset for pizza preparation loading states.
+
+### 12.2 Agents & Automation Governance (`.agents/` & `scripts/`)
+- [.agents/AGENTS.md](file:///c:/Users/RYZEN/Downloads/olive-pizza/.agents/AGENTS.md) - Workspace design rules, Mobile First policy, Floating Cart standard, and 8-step pizza animation rules.
+- [.agents/standing_regression_checklist.md](file:///c:/Users/RYZEN/Downloads/olive-pizza/.agents/standing_regression_checklist.md) - Permanent QA test checklist covering auth, checkout, POS, delivery navigation, live updates, and offline fallbacks.
+- [scripts/deploy-validator.js](file:///c:/Users/RYZEN/Downloads/olive-pizza/scripts/deploy-validator.js) - Deployment pre-flight check script validating env variables, build artifacts, and database connections.
+- [scripts/download_icons.js](file:///c:/Users/RYZEN/Downloads/olive-pizza/scripts/download_icons.js) - Automated icon downloader script for mobile asset compilation.
+- [scripts/secretScanner.js](file:///c:/Users/RYZEN/Downloads/olive-pizza/scripts/secretScanner.js) - Pre-commit security scanner verifying no hardcoded API keys or service account credentials exist in code.
+- [scripts/supabase-health-check.mjs](file:///c:/Users/RYZEN/Downloads/olive-pizza/scripts/supabase-health-check.mjs) - Automated Supabase PostgreSQL connection, table schema, and RLS health verification script.
+
+### 12.3 Frontend Application Layer (`frontend/src/`)
+#### Entry & Core Infrastructure
+- [frontend/src/main.tsx](file:///c:/Users/RYZEN/Downloads/olive-pizza/frontend/src/main.tsx) - Application bootstrap mounting React 19 root with Error Boundary and Auth Provider.
+- [frontend/src/App.tsx](file:///c:/Users/RYZEN/Downloads/olive-pizza/frontend/src/App.tsx) - Root router configuration defining customer, owner POS, delivery partner, and admin routes.
+- [frontend/src/index.css](file:///c:/Users/RYZEN/Downloads/olive-pizza/frontend/src/index.css) - Global CSS styles, Tailwind v4 imports, HSL color tokens, glassmorphism utilities, dark galaxy backdrop styling.
+- [frontend/src/vite-env.d.ts](file:///c:/Users/RYZEN/Downloads/olive-pizza/frontend/src/vite-env.d.ts) & [react-confetti.d.ts](file:///c:/Users/RYZEN/Downloads/olive-pizza/frontend/src/react-confetti.d.ts) - TypeScript environment definitions and module declarations.
+
+#### Viewport & State Hooks (`frontend/src/hooks/`)
+- [useViewport.ts](file:///c:/Users/RYZEN/Downloads/olive-pizza/frontend/src/hooks/useViewport.ts) - Responsive screen category detection (8 device sizes), orientation tracking (`isLandscape`), touch device identification.
+- [useDeviceSession.ts](file:///c:/Users/RYZEN/Downloads/olive-pizza/frontend/src/hooks/useDeviceSession.ts) - Device session ID generator, platform detector (PWA/Capacitor/Web), multi-session sync.
+- [useHeartbeat.ts](file:///c:/Users/RYZEN/Downloads/olive-pizza/frontend/src/hooks/useHeartbeat.ts) - Periodic background pulse updating active client presence to backend.
+- [useLiveMetrics.ts](file:///c:/Users/RYZEN/Downloads/olive-pizza/frontend/src/hooks/useLiveMetrics.ts) - Subscribes to real-time order count, sales telemetry, and fleet statistics.
+- [useNotificationSound.ts](file:///c:/Users/RYZEN/Downloads/olive-pizza/frontend/src/hooks/useNotificationSound.ts) - Native/Web continuous audio alarm loop manager with cross-tab silence orchestration.
+- [useNotificationDebugger.ts](file:///c:/Users/RYZEN/Downloads/olive-pizza/frontend/src/hooks/useNotificationDebugger.ts) - FCM registration diagnostics, permission inspector, channel debugger.
+- [useSystemHealth.ts](file:///c:/Users/RYZEN/Downloads/olive-pizza/frontend/src/hooks/useSystemHealth.ts) - Monitors backend connectivity, Supabase ping, Firestore connection state.
+- [useVersionCheck.ts](file:///c:/Users/RYZEN/Downloads/olive-pizza/frontend/src/hooks/useVersionCheck.ts) - Native app version comparison against server release manifests for force-update gates.
+- [useDebounce.ts](file:///c:/Users/RYZEN/Downloads/olive-pizza/frontend/src/hooks/useDebounce.ts) - Performance utility hook for debouncing search input and rapid UI events.
+
+#### Domain Services & Utilities (`frontend/src/services/` & `frontend/src/lib/`)
+- [navigationRouting.service.ts](file:///c:/Users/RYZEN/Downloads/olive-pizza/frontend/src/services/navigationRouting.service.ts) - OSRM routing client with `localStorage` polyline caching and offline turn-by-turn fallback.
+- [navigationInstructions.ts](file:///c:/Users/RYZEN/Downloads/olive-pizza/frontend/src/services/navigationInstructions.ts) - Text-to-speech prompt formatter generating natural language voice direction cues.
+- [TextToSpeech.service.ts](file:///c:/Users/RYZEN/Downloads/olive-pizza/frontend/src/services/TextToSpeech.service.ts) - Speech synthesis service orchestrating NVIDIA Chatterbox neural TTS, Web Speech API, and Android TTS fallback.
+- [OwnerAlarmManager.ts](file:///c:/Users/RYZEN/Downloads/olive-pizza/frontend/src/services/OwnerAlarmManager.ts) - Audio alarm controller for kitchen owner POS on incoming live orders.
+- [DeliveryAlarmManager.ts](file:///c:/Users/RYZEN/Downloads/olive-pizza/frontend/src/services/DeliveryAlarmManager.ts) - Continuous ringtone manager for delivery partners when a new delivery is assigned.
+- [dataStore.ts](file:///c:/Users/RYZEN/Downloads/olive-pizza/frontend/src/lib/dataStore.ts) - Zustand state store managing active cart items, applied coupons, customer address, and user profile state.
+- [pushNotifications.ts](file:///c:/Users/RYZEN/Downloads/olive-pizza/frontend/src/lib/pushNotifications.ts) - FCM push token requester, background message listener, notification channel binder.
+- [permissions.ts](file:///c:/Users/RYZEN/Downloads/olive-pizza/frontend/src/lib/permissions.ts) - Native Android/Web runtime permission handler (GPS, Push Notifications, Storage).
+- [offlineSync.ts](file:///c:/Users/RYZEN/Downloads/olive-pizza/frontend/src/lib/offlineSync.ts) - IndexedDB transaction queue for syncing offline cart actions once network resumes.
+- [fcm.ts](file:///c:/Users/RYZEN/Downloads/olive-pizza/frontend/src/lib/fcm.ts) - Firebase Cloud Messaging client initialization and foreground handler.
+- [cloudinary.ts](file:///c:/Users/RYZEN/Downloads/olive-pizza/frontend/src/lib/cloudinary.ts) - Cloudinary image URL optimizer (auto-format WebP, dynamic resizing, responsive srcSet).
+- [analytics.ts](file:///c:/Users/RYZEN/Downloads/olive-pizza/frontend/src/lib/analytics.ts) - Event logger tracking conversion funnel, add-to-cart, checkout completion, and drop-offs.
+- [motion.ts](file:///c:/Users/RYZEN/Downloads/olive-pizza/frontend/src/lib/motion.ts) - Framer Motion reusable spring physics variants, page transition presets, glassmorphic card animations.
+- [versionManager.ts](file:///c:/Users/RYZEN/Downloads/olive-pizza/frontend/src/lib/versionManager.ts) - App version check utilities and APK download trigger handler.
+
+#### Frontend Components (`frontend/src/components/`)
+- **Global Layout**: `MainLayout.tsx`, `OwnerLayout.tsx`, `DeliveryLayout.tsx`, `Footer.tsx`, `SEO.tsx`, `ErrorBoundary.tsx`, `GlobalErrorBoundary.tsx`, `RouteErrorBoundary.tsx`, `PageTransition.tsx`, `OnboardingGuard.tsx`.
+- **UI & Animations**: `CartAnimationProvider.tsx`, `FloatingTracker.tsx`, `FloatingCart.tsx`, `LuxuryHero.tsx`, `LuxuryProductCard.tsx`, `Particles.tsx`, `Galaxy.tsx`, `PixelSnow.tsx`, `Aurora.tsx`, `SideRays.tsx`, `Ferrofluid.tsx`, `SpecialCategorySection.tsx`, `BannerCarousel.tsx`, `ComboCard.tsx`, `CouponCard.tsx`, `PizzaLoader.tsx`, `SkeletonLoader.tsx`, `TiltCard.tsx`, `WishlistButton.tsx`, `AnimatedCounter.tsx`, `CountdownTimer.tsx`, `NotificationCenter.tsx`, `NotificationDiagnosticsOverlay.tsx`, `OfflineBanner.tsx`, `StartupGate.tsx`, `AutoUpdater.tsx`, `DeliveredOverlay.tsx`, `OwnerAcceptedOverlay.tsx`.
+- **Cart & Checkout**: `AddToCartAnimation.tsx`, `PaymentMethodOverlay.tsx`, `ProcessingOverlay.tsx`.
+- **3D Maps**: `UniversalMap3D.tsx` (MapLibre vector engine, 45° delivery pitch lerp, top-view drag fallback), `LocationPicker3D.tsx`, `LocationMap.tsx`.
+- **Kitchen Owner POS**: `LiveOrdersTable.tsx`, `BusinessIntelligence.tsx`, `DashboardCharts.tsx`, `ComboBuilder.tsx`, `OwnerLiveMap.tsx`, `OwnerLiveMapModal.tsx`, `OwnerAlertManager.tsx`, `OwnerNotificationCenter.tsx`, `SystemDiagnostics.tsx`, `SystemHealthPanel.tsx`, `SystemStatusPanel.tsx`, `CancelOrderReasonModal.tsx`, `ApkBuildStatus.tsx`, `ActivityFeed.tsx`, `QuickActions.tsx`, `StatCard.tsx`.
+- **Delivery Partner UI**: `DeliveryMap.tsx`, `DeliveryAlertManager.tsx`, `CancelDeliveryModal.tsx`, `DeclineDeliveryReasonModal.tsx`.
+- **Tracking & AI**: `TrackingMap.tsx`, `OrderEventsOverlay.tsx`, `AIAssistant.tsx`, `PushNotificationManager.tsx`, `NativeAppUpdater.tsx`, `OwnerAndroidBuilds.tsx`, `VersionUpdateScreens.tsx`.
+
+#### Customer, Delivery & Owner Pages (`frontend/src/pages/`)
+- **Customer Views**: `Home.tsx`, `Menu.tsx`, `ProductDetail.tsx`, `Cart.tsx`, `Checkout.tsx`, `OrderSuccessScreen.tsx`, `ProcessingOrder.tsx`, `OrderTracking.tsx`, `CustomerDashboard.tsx`, `UniversalAssistant.tsx`, `RecheckOrder.tsx`, `About.tsx`, `Contact.tsx`, `FAQ.tsx`, `Login.tsx`, `Register.tsx`, `ForgotPassword.tsx`, `DeleteAccount.tsx`.
+- **Legal Views**: `PrivacyPolicy.tsx`, `Terms.tsx`, `DeliveryPolicy.tsx`.
+- **Onboarding Flow**: `SetupLocation.tsx`, `SetupPhone.tsx`, `VerifyEmail.tsx`.
+- **Kitchen Owner Views**: `OwnerDashboard.tsx`, `OwnerOrders.tsx`, `OwnerOrderHistory.tsx`, `OwnerProducts.tsx`, `OwnerCoupons.tsx`, `OwnerOffers.tsx`, `OwnerAds.tsx`, `OwnerSpecialCategories.tsx`, `OwnerEmailCenter.tsx`, `OwnerNotificationCenter.tsx`, `OwnerNotificationDiagnostics.tsx`, `OwnerReports.tsx`, `OwnerAnalytics.tsx`, `OwnerCustomers.tsx`, `DeliveryPartners.tsx`, `OwnerAIKnowledge.tsx`, `AIHealthMonitor.tsx`, `OwnerHomepageManager.tsx`, `OwnerMediaLibrary.tsx`, `OwnerEvents.tsx`, `OwnerSecurity.tsx`, `OwnerSettings.tsx`, `OwnerVersionManagement.tsx`, `OwnerVerificationMetrics.tsx`, `DeveloperDashboard.tsx`.
+- **Delivery Partner Views**: `DeliveryDashboard.tsx`, `DeliveryEarnings.tsx`, `DeliveryPerformance.tsx`, `DeliveryProfile.tsx`, `DeliveryNotificationCenter.tsx`.
+
+### 12.4 Backend Application Layer (`backend/src/`)
+#### Core App Bootstrap (`backend/src/app.ts`)
+- Express app setup, CORS configuration, body parsers, security headers (Helmet), rate limiters, route mounting, global error handling middleware.
+
+#### Express REST Routes (`backend/src/routes/`)
+- `auth.routes.ts` - Phone OTP authentication, Firebase custom token generation, user signup endpoints.
+- `order.routes.ts` - Order placement, status updates, kitchen acceptance, rider assignment, cancellation handling.
+- `tracking.routes.ts` - HMAC signed order tracking telemetry, live GPS position lookup, route geometry stream.
+- `tts.routes.ts` - NVIDIA Chatterbox neural TTS voice synthesis proxy (`/api/tts/synthesize`).
+- `delivery.routes.ts` - Delivery partner job queue, background GPS ping receiver, availability toggle.
+- `notification.routes.ts` - High-priority FCM push notification dispatcher, sound payload generator, topic broadcasts.
+- `ai.routes.ts` - AI pizza assistant chat endpoint, recommendation engine, meal customized prompt pipeline.
+- `aiKnowledge.routes.ts` - Qdrant vector database query endpoint, document embedding indexer.
+- `email.routes.ts` - Automated HTML transactional emails (order invoices, status updates, kitchen alerts).
+- `github.routes.ts` - GitHub API integration proxying latest Android APK build artifacts.
+- `googleDrive.routes.ts` - Service account authentication and cloud backup for monthly business reports.
+- `report.routes.ts` - Monthly PDF/CSV business intelligence report generator.
+- `coupon.routes.ts` - Coupon code validation, discount calculation, usage limits.
+- `menu.routes.ts` - Public menu catalog fetching, category filters, item availability.
+- `user.routes.ts` - Profile management, saved delivery addresses, favorite items.
+- `admin.routes.ts` - Kitchen owner administrative actions, system settings, staff management.
+- `dataManager.routes.ts` - Database cleanup routines, stale telemetry purging, archiving.
+- `devops.routes.ts` - System diagnostics, memory usage, environment status (restricted access).
+- `health.routes.ts` & `health.stream.routes.ts` - Server health ping and Server-Sent Events (SSE) diagnostic stream.
+- `heartbeat.routes.ts` - Live client connection pulse collector.
+- `pageBuilder.routes.ts` - Dynamic home section layout configuration endpoints.
+- `phoneVerification.routes.ts` - Truecaller & SMS OTP verification endpoints.
+- `seo.routes.ts` - Dynamic sitemap.xml and meta tags generator.
+- `version.routes.ts` - Server-side app version manifest provider.
+
+#### Backend Domain Services (`backend/src/services/`)
+- `ai.service.ts` - LangChain/OpenAI/Gemini orchestration for pizza recommendations and customer service.
+- `KnowledgeBaseService.ts` - Qdrant vector database embedding generator and document semantic lookup.
+- `email.service.ts` - Nodemailer transporter service for sending HTML emails.
+- `emailTemplates.service.ts` - Responsive HTML email templates for order confirmation, delivery alerts, invoices.
+- `googleDrive.service.ts` - Google Drive v3 API client for report backup and service key authentication.
+- `storageAnalyzer.service.ts` - Storage usage calculator for Firestore, Supabase, and Cloudinary.
+- `DataLifecycleService.ts` - Automatic cleanup service purging expired GPS telemetry and obsolete locks.
+- `HeartbeatService.ts` - Real-time active connection tracking and driver availability status indexer.
+- `sub-service modules`: `ai/`, `background/`, `devOps/`, `email/`, `eventBus/`, `notification/`, `order/`, `phone-verification/`, `websocket/`.
+
+#### Middleware & Utility Core (`backend/src/middleware/`, `config/`, `utils/`)
+- `middleware/auth.middleware.ts` - Firebase Bearer token verification and role assertion (`customer`, `owner`, `delivery`).
+- `middleware/dynamicHtml.ts` - Dynamic index.html template injection for open graph social tags.
+- `middleware/requireDeveloper.ts` - Restricts sensitive DevOps endpoints strictly to master developer accounts.
+- `middleware/versionCheck.ts` - Rejects outdated API calls from obsolete app builds.
+- `config/firebase.ts` - Firebase Admin SDK initialization using service account keys.
+- `config/postgres.ts` - Supabase PostgreSQL pool initialization and schema migration runner.
+- `config/security.config.ts` - Rate-limiting thresholds, CORS whitelist, Helmet security headers.
+- `config/cloudinary.ts` - Cloudinary SDK configuration.
+- `utils/trackingToken.ts` - HMAC-SHA256 tracking token generator and validator.
+- `utils/securityLogger.ts` - Security audit logger recording failed auth attempts and sensitive actions.
+
+### 12.5 Native Android Runtime Layer (`android/`)
+#### Java Native Core (`android/app/src/main/java/com/olivepizza/app/`)
+- [MainActivity.java](file:///c:/Users/RYZEN/Downloads/olive-pizza/android/app/src/main/java/com/olivepizza/app/MainActivity.java) - Native Android entry point configuring webview settings, Capacitor bridge, notification permissions, and screen keep-awake flags.
+- [OliveMessagingService.java](file:///c:/Users/RYZEN/Downloads/olive-pizza/android/app/src/main/java/com/olivepizza/app/OliveMessagingService.java) - Custom Firebase Messaging Service handling high-priority FCM pushes, background notification parsing, custom heads-up banners, and alarm triggers.
+- [AlarmActivity.java](file:///c:/Users/RYZEN/Downloads/olive-pizza/android/app/src/main/java/com/olivepizza/app/AlarmActivity.java) - Native full-screen alarm overlay activity waking up device screens for incoming kitchen orders or delivery assignments.
+- [DeliveryLocationService.java](file:///c:/Users/RYZEN/Downloads/olive-pizza/android/app/src/main/java/com/olivepizza/app/DeliveryLocationService.java) - Background Android Service executing continuous GPS location tracking even when app is minimized.
+- [DeliveryPlugin.java](file:///c:/Users/RYZEN/Downloads/olive-pizza/android/app/src/main/java/com/olivepizza/app/plugins/DeliveryPlugin.java) - Capacitor Java plugin exposing native location service controls to React frontend.
+- [NotificationActionReceiver.java](file:///c:/Users/RYZEN/Downloads/olive-pizza/android/app/src/main/java/com/olivepizza/app/NotificationActionReceiver.java) - Broadcast Receiver intercepting notification button taps ("Accept Order", "Mute Alarm") directly from Android lock screen.

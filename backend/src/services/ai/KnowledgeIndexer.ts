@@ -1,5 +1,5 @@
 import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
-import { qdrantService, QDRANT_COLLECTION } from './QdrantService.js';
+import { pineconeService } from './PineconeService.js';
 import { embeddingService } from './EmbeddingService.js';
 import crypto from 'crypto';
 import * as pdfParseModule from 'pdf-parse';
@@ -43,44 +43,39 @@ export class KnowledgeIndexer {
   public async indexText(text: string, metadata: DocumentMetadata): Promise<boolean> {
     try {
       console.log(`[KnowledgeIndexer] Indexing document ${metadata.documentId} [${metadata.category}]`);
-      
+
       // 1. Split text into chunks
       const chunks = await this.splitter.createDocuments([text]);
-      
+
       if (chunks.length === 0) return true;
 
       // 2. Delete existing vectors for this document to prevent duplicates
-      await qdrantService.deleteDocument(metadata.documentId);
+      await pineconeService.deleteDocument(metadata.documentId);
 
       // 3. Batch process embeddings
       const texts = chunks.map((c: any) => c.pageContent);
       const embeddings = await embeddingService.generateEmbeddings(texts);
 
-      // 4. Prepare Qdrant points
-      const points = embeddings.map((vector, index) => {
-        return {
-          id: crypto.randomUUID(),
-          vector: vector,
-          payload: {
-            ...metadata,
-            chunkIndex: index,
-            totalChunks: chunks.length,
-            content: texts[index],
-          }
-        };
-      });
+      // 4. Prepare Pinecone vector points
+      const points = embeddings.map((vector, index) => ({
+        id: crypto.randomUUID(),
+        values: vector,
+        metadata: {
+          ...metadata,
+          chunkIndex: index,
+          totalChunks: chunks.length,
+          content: texts[index],
+        } as any,
+      }));
 
-      // 5. Upsert to Qdrant (in batches of 100 to avoid limits)
+      // 5. Upsert to Pinecone (in batches of 100 to respect limits)
       const batchSize = 100;
       for (let i = 0; i < points.length; i += batchSize) {
         const batch = points.slice(i, i + batchSize);
-        await qdrantService.getClient().upsert(QDRANT_COLLECTION, {
-          wait: true,
-          points: batch,
-        });
+        await pineconeService.upsertPoints(batch);
       }
 
-      console.log(`[KnowledgeIndexer] Indexed ${points.length} vectors for document ${metadata.documentId}`);
+      console.log(`[KnowledgeIndexer] ✅ Indexed ${points.length} vectors for document ${metadata.documentId}`);
       return true;
     } catch (error: any) {
       console.error(`[KnowledgeIndexer] Error indexing document ${metadata.documentId}:`, error.message);
@@ -129,15 +124,14 @@ export class KnowledgeIndexer {
   }
 
   /**
-   * Synchronously removes a deleted public item from Qdrant vector index directly upon owner deletion.
+   * Synchronously removes a deleted public item from Pinecone vector index directly upon owner deletion.
    */
   public async removeItemDirectly(itemId: string): Promise<boolean> {
     const documentId = itemId.startsWith('prod_') ? itemId : `prod_${itemId}`;
     console.log(`[KnowledgeIndexer] ⚡ Synchronous direct vector deletion triggered for document: ${documentId}`);
-    await qdrantService.deleteDocument(documentId);
+    await pineconeService.deleteDocument(documentId);
     return true;
   }
 }
 
 export const knowledgeIndexer = new KnowledgeIndexer();
-

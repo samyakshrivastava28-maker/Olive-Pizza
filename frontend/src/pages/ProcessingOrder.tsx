@@ -37,6 +37,51 @@ export default function ProcessingOrder() {
            }, { merge: true });
         }
         
+        // 1. Create Payment Session / Intent
+        const intentRes = await fetch('/api/payment/create-intent', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({
+            items: items.map((item: any) => ({
+              menuItemId: item.menuItemId || item.id || item._id || 'item-' + Math.random().toString(36).substr(2, 9),
+              name: item.name,
+              quantity: item.quantity,
+              price: item.price,
+              size: item.variant || 'regular',
+              crust: item.crust || 'normal'
+            })),
+            paymentMethod: paymentMethod || 'cod',
+            deliveryAddress: deliveryType === 'delivery' ? address : 'Pickup',
+            customerName: auth.currentUser?.displayName || 'Gourmet Customer',
+            customerPhone: auth.currentUser?.phoneNumber || '',
+            customerEmail: auth.currentUser?.email || '',
+          })
+        });
+
+        const intentData = await intentRes.json();
+        if (!intentRes.ok) throw new Error(intentData.error || 'Failed to create payment session');
+
+        let verifiedPaymentId = intentData.paymentId;
+
+        // If online payment (UPI, Card, Wallet), verify intent signature
+        if (paymentMethod !== 'cod' && intentData.providerPaymentId) {
+          const verifyRes = await fetch('/api/payment/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({
+              paymentId: intentData.paymentId,
+              providerPaymentId: intentData.providerPaymentId,
+              providerTransactionId: `tx_${Date.now()}`
+            })
+          });
+
+          const verifyData = await verifyRes.json();
+          if (!verifyRes.ok || !verifyData.verified) {
+            throw new Error(verifyData.error || 'Payment verification failed');
+          }
+        }
+
+        // 2. Atomically Create Order
         const res = await fetch('/api/orders', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -50,6 +95,7 @@ export default function ProcessingOrder() {
               crust: item.crust || 'normal'
             })),
             paymentMethod: paymentMethod,
+            paymentId: verifiedPaymentId,
             deliveryType,
             address: deliveryType === 'delivery' ? address : 'Pickup',
             addressDetails,

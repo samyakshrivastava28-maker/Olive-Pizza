@@ -141,9 +141,15 @@ import emailRoutes from './routes/email.routes.js';
 import googleDriveRoutes from './routes/googleDrive.routes.js';
 import aiKnowledgeRoutes from './routes/aiKnowledge.routes.js';
 import dataManagerRoutes from './routes/dataManager.routes.js';
+import aiIntegrationRoutes from './routes/aiIntegration.routes.js';
 
 app.use('/orders', orderRoutes);
 app.use('/api/orders', orderRoutes);
+app.use('/api/order', orderRoutes);
+
+app.use('/api/integration/ai', aiIntegrationRoutes);
+// Alias for AI management dashboard — convenient for admin panels
+app.use('/api/ai/management', aiIntegrationRoutes);
 
 app.use('/admin', adminRoutes);
 app.use('/api/admin', adminRoutes);
@@ -152,6 +158,7 @@ app.use('/page-builder', pageBuilderRoutes);
 app.use('/api/page-builder', pageBuilderRoutes);
 
 app.use('/ai', aiRoutes);
+app.use('/api/ai', aiRoutes);
 app.use('/api/ai', aiKnowledgeRoutes);
 
 app.use('/delivery', deliveryRoutes);
@@ -204,6 +211,15 @@ app.use('/api/data-manager', dataManagerRoutes);
 
 app.use('/devops', devopsRoutes);
 app.use('/api/devops', devopsRoutes);
+
+import paymentRoutes from './routes/payment.routes.js';
+import { PaymentReconciliationService } from './services/payment/PaymentReconciliationService.js';
+
+app.use('/payment', paymentRoutes);
+app.use('/api/payment', paymentRoutes);
+
+// Start background payment reconciliation cron job
+PaymentReconciliationService.startCronJob();
 
 app.use('/tts', ttsRoutes);
 app.use('/api/tts', ttsRoutes);
