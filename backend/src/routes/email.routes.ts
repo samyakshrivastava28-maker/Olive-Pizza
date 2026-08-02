@@ -181,7 +181,7 @@ router.post('/ai-alert', async (req, res) => {
     const recipients = Array.isArray(to) ? to : [to];
     for (const recipient of recipients) {
       if (recipient) {
-        await queueEmail(recipient, subject, htmlBody, 'system');
+        await queueEmail(recipient, subject, htmlBody, 'transactional');
       }
     }
     
