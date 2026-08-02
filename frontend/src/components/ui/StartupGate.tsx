@@ -37,11 +37,11 @@ export default function StartupGate({ children }: StartupGateProps) {
       sessionStorage.setItem('hasSeenIntro', 'true');
       logDiagnostic("Initializing intro video");
       
-      // Strict fallback timer — if video hangs or network drops, force skip quickly (1.5s max)
+      // Strict fallback timer — if video hangs or network drops, force skip quickly (5s max)
       const fallbackTimer = setTimeout(() => {
-        logDiagnostic("Startup video timed out, forcing skip.", { timeout: 1500 });
+        logDiagnostic("Startup video timed out, forcing skip.", { timeout: 5000 });
         handleVideoEnd();
-      }, 1500);
+      }, 5000);
       
       return () => {
         clearTimeout(fallbackTimer);

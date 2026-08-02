@@ -154,7 +154,8 @@ Delivery Guarantee: Fresh & piping hot within 30 to 45 minutes.`
   }
 ];
 
-export cla  public async syncAll(): Promise<{ success: boolean; stats: any }> {
+export class KnowledgeSync {
+  public async syncAll(): Promise<{ success: boolean; stats: any }> {
     try {
       console.log('[KnowledgeSync] Queueing full sync to Pinecone worker...');
       let indexedCount = 0;
@@ -257,5 +258,4 @@ export cla  public async syncAll(): Promise<{ success: boolean; stats: any }> {
   }
 }
 
-export const knowledgeSync = new KnowledgeSync();
 export const knowledgeSync = new KnowledgeSync();
