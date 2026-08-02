@@ -9,7 +9,7 @@ import './src/services/DataLifecycleService.js';
 import './src/services/notification/NotificationQueueService.js';
 import './src/jobs/WeeklyReportJob.js';
 import { kb } from './src/services/KnowledgeBaseService.js';
-import { qdrantService } from './src/services/ai/QdrantService.js';
+import { pineconeService } from './src/services/ai/PineconeService.js';
 import { storageAnalyzer } from './src/services/storageAnalyzer.service.js';
 
 import { validateEnvironmentVariables } from './src/config/validator.js';
@@ -68,12 +68,14 @@ import { FirestoreListener } from './src/listeners/firestore.listener.js';
 import { initKeepAlive } from './src/scripts/keepAlive.js';
 import { dynamicHtmlInjector } from './src/middleware/dynamicHtml.js';
 import { webSocketServer } from './src/services/websocket/WebSocketServer.js';
+import { AIHeartbeatJob } from './src/jobs/AIHeartbeatJob.js';
 
 // Setup Vite in development or static files in production
 async function setupVite() {
   await initPostgres();
   initScheduler();
   DataRetentionJob.schedule();
+  AIHeartbeatJob.schedule(); // Start AI Keep-Alive
 
   // Auto-sync all Firestore FCM tokens into PostgreSQL fcm_tokens on boot
   (async () => {
@@ -105,27 +107,27 @@ async function setupVite() {
   // Initialize AI Knowledge Base (auto-syncs with Firestore in real-time)
   kb.initialize().catch(err => console.warn('[KB] Non-fatal init error:', err.message));
 
-  // Initialize Qdrant DB (canonical dim = 1024, NVIDIA nv-embed-v1 primary)
-  // initializeCollection auto-detects & rebuilds if the existing collection has a mismatched dimension.
-  // Then auto-sync KB data into Qdrant after a short delay (KB needs time to load Firestore)
-  qdrantService.initializeCollection().then(async (ok) => {
-    if (ok) {
-      console.log('[Qdrant] ✅ Collection ready — scheduling KB sync in 30s...');
+  // Initialize Pinecone Vector DB — verify connection, then auto-sync KB data
+  pineconeService.getStatus().then(async (status: { ok: boolean; vectorCount?: number; error?: string }) => {
+    if (status.ok) {
+      console.log(`[Pinecone] ✅ Connected — index: olive-pizza, vectors: ${status.vectorCount ?? 0} — scheduling KB sync in 30s...`);
       setTimeout(async () => {
         try {
           const { knowledgeSync } = await import('./src/services/ai/KnowledgeSync.js');
           const result = await knowledgeSync.syncAll();
           if (result.success) {
-            console.log(`[Qdrant] ✅ KB auto-sync complete — ${result.stats?.syncedRecords ?? 0} records indexed`);
+            console.log(`[Pinecone] ✅ KB auto-sync complete — ${result.stats?.syncedRecords ?? 0} records indexed`);
           } else {
-            console.warn('[Qdrant] ⚠️ KB auto-sync completed with errors');
+            console.warn('[Pinecone] ⚠️ KB auto-sync completed with errors');
           }
         } catch (e: any) {
-          console.warn('[Qdrant] ⚠️ KB auto-sync failed (non-fatal):', e.message);
+          console.warn('[Pinecone] ⚠️ KB auto-sync failed (non-fatal):', e.message);
         }
       }, 30_000);
+    } else {
+      console.warn('[Pinecone] ⚠️ Connection check failed (non-fatal):', status.error);
     }
-  }).catch(err => console.warn('[Qdrant] Non-fatal init error:', err.message));
+  }).catch((err: any) => console.warn('[Pinecone] Non-fatal init error:', err.message));
 
 
   // Initialize Slack Notification Listeners
