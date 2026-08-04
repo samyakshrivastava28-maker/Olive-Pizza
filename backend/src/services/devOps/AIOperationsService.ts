@@ -14,6 +14,32 @@
 import { pineconeService, PINECONE_INDEX_NAME } from '../ai/PineconeService.js';
 import { aiProviderStats } from '../ai.service.js';
 
+export interface SMSLog {
+  id?: string;
+  timestamp: string;
+  phone: string;
+  provider: string;
+  status: 'DELIVERED_TO_GATEWAY' | 'GATEWAY_ERROR' | 'NETWORK_ERROR' | 'RATE_LIMITED';
+  requestId?: string;
+  latencyMs?: number;
+  error?: string;
+  success: boolean;
+}
+
+export interface ImageGenLog {
+  id: string;
+  timestamp: string;
+  prompt: string;
+  enhancedPrompt?: string;
+  providerUsed: string;
+  modelUsed: string;
+  aspectRatio: string;
+  imageUrl?: string;
+  latencyMs: number;
+  success: boolean;
+  error?: string;
+}
+
 export interface AIDiagnosticLog {
   id: string;
   timestamp: string;
@@ -64,6 +90,8 @@ export interface AIDiagnosticLog {
 
 class AIOperationsStore {
   private logs: AIDiagnosticLog[] = [];
+  private smsLogs: SMSLog[] = [];
+  private imageGenLogs: ImageGenLog[] = [];
   private maxLogs = 250;
 
   // SLA Threshold Targets (in milliseconds)
@@ -84,6 +112,42 @@ class AIOperationsStore {
     if (this.logs.length > this.maxLogs) {
       this.logs.pop();
     }
+  }
+
+  public pushSmsLog(log: Omit<SMSLog, 'id'>) {
+    const fullLog: SMSLog = {
+      id: 'sms_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+      ...log
+    };
+    this.smsLogs.unshift(fullLog);
+    if (this.smsLogs.length > this.maxLogs) {
+      this.smsLogs.pop();
+    }
+  }
+
+  public getSmsLogs(limit: number = 50, offset: number = 0) {
+    return {
+      total: this.smsLogs.length,
+      logs: this.smsLogs.slice(offset, offset + limit)
+    };
+  }
+
+  public pushImageGenLog(log: Omit<ImageGenLog, 'id'>) {
+    const fullLog: ImageGenLog = {
+      id: 'img_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+      ...log
+    };
+    this.imageGenLogs.unshift(fullLog);
+    if (this.imageGenLogs.length > this.maxLogs) {
+      this.imageGenLogs.pop();
+    }
+  }
+
+  public getImageGenLogs(limit: number = 50, offset: number = 0) {
+    return {
+      total: this.imageGenLogs.length,
+      logs: this.imageGenLogs.slice(offset, offset + limit)
+    };
   }
 
   public getLogs(limit: number = 50, offset: number = 0, role?: string, search?: string) {
@@ -138,6 +202,8 @@ class AIOperationsStore {
       avgTotalLatencyMs: totalRequests > 0 ? Math.round(avgTotalLatency / totalRequests) : 0,
       avgLlmLatencyMs: totalRequests > 0 ? Math.round(avgLlmLatency / totalRequests) : 0,
       avgVectorLatencyMs: totalRequests > 0 ? Math.round(avgVectorLatency / totalRequests) : 0,
+      smsTotal: this.smsLogs.length,
+      imageGenTotal: this.imageGenLogs.length,
       providers: aiProviderStats,
       slaTargets: this.slaTargets,
     };
@@ -156,14 +222,18 @@ class AIOperationsStore {
     const llmOnline = aiProviderStats.nvidia.ok || aiProviderStats.openrouter.ok || aiProviderStats.gemini.ok || aiProviderStats.activeProvider !== 'none';
     const sttOnline = true; // Whisper / Canary route active
     const ttsOnline = true; // Multilingual TTS / WebSpeech active
+    const fast2smsOnline = Boolean(process.env.FAST2SMS_API_KEY && process.env.FAST2SMS_API_KEY.length > 5);
 
     return {
       stt: { status: sttOnline ? 'GREEN' : 'RED', label: 'ASR Transcription Engine (Canary/Whisper)' },
       llm: { status: llmOnline ? 'GREEN' : 'YELLOW', label: 'LLM Multi-Provider Failover Engine', activeProvider: aiProviderStats.activeProvider },
       pinecone: { status: pineconeOnline ? 'GREEN' : 'RED', label: 'Pinecone Vector Database', indexName: PINECONE_INDEX_NAME, ...pineconeDetails },
       tts: { status: ttsOnline ? 'GREEN' : 'RED', label: 'NVIDIA Chatterbox & WebSpeech TTS' },
+      sms: { status: fast2smsOnline ? 'GREEN' : 'YELLOW', label: 'Fast2SMS Production OTP Gateway', configured: fast2smsOnline },
+      imageGen: { status: 'GREEN', label: 'AI Image Engine (FLUX / Pollinations / Cloudinary)' }
     };
   }
 }
 
 export const aiOperationsStore = new AIOperationsStore();
+

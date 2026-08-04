@@ -323,9 +323,32 @@ export const initPostgres = async () => {
         CREATE INDEX IF NOT EXISTS idx_payments_provider_id ON payments(provider_payment_id);
         CREATE INDEX IF NOT EXISTS idx_audit_payment_id ON payment_audit_logs(payment_id);
       `);
-      console.log('[PostgreSQL] Payment System production tables initialized');
-    } catch (pErr: any) {
-      console.warn('[PostgreSQL] Payment tables initialization warning:', pErr.message);
+      console.log('[PostgreSQL] Payment system tables initialized');
+    } catch (payErr: any) {
+      console.warn('[PostgreSQL] Payment tables initialization warning:', payErr.message);
+    }
+
+    try {
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS website_analytics (
+          id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+          event_type VARCHAR(50) NOT NULL,
+          section_id VARCHAR(100),
+          section_type VARCHAR(50),
+          session_id VARCHAR(100),
+          user_id VARCHAR(100),
+          metadata JSONB DEFAULT '{}',
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_wa_section_id ON website_analytics(section_id);
+        CREATE INDEX IF NOT EXISTS idx_wa_created_at ON website_analytics(created_at);
+        CREATE INDEX IF NOT EXISTS idx_wa_event_type ON website_analytics(event_type);
+        CREATE INDEX IF NOT EXISTS idx_wa_session_id ON website_analytics(session_id);
+      `);
+      console.log('[PostgreSQL] website_analytics table and indexes initialized');
+    } catch (waErr: any) {
+      console.warn('[PostgreSQL] website_analytics initialization warning:', waErr.message);
     }
 
     client.release();

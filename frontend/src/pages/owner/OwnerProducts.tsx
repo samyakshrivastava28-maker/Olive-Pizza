@@ -20,8 +20,10 @@ import { getCurrentAuthToken } from "../../lib/firebase";
 import { logActivity } from "../../lib/logger";
 import ProductCard from "../../components/ProductCard";
 import ComboBuilder from "../../components/owner/ComboBuilder";
+import toast from "react-hot-toast";
 
 export default function OwnerProducts() {
+
   const { user } = useAuthStore();
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -173,13 +175,14 @@ export default function OwnerProducts() {
 
   const handleEnhanceImagePrompt = async () => {
     if (!newItem.productName) {
-      alert("Please enter a product name first to enhance the prompt!");
+      toast.error("Please enter a product name first to enhance the prompt!");
       return;
     }
     const basePrompt =
       customImagePrompt ||
       `Delicious ${newItem.productName}, ${newItem.description || ""}`;
     setIsEnhancingPrompt(true);
+    const toastId = toast.loading("Enhancing prompt with AI...");
     try {
       const res = await fetch("/api/ai/enhance-prompt", {
         method: "POST",
@@ -189,11 +192,12 @@ export default function OwnerProducts() {
       const data = await res.json();
       if (res.ok && data.success) {
         setCustomImagePrompt(data.text);
+        toast.success("Prompt enhanced!", { id: toastId });
       } else {
-        alert("Failed to enhance prompt: " + data.error);
+        toast.error("Failed to enhance prompt: " + (data.error || "Unknown error"), { id: toastId });
       }
     } catch (e: any) {
-      alert("Error enhancing prompt: " + e.message);
+      toast.error("Error enhancing prompt: " + e.message, { id: toastId });
     } finally {
       setIsEnhancingPrompt(false);
     }
@@ -201,10 +205,11 @@ export default function OwnerProducts() {
 
   const handleGenerateAIImage = async () => {
     if (!newItem.productName) {
-      alert("Please enter a product name first!");
+      toast.error("Please enter a product name first!");
       return;
     }
     setIsGeneratingImage(true);
+    const toastId = toast.loading("Generating AI product image...");
     try {
       const res = await fetch("/api/ai/generate-product-image", {
         method: "POST",
@@ -224,15 +229,17 @@ export default function OwnerProducts() {
       if (res.ok && data.success) {
         setAiGeneratedImageUrl(data.imageUrl);
         setAiGeneratedPublicId(data.publicId);
+        toast.success("Product image generated successfully!", { id: toastId });
       } else {
-        alert("Failed to generate image: " + data.error);
+        toast.error("Failed to generate image: " + (data.error || "Unknown error"), { id: toastId });
       }
     } catch (e: any) {
-      alert("Error generating image: " + e.message);
+      toast.error("Error generating image: " + e.message, { id: toastId });
     } finally {
       setIsGeneratingImage(false);
     }
   };
+
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -503,25 +510,45 @@ export default function OwnerProducts() {
                   </button>
                 </div>
               ) : aiGeneratedImageUrl ? (
-                <div className="text-center z-10 relative">
+                <div className="text-center z-10 relative flex flex-col items-center">
                   <img
                     src={aiGeneratedImageUrl}
                     alt="AI Generated"
-                    className="h-32 object-contain mx-auto mb-4 rounded shadow-lg border border-primary-500/50"
+                    className="h-36 object-cover mx-auto mb-2 rounded-lg shadow-lg border border-primary-500/50"
                   />
-                  <p className="text-sm font-bold text-primary-400">
-                    ✨ AI Generated Image
+                  <p className="text-xs font-bold text-primary-400 mb-2">
+                    ✨ AI Generated Food Photography
                   </p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAiGeneratedImageUrl(null);
-                      setAiGeneratedPublicId(null);
-                    }}
-                    className="text-red-500 text-xs mt-2 font-bold hover:underline"
-                  >
-                    Remove
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(aiGeneratedImageUrl);
+                        toast.success("Image URL copied to clipboard!");
+                      }}
+                      className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs rounded border border-slate-700 transition-all font-medium"
+                    >
+                      Copy URL
+                    </button>
+                    <a
+                      href={aiGeneratedImageUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs rounded border border-slate-700 transition-all font-medium"
+                    >
+                      View / Download
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAiGeneratedImageUrl(null);
+                        setAiGeneratedPublicId(null);
+                      }}
+                      className="px-2.5 py-1 bg-red-950/40 hover:bg-red-900/60 text-red-400 text-xs rounded border border-red-800/50 transition-all font-bold"
+                    >
+                      Remove
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <>

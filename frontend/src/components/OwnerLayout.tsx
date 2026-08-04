@@ -49,6 +49,7 @@ export default function OwnerLayout() {
     { name: 'Data Manager', path: '/owner/data-manager', icon: '💽' },
     { name: 'Email Center', path: '/owner/email', icon: '✉️' },
     { name: 'Special Categories', path: '/owner/special-categories', icon: '🎪' },
+    { name: 'Website Manager (SDUI)', path: '/owner/website-manager', icon: '🎨' },
     { name: 'Homepage Manager', path: '/owner/homepage', icon: '🏗️' },
     { name: 'Versions', path: '/owner/versions', icon: '🚀' },
     { name: 'AI Knowledge', path: '/owner/ai-knowledge', icon: '🧠' },

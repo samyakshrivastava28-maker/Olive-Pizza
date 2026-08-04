@@ -218,6 +218,23 @@ import { PaymentReconciliationService } from './services/payment/PaymentReconcil
 app.use('/payment', paymentRoutes);
 app.use('/api/payment', paymentRoutes);
 
+import websiteManagerRoutes from './routes/websiteManager.routes.js';
+import ownerAIRoutes from './routes/ownerAI.routes.js';
+import websiteAnalyticsRoutes from './routes/websiteAnalytics.routes.js';
+import mediaLibraryRoutes from './routes/mediaLibrary.routes.js';
+
+app.use('/website-manager', websiteManagerRoutes);
+app.use('/api/website-manager', websiteManagerRoutes);
+
+app.use('/owner-ai', ownerAIRoutes);
+app.use('/api/owner-ai', ownerAIRoutes);
+
+app.use('/website-analytics', websiteAnalyticsRoutes);
+app.use('/api/website-analytics', websiteAnalyticsRoutes);
+
+app.use('/media-library', mediaLibraryRoutes);
+app.use('/api/media-library', mediaLibraryRoutes);
+
 // Start background payment reconciliation cron job
 PaymentReconciliationService.startCronJob();
 

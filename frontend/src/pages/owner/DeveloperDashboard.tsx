@@ -18,11 +18,15 @@ import {
   Activity, Bell, Mail, Database, Cpu, RefreshCw,
   CheckCircle2, XCircle, AlertTriangle, Clock, Search,
   ShieldCheck, Zap, Terminal, BarChart3, HardDrive, Wifi,
-  ChevronDown, ChevronRight, Copy, Check, Bot
+  ChevronDown, ChevronRight, Copy, Check, Bot, Layout
 } from 'lucide-react';
 import { auth } from '../../lib/firebase';
 import toast from 'react-hot-toast';
 import AIDiagnosticsConsole from '../../components/developer/AIDiagnosticsConsole';
+import DevWebsiteManager from '../../components/developer/sdui/DevWebsiteManager';
+import DevRealtimeMonitor from '../../components/developer/sdui/DevRealtimeMonitor';
+import DevLiveInspector from '../../components/developer/sdui/DevLiveInspector';
+import DevPerformanceAnalytics from '../../components/developer/sdui/DevPerformanceAnalytics';
 
 const BACKEND = import.meta.env.VITE_BACKEND_URL || 'https://olive-pizza-backend.onrender.com';
 
@@ -174,7 +178,7 @@ export default function DeveloperDashboard() {
   const [fcmLogs, setFcmLogs] = useState<any[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
   const [claimLoading, setClaimLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'health' | 'email' | 'payment' | 'audit' | 'databases' | 'configs' | 'notif_templates' | 'ai' | 'errors' | 'scheduler' | 'monitor' | 'diagnostics' | 'logs' | 'security'>('health');
+  const [activeTab, setActiveTab] = useState<'health' | 'sdui' | 'email' | 'payment' | 'audit' | 'databases' | 'configs' | 'notif_templates' | 'ai' | 'errors' | 'scheduler' | 'monitor' | 'diagnostics' | 'logs' | 'security'>('health');
   const [autoRefresh, setAutoRefresh] = useState(false);
 
   // Operations Center States
@@ -284,6 +288,7 @@ export default function DeveloperDashboard() {
 
   const tabs = [
     { id: 'health', label: 'System Health', icon: Activity },
+    { id: 'sdui', label: 'SDUI Master Controls', icon: Layout },
     { id: 'payment', label: 'Payment Telemetry', icon: ShieldCheck },
     { id: 'email', label: 'Email Controls', icon: Mail },
     { id: 'monitor', label: 'Pipeline Monitor', icon: Zap },
@@ -364,6 +369,18 @@ export default function DeveloperDashboard() {
                 </div>
               </>
             ) : null}
+          </motion.div>
+        )}
+
+        {/* SDUI Master Controls */}
+        {activeTab === 'sdui' && (
+          <motion.div key="sdui" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
+            <DevWebsiteManager />
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <DevRealtimeMonitor />
+              <DevPerformanceAnalytics />
+            </div>
+            <DevLiveInspector />
           </motion.div>
         )}
 

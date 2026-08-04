@@ -11,6 +11,8 @@ import { useVersionCheck } from './hooks/useVersionCheck';
 import NativeAppUpdater from './components/NativeAppUpdater';
 import CartSyncManager from './components/CartSyncManager';
 import { NotificationDiagnosticsOverlay } from './components/ui/NotificationDiagnosticsOverlay';
+import AnnouncementBar from './components/AnnouncementBar';
+import { useWebsiteConfigStore } from './stores/websiteConfigStore';
 
 // Custom lazy loading with retry for chunk errors (prevents black screen on PWA update)
 const lazyWithRetry = <T extends ComponentType<any>>(
@@ -89,7 +91,7 @@ import PizzaLoader from './components/ui/PizzaLoader';
 import { RouteErrorBoundary } from './components/RouteErrorBoundary';
 
 // Lazy loaded heavy components
-const AIAssistant = lazyWithRetry(() => import('./components/AIAssistant'));
+const AIAssistant = lazyWithRetry(() => import('./components/olive-pizza-ai/AIAssistant'));
 const UniversalAssistant = lazyWithRetry(() => import('./pages/UniversalAssistant'));
 const FloatingTracker = lazyWithRetry(() => import('./components/ui/FloatingTracker'));
 
@@ -155,6 +157,7 @@ const OwnerNotificationCenter = lazyWithRetry(() => import('./pages/owner/OwnerN
 const AIHealthMonitor = lazyWithRetry(() => import('./pages/owner/AIHealthMonitor'));
 const OwnerNotificationDiagnostics = lazyWithRetry(() => import('./pages/owner/OwnerNotificationDiagnostics'));
 const OwnerDataManager = lazyWithRetry(() => import('./pages/owner/DataManager'));
+const WebsiteManagerHub = lazyWithRetry(() => import('./pages/owner/WebsiteManager'));
 const DeveloperDashboard = lazyWithRetry(() => import('./pages/owner/DeveloperDashboard'));
 
 
@@ -226,6 +229,12 @@ function AppContent() {
     }
   }, [isAuthenticated, role, location.pathname, navigate]);
 
+  // Realtime Server-Driven UI & Theme Subscription
+  useEffect(() => {
+    const unsubscribe = useWebsiteConfigStore.getState().subscribe();
+    return () => unsubscribe();
+  }, []);
+
   // Global Session Initializer Blocker
   // This completely stops the app from rendering while we restore the persisted session.
   // This eliminates the "login flash" the user sees on startup.
@@ -235,6 +244,7 @@ function AppContent() {
 
   return (
     <>
+      <AnnouncementBar />
       <NativeAppUpdater />
       <CartSyncManager />
       <PushNotificationManager />
@@ -311,6 +321,8 @@ function AppContent() {
                   <Route path="email" element={<OwnerEmailCenter />} />
                   <Route path="special-categories" element={<OwnerSpecialCategories />} />
                   <Route path="homepage" element={<OwnerHomepageManager />} />
+                  <Route path="website-manager" element={<WebsiteManagerHub />} />
+                  <Route path="sdui" element={<WebsiteManagerHub />} />
                   <Route path="notifications" element={<OwnerNotificationCenter />} />
                   <Route path="verification-metrics" element={<OwnerVerificationMetrics />} />
                   <Route path="versions" element={<OwnerVersionManagement />} />

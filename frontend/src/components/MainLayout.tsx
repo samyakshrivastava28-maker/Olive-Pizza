@@ -16,6 +16,7 @@ import FloatingCart from './layout/FloatingCart';
 import FloatingWaitingCard from './layout/FloatingWaitingCard';
 import FloatingOrderTracker from './layout/FloatingOrderTracker';
 import PizzaLoader from './ui/PizzaLoader';
+import FlagshipFooter from './home/FlagshipFooter';
 
 export default function MainLayout() {
   const isAuthenticated = useAuthStore(state => state.isAuthenticated);
@@ -428,29 +429,8 @@ export default function MainLayout() {
         })}
       </nav>
 
-      {/* Footer */}
-      <footer className="w-full bg-dark-900 text-white py-8 md:py-12 mt-auto border-t border-dark-800 pb-24 md:pb-12">
-        <div className="container mx-auto px-4 text-center">
-          <div className="text-2xl font-black mb-2 text-primary-500">Olive Pizza</div>
-          <p className="text-sm text-slate-400 mb-1">Dongargaon Rd, near Saraswati School, Gokul Nagar</p>
-          <p className="text-sm text-slate-400 mb-6">Rajnandgaon, Chhattisgarh 491441</p>
-          
-          <div className="flex justify-center gap-6 mb-8 text-sm flex-wrap">
-            <Link to="/contact" className="text-slate-300 hover:text-white transition-colors">Contact Us</Link>
-            <Link to="/privacy-policy" className="text-slate-300 hover:text-white transition-colors">Privacy Policy</Link>
-            <Link to="/terms" className="text-slate-300 hover:text-white transition-colors">Terms of Service</Link>
-            <Link to="/delivery-policy" className="text-slate-300 hover:text-white transition-colors">Delivery Policy</Link>
-            <a href={`https://www.google.com/maps/dir/?api=1&destination=21.0810244,81.0123793`} target="_blank" rel="noopener noreferrer" className="text-slate-300 hover:text-white transition-colors">Get Directions</a>
-          </div>
-
-          <div className="mt-8 text-xs text-slate-500">
-            © {new Date().getFullYear()} Olive Pizza. All rights reserved.
-          </div>
-          <div className="mt-2 text-[10px] md:text-xs font-medium text-slate-400">
-            A Premium Website By <a href="https://28webhub.netlify.app" target="_blank" rel="noopener noreferrer" className="text-primary-500 hover:text-primary-400 hover:underline transition-colors">S-Web Hub</a>
-          </div>
-        </div>
-      </footer>
+      {/* Universal Flagship Footer */}
+      <FlagshipFooter />
     </div>
   );
 }

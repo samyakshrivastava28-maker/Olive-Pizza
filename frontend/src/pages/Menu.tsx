@@ -71,7 +71,12 @@ export default function Menu() {
   }, [user?.uid]);
 
   useEffect(() => {
-    if (location.search.includes("search=1") && searchInputRef.current) {
+    const params = new URLSearchParams(location.search);
+    const cat = params.get("category");
+    if (cat) {
+      setCategory(cat.toLowerCase());
+    }
+    if (params.get("search") === "1" && searchInputRef.current) {
       searchInputRef.current.focus();
     }
   }, [location.search]);

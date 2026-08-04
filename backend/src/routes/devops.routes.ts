@@ -342,4 +342,41 @@ router.post('/ai/playground', async (req: DevRequest, res: Response) => {
   }
 });
 
+// ── 11. SMS Gateway & Image Gen Diagnostics ────────────────────────────────
+router.get('/sms/logs', async (req: DevRequest, res: Response) => {
+  try {
+    const limit = parseInt((req.query.limit as string) || '50', 10);
+    const offset = parseInt((req.query.offset as string) || '0', 10);
+    const data = aiOperationsStore.getSmsLogs(limit, offset);
+    res.json({ success: true, data });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.post('/sms/test', async (req: DevRequest, res: Response) => {
+  try {
+    const { phone } = req.body;
+    if (!phone) return res.status(400).json({ success: false, error: 'Phone number is required' });
+    const { Fast2SMSProvider } = await import('../services/phone-verification/Fast2SMSProvider.js');
+    const fast2sms = new Fast2SMSProvider();
+    const result = await fast2sms.sendOtp(phone, 'devops-test-runner');
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.get('/image-gen/logs', async (req: DevRequest, res: Response) => {
+  try {
+    const limit = parseInt((req.query.limit as string) || '50', 10);
+    const offset = parseInt((req.query.offset as string) || '0', 10);
+    const data = aiOperationsStore.getImageGenLogs(limit, offset);
+    res.json({ success: true, data });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 export default router;
+

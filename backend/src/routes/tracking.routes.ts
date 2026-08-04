@@ -25,10 +25,17 @@ function calculateETA(distanceKm: number, speedKmh?: number): number {
   return Math.ceil((distanceKm / avgSpeed) * 60); // returns minutes
 }
 
+import { webSocketServer } from '../services/websocket/WebSocketServer.js';
+
+// Default Olive Pizza Main Branch Coordinates (Rajnandgaon)
+const DEFAULT_BRANCH_LAT = 21.0967;
+const DEFAULT_BRANCH_LNG = 81.0315;
+const DEFAULT_MAX_DELIVERY_RADIUS_KM = 12.0;
+
 // Updates delivery partner location
 router.post('/location/update', verifyToken, requireRole(['delivery', 'delivery_partner']), async (req: AuthRequest, res: Response) => {
   try {
-    const { partnerId, orderId, latitude, longitude, lat, lng, accuracy, speed, heading } = req.body;
+    const { partnerId, orderId, latitude, longitude, lat, lng, accuracy, speed, heading, battery, isMoving } = req.body;
     const actualPartnerId = partnerId || req.user?.uid;
     const actualLat = latitude !== undefined ? latitude : lat;
     const actualLng = longitude !== undefined ? longitude : lng;
@@ -40,6 +47,21 @@ router.post('/location/update', verifyToken, requireRole(['delivery', 'delivery_
     if (req.user?.uid !== actualPartnerId && req.user?.role !== 'admin') {
       return res.status(403).json({ error: 'Forbidden: Cannot update other partner locations' });
     }
+
+    // ⚡ INSTANT WEBSOCKET BROADCAST (<5ms latency to all listening customers & owners)
+    webSocketServer.handleDriverLocationUpdate({
+      deliveryPartnerId: actualPartnerId,
+      orderId: orderId || null,
+      lat: Number(actualLat),
+      lng: Number(actualLng),
+      accuracy: accuracy || 5,
+      speed: speed || 0,
+      heading: heading || 0,
+      battery: battery || 100,
+      isMoving: isMoving !== undefined ? isMoving : (Number(speed || 0) > 1),
+      timestamp: new Date().toISOString(),
+      status: 'ONLINE'
+    });
 
     const client = await pgPool.connect();
     
@@ -78,7 +100,7 @@ router.post('/location/update', verifyToken, requireRole(['delivery', 'delivery_
         }
       }
 
-      // Also update Firestore active_deliveries
+      // Also update Firestore active_deliveries asynchronously
       try {
         await adminDb.collection('active_deliveries').doc(orderId).set({
           order_id: orderId,
@@ -102,6 +124,7 @@ router.post('/location/update', verifyToken, requireRole(['delivery', 'delivery_
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
 
 // Returns current location of a partner
 router.get('/location/:partnerId', async (req: Request, res: Response) => {
@@ -322,4 +345,45 @@ router.post('/status', verifyToken, requireRole(['delivery_partner']), async (re
   }
 });
 
+// Check if customer coordinate is within store delivery radius
+router.post('/boundary-check', async (req: Request, res: Response) => {
+  try {
+    const { lat, lng, branchLat, branchLng, maxRadiusKm } = req.body;
+    if (lat === undefined || lng === undefined) {
+      return res.status(400).json({ error: 'Latitude and longitude are required' });
+    }
+
+    const bLat = Number(branchLat || DEFAULT_BRANCH_LAT);
+    const bLng = Number(branchLng || DEFAULT_BRANCH_LNG);
+    const radiusLimit = Number(maxRadiusKm || DEFAULT_MAX_DELIVERY_RADIUS_KM);
+
+    const distanceKm = Number(calculateDistance(Number(lat), Number(lng), bLat, bLng).toFixed(2));
+    const inside = distanceKm <= radiusLimit;
+    const estimatedMinutes = calculateETA(distanceKm, 25);
+
+    res.json({
+      success: true,
+      inside,
+      distanceKm,
+      maxRadiusKm: radiusLimit,
+      estimatedMinutes,
+      message: inside ? 'Location is within our delivery zone' : `Location is ${distanceKm} km away, which exceeds our maximum delivery radius of ${radiusLimit} km.`
+    });
+  } catch (error: any) {
+    console.error('Error in boundary check:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Get real-time driver active fleet status
+router.get('/active-drivers', async (_req: Request, res: Response) => {
+  try {
+    const activeDrivers = webSocketServer.getActiveDriverLocations();
+    res.json({ success: true, count: activeDrivers.length, data: activeDrivers });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;
+

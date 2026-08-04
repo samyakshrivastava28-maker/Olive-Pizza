@@ -34,13 +34,15 @@ import toast from "react-hot-toast";
 import SEO from "../components/SEO";
 import { generateRestaurantSchema } from "../lib/schema";
 
-import CategoryCapsules from "../components/home/CategoryCapsules";
+import LiveMenuCategories from "../components/home/LiveMenuCategories";
+import LiveCoupons from "../components/home/LiveCoupons";
+import LiveAdvertisements from "../components/home/LiveAdvertisements";
+import PreviouslyOrdered from "../components/home/PreviouslyOrdered";
 import FeaturedShowcase from "../components/home/FeaturedShowcase";
-import PromotionalBanners from "../components/home/PromotionalBanners";
-import StorytellingSection from "../components/home/StorytellingSection";
-import TestimonialsCarousel from "../components/home/TestimonialsCarousel";
 import AppDownloadSection from "../components/home/AppDownloadSection";
 import FlagshipFooter from "../components/home/FlagshipFooter";
+import HomepageRenderer from "../components/sdui/HomepageRenderer";
+import { useWebsiteConfigStore } from "../stores/websiteConfigStore";
 
 // ─── Premium Skeleton ─────────────────────────────────────────────────────────
 function SectionSkeleton({ rows = 3 }: { rows?: number }) {
@@ -328,43 +330,7 @@ export default function Home() {
         );
 
       case "menu":
-        return (
-          <PremiumSectionWrapper id="menu" key="menu" onView={() => {}}>
-            <PremiumSectionHeader
-              title="Our Menu"
-              subtitle="Everything crafted fresh from our kitchen"
-              accent="🍕"
-            />
-            <div className="grid grid-cols-3 gap-3 md:gap-5">
-              {[
-                { label: "Pizzas", category: "pizza", emoji: "🍕", color: "#f97316" },
-                { label: "Sides", category: "sides", emoji: "🥗", color: "#10b981" },
-                { label: "Beverages", category: "beverage", emoji: "🥤", color: "#3b82f6" },
-              ].map((cat) => (
-                <motion.div key={cat.category} whileHover={{ y: -4, scale: 1.02 }} whileTap={{ scale: 0.97 }}>
-                  <Link
-                    to={`/menu?category=${cat.category}`}
-                    className="flex flex-col items-center gap-3 p-5 md:p-7 rounded-2xl transition-all"
-                    style={{
-                      background: "linear-gradient(145deg, rgba(30,30,30,0.9), rgba(18,18,18,0.97))",
-                      border: "1px solid rgba(255,255,255,0.07)",
-                      boxShadow: "0 12px 40px rgba(0,0,0,0.5)",
-                    }}
-                  >
-                    <span className="text-3xl md:text-4xl">{cat.emoji}</span>
-                    <span className="font-black text-white text-sm md:text-base">{cat.label}</span>
-                    <span
-                      className="flex items-center gap-1 text-[11px] font-bold"
-                      style={{ color: cat.color }}
-                    >
-                      View All <ChevronRight className="w-3 h-3" />
-                    </span>
-                  </Link>
-                </motion.div>
-              ))}
-            </div>
-          </PremiumSectionWrapper>
-        );
+        return null;
 
       case "personalization":
         if (!isAuthenticated) return null;
@@ -485,74 +451,9 @@ export default function Home() {
             }}
           />
 
-          {/* 1. 3D Floating Category Capsules */}
-          <CategoryCapsules />
-
-          {/* 2. 3D Featured Pizza Showcase */}
-          <FeaturedShowcase
-            products={topSelling.length > 0 ? topSelling : allProducts}
-            wishlistIds={wishlistIds}
-          />
-
-          {/* 3. Promotional Offers & Coupon Countdown */}
-          <PromotionalBanners />
-
-          {/* 4. Why Choose Olive Pizza Storytelling Cards */}
-          <StorytellingSection />
-
-          {/* 5. Customer Review Testimonial Carousel */}
-          <TestimonialsCarousel />
-
-          {/* 6. Mobile App & Smart AI Showcase */}
-          <AppDownloadSection />
-
-          {/* Dynamic Admin Custom Sections (if enabled) */}
-          {activeSections.length > 0 && (
-            <div className="max-w-7xl mx-auto px-4 py-8 space-y-12 relative z-10">
-              {activeSections
-                .filter((s) => s.type !== "hero" && s.type !== "top_selling" && s.type !== "coupons" && s.type !== "ads")
-                .map((section) => renderSection(section))}
-            </div>
-          )}
-
-          {/* 7. Visit Olive Pizza & Interactive Map */}
-          <motion.div
-            initial={{ opacity: 0, y: 32 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-            className="py-16 md:py-24 relative z-10"
-            style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}
-          >
-            <div className="max-w-7xl mx-auto px-4">
-              <div className="text-center mb-10 md:mb-14">
-                <h2
-                  className="text-3xl md:text-5xl font-black text-white mb-3"
-                  style={{ letterSpacing: "-0.02em" }}
-                >
-                  Visit Olive Pizza
-                </h2>
-                <p className="text-slate-400 max-w-xl mx-auto mb-7 text-sm md:text-base font-medium">
-                  We deliver fresh to your door, or drop by and grab a hot slice right out of the wood-fired oven.
-                </p>
-                <OpenInMapsButton />
-              </div>
-              <Suspense
-                fallback={
-                  <div className="w-full h-80 md:h-[500px] rounded-3xl luxury-shimmer border border-white/5" />
-                }
-              >
-                <LocationMap
-                  className="w-full h-80 md:h-[500px] rounded-3xl shadow-2xl border border-white/5 z-0"
-                  showRadius
-                />
-              </Suspense>
-            </div>
-          </motion.div>
+          {/* Server-Driven Dynamic Homepage Layout */}
+          <HomepageRenderer />
         </main>
-
-        {/* 8. Flagship Footer */}
-        <FlagshipFooter />
       </PageTransition>
     </>
   );

@@ -107,4 +107,29 @@ export class TruecallerProvider implements PhoneVerificationProvider {
       return { success: false, error: 'Truecaller verification failed due to internal error.' };
     }
   }
+
+  public async verifyProfile(payload: any, _uid?: string): Promise<VerificationResult> {
+    if (!payload) {
+      return { success: false, error: 'Payload is required.' };
+    }
+    if (typeof payload === 'string') {
+      return this.verifyNativePayload(payload, payload);
+    }
+    if (payload.payload && payload.signature) {
+      return this.verifyNativePayload(payload.payload, payload.signature, payload.signatureAlgorithm);
+    }
+    if (payload.phoneNumber || payload.phone) {
+      let formattedPhone = (payload.phoneNumber || payload.phone || '').trim();
+      if (formattedPhone && !formattedPhone.startsWith('+')) formattedPhone = '+' + formattedPhone;
+      return {
+        success: true,
+        phone: formattedPhone,
+        provider: 'truecaller',
+        name: `${payload.firstName || payload.name || ''} ${payload.lastName || ''}`.trim(),
+        country: payload.countryCode || 'IN'
+      };
+    }
+    return { success: false, error: 'Unrecognized Truecaller payload format.' };
+  }
 }
+

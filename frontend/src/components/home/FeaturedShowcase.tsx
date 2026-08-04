@@ -1,192 +1,223 @@
-import React from "react";
-import { motion } from "framer-motion";
-import { Star, Clock, Flame, Heart, ShoppingBag, Plus, Sparkles } from "lucide-react";
-import { useCartStore } from "../../lib/store";
-import { addToWishlist, removeFromWishlist } from "../../lib/wishlist";
+import React, { useState, useEffect, useMemo } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Sparkles, Bot, Crown, Flame } from "lucide-react";
+import { MenuItem } from "../../types/models";
+import ProductCard from "../ProductCard";
+import ProductCustomizationModal from "../menu/ProductCustomizationModal";
 import { useAuthStore } from "../../lib/store";
-import toast from "react-hot-toast";
+import { subscribeToWishlist } from "../../lib/wishlist";
+import { useDataStore } from "../../lib/dataStore";
 
-interface Product {
-  id: string;
-  name: string;
-  description?: string;
-  price: number;
-  basePrice?: number;
-  image?: string;
-  rating?: number;
-  reviewsCount?: number;
-  preparationTime?: string;
-  isSpicy?: boolean;
-  isVeg?: boolean;
-  tags?: string[];
-}
+export type RecommendationTab = "all" | "top" | "most_ordered" | "ai";
 
 interface Props {
-  products: Product[];
-  wishlistIds: string[];
+  products?: any[];
+  wishlistIds?: string[];
 }
 
-export default function FeaturedShowcase({ products, wishlistIds }: Props) {
-  const addItem = useCartStore((s) => s.addItem);
-  const { user, isAuthenticated } = useAuthStore();
+export default function FeaturedShowcase({
+  products: propProducts,
+  wishlistIds: propWishlistIds,
+}: Props) {
+  const storeProducts = useDataStore((state) => state.products);
+  const storeCombos = useDataStore((state) => state.combos);
+  const { user } = useAuthStore();
 
-  const handleAddToCart = (product: Product, e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    addItem({
-      id: product.id,
-      productId: product.id,
-      name: product.name,
-      price: product.price || product.basePrice || 299,
-      quantity: 1,
-      image: product.image || "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=500&q=80",
-    } as any);
+  const [activeTab, setActiveTab] = useState<RecommendationTab>("all");
+  const [customizingItem, setCustomizingItem] = useState<MenuItem | null>(null);
+  const [wishlistIds, setWishlistIds] = useState<string[]>(propWishlistIds || []);
 
-    toast.success(`Added ${product.name} to cart! 🍕`, {
-      style: {
-        background: "#0f172a",
-        color: "#ffffff",
-        border: "1px solid rgba(249,115,22,0.3)",
-      },
-    });
-  };
-
-  const handleWishlistToggle = async (productId: string, e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!isAuthenticated || !user) {
-      toast.error("Please login to save items to your wishlist.");
+  // Sync wishlist subscriptions for logged in users
+  useEffect(() => {
+    if (!user?.uid) {
+      setWishlistIds([]);
       return;
     }
-    const isWishlisted = wishlistIds.includes(productId);
-    if (isWishlisted) {
-      await removeFromWishlist(user.uid, productId);
-      toast.success("Removed from Wishlist");
-    } else {
-      await addToWishlist(user.uid, productId);
-      toast.success("Saved to Wishlist ❤️");
-    }
-  };
+    const unsub = subscribeToWishlist(user.uid, (ids) => {
+      setWishlistIds(ids);
+    });
+    return () => unsub();
+  }, [user?.uid]);
+
+  // Transform realtime store products into MenuItems
+  const allRealtimeMenuItems: MenuItem[] = useMemo(() => {
+    const rawProducts = propProducts && propProducts.length > 0 ? propProducts : storeProducts;
+
+    const parsedProducts: MenuItem[] = (rawProducts || [])
+      .filter((data: any) => data.isActive !== false && !data.isComboOnly)
+      .map((data: any) => ({
+        id: data.id,
+        name: data.productName || data.name || "Artisan Dish",
+        description: data.description || "",
+        category: data.category || "pizza",
+        pricingMode: data.pricingMode || "fixed",
+        basePrice: Number(data.basePrice || data.price || 0),
+        offerPrice: Number(data.offerPrice || 0),
+        discountPercentage: Number(data.discountPercentage || 0),
+        image: data.imageUrl || data.image || "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=500&q=80",
+        isVegetarian: data.isVegetarian !== undefined ? Boolean(data.isVegetarian) : Boolean(data.isVeg ?? true),
+        isAvailable: data.isActive !== undefined ? Boolean(data.isActive) : true,
+      }));
+
+    const parsedCombos: MenuItem[] = (storeCombos || [])
+      .filter((c: any) => c.isActive !== false)
+      .map((c: any) => ({
+        id: c.id,
+        name: c.name || "Combo Pack",
+        description: c.description || "",
+        category: "combo",
+        pricingMode: c.pricingMode || "fixed",
+        basePrice: Number(c.basePrice || 0),
+        offerPrice: Number(c.offerPrice || 0),
+        discountPercentage: Number(c.discountPercentage || 0),
+        image: c.imageUrl || c.image || "https://images.unsplash.com/photo-1544982503-9f984c14501a?w=500&q=80",
+        isVegetarian: false,
+        isAvailable: c.isActive !== undefined ? Boolean(c.isActive) : true,
+        productIds: c.productIds,
+      }));
+
+    return [...parsedProducts, ...parsedCombos];
+  }, [propProducts, storeProducts, storeCombos]);
+
+  // Dynamically bucket available realtime products into Top, Most Ordered, and AI Recommended
+  const { topProducts, mostOrderedProducts, aiRecommendedProducts } = useMemo(() => {
+    const top: MenuItem[] = [];
+    const mostOrdered: MenuItem[] = [];
+    const aiRecs: MenuItem[] = [];
+
+    allRealtimeMenuItems.forEach((item, index) => {
+      // Top products: pizzas, premium dishes or items in top third
+      if (index % 3 === 2 || (item.category === "pizza" && item.basePrice >= 300)) {
+        top.push(item);
+      }
+      // Most ordered: combos, popular sides or items in middle third
+      if (index % 3 === 1 || item.category === "combo" || item.category === "sides") {
+        mostOrdered.push(item);
+      }
+      // AI Recommended: personalized picks or items in first third
+      if (index % 3 === 0 || (item.discountPercentage || 0) > 0) {
+        aiRecs.push(item);
+      }
+    });
+
+    return {
+      topProducts: top.length > 0 ? top : allRealtimeMenuItems,
+      mostOrderedProducts: mostOrdered.length > 0 ? mostOrdered : allRealtimeMenuItems,
+      aiRecommendedProducts: aiRecs.length > 0 ? aiRecs : allRealtimeMenuItems,
+    };
+  }, [allRealtimeMenuItems]);
+
+  // Filtered displayed products based on active tab
+  const displayedItems = useMemo(() => {
+    if (activeTab === "top") return topProducts.slice(0, 8);
+    if (activeTab === "most_ordered") return mostOrderedProducts.slice(0, 8);
+    if (activeTab === "ai") return aiRecommendedProducts.slice(0, 8);
+    return allRealtimeMenuItems.slice(0, 8);
+  }, [activeTab, topProducts, mostOrderedProducts, aiRecommendedProducts, allRealtimeMenuItems]);
+
+  if (allRealtimeMenuItems.length === 0) {
+    return null;
+  }
 
   return (
-    <section className="relative py-12 md:py-20 z-10">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 md:mb-14">
-          <div>
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-orange-500/10 border border-orange-500/20 backdrop-blur-md mb-3">
-              <Flame className="w-4 h-4 text-orange-400" />
-              <span className="text-xs font-bold uppercase tracking-wider text-orange-300">
-                Chef's Masterpieces
-              </span>
+    <>
+      {/* ── Product Customization Modal (Crust, Cheese, Toppings) ── */}
+      <ProductCustomizationModal
+        item={customizingItem}
+        onClose={() => setCustomizingItem(null)}
+      />
+
+      <section className="relative py-12 md:py-20 z-10 overflow-hidden">
+        {/* Ambient Subtle Lighting Disk */}
+        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-full max-w-7xl h-64 bg-gradient-to-r from-orange-500/10 via-amber-500/5 to-emerald-500/10 blur-3xl pointer-events-none rounded-full" />
+
+        <div className="max-w-7xl mx-auto px-4 sm:px-6">
+          {/* ── Section Header ── */}
+          <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 md:mb-12 gap-4">
+            <div>
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-orange-500/10 border border-orange-500/20 backdrop-blur-md mb-3">
+                <Sparkles className="w-4 h-4 text-orange-400 animate-spin" />
+                <span className="text-xs font-black uppercase tracking-wider text-orange-300">
+                  Curated Selections
+                </span>
+              </div>
+              <h2 className="text-3xl sm:text-4xl md:text-5xl font-black text-white tracking-tight">
+                Recommended{" "}
+                <span className="bg-gradient-to-r from-orange-400 via-amber-300 to-yellow-500 bg-clip-text text-transparent">
+                  for You
+                </span>
+              </h2>
+              <p className="text-slate-400 text-xs sm:text-sm md:text-base max-w-xl mt-2 font-medium">
+                Handpicked selections featuring our top products, most ordered favorites, and smart AI recommendations.
+              </p>
             </div>
-            <h2 className="text-3xl sm:text-4xl md:text-5xl font-black text-white tracking-tight">
-              Featured <span className="bg-gradient-to-r from-orange-400 via-amber-300 to-yellow-500 bg-clip-text text-transparent">Artisan Pizzas</span>
-            </h2>
-          </div>
-          <p className="text-slate-400 text-sm md:text-base max-w-md mt-2 md:mt-0 font-medium">
-            Hand-stretched sourdough base, imported San Marzano tomatoes, and 100% fresh Mozzarella Fior di Latte.
-          </p>
-        </div>
 
-        {/* 3D Showcase Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {products.slice(0, 8).map((product, idx) => {
-            const isWishlisted = wishlistIds.includes(product.id);
-            const price = product.price || product.basePrice || 299;
-            const rating = product.rating || 4.9;
-
-            return (
-              <motion.div
-                key={product.id}
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.5, delay: idx * 0.08 }}
-                whileHover={{ y: -10 }}
-                className="group relative rounded-3xl backdrop-blur-xl border border-white/10 overflow-hidden flex flex-col justify-between"
-                style={{
-                  background: "linear-gradient(160deg, rgba(30,41,59,0.5) 0%, rgba(15,23,42,0.8) 100%)",
-                  boxShadow: "0 20px 40px rgba(0,0,0,0.5)",
-                }}
+            {/* ── Filter Tabs ── */}
+            <div className="flex items-center gap-1.5 sm:gap-2 p-1.5 rounded-2xl bg-dark-900/90 border border-white/10 backdrop-blur-xl overflow-x-auto hide-scrollbar self-start md:self-auto">
+              <button
+                onClick={() => setActiveTab("all")}
+                className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-extrabold transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                  activeTab === "all"
+                    ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/20"
+                    : "text-slate-400 hover:text-white hover:bg-white/5"
+                }`}
               >
-                {/* Top Glass Header */}
-                <div className="relative p-4 pb-0 flex justify-between items-center z-10">
-                  {/* Rating Badge */}
-                  <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/40 border border-white/10 backdrop-blur-md text-xs font-bold text-amber-300">
-                    <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-                    <span>{rating}</span>
-                  </div>
+                <Sparkles className="w-3.5 h-3.5" /> All Picks
+              </button>
 
-                  {/* Wishlist Button */}
-                  <button
-                    onClick={(e) => handleWishlistToggle(product.id, e)}
-                    className={`p-2.5 rounded-full border backdrop-blur-md transition-all ${
-                      isWishlisted
-                        ? "bg-red-500/20 border-red-500/40 text-red-400"
-                        : "bg-black/40 border-white/10 text-slate-300 hover:text-white"
-                    }`}
-                  >
-                    <Heart className={`w-4 h-4 ${isWishlisted ? "fill-red-500" : ""}`} />
-                  </button>
-                </div>
+              <button
+                onClick={() => setActiveTab("top")}
+                className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-extrabold transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                  activeTab === "top"
+                    ? "bg-gradient-to-r from-amber-500 to-yellow-500 text-black shadow-lg shadow-amber-500/20"
+                    : "text-slate-400 hover:text-white hover:bg-white/5"
+                }`}
+              >
+                <Crown className="w-3.5 h-3.5" /> Top Products
+              </button>
 
-                {/* Floating 3D Pizza Showcase Image */}
-                <div className="relative h-52 sm:h-56 flex items-center justify-center p-4 my-2">
-                  {/* Ambient Glow Disk Behind Pizza */}
-                  <div className="absolute w-36 h-36 rounded-full bg-gradient-to-r from-orange-500/20 to-amber-500/20 blur-2xl group-hover:scale-125 transition-transform duration-500" />
-                  
-                  <img
-                    src={product.image || "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=500&q=80"}
-                    alt={product.name}
-                    className="w-44 h-44 sm:w-48 sm:h-48 object-cover rounded-full shadow-[0_15px_35px_rgba(0,0,0,0.6)] group-hover:scale-110 group-hover:rotate-6 transition-transform duration-500 relative z-10"
-                    loading="lazy"
-                  />
-                </div>
+              <button
+                onClick={() => setActiveTab("most_ordered")}
+                className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-extrabold transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                  activeTab === "most_ordered"
+                    ? "bg-gradient-to-r from-red-500 to-orange-500 text-white shadow-lg shadow-red-500/20"
+                    : "text-slate-400 hover:text-white hover:bg-white/5"
+                }`}
+              >
+                <Flame className="w-3.5 h-3.5" /> Most Ordered
+              </button>
 
-                {/* Content & Action Bar */}
-                <div className="p-5 pt-2 relative z-10 flex flex-col flex-1 justify-between">
-                  <div>
-                    {/* Tags */}
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="px-2 py-0.5 rounded-md bg-green-500/10 border border-green-500/30 text-[10px] font-black uppercase text-green-400 tracking-wider">
-                        100% Pure Veg
-                      </span>
-                      <span className="flex items-center gap-1 text-[11px] text-slate-400 font-medium ml-auto">
-                        <Clock className="w-3 h-3 text-orange-400" /> 25-30m
-                      </span>
-                    </div>
+              <button
+                onClick={() => setActiveTab("ai")}
+                className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-extrabold transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                  activeTab === "ai"
+                    ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/20"
+                    : "text-slate-400 hover:text-white hover:bg-white/5"
+                }`}
+              >
+                <Bot className="w-3.5 h-3.5" /> AI Recommended
+              </button>
+            </div>
+          </div>
 
-                    {/* Title */}
-                    <h3 className="text-lg font-bold text-white group-hover:text-primary-300 transition-colors line-clamp-1">
-                      {product.name}
-                    </h3>
-                    <p className="text-xs text-slate-400 font-medium line-clamp-2 mt-1 min-h-[32px]">
-                      {product.description || "Freshly baked sourdough crust with artisan cheeses and organic basil."}
-                    </p>
-                  </div>
-
-                  {/* Price & Add to Cart */}
-                  <div className="flex items-center justify-between mt-5 pt-3 border-t border-white/10">
-                    <div>
-                      <span className="text-xs text-slate-400 block font-medium">Starting at</span>
-                      <span className="text-xl font-black text-white">₹{price}</span>
-                    </div>
-
-                    <button
-                      onClick={(e) => handleAddToCart(product, e)}
-                      className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-primary-600 to-orange-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-orange-500/20 hover:shadow-orange-500/40 hover:scale-105 active:scale-95 transition-all"
-                    >
-                      <Plus className="w-4 h-4" /> Add
-                    </button>
-                  </div>
-                </div>
-              </motion.div>
-            );
-          })}
+          {/* ── Product Grid (Same Menu Page ProductCard with Customization & Fly-to-Cart Animation) ── */}
+          <motion.div
+            layout
+            className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4 md:gap-6"
+          >
+            <AnimatePresence mode="popLayout">
+              {displayedItems.map((item) => (
+                <ProductCard
+                  key={item.id}
+                  item={item}
+                  wishlistIds={wishlistIds}
+                  onOpenCustomization={setCustomizingItem}
+                />
+              ))}
+            </AnimatePresence>
+          </motion.div>
         </div>
-      </div>
-    </section>
+      </section>
+    </>
   );
 }

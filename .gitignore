@@ -29,3 +29,5 @@ android/local.properties
 *.jks
 backend/logs/
 coverage/
+scratch/
+test_fast2sms.ts

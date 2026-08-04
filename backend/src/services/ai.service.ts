@@ -102,62 +102,53 @@ function blacklistModel(modelKey: string, durationMs: number = 600000) {
 
 // ── Model chain (priority order for general tasks) ────────────────────────────
 // ── Production Model Router Chain ──────────────────────────────────────────────
-// Primary: NVIDIA NIM (DeepSeek V4 Flash default -> GLM 5.2 -> Nemotron 3 Super -> Kimi 2.6)
-// Fallback: OpenRouter (Kimi 2.7 -> Gemma 4 31B -> GPT OSS 120B -> Ling 3.0 Flash -> Gemini 3.6 Flash -> Gemini 3.5 Flash Lite)
+// Multi-Tier Failover: OpenRouter -> Google Gemini Direct -> NVIDIA NIM
 function getModelChain() {
   const chain: { client: OpenAI; model: string; name: string; providerKey: string }[] = [];
-  const nvidia = getNvidiaClient();
   const or = getOpenRouterClient();
+  const gemini = getGeminiClient();
+  const nvidia = getNvidiaClient();
 
-  // 1. PRIMARY TIER: NVIDIA NIM
-  if (nvidia) {
-    if (!isModelBlacklisted('nvidia:deepseek-ai/deepseek-v4-flash')) {
-      chain.push({ client: nvidia, model: 'deepseek-ai/deepseek-v4-flash', name: 'DeepSeek V4 Flash (NVIDIA Primary Default)', providerKey: 'nvidia' });
+  // 1. PRIMARY TIER: OpenRouter Fast Models
+  if (or) {
+    if (!isModelBlacklisted('openrouter:meta-llama/llama-3.3-70b-instruct')) {
+      chain.push({ client: or, model: 'meta-llama/llama-3.3-70b-instruct', name: 'Llama 3.3 70B (OpenRouter)', providerKey: 'openrouter' });
     }
-    if (!isModelBlacklisted('nvidia:z-ai/glm-5.2')) {
-      chain.push({ client: nvidia, model: 'z-ai/glm-5.2', name: 'GLM 5.2 (NVIDIA)', providerKey: 'nvidia' });
+    if (!isModelBlacklisted('openrouter:deepseek/deepseek-chat')) {
+      chain.push({ client: or, model: 'deepseek/deepseek-chat', name: 'DeepSeek V3 (OpenRouter)', providerKey: 'openrouter' });
     }
-    if (!isModelBlacklisted('nvidia:nvidia/nemotron-3-super-120b-a12b')) {
-      chain.push({ client: nvidia, model: 'nvidia/nemotron-3-super-120b-a12b', name: 'Nemotron 3 Super (NVIDIA)', providerKey: 'nvidia' });
-    }
-    if (!isModelBlacklisted('nvidia:moonshotai/kimi-k2.6')) {
-      chain.push({ client: nvidia, model: 'moonshotai/kimi-k2.6', name: 'Kimi 2.6 (NVIDIA)', providerKey: 'nvidia' });
+    if (!isModelBlacklisted('openrouter:mistralai/mistral-large-2411')) {
+      chain.push({ client: or, model: 'mistralai/mistral-large-2411', name: 'Mistral Large (OpenRouter)', providerKey: 'openrouter' });
     }
   }
 
-  // 2. SECONDARY TIER: OpenRouter Fallback Chain
-  if (or) {
-    if (!isModelBlacklisted('openrouter:moonshotai/kimi-2.7')) {
-      chain.push({ client: or, model: 'moonshotai/kimi-2.7', name: 'Kimi 2.7 (OpenRouter)', providerKey: 'openrouter' });
+  // 2. SECONDARY TIER: Google Gemini Direct
+  if (gemini) {
+    if (!isModelBlacklisted('gemini:gemini-1.5-flash')) {
+      chain.push({ client: gemini, model: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash (Google Direct)', providerKey: 'gemini' });
     }
-    if (!isModelBlacklisted('openrouter:google/gemma-4-31b-it')) {
-      chain.push({ client: or, model: 'google/gemma-4-31b-it', name: 'Gemma 4 31B (OpenRouter)', providerKey: 'openrouter' });
+    if (!isModelBlacklisted('gemini:gemini-2.0-flash')) {
+      chain.push({ client: gemini, model: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash (Google Direct)', providerKey: 'gemini' });
     }
-    if (!isModelBlacklisted('openrouter:openai/gpt-oss-120b')) {
-      chain.push({ client: or, model: 'openai/gpt-oss-120b', name: 'GPT OSS 120B (OpenRouter)', providerKey: 'openrouter' });
+  }
+
+  // 3. TERTIARY TIER: NVIDIA NIM
+  if (nvidia) {
+    if (!isModelBlacklisted('nvidia:nvidia/llama-3.1-nemotron-70b-instruct')) {
+      chain.push({ client: nvidia, model: 'nvidia/llama-3.1-nemotron-70b-instruct', name: 'Nemotron 70B (NVIDIA NIM)', providerKey: 'nvidia' });
     }
-    if (!isModelBlacklisted('openrouter:inclusionai/ling-3.0-flash')) {
-      chain.push({ client: or, model: 'inclusionai/ling-3.0-flash', name: 'Ling 3.0 Flash (OpenRouter)', providerKey: 'openrouter' });
-    }
-    if (!isModelBlacklisted('openrouter:google/gemini-3.6-flash')) {
-      chain.push({ client: or, model: 'google/gemini-3.6-flash', name: 'Gemini 3.6 Flash (OpenRouter)', providerKey: 'openrouter' });
-    }
-    if (!isModelBlacklisted('openrouter:google/gemini-3.5-flash-lite')) {
-      chain.push({ client: or, model: 'google/gemini-3.5-flash-lite', name: 'Gemini 3.5 Flash Lite (OpenRouter)', providerKey: 'openrouter' });
+    if (!isModelBlacklisted('nvidia:meta/llama-3.1-70b-instruct')) {
+      chain.push({ client: nvidia, model: 'meta/llama-3.1-70b-instruct', name: 'Llama 3.1 70B (NVIDIA NIM)', providerKey: 'nvidia' });
     }
   }
 
   return chain;
 }
 
-// Legacy MODEL_CHAIN for email/image/description — built once, lazily
-let _MODEL_CHAIN: { client: OpenAI; model: string; name: string; providerKey: string }[] | null = null;
-const MODEL_CHAIN_GETTER = () => {
-  if (!_MODEL_CHAIN) _MODEL_CHAIN = getModelChain();
-  return _MODEL_CHAIN;
-};
-// Allow non-lazy usage for existing functions (safe — clients are lazily initialized internally)
-const MODEL_CHAIN = MODEL_CHAIN_GETTER();
+
+// Dynamic getter to always use active non-blacklisted models
+export const getActiveModelChain = getModelChain;
+
 
 // ── Fetch product details safely ────────────────────────────────────────────────
 async function fetchProductContext(selectedProducts: string[]): Promise<string> {
@@ -207,7 +198,7 @@ ${context}
 USER CAMPAIGN BRIEF: ${prompt}`;
 
     let lastError: Error | null = null;
-    for (const config of MODEL_CHAIN) {
+    for (const config of getModelChain()) {
       try {
         console.log(`[AI Email] Trying ${config.name}...`);
         const response = await config.client.chat.completions.create({
@@ -672,7 +663,8 @@ export async function generateProductImage(params: {
 }> {
   const { productName, description, category, ingredients, toppings, sizes, crusts, imageType, customPrompt, modelName, baseImageUrl } = params;
 
-  let prompt = customPrompt || buildProductImagePrompt(productName, description, category, ingredients, toppings, sizes, crusts, imageType);
+  // Use exact owner prompt if provided, otherwise compose from details
+  let prompt = customPrompt?.trim() || buildProductImagePrompt(productName, description, category, ingredients, toppings, sizes, crusts, imageType);
   if (baseImageUrl && modelName === 'qwen-image-edit') {
     prompt = `[IMAGE EDIT INSTRUCTION] Remake this exact concept but apply these edits: ${prompt}. Maintain the original color palette and composition.`;
   }
@@ -683,182 +675,163 @@ export async function generateProductImage(params: {
   console.log('[PRODUCT_IMAGE_REQUEST]');
   console.log('  Product:', productName);
   console.log('  Type:', imageType || 'product_photo');
-  console.log('  Prompt (first 120):', prompt.slice(0, 120) + '...');
+  console.log('  Prompt:', prompt);
   console.log('═══════════════════════════════════════════════════');
 
+  const startTime = Date.now();
   const errors: string[] = [];
 
-  // ── ATTEMPT 1: Qwen Image Model (NVIDIA NIM primary) ──────────────────────
-  // Qwen Image via NVIDIA uses the standard OpenAI images.generate endpoint
-  console.log('[PRODUCT_IMAGE] → Qwen Image (NVIDIA NIM primary)');
-  try {
-    const qwenRes = await fetch('https://integrate.api.nvidia.com/v1/images/generations', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${getKey('NVIDIA_API_KEY')}`,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'qwen/qwen-image',
-        prompt: prompt,
-        n: 1,
-        size: '1024x1024',
-        response_format: 'url',
-      }),
-      signal: AbortSignal.timeout(60000),
-    });
-
-    if (qwenRes.ok) {
-      const qwenData: any = await qwenRes.json();
-      const imageUrl = qwenData?.data?.[0]?.url;
-      const b64 = qwenData?.data?.[0]?.b64_json;
-
-      if (imageUrl || b64) {
-        console.log('[PRODUCT_IMAGE] ✅ Qwen Image success');
-        const dataToUpload = b64 ? `data:image/png;base64,${b64}` : imageUrl;
-        try {
-          const upload = await cloudinary.uploader.upload(dataToUpload!, {
-            folder: 'olive-pizza/ai-product-images',
-            resource_type: 'image',
-            format: 'jpg',
-            quality: 90,
-            transformation: [{ width: 1200, crop: 'limit' }],
-            context: `productName=${productName.slice(0, 100)}|imageType=${imageType || 'product_photo'}|model=qwen-image-nvidia`,
-          });
-          console.log('[CLOUDINARY] ✅ Uploaded:', upload.secure_url);
-          return { success: true, imageUrl: upload.secure_url, publicId: upload.public_id, prompt, model: 'Qwen Image (NVIDIA)' };
-        } catch (uploadErr: any) {
-          errors.push(`Cloudinary upload (Qwen): ${uploadErr.message}`);
-        }
-      } else {
-        errors.push('Qwen Image: no URL or b64 in response');
-      }
-    } else {
-      const errText = await qwenRes.text();
-      errors.push(`Qwen Image: HTTP ${qwenRes.status} — ${errText.slice(0, 200)}`);
-      console.warn('[PRODUCT_IMAGE] ❌ Qwen Image:', errors[errors.length - 1]);
-    }
-  } catch (e: any) {
-    errors.push(`Qwen Image: ${e.message}`);
-    console.warn('[PRODUCT_IMAGE] ❌ Qwen Image:', e.message);
-  }
-
-  // ── ATTEMPT 2: NVIDIA SDXL endpoints ──────────────────────────────────────
-  const nvEndpoints = [
-    {
-      name: 'NVIDIA SDXL',
-      url: 'https://ai.api.nvidia.com/v1/genai/stabilityai/stable-diffusion-xl',
-      body: {
-        text_prompts: [
-          { text: prompt, weight: 1 },
-          { text: negativePrompt, weight: -1 },
-        ],
-        height: 768, width: 768,
-        seed: Math.floor(Math.random() * 9999999),
-        steps: 30, cfg_scale: 7.5, sampler: 'K_DPMPP_2M',
-      },
-      extractBase64: (r: any) => r?.artifacts?.[0]?.base64 ?? null,
-    },
-    {
-      name: 'NVIDIA SDXL Turbo',
-      url: 'https://ai.api.nvidia.com/v1/genai/stabilityai/sdxl-turbo',
-      body: {
-        text_prompts: [
-          { text: prompt, weight: 1 },
-          { text: negativePrompt, weight: -1 },
-        ],
-        height: 512, width: 512,
-        seed: Math.floor(Math.random() * 9999999),
-        steps: 4, cfg_scale: 0,
-      },
-      extractBase64: (r: any) => r?.artifacts?.[0]?.base64 ?? null,
-    },
-  ];
-
-  for (const endpoint of nvEndpoints) {
-    console.log(`[PRODUCT_IMAGE] → ${endpoint.name}`);
+  // Helper for logging to DevOps store dynamically
+  const logToStore = async (provider: string, model: string, success: boolean, imageUrl?: string, err?: string) => {
     try {
-      const response = await fetch(endpoint.url, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${getKey('NVIDIA_API_KEY')}`,
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: JSON.stringify(endpoint.body),
-        signal: AbortSignal.timeout(60000),
+      const { aiOperationsStore } = await import('./devOps/AIOperationsService.js');
+      aiOperationsStore.pushImageGenLog({
+        timestamp: new Date().toISOString(),
+        prompt,
+        providerUsed: provider,
+        modelUsed: model,
+        aspectRatio: '1:1',
+        imageUrl,
+        latencyMs: Date.now() - startTime,
+        success,
+        error: err
       });
+    } catch {}
+  };
 
-      if (!response.ok) {
-        const errText = await response.text();
-        errors.push(`${endpoint.name}: HTTP ${response.status}: ${errText.slice(0, 200)}`);
-        console.warn(`[PRODUCT_IMAGE] ❌ ${endpoint.name}:`, errors[errors.length - 1]);
-        continue;
-      }
-
-      const result = await response.json();
-      const base64 = endpoint.extractBase64(result);
-      if (!base64 || base64.length < 100) {
-        errors.push(`${endpoint.name}: empty base64`);
-        continue;
-      }
-
-      console.log(`[PRODUCT_IMAGE] ✅ ${endpoint.name}`);
-      const dataUri = base64.startsWith('data:') ? base64 : `data:image/png;base64,${base64}`;
-      const upload = await cloudinary.uploader.upload(dataUri, {
-        folder: 'olive-pizza/ai-product-images',
-        resource_type: 'image',
-        format: 'jpg', quality: 90,
-        transformation: [{ width: 1200, crop: 'limit' }],
-        context: `productName=${productName.slice(0, 100)}|imageType=${imageType || 'product_photo'}|model=${endpoint.name}`,
-      });
-      console.log('[CLOUDINARY] ✅ Uploaded:', upload.secure_url);
-      return { success: true, imageUrl: upload.secure_url, publicId: upload.public_id, prompt, model: endpoint.name };
-    } catch (e: any) {
-      errors.push(`${endpoint.name}: ${e.message}`);
-      console.warn(`[PRODUCT_IMAGE] ❌ ${endpoint.name}:`, e.message);
-    }
-  }
-
-  // ── ATTEMPT 3: Pollinations.AI (FLUX fallback, no API key needed) ──────────
+  // ── ATTEMPT 1: Pollinations FLUX Engine (Ultra-fast, High-res 1024x1024 food styling) ──────────
   const pollUrls = [
-    `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1024&height=1024&model=flux&seed=${Math.floor(Math.random() * 9999999)}&nologo=true&enhance=true`,
+    `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1024&height=1024&model=flux&seed=${Math.floor(Math.random() * 9999999)}&nologo=true`,
     `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1024&height=1024&model=flux-realism&seed=${Math.floor(Math.random() * 9999999)}&nologo=true`,
   ];
 
   for (const pollUrl of pollUrls) {
-    const modelName = pollUrl.match(/model=([^&]+)/)?.[1] || 'flux';
-    console.log(`[PRODUCT_IMAGE] → Pollinations (${modelName}) fallback`);
+    const pollModel = pollUrl.match(/model=([^&]+)/)?.[1] || 'flux';
+    console.log(`[PRODUCT_IMAGE] → Pollinations FLUX (${pollModel})`);
     try {
-      const response = await fetch(pollUrl, { method: 'GET', signal: AbortSignal.timeout(90000) });
-      if (!response.ok) { errors.push(`Pollinations ${modelName}: HTTP ${response.status}`); continue; }
+      const response = await fetch(pollUrl, {
+        method: 'GET',
+        headers: { 'User-Agent': 'OlivePizza-App/2.0' },
+        signal: AbortSignal.timeout(45000)
+      });
+      if (!response.ok) {
+        errors.push(`Pollinations ${pollModel}: HTTP ${response.status}`);
+        continue;
+      }
       const contentType = response.headers.get('content-type') || '';
-      if (!contentType.startsWith('image/')) { errors.push(`Pollinations ${modelName}: wrong content-type`); continue; }
+      if (!contentType.startsWith('image/')) {
+        errors.push(`Pollinations ${pollModel}: invalid content-type ${contentType}`);
+        continue;
+      }
       const imageBuffer = Buffer.from(await response.arrayBuffer());
-      if (imageBuffer.length < 5000) { errors.push(`Pollinations ${modelName}: too small`); continue; }
+      if (imageBuffer.length < 5000) {
+        errors.push(`Pollinations ${pollModel}: image buffer too small (${imageBuffer.length} bytes)`);
+        continue;
+      }
 
-      console.log(`[PRODUCT_IMAGE] ✅ Pollinations ${modelName} — ${imageBuffer.length} bytes`);
+      console.log(`[PRODUCT_IMAGE] ✅ Pollinations ${pollModel} — ${imageBuffer.length} bytes`);
       const dataUri = `data:image/png;base64,${imageBuffer.toString('base64')}`;
       const upload = await cloudinary.uploader.upload(dataUri, {
         folder: 'olive-pizza/ai-product-images',
         resource_type: 'image',
-        format: 'jpg', quality: 90,
+        format: 'jpg',
+        quality: 90,
         transformation: [{ width: 1200, crop: 'limit' }],
-        context: `productName=${productName.slice(0, 100)}|imageType=${imageType || 'product_photo'}|model=pollinations-${modelName}`,
+        context: `productName=${(productName || 'product').slice(0, 100)}|imageType=${imageType || 'product_photo'}|model=pollinations-${pollModel}`,
       });
       console.log('[CLOUDINARY] ✅ Uploaded:', upload.secure_url);
-      return { success: true, imageUrl: upload.secure_url, publicId: upload.public_id, prompt, model: `Pollinations ${modelName}` };
+      await logToStore('Pollinations AI', `flux-${pollModel}`, true, upload.secure_url);
+      return { success: true, imageUrl: upload.secure_url, publicId: upload.public_id, prompt, model: `FLUX (${pollModel})` };
     } catch (e: any) {
-      errors.push(`Pollinations ${modelName}: ${e.message}`);
-      console.warn(`[PRODUCT_IMAGE] ❌ Pollinations ${modelName}:`, e.message);
+      errors.push(`Pollinations ${pollModel}: ${e.message}`);
+      console.warn(`[PRODUCT_IMAGE] ❌ Pollinations ${pollModel}:`, e.message);
+    }
+  }
+
+  // ── ATTEMPT 2: NVIDIA NIM SDXL / SDXL Turbo ─────────────────────────────────
+  const nvKey = getKey('NVIDIA_API_KEY');
+  if (isValidKey(nvKey)) {
+    const nvEndpoints = [
+      {
+        name: 'NVIDIA SDXL',
+        url: 'https://ai.api.nvidia.com/v1/genai/stabilityai/stable-diffusion-xl',
+        body: {
+          text_prompts: [
+            { text: prompt, weight: 1 },
+            { text: negativePrompt, weight: -1 },
+          ],
+          height: 768, width: 768,
+          seed: Math.floor(Math.random() * 9999999),
+          steps: 30, cfg_scale: 7.5, sampler: 'K_DPMPP_2M',
+        },
+        extractBase64: (r: any) => r?.artifacts?.[0]?.base64 ?? null,
+      },
+      {
+        name: 'NVIDIA SDXL Turbo',
+        url: 'https://ai.api.nvidia.com/v1/genai/stabilityai/sdxl-turbo',
+        body: {
+          text_prompts: [
+            { text: prompt, weight: 1 },
+            { text: negativePrompt, weight: -1 },
+          ],
+          height: 512, width: 512,
+          seed: Math.floor(Math.random() * 9999999),
+          steps: 4, cfg_scale: 0,
+        },
+        extractBase64: (r: any) => r?.artifacts?.[0]?.base64 ?? null,
+      },
+    ];
+
+    for (const endpoint of nvEndpoints) {
+      console.log(`[PRODUCT_IMAGE] → ${endpoint.name}`);
+      try {
+        const response = await fetch(endpoint.url, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${nvKey}`,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          body: JSON.stringify(endpoint.body),
+          signal: AbortSignal.timeout(20000),
+        });
+
+        if (!response.ok) {
+          const errText = await response.text();
+          errors.push(`${endpoint.name}: HTTP ${response.status}: ${errText.slice(0, 200)}`);
+          continue;
+        }
+
+        const result = await response.json();
+        const base64 = endpoint.extractBase64(result);
+        if (!base64 || base64.length < 100) {
+          errors.push(`${endpoint.name}: empty base64`);
+          continue;
+        }
+
+        console.log(`[PRODUCT_IMAGE] ✅ ${endpoint.name}`);
+        const dataUri = base64.startsWith('data:') ? base64 : `data:image/png;base64,${base64}`;
+        const upload = await cloudinary.uploader.upload(dataUri, {
+          folder: 'olive-pizza/ai-product-images',
+          resource_type: 'image',
+          format: 'jpg', quality: 90,
+          transformation: [{ width: 1200, crop: 'limit' }],
+          context: `productName=${(productName || 'product').slice(0, 100)}|imageType=${imageType || 'product_photo'}|model=${endpoint.name}`,
+        });
+        console.log('[CLOUDINARY] ✅ Uploaded:', upload.secure_url);
+        await logToStore('NVIDIA NIM', endpoint.name, true, upload.secure_url);
+        return { success: true, imageUrl: upload.secure_url, publicId: upload.public_id, prompt, model: endpoint.name };
+      } catch (e: any) {
+        errors.push(`${endpoint.name}: ${e.message}`);
+      }
     }
   }
 
   // ── ALL FAILED ─────────────────────────────────────────────────────────────
   const errorSummary = errors.join(' | ');
   console.error('[PRODUCT_IMAGE] All attempts failed:', errorSummary);
-  return { success: false, error: `Image generation failed. Tried: Qwen Image (NVIDIA), SDXL, SDXL Turbo, Pollinations FLUX. Errors: ${errorSummary}` };
+  await logToStore('Failover Chain', 'None', false, undefined, errorSummary);
+  return { success: false, error: `Image generation failed. Errors: ${errorSummary}` };
 }
 
 // ── Generate image via Pollinations + upload to Cloudinary (for email banners) ─
@@ -868,34 +841,47 @@ export async function generateImage(
   modelName?: string,
   baseImageUrl?: string | null
 ): Promise<{ success: boolean; imageUrl?: string; publicId?: string; error?: string }> {
-  let enhancedPrompt = prompt;
-  if (context?.productName) {
-    enhancedPrompt += `. Featuring ${context.productName}`;
-  }
-  if (context?.category) {
-    enhancedPrompt += `, category: ${context.category}`;
-  }
-  if (context?.description) {
-    enhancedPrompt += `, style/description: ${context.description}`;
-  }
+  // Use exact owner prompt directly
+  let enhancedPrompt = prompt.trim();
   if (baseImageUrl && modelName === 'qwen-image-edit') {
     enhancedPrompt = `[IMAGE EDIT INSTRUCTION] Remake this exact concept but apply these edits: ${enhancedPrompt}. Maintain the original color palette and layout.`;
   }
-  enhancedPrompt += `. High quality commercial photography, 4K, vivid colors. Professional restaurant advertising photography, photorealistic, commercial quality. Olive Pizza restaurant branding, vibrant orange and dark theme, studio lighting, 4K quality, appetizing food styling.`;
   const negativePrompt = 'blurry, low quality, pixelated, distorted, watermark, text overlay, sketch, cartoon, anime, illustration, placeholder, stock photo, clipart, ugly, unappetizing';
 
+  const startTime = Date.now();
   const errors: string[] = [];
 
-  // Pollinations first (fast, free)
+  const logToStore = async (provider: string, model: string, success: boolean, imageUrl?: string, err?: string) => {
+    try {
+      const { aiOperationsStore } = await import('./devOps/AIOperationsService.js');
+      aiOperationsStore.pushImageGenLog({
+        timestamp: new Date().toISOString(),
+        prompt,
+        providerUsed: provider,
+        modelUsed: model,
+        aspectRatio: '16:9',
+        imageUrl,
+        latencyMs: Date.now() - startTime,
+        success,
+        error: err
+      });
+    } catch {}
+  };
+
+  // Pollinations first (fast, reliable FLUX engine)
   const pollUrls = [
-    `https://image.pollinations.ai/prompt/${encodeURIComponent(enhancedPrompt)}?width=1024&height=768&model=flux&seed=${Math.floor(Math.random() * 9999999)}&nologo=true&enhance=true`,
+    `https://image.pollinations.ai/prompt/${encodeURIComponent(enhancedPrompt)}?width=1024&height=768&model=flux&seed=${Math.floor(Math.random() * 9999999)}&nologo=true`,
     `https://image.pollinations.ai/prompt/${encodeURIComponent(enhancedPrompt)}?width=1024&height=768&model=flux-realism&seed=${Math.floor(Math.random() * 9999999)}&nologo=true`,
   ];
 
   for (const pollUrl of pollUrls) {
-    const modelName = pollUrl.match(/model=([^&]+)/)?.[1] || 'flux';
+    const model = pollUrl.match(/model=([^&]+)/)?.[1] || 'flux';
     try {
-      const response = await fetch(pollUrl, { method: 'GET', signal: AbortSignal.timeout(60000) });
+      const response = await fetch(pollUrl, {
+        method: 'GET',
+        headers: { 'User-Agent': 'OlivePizza-App/2.0' },
+        signal: AbortSignal.timeout(45000)
+      });
       if (!response.ok || !response.headers.get('content-type')?.startsWith('image/')) continue;
       const imageBuffer = Buffer.from(await response.arrayBuffer());
       if (imageBuffer.length < 5000) continue;
@@ -906,47 +892,55 @@ export async function generateImage(
         resource_type: 'image',
         format: 'jpg', quality: 90,
         transformation: [{ width: 1200, crop: 'limit' }],
-        context: `prompt=${prompt.slice(0, 200)}|model=pollinations-${modelName}`,
+        context: `prompt=${prompt.slice(0, 200)}|model=pollinations-${model}`,
       });
+      await logToStore('Pollinations AI', `flux-${model}`, true, upload.secure_url);
       return { success: true, imageUrl: upload.secure_url, publicId: upload.public_id };
     } catch (e: any) {
-      errors.push(`Pollinations ${modelName}: ${e.message}`);
+      errors.push(`Pollinations ${model}: ${e.message}`);
     }
   }
 
   // NVIDIA SDXL fallback
-  const nvEndpoints = [
-    {
-      name: 'NVIDIA SDXL',
-      url: 'https://ai.api.nvidia.com/v1/genai/stabilityai/stable-diffusion-xl',
-      body: { text_prompts: [{ text: enhancedPrompt, weight: 1 }, { text: negativePrompt, weight: -1 }], height: 512, width: 768, seed: Math.floor(Math.random() * 9999999), steps: 30, cfg_scale: 7.5, sampler: 'K_DPMPP_2M' },
-      extractBase64: (r: any) => r?.artifacts?.[0]?.base64 ?? null,
-    },
-  ];
+  const nvKey = getKey('NVIDIA_API_KEY');
+  if (isValidKey(nvKey)) {
+    const nvEndpoints = [
+      {
+        name: 'NVIDIA SDXL',
+        url: 'https://ai.api.nvidia.com/v1/genai/stabilityai/stable-diffusion-xl',
+        body: { text_prompts: [{ text: enhancedPrompt, weight: 1 }, { text: negativePrompt, weight: -1 }], height: 512, width: 768, seed: Math.floor(Math.random() * 9999999), steps: 30, cfg_scale: 7.5, sampler: 'K_DPMPP_2M' },
+        extractBase64: (r: any) => r?.artifacts?.[0]?.base64 ?? null,
+      },
+    ];
 
-  for (const endpoint of nvEndpoints) {
-    try {
-      const response = await fetch(endpoint.url, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${getKey('NVIDIA_API_KEY')}`, 'Content-Type': 'application/json', 'Accept': 'application/json' },
-        body: JSON.stringify(endpoint.body),
-      });
-      if (!response.ok) { errors.push(`${endpoint.name}: HTTP ${response.status}`); continue; }
-      const result = await response.json();
-      const base64 = endpoint.extractBase64(result);
-      if (!base64 || base64.length < 100) { errors.push(`${endpoint.name}: empty`); continue; }
-      const dataUri = base64.startsWith('data:') ? base64 : `data:image/png;base64,${base64}`;
-      const upload = await cloudinary.uploader.upload(dataUri, { folder: 'olive-pizza/ai-generated', resource_type: 'image', format: 'jpg', quality: 90, transformation: [{ width: 1200, crop: 'limit' }], context: `prompt=${prompt.slice(0, 200)}|model=${endpoint.name}` });
-      return { success: true, imageUrl: upload.secure_url, publicId: upload.public_id };
-    } catch (e: any) {
-      errors.push(`${endpoint.name}: ${e.message}`);
+    for (const endpoint of nvEndpoints) {
+      try {
+        const response = await fetch(endpoint.url, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${nvKey}`, 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify(endpoint.body),
+          signal: AbortSignal.timeout(15000),
+        });
+        if (!response.ok) { errors.push(`${endpoint.name}: HTTP ${response.status}`); continue; }
+        const result = await response.json();
+        const base64 = endpoint.extractBase64(result);
+        if (!base64 || base64.length < 100) { errors.push(`${endpoint.name}: empty`); continue; }
+        const dataUri = base64.startsWith('data:') ? base64 : `data:image/png;base64,${base64}`;
+        const upload = await cloudinary.uploader.upload(dataUri, { folder: 'olive-pizza/ai-generated', resource_type: 'image', format: 'jpg', quality: 90, transformation: [{ width: 1200, crop: 'limit' }], context: `prompt=${prompt.slice(0, 200)}|model=${endpoint.name}` });
+        await logToStore('NVIDIA NIM', endpoint.name, true, upload.secure_url);
+        return { success: true, imageUrl: upload.secure_url, publicId: upload.public_id };
+      } catch (e: any) {
+        errors.push(`${endpoint.name}: ${e.message}`);
+      }
     }
   }
 
-  return { success: false, error: `Image generation failed. Errors: ${errors.join(' | ')}` };
+  const errSummary = errors.join(' | ');
+  await logToStore('Failover Chain', 'None', false, undefined, errSummary);
+  return { success: false, error: `Image generation failed. Errors: ${errSummary}` };
 }
 
-// ── Generate Product Description (FIXED: uses fallback model chain) ────────────
+// ── Generate Product Description (uses fallback model chain) ────────────
 export async function generateProductDescription(
   messages: { role: string, content: string }[]
 ): Promise<{ success: boolean; text?: string; error?: string }> {
@@ -955,19 +949,23 @@ If the owner just provides a product name, ask 1 or 2 quick questions to underst
 If you have enough information, generate the final description (2-3 sentences max).
 When you output the final description, prefix it EXACTLY with "FINAL_DESCRIPTION: " so the system can extract it. Keep it appetizing and professional.`;
 
+  const chain = getModelChain();
   let lastError: Error | null = null;
-  for (const config of MODEL_CHAIN) {
+  for (const config of chain) {
     try {
       console.log(`[AI Desc] Trying ${config.name}...`);
-      const response = await config.client.chat.completions.create({
-        model: config.model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          ...messages
-        ] as any[],
-        temperature: 0.7,
-        max_tokens: 500,
-      });
+      const response = await config.client.chat.completions.create(
+        {
+          model: config.model,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            ...messages
+          ] as any[],
+          temperature: 0.7,
+          max_tokens: 500,
+        },
+        { timeout: 12000 }
+      );
       const text = response.choices[0]?.message?.content || '';
       if (!text) throw new Error('Empty response');
       console.log(`[AI Desc] ✅ ${config.name}`);
@@ -980,34 +978,38 @@ When you output the final description, prefix it EXACTLY with "FINAL_DESCRIPTION
   return { success: false, error: `Failed to generate description. Last error: ${lastError?.message}` };
 }
 
-// ── Enhance Image Prompt (DeepSeek R1 primary, Qwen fallback) ────────────────
+// ── Enhance Image Prompt (Multi-Tier Failover Engine) ─────────────────────────
 export async function enhancePrompt(prompt: string, type: string): Promise<{ success: boolean; text?: string; error?: string }> {
-  const systemPrompt = `You are an expert prompt engineer specializing in AI image generation for a premium pizza brand called Olive Pizza.
-Your task is to take a short, basic prompt from the user and expand it into a highly detailed, evocative, and professional image generation prompt.
-Do not include any conversational filler, explanations, or quotes. Output ONLY the enhanced prompt.
-Always include cinematic lighting, photorealism, and appetizing food photography descriptors.
-Type context: ${type === 'banner' ? 'Wide promotional marketing banner, dynamic composition' : 'Close-up product photography, mouth-watering details'}.
-CRITICAL INSTRUCTION: You must provide the final prompt immediately. Keep your <think> reasoning extremely brief (under 3 sentences) to ensure a fast response under 20 seconds.`;
+  const systemPrompt = `You are an expert prompt engineer specializing in AI food photography prompts for a premium brand called Olive Pizza.
+Your task is to take a short prompt from the owner and expand it into a concise, vivid, professional food photography prompt.
+OUTPUT FORMAT: Output ONLY the enhanced prompt. No explanations, no introductory text, no quotes, no conversational filler.
+Descriptors to emphasize: crisp studio lighting, 4k ultra-realistic food styling, appetizing fresh ingredients, rich texture, restaurant commercial quality.
+Context: ${type === 'banner' ? 'Wide promotional marketing banner composition' : 'Close-up product photography'}.`;
 
   const chain = getModelChain();
-
   let lastError: Error | null = null;
+
   for (const config of chain) {
     try {
       console.log(`[AI Enhance] Trying ${config.name}...`);
-      const response = await config.client.chat.completions.create({
-        model: config.model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: prompt }
-        ],
-        temperature: 0.7,
-        max_tokens: 1500,
-      });
+      const response = await config.client.chat.completions.create(
+        {
+          model: config.model,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: prompt }
+          ],
+          temperature: 0.7,
+          max_tokens: 500,
+        },
+        { timeout: 10000 }
+      );
       let text = response.choices[0]?.message?.content || '';
       if (!text) throw new Error('Empty response');
-      // Deepseek R1 often includes <think> blocks, we should strip them out just in case
+      
+      // Clean up reasoning tags and enclosing quotes
       text = text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+      text = text.replace(/^["']|["']$/g, '').trim();
       
       console.log(`[AI Enhance] ✅ ${config.name}`);
       return { success: true, text };
@@ -1018,6 +1020,7 @@ CRITICAL INSTRUCTION: You must provide the final prompt immediately. Keep your <
   }
   return { success: false, error: `Failed to enhance prompt. Last error: ${lastError?.message}` };
 }
+
 
 // ── Speech-to-Text Transcription (Whisper 3 Large Primary -> Canary 1B Fallback) ──
 export async function transcribeAudioWhisper(audioBuffer: Buffer, mimeType: string = 'audio/wav'): Promise<{ success: boolean; text?: string; error?: string }> {
