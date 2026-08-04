@@ -20,6 +20,7 @@ export default function PhoneUpdateModal({ isOpen, onClose, currentPhone, onSucc
   const [newPhone, setNewPhone] = useState('');
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
+  const isDevMode = import.meta.env.VITE_PHONE_AUTH_MODE === 'development';
 
   useEffect(() => {
     if (isOpen) {
@@ -90,12 +91,38 @@ export default function PhoneUpdateModal({ isOpen, onClose, currentPhone, onSucc
     }
   };
 
+  const handleInstantBypass = async () => {
+    if (!isDevMode) return;
+    setLoading(true);
+    try {
+      let phoneNumber = newPhone.trim() ? newPhone.trim() : '9999999999';
+      if (!phoneNumber.startsWith('+')) {
+        phoneNumber = `+91${phoneNumber}`;
+      }
+      if (auth.currentUser?.uid) {
+        await setDoc(doc(db, 'users', auth.currentUser.uid), {
+          phone: phoneNumber,
+          phoneVerified: true,
+          verificationMethod: 'demo_bypass',
+          verifiedAt: Date.now(),
+          phoneSetupCompleted: true
+        }, { merge: true });
+      }
+      toast.success("Phone verified (Testing Bypass)!");
+      onSuccess(phoneNumber);
+      onClose();
+    } catch (err) {
+      toast.error("Bypass failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      // 🚨 DEVELOPMENT BYPASS: Allow any string/number format
       let formattedPhone = newPhone;
       if (!newPhone.startsWith('+')) {
         formattedPhone = `+91${newPhone}`;
@@ -144,7 +171,7 @@ export default function PhoneUpdateModal({ isOpen, onClose, currentPhone, onSucc
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (token) headers['Authorization'] = `Bearer ${token}`;
       
-      await fetch('/api/phone/verify-otp', {
+      const res = await fetch('/api/phone/verify-otp', {
         method: 'POST',
         headers,
         body: JSON.stringify({ 
@@ -152,23 +179,28 @@ export default function PhoneUpdateModal({ isOpen, onClose, currentPhone, onSucc
           otp: otp || '123456',
           userId: auth.currentUser?.uid
         })
-      }).catch(err => console.warn('[PhoneUpdateModal] verify-otp backend warning:', err));
-
-      if (auth.currentUser?.uid) {
-        await setDoc(doc(db, 'users', auth.currentUser.uid), {
-          phone: phoneNumber,
-          phoneVerified: true,
-          verificationMethod: 'demo_bypass',
-          verifiedAt: Date.now(),
-          phoneSetupCompleted: true
-        }, { merge: true });
+      });
+      const data = await res.json();
+      
+      if (data.success) {
+        toast.success("Phone verified successfully!");
+        onSuccess(phoneNumber);
+        onClose();
+      } else {
+        toast.error(data.error || "Invalid OTP");
       }
-
-      toast.success("Phone verified successfully!");
-      onSuccess(phoneNumber);
-      onClose();
     } catch (err: any) {
-      toast.error(err.response?.data?.error || err.message || "An error occurred");
+      if (isDevMode) {
+        let phoneNumber = newPhone.trim() ? newPhone.trim() : '9999999999';
+        if (!phoneNumber.startsWith('+')) {
+          phoneNumber = `+91${phoneNumber}`;
+        }
+        toast.success("Phone verified (Testing Bypass)!");
+        onSuccess(phoneNumber);
+        onClose();
+      } else {
+        toast.error(err.response?.data?.error || err.message || "An error occurred");
+      }
     } finally {
       setLoading(false);
     }
@@ -231,6 +263,16 @@ export default function PhoneUpdateModal({ isOpen, onClose, currentPhone, onSucc
                         {loading ? <PizzaLoader size="inline" /> : "Verify with Truecaller"}
                     </button>
                     
+                    {isDevMode && (
+                      <button
+                        onClick={handleInstantBypass}
+                        disabled={loading}
+                        className="w-full flex justify-center py-2.5 px-4 border border-purple-500/30 rounded-xl text-xs font-bold text-purple-300 bg-purple-900/30 hover:bg-purple-900/50 transition-colors"
+                      >
+                        ⚡ Instant Demo Bypass (Testing Mode)
+                      </button>
+                    )}
+                    
                     <button onClick={() => setStep('phone_input')} className="text-sm text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">
                         Use SMS OTP instead
                     </button>
@@ -263,6 +305,17 @@ export default function PhoneUpdateModal({ isOpen, onClose, currentPhone, onSucc
                     >
                       {loading ? <PizzaLoader size="inline" /> : "Send OTP"}
                     </button>
+
+                    {isDevMode && (
+                      <button
+                        type="button"
+                        onClick={handleInstantBypass}
+                        disabled={loading}
+                        className="w-full flex justify-center py-2.5 px-4 border border-purple-500/30 rounded-xl text-xs font-bold text-purple-300 bg-purple-900/30 hover:bg-purple-900/50 transition-colors"
+                      >
+                        ⚡ Instant Demo Bypass (Testing Mode)
+                      </button>
+                    )}
                   </form>
                 )}
 
@@ -271,8 +324,13 @@ export default function PhoneUpdateModal({ isOpen, onClose, currentPhone, onSucc
                     <div className="text-center mb-6">
                         <MessageSquare className="w-12 h-12 text-orange-500 mx-auto mb-2 opacity-80" />
                         <p className="text-sm text-slate-600 dark:text-slate-400">
-                          Enter the 6-digit code sent to <br/><span className="font-bold text-slate-900 dark:text-white">+91 {newPhone}</span>
+                          Enter the 6-digit code sent to <br/><span className="font-bold text-slate-900 dark:text-white">{newPhone || '9999999999'}</span>
                         </p>
+                        {isDevMode && (
+                          <p className="text-xs text-purple-400 font-bold mt-1">
+                             (Testing Mode Active: Use 123456)
+                          </p>
+                        )}
                     </div>
 
                     <div>
@@ -293,6 +351,17 @@ export default function PhoneUpdateModal({ isOpen, onClose, currentPhone, onSucc
                     >
                       {loading ? <PizzaLoader size="inline" /> : "Verify OTP"}
                     </button>
+
+                    {isDevMode && (
+                      <button
+                        type="button"
+                        onClick={handleInstantBypass}
+                        disabled={loading}
+                        className="w-full flex justify-center py-2.5 px-4 border border-purple-500/30 rounded-xl text-xs font-bold text-purple-300 bg-purple-900/30 hover:bg-purple-900/50 transition-colors"
+                      >
+                        ⚡ Instant Demo Bypass (Testing Mode)
+                      </button>
+                    )}
                   </form>
                 )}
               </div>

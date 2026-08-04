@@ -1,4 +1,5 @@
 import axios from 'axios';
+import crypto from 'crypto';
 import { adminDb } from '../../config/firebase.js';
 import bcrypt from 'bcrypt';
 import { PhoneVerificationProvider, OTPRequestResult, VerificationResult } from './PhoneVerificationProvider.js';
@@ -6,9 +7,11 @@ import { aiOperationsStore } from '../devOps/AIOperationsService.js';
 
 export class Fast2SMSProvider implements PhoneVerificationProvider {
   private apiKey: string;
+  private mode: 'development' | 'production';
   
   constructor() {
     this.apiKey = process.env.FAST2SMS_API_KEY || '';
+    this.mode = (process.env.PHONE_AUTH_MODE as 'development' | 'production') || 'development';
   }
 
   /**
@@ -65,35 +68,40 @@ export class Fast2SMSProvider implements PhoneVerificationProvider {
       
       const now = Date.now();
       let attemptsInHour = 0;
+      let attemptsIn5Mins = 0;
       
       if (!snapshot.empty) {
         const sortedDocs = snapshot.docs.sort((a, b) => (b.data().createdAt || 0) - (a.data().createdAt || 0));
         const lastOtp = sortedDocs[0].data();
+        
         // 60-second cooldown
         if (now - lastOtp.createdAt < 60000) {
           const remainingSec = Math.ceil((60000 - (now - lastOtp.createdAt)) / 1000);
           return { success: false, error: `Please wait ${remainingSec} seconds before requesting another OTP.` };
         }
         
-        // 5 requests per hour
+        // Rate Limits: Max 10 per hour, Max 3 per 5 mins
         sortedDocs.forEach(doc => {
-          if (now - doc.data().createdAt < 3600000) {
-            attemptsInHour++;
-          }
+          const createdAt = doc.data().createdAt || 0;
+          if (now - createdAt < 3600000) attemptsInHour++;
+          if (now - createdAt < 300000) attemptsIn5Mins++;
         });
         
-        if (attemptsInHour >= 5) {
-          const blockedUntil = now + 3600000;
-          return { 
-            success: false, 
-            error: 'Maximum OTP attempts reached for this hour. Please try again later.',
-            blockedUntil
-          };
+        if (attemptsInHour >= 10) {
+          return { success: false, error: 'Maximum OTP attempts reached for this hour. Please try again later.' };
         }
+        if (attemptsIn5Mins >= 3) {
+          return { success: false, error: 'Too many OTP requests in a short time. Please wait 5 minutes.' };
+        }
+        
+        // Invalidate old OTPs
+        const batch = adminDb.batch();
+        snapshot.docs.forEach(doc => batch.delete(doc.ref));
+        await batch.commit();
       }
 
       // Generate secure 6-digit OTP
-      const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+      const otpCode = crypto.getRandomValues(new Uint32Array(1))[0].toString().padStart(6, '0').substring(0, 6);
       let sentViaGateway = false;
       let gatewayRequestId: string | undefined = undefined;
       let gatewayErrorMsg: string | undefined = undefined;
@@ -169,6 +177,10 @@ export class Fast2SMSProvider implements PhoneVerificationProvider {
           };
         }
       } else {
+        if (this.mode === 'production') {
+          console.error('[Fast2SMS] ❌ FAST2SMS_API_KEY is missing but PRODUCTION mode is active.');
+          return { success: false, error: 'SMS Gateway is not configured correctly for production.' };
+        }
         console.warn('[Fast2SMS] ⚠️ FAST2SMS_API_KEY is not configured. Running in Demo Mode.');
       }
 
@@ -176,7 +188,6 @@ export class Fast2SMSProvider implements PhoneVerificationProvider {
       const saltRounds = 10;
       const hashedOtp = await bcrypt.hash(otpCode, saltRounds);
 
-      // Save to Firestore with 10-minute expiry
       const newOtpRef = adminDb.collection('phone_verifications').doc();
       await newOtpRef.set({
         phone: formattedPhone,
@@ -184,7 +195,7 @@ export class Fast2SMSProvider implements PhoneVerificationProvider {
         userId: userId || null,
         hashedOtp,
         createdAt: now,
-        expiresAt: now + 10 * 60 * 1000, // 10 minutes
+        expiresAt: now + 4 * 60 * 1000, // Exactly 4 minutes expiry
         attempts: 0,
         type: 'fast2sms',
         gatewayRequestId: gatewayRequestId || null,
@@ -210,13 +221,17 @@ export class Fast2SMSProvider implements PhoneVerificationProvider {
       // Check if API key is active
       const hasActiveApiKey = this.apiKey && this.apiKey.trim().length > 5;
 
-      // Demo OTP bypass ONLY allowed if NO API key is configured
-      if (!hasActiveApiKey && code === '123456') {
+      // Demo OTP bypass ONLY allowed if mode is development
+      if (this.mode === 'development' && code === '123456') {
         return {
           success: true,
           phone: formattedPhone,
           provider: 'fast2sms (demo)'
         };
+      }
+      
+      if (this.mode === 'production' && code === '123456' && !hasActiveApiKey) {
+          return { success: false, error: 'OTP bypass is strictly disabled in production mode.' };
       }
 
       // Get the latest active OTP for this phone

@@ -1,10 +1,14 @@
 import cron from 'node-cron';
 import { weeklyReportService } from '../lib/services/WeeklyReportService.js';
 import { WeeklyReportJob } from '../jobs/WeeklyReportJob.js';
+import { DataExpiryJob } from '../jobs/DataExpiryJob.js';
 
 export function initScheduler() {
   // Initialize weekly report cron (Runs every Monday at 00:05 AM)
   WeeklyReportJob.initCronJob();
+
+  // Initialize expiry engine
+  DataExpiryJob.schedule();
 
   // Daily cleanup of old GPS tracking data (older than 24 hours) at 3:00 AM
   cron.schedule('0 3 * * *', async () => {

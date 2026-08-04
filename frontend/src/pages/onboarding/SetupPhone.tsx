@@ -23,6 +23,7 @@ export default function SetupPhone() {
   const searchParams = new URLSearchParams(window.location.search);
   const redirectPath = searchParams.get('redirect') || "/dashboard";
   const { setUser, user, role } = useAuthStore();
+  const isDevMode = import.meta.env.VITE_PHONE_AUTH_MODE === 'development';
 
   const fetchUserProfile = async (uid: string) => {
     try {
@@ -215,7 +216,7 @@ export default function SetupPhone() {
 
       const data = await res.json();
       if (data.success) {
-        toast.success(data.message || "OTP Bypassed for Testing! Enter any code.");
+        toast.success(data.message || "OTP Sent successfully!");
         setStep('otp_input');
         setCountdown(60);
       } else {
@@ -223,8 +224,8 @@ export default function SetupPhone() {
       }
     } catch (err: any) {
       console.error(err);
-      toast.success("OTP Bypassed for Testing! Enter any code.");
-      setStep('otp_input');
+      toast.error(err.message || "Failed to send OTP.");
+      if (isDevMode) setStep('otp_input');
     } finally {
       setLoading(false);
     }
@@ -257,13 +258,17 @@ export default function SetupPhone() {
 
       await markPhoneVerifiedInStoreAndDb(formattedPhone);
 
-      toast.success("Phone verified successfully (Bypass Active)!");
+      toast.success("Phone verified successfully!");
       navigate(redirectPath);
     } catch (err: any) {
       console.error(err);
-      await markPhoneVerifiedInStoreAndDb(phone || '9999999999');
-      toast.success("Phone verified (Testing Bypass)!");
-      navigate(redirectPath);
+      if (isDevMode) {
+        await markPhoneVerifiedInStoreAndDb(phone || '9999999999');
+        toast.success("Phone verified (Testing Bypass)!");
+        navigate(redirectPath);
+      } else {
+        setError(err.response?.data?.error || err.message || "Verification failed");
+      }
     } finally {
       setLoading(false);
     }
@@ -281,7 +286,7 @@ export default function SetupPhone() {
           Verify your phone
         </h2>
         <p className="mt-2 text-center text-sm text-slate-600 dark:text-slate-400">
-          Secure your account to place orders (Testing Bypass Active)
+          Secure your account to place orders {isDevMode && "(Testing Bypass Active)"}
         </p>
       </div>
 
@@ -310,13 +315,15 @@ export default function SetupPhone() {
                   {loading ? <PizzaLoader size="inline" /> : "Verify with Truecaller"}
                </button>
 
-               <button
-                  onClick={handleInstantBypass}
-                  disabled={loading}
-                  className="w-full flex justify-center py-2.5 px-4 border border-purple-500/30 rounded-xl text-xs font-bold text-purple-300 bg-purple-900/30 hover:bg-purple-900/50 transition-colors"
-               >
-                  ⚡ Instant Demo Bypass (Testing Mode)
-               </button>
+               {isDevMode && (
+                 <button
+                    onClick={handleInstantBypass}
+                    disabled={loading}
+                    className="w-full flex justify-center py-2.5 px-4 border border-purple-500/30 rounded-xl text-xs font-bold text-purple-300 bg-purple-900/30 hover:bg-purple-900/50 transition-colors"
+                 >
+                    ⚡ Instant Demo Bypass (Testing Mode)
+                 </button>
+               )}
                
                <button onClick={() => setStep('phone_input')} className="text-sm text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">
                   Use SMS OTP instead
@@ -362,14 +369,16 @@ export default function SetupPhone() {
                 {loading ? <PizzaLoader size="inline" /> : "Send OTP"}
               </button>
 
-              <button
-                type="button"
-                onClick={handleInstantBypass}
-                disabled={loading}
-                className="w-full flex justify-center py-2.5 px-4 border border-purple-500/30 rounded-xl text-xs font-bold text-purple-300 bg-purple-900/30 hover:bg-purple-900/50 transition-colors"
-              >
-                ⚡ Instant Demo Bypass (Testing Mode)
-              </button>
+              {isDevMode && (
+                <button
+                  type="button"
+                  onClick={handleInstantBypass}
+                  disabled={loading}
+                  className="w-full flex justify-center py-2.5 px-4 border border-purple-500/30 rounded-xl text-xs font-bold text-purple-300 bg-purple-900/30 hover:bg-purple-900/50 transition-colors"
+                >
+                  ⚡ Instant Demo Bypass (Testing Mode)
+                </button>
+              )}
             </form>
           )}
 
@@ -378,11 +387,13 @@ export default function SetupPhone() {
                <div className="text-center mb-6">
                   <MessageSquare className="w-12 h-12 text-orange-500 mx-auto mb-2 opacity-80" />
                   <p className="text-sm text-slate-600 dark:text-slate-400">
-                     Enter any code sent to <br/><span className="font-bold text-slate-900 dark:text-white">+91 {phone || '9999999999'}</span>
+                     Enter the 6-digit code sent to <br/><span className="font-bold text-slate-900 dark:text-white">+91 {phone || '9999999999'}</span>
                   </p>
-                  <p className="text-xs text-purple-400 font-bold mt-1">
-                     (Testing Mode Active: Use 123456 or any code)
-                  </p>
+                  {isDevMode && (
+                    <p className="text-xs text-purple-400 font-bold mt-1">
+                       (Testing Mode Active: Use 123456)
+                    </p>
+                  )}
                </div>
 
               <div>
@@ -411,14 +422,16 @@ export default function SetupPhone() {
                 {loading ? <PizzaLoader size="inline" /> : "Verify OTP"}
               </button>
 
-              <button
-                type="button"
-                onClick={handleInstantBypass}
-                disabled={loading}
-                className="w-full flex justify-center py-2.5 px-4 border border-purple-500/30 rounded-xl text-xs font-bold text-purple-300 bg-purple-900/30 hover:bg-purple-900/50 transition-colors"
-              >
-                ⚡ Instant Demo Bypass (Testing Mode)
-              </button>
+              {isDevMode && (
+                <button
+                  type="button"
+                  onClick={handleInstantBypass}
+                  disabled={loading}
+                  className="w-full flex justify-center py-2.5 px-4 border border-purple-500/30 rounded-xl text-xs font-bold text-purple-300 bg-purple-900/30 hover:bg-purple-900/50 transition-colors"
+                >
+                  ⚡ Instant Demo Bypass (Testing Mode)
+                </button>
+              )}
               
               <div className="text-center mt-4">
                  {countdown > 0 ? (

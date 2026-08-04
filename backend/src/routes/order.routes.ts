@@ -238,7 +238,7 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
         userId,
         items: validatedItems,
         totalAmount: serverCalculatedTotal,
-        status: 'pending',
+        status: 'pending_acceptance',
         notification_version: 1,
         deliveryAddress: { 
           addressLine: userAddress || 'Pickup', 
@@ -353,6 +353,45 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
         console.error('Failed to release checkout lock:', e);
       }
     }
+  }
+});
+
+// Owner Accept Order
+router.post('/:id/accept', verifyToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const userRole = req.user?.role;
+    if (userRole !== 'owner') return res.status(403).json({ error: 'Unauthorized' });
+
+    await adminDb.collection('orders').doc(id).update({
+      status: 'preparing',
+      updatedAt: new Date()
+    });
+
+    orderEventService.emitStatusChange(id, 'preparing', req.user.uid);
+    res.json({ success: true, status: 'preparing' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to accept order' });
+  }
+});
+
+// Owner Reject Order
+router.post('/:id/reject', verifyToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const userRole = req.user?.role;
+    if (userRole !== 'owner') return res.status(403).json({ error: 'Unauthorized' });
+
+    await adminDb.collection('orders').doc(id).update({
+      status: 'cancelled',
+      cancellationReason: req.body.reason || 'Rejected by restaurant',
+      updatedAt: new Date()
+    });
+
+    orderEventService.emitStatusChange(id, 'cancelled', req.user.uid);
+    res.json({ success: true, status: 'cancelled' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to reject order' });
   }
 });
 

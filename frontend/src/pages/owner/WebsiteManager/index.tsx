@@ -26,9 +26,11 @@ import WebsiteAnalytics from './WebsiteAnalytics';
 import ABTesting from './ABTesting';
 import VersionHistory from './VersionHistory';
 import PermissionsManager from './PermissionsManager';
+import AIDesignStudio from './AIDesignStudio';
 
 const TABS = [
   { id: 'homepage', label: 'Homepage Builder', icon: Layout },
+  { id: 'ai_studio', label: 'AI Design Studio', icon: Bot },
   { id: 'theme', label: 'Theme & Tokens', icon: Palette },
   { id: 'navigation', label: 'Navigation & Footer', icon: Compass },
   { id: 'announcements', label: 'Announcement Bar', icon: Bell },
@@ -87,6 +89,7 @@ export const WebsiteManagerHub: React.FC = () => {
       {/* Active Tab Content */}
       <div>
         {activeTab === 'homepage' && <HomepageBuilder />}
+        {activeTab === 'ai_studio' && <AIDesignStudio />}
         {activeTab === 'theme' && <ThemeManager />}
         {activeTab === 'navigation' && <NavigationBuilder />}
         {activeTab === 'announcements' && <AnnouncementManager />}

@@ -8,10 +8,17 @@ import { z } from 'zod';
 import { CustomerTemplates } from '../services/notification/NotificationTemplates.js';
 import { notificationEngine } from '../services/notification/NotificationEngine.js';
 
+import { DeliveryCapacityService } from '../services/delivery/DeliveryCapacityService.js';
+import { webSocketServer } from '../services/websocket/WebSocketServer.js';
+
 const router = Router();
 
 const deliveryStatusSchema = z.object({
   status: z.enum(['delivered', 'out_for_delivery', 'picked_up', 'partner_assigned', 'ready'])
+});
+
+const partnerStatusSchema = z.object({
+  status: z.enum(['online', 'offline', 'busy', 'on_delivery', 'break'])
 });
 
 router.use(verifyToken);
@@ -106,10 +113,53 @@ router.patch('/orders/:id/status', requireRole(['owner', 'delivery', 'delivery_p
     // Emit event so emails are triggered
     orderEventService.emitStatusChange(id, status as any, req.user?.uid || 'system');
     
+    // Auto-update rider status if delivered
+    if (status === 'delivered' && req.user?.uid) {
+      await DeliveryCapacityService.setPartnerStatus(req.user.uid, 'online'); // becomes available again
+    }
+
     res.json({ message: `Order status updated to ${status}` });
   } catch (error) {
     console.error('[Delivery Routes] Failed to update order status:', error);
     res.status(500).json({ error: 'Failed to update order status' });
+  }
+});
+
+// Update rider availability status (online/offline/busy)
+router.patch('/partner-status', requireRole(['delivery', 'delivery_partner', 'owner']), async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const partnerId = req.user?.uid;
+    const parsedBody = partnerStatusSchema.safeParse(req.body);
+    if (!parsedBody.success || !partnerId) {
+      res.status(400).json({ error: 'Invalid status update' });
+      return;
+    }
+    await DeliveryCapacityService.setPartnerStatus(partnerId, parsedBody.data.status);
+    res.json({ success: true, status: parsedBody.data.status });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update partner status' });
+  }
+});
+
+// Fetch restaurant availability & queue data (Public-ish, used by Checkout)
+router.get('/availability', async (req: Request, res: Response) => {
+  try {
+    const data = await DeliveryCapacityService.getRestaurantAvailability();
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch availability' });
+  }
+});
+
+// Join the notify queue
+router.post('/notify-queue', verifyToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const customerId = req.user?.uid;
+    if (!customerId) return res.status(401).json({ error: 'Unauthorized' });
+    await DeliveryCapacityService.addToNotifyQueue(customerId, req.body.fcmToken);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to join queue' });
   }
 });
 
@@ -169,6 +219,29 @@ const handleLocationUpdate = async (req: AuthRequest, res: Response) => {
       heading: heading || 0,
       updated_at: new Date().toISOString()
     }, { merge: true });
+
+    // 3. Check Delivery Radius Warning
+    const settingsSnap = await adminDb.collection('settings').doc('store').get();
+    const settings = settingsSnap.data() || {};
+    const storeLat = settings.restaurantLat || 28.6139; // Default fallback
+    const storeLng = settings.restaurantLng || 77.2090;
+    const maxRadius = settings.deliveryRadiusKm || 5;
+
+    const distance = DeliveryCapacityService.getDistanceKm(storeLat, storeLng, actualLat, actualLng);
+    if (distance > maxRadius) {
+      // Broadcast warning to owner via websockets/firestore
+      const warningMsg = `⚠ Delivery Partner ${deliveryPartnerId} is outside delivery radius (${distance.toFixed(1)}km away).`;
+      await adminDb.collection('owner_alerts').add({
+        type: 'radius_warning',
+        message: warningMsg,
+        partnerId: deliveryPartnerId,
+        distance,
+        timestamp: FieldValue.serverTimestamp(),
+        acknowledged: false
+      });
+      // Optionally emit websocket event to owner dashboard
+      webSocketServer.emitToAdmins('radius_warning', { partnerId: deliveryPartnerId, distance, maxRadius });
+    }
 
     res.json({ success: true });
   } catch (error) {

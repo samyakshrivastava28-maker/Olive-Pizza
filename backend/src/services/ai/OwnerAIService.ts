@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 import { adminDb as db } from '../../config/firebase.js';
 import { WebsiteConfigService } from '../websiteConfig/WebsiteConfigService.js';
 import { HomepageConfig, ThemeConfig } from '../../types/websiteConfig.types.js';
+import { ReactComponentGenerator } from './ReactComponentGenerator.js';
 
 dotenv.config();
 
@@ -44,6 +45,7 @@ export class OwnerAIService {
     suggestions: string[];
     latencyMs: number;
     modelUsed: string;
+    componentGenerated?: any; // present if AI decided to generate a React + FM component
   }> {
     const startTime = Date.now();
     const currentDraft = await WebsiteConfigService.getHomepageDraft();
@@ -55,29 +57,47 @@ export class OwnerAIService {
     let diff: any = {};
     let suggestions: string[] = [];
 
-    const systemPrompt = `You are the Senior Website Architect & SDUI AI Assistant for Olive Pizza.
-Your job is to interpret the restaurant owner's natural language command and output a JSON modification for the website configuration.
+    const systemPrompt = `You are the Senior AI Design Assistant for Olive Pizza restaurant platform.
 
-Current Homepage Config:
+## Your Capabilities:
+1. **SDUI Layout Control** — modify the JSON layout of the homepage in real-time
+2. **React + Framer Motion Component Generation** — generate real TSX components with spring animations, scroll-triggered effects, staggered entrances, and hover interactions for the homepage
+3. **Google Stitch Layout Import** — when owner mentions Stitch or a design they made in Google Stitch, integrate those layouts as structure and apply Olive Pizza brand colors
+4. **Theme control** — change colors, typography, spacing
+
+## When to generate React components:
+- Owner says "generate", "create a component", "build", "make a section", "design"
+- Owner mentions "animation", "Framer Motion", "React", "spring", "motion"
+- Owner wants a brand-new section that doesn't exist yet
+
+## Strict Brand Rules (NEVER VIOLATE):
+- Primary: #55775a (Deep Olive Green)
+- Secondary: #f97316 (Warm Pizza Orange)  
+- Accent: #f59e0b (Premium Gold)
+- Background: #0a0a0a — Surface: #121212 — Card: #1e1e1e
+- NO blue, purple, pink, cyan, or random colors
+
+## Current Layout:
 ${JSON.stringify({ sections: currentDraft.sections })}
 
-Current Theme Config:
+## Current Theme:
 ${JSON.stringify(currentTheme)}
 
-Owner Instruction: "${command}"
-
-CRITICAL RULES:
-1. Output ONLY a valid JSON object with these keys:
+## Response format (STRICT — only this JSON, no markdown):
 {
-  "explanation": "Human-friendly 1-2 sentence description of the change you made",
+  "explanation": "1-2 sentence description of what you did or what to do next",
   "diff": {
-    "sections": [...updated sections array if sections changed...],
-    "theme": {...updated theme properties if theme changed...}
+    "sections": [...updated sections if changed...],
+    "theme": {...if theme changed...}
   },
-  "suggestions": ["Follow-up suggestion 1", "Follow-up suggestion 2"]
-}
-2. Preserve existing section IDs whenever possible.
-3. NEVER return markdown or code fences like \`\`\`json. Return pure raw JSON only.`;
+  "suggestions": ["Quick follow-up action 1", "Quick follow-up action 2"],
+  "componentAction": {
+    "shouldGenerate": true/false,
+    "sectionType": "hero|bestsellers|stats|testimonials|coupons|faq|categories",
+    "reason": "Why generating a React component is needed"
+  }
+}`;
+
 
     if (client) {
       try {
@@ -98,6 +118,29 @@ CRITICAL RULES:
         explanation = parsed.explanation || 'Updated website configuration based on your request.';
         diff = parsed.diff || {};
         suggestions = parsed.suggestions || ['Publish changes when ready', 'Adjust colors if needed'];
+
+        // If AI decided a React + Framer Motion component should be generated
+        if (parsed.componentAction?.shouldGenerate) {
+          try {
+            const sectionType = parsed.componentAction.sectionType || 'hero';
+            console.log(`[OwnerAIService] Auto-triggering React component generation for: ${sectionType}`);
+            const generatedComponent = await ReactComponentGenerator.generateSection(sectionType, command);
+            // Save it to Firestore
+            await db.collection('generated_components').add({ userId, ...generatedComponent }).catch(() => {});
+            // Pass it back in the response so the frontend can display the code
+            (diff as any)._generatedComponent = {
+              componentName: generatedComponent.componentName,
+              sectionType: generatedComponent.sectionType,
+              htmlPreview: generatedComponent.htmlPreview,
+              animationsUsed: generatedComponent.animationsUsed,
+              description: generatedComponent.description,
+              tsxCodePreview: generatedComponent.tsxCode.slice(0, 500) + '\n// ... (download full .tsx from AI Design Studio)',
+            };
+            explanation = `${explanation} I've also generated a React + Framer Motion component for the ${sectionType} section — check the AI Design Studio → React Generator tab!`;
+          } catch (compErr: any) {
+            console.warn('[OwnerAIService] Component generation failed:', compErr.message);
+          }
+        }
       } catch (e: any) {
         console.warn('[OwnerAIService] Primary LLM fallback:', e.message);
         modelUsed = 'rule-based-fallback';

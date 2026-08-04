@@ -32,8 +32,8 @@ export class DataLifecycleService {
       // Delete SQL live navigation data for orders that were updated/finished > 5 mins ago
       await client.query(`
         DELETE FROM active_deliveries 
-        WHERE order_id IN (
-          SELECT order_id as id FROM background_tasks WHERE status = 'completed' AND finished_at < NOW() - INTERVAL '5 minutes'
+        WHERE order_id::text IN (
+          SELECT order_id::text as id FROM background_tasks WHERE status = 'completed' AND finished_at < NOW() - INTERVAL '5 minutes'
         ) OR updated_at < NOW() - INTERVAL '5 minutes'
       `);
     } catch (error) {

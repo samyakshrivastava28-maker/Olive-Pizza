@@ -291,6 +291,26 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
           res.status(400).json({ error: 'partnerId is required for assign_delivery', requestId });
           return;
         }
+
+        const partnerDoc = await db.collection('users').doc(partnerId).get();
+        const partnerData = partnerDoc.exists ? partnerDoc.data() : {};
+
+        // ENFORCE ASSIGNMENT LOCK (Phase 5)
+        if (partnerData?.deliveryStatus === 'on_delivery' || partnerData?.deliveryStatus === 'offline' || partnerData?.deliveryStatus === 'busy') {
+          await releaseOrderLock(orderId);
+          lockReleased = true;
+          res.status(409).json({ error: `Cannot assign order: Delivery partner is currently ${partnerData?.deliveryStatus}.`, requestId });
+          return;
+        }
+
+        // Set status to on_delivery via DeliveryCapacityService equivalent
+        backgroundTasks.push(async () => {
+           try {
+             const { DeliveryCapacityService } = await import('../services/delivery/DeliveryCapacityService.js');
+             await DeliveryCapacityService.setPartnerStatus(partnerId, 'on_delivery', orderId);
+           } catch(e) { console.error('Failed to update partner status', e); }
+        });
+
         firestoreUpdates.deliveryPartnerId = partnerId;
         firestoreUpdates.delivery_partner_id = partnerId;
         

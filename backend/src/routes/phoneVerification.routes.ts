@@ -129,11 +129,12 @@ router.post('/truecaller', async (req, res) => {
 
 router.get('/status', async (_req, res) => {
   const hasKey = Boolean(process.env.FAST2SMS_API_KEY && process.env.FAST2SMS_API_KEY.length > 5);
+  const authMode = process.env.PHONE_AUTH_MODE || 'development';
   res.json({
     success: true,
     service: 'Fast2SMS Production OTP Service',
     configured: hasKey,
-    mode: hasKey ? 'PRODUCTION' : 'DEMO'
+    mode: authMode.toUpperCase()
   });
 });
 

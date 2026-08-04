@@ -222,6 +222,7 @@ import websiteManagerRoutes from './routes/websiteManager.routes.js';
 import ownerAIRoutes from './routes/ownerAI.routes.js';
 import websiteAnalyticsRoutes from './routes/websiteAnalytics.routes.js';
 import mediaLibraryRoutes from './routes/mediaLibrary.routes.js';
+import stitchRoutes from './routes/stitch.routes.js';
 
 app.use('/website-manager', websiteManagerRoutes);
 app.use('/api/website-manager', websiteManagerRoutes);
@@ -234,6 +235,13 @@ app.use('/api/website-analytics', websiteAnalyticsRoutes);
 
 app.use('/media-library', mediaLibraryRoutes);
 app.use('/api/media-library', mediaLibraryRoutes);
+
+app.use('/stitch', stitchRoutes);
+app.use('/api/stitch', stitchRoutes);
+
+import designStudioRoutes from './routes/designStudio.routes.js';
+app.use('/design-studio', designStudioRoutes);
+app.use('/api/design-studio', designStudioRoutes);
 
 // Start background payment reconciliation cron job
 PaymentReconciliationService.startCronJob();

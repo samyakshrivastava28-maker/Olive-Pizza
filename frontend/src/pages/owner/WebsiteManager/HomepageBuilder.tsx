@@ -33,11 +33,13 @@ import {
   Sparkles,
   ExternalLink,
   Copy,
+  Loader2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useWebsiteConfigStore, Section } from '../../../stores/websiteConfigStore';
 import { auth } from '../../../lib/firebase';
 import OwnerAIPanel from './OwnerAIPanel';
+import SectionRenderer from '../../../components/sdui/SectionRenderer';
 
 const BACKEND = import.meta.env.VITE_BACKEND_URL || '';
 
@@ -49,6 +51,7 @@ const SECTION_TEMPLATES = [
   { type: 'bestsellers', label: 'Best Sellers Showcase', icon: '🔥' },
   { type: 'trending', label: 'Trending Items', icon: '⚡' },
   { type: 'custom', label: 'Custom HTML Block', icon: '💻' },
+  { type: 'stitch', label: 'Google Stitch Design', icon: '🎨' },
 ];
 
 function SortableItem({
@@ -57,12 +60,14 @@ function SortableItem({
   onOpenSettings,
   onDelete,
   onDuplicate,
+  builderMode,
 }: {
   section: Section;
   onToggleVisibility: (id: string) => void;
   onOpenSettings: (s: Section) => void;
   onDelete: (id: string) => void;
   onDuplicate: (s: Section) => void;
+  builderMode: 'beginner' | 'advanced';
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: section.id,
@@ -79,14 +84,15 @@ function SortableItem({
     <div
       ref={setNodeRef}
       style={style}
-      className={`p-4 rounded-xl border flex items-center justify-between gap-3 transition-all ${
+      className={`p-4 rounded-xl border flex flex-col items-stretch justify-start gap-3 transition-all relative group overflow-hidden ${
         section.isLocked
           ? 'bg-slate-900/40 border-amber-500/20'
           : section.isVisible
-          ? 'bg-slate-900/80 border-white/10 hover:border-primary-500/40'
+          ? 'bg-slate-900/80 border-white/10 hover:border-primary-500/40 hover:shadow-[0_0_30px_rgba(85,119,90,0.15)]'
           : 'bg-slate-950/50 border-white/5 opacity-60'
       }`}
     >
+      <div className="flex items-center justify-between w-full z-10 relative bg-slate-900/90 rounded-lg p-2 border border-white/5 shadow-md">
       <div className="flex items-center gap-3">
         {!section.isLocked ? (
           <button
@@ -156,6 +162,23 @@ function SortableItem({
           </>
         )}
       </div>
+      </div>
+
+      {builderMode === 'beginner' && (
+        <div className="absolute inset-x-0 bottom-0 top-16 opacity-0 group-hover:opacity-100 bg-dark-900/40 backdrop-blur-[2px] transition-opacity pointer-events-none rounded-b-xl overflow-hidden flex items-center justify-center">
+          <span className="px-3 py-1 bg-black/80 rounded-full text-white text-xs font-semibold shadow-xl border border-white/10">Live Preview Container</span>
+        </div>
+      )}
+      {builderMode === 'beginner' && section.type !== 'stitch' && (
+        <div className="w-full mt-4 p-4 bg-black/20 rounded-xl overflow-hidden relative pointer-events-none scale-90 origin-top h-[200px]">
+          <SectionRenderer section={section} />
+        </div>
+      )}
+      {builderMode === 'beginner' && section.type === 'stitch' && (
+        <div className="w-full mt-4 p-4 bg-black/20 rounded-xl overflow-hidden relative pointer-events-none flex items-center justify-center h-[100px] border border-dashed border-primary-500/30">
+          <p className="text-primary-400 font-medium text-sm flex items-center gap-2"><span className="text-xl">🎨</span> Google Stitch Canvas: {section.config?.stitchId || 'Layout'}</p>
+        </div>
+      )}
     </div>
   );
 }
@@ -171,6 +194,10 @@ export const HomepageBuilder: React.FC = () => {
   const [changelog, setChangelog] = useState('');
   const [previewDevice, setPreviewDevice] = useState<'desktop' | 'tablet' | 'mobile'>('mobile');
   const [saving, setSaving] = useState(false);
+  const [builderMode, setBuilderMode] = useState<'beginner' | 'advanced'>('beginner');
+  const [showStitchModal, setShowStitchModal] = useState(false);
+  const [stitchDesignId, setStitchDesignId] = useState('');
+  const [importingStitch, setImportingStitch] = useState(false);
 
   useEffect(() => {
     const active = draftHomepage?.sections || homepage?.sections || [];
@@ -224,6 +251,12 @@ export const HomepageBuilder: React.FC = () => {
   };
 
   const handleAddSection = (type: string, label: string) => {
+    if (type === 'stitch') {
+      setShowAddModal(false);
+      setShowStitchModal(true);
+      return;
+    }
+    
     const newSec: Section = {
       id: `${type}_${Date.now()}`,
       type,
@@ -238,6 +271,39 @@ export const HomepageBuilder: React.FC = () => {
     handleSaveDraft(newArr);
     setShowAddModal(false);
     toast.success(`Added ${label}`);
+  };
+
+  const handleImportStitch = async () => {
+    if (!stitchDesignId.trim()) return;
+    setImportingStitch(true);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch(`${BACKEND}/api/stitch/import/${stitchDesignId.trim()}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error);
+
+      const newSec: Section = {
+        ...data.section,
+        id: `stitch_${Date.now()}`,
+        label: `Stitch: ${stitchDesignId}`,
+        isVisible: true,
+        order: sections.length,
+        isLocked: false,
+      };
+      
+      const newArr = [...sections, newSec];
+      setSections(newArr);
+      handleSaveDraft(newArr);
+      toast.success('Google Stitch design imported successfully!');
+      setShowStitchModal(false);
+      setStitchDesignId('');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to import Stitch design');
+    } finally {
+      setImportingStitch(false);
+    }
   };
 
   const handleSaveDraft = async (secsToSave = sections) => {
@@ -320,19 +386,31 @@ export const HomepageBuilder: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          <button
-            onClick={handleDiscard}
-            className="px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 text-xs font-semibold flex items-center gap-1.5 border border-white/10 transition-colors"
-          >
-            <RotateCcw className="w-4 h-4" />
-            Discard
-          </button>
+          <p className="text-slate-400 text-sm mt-1">Visually design and publish your Olive Pizza app layouts.</p>
+        </div>
+        
+        <div className="flex items-center gap-3">
+          <div className="flex bg-slate-950 p-1 rounded-xl border border-white/10">
+            <button
+              onClick={() => setBuilderMode('beginner')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${builderMode === 'beginner' ? 'bg-primary-500 text-white' : 'text-slate-400 hover:text-slate-300'}`}
+            >
+              Visual Mode
+            </button>
+            <button
+              onClick={() => setBuilderMode('advanced')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${builderMode === 'advanced' ? 'bg-primary-500 text-white' : 'text-slate-400 hover:text-slate-300'}`}
+            >
+              Developer Mode
+            </button>
+          </div>
+          
           <button
             onClick={() => handleSaveDraft()}
             disabled={saving}
-            className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold flex items-center gap-1.5 border border-white/10 transition-colors"
+            className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-sm font-semibold flex items-center gap-2 border border-white/10 transition-colors disabled:opacity-50"
           >
-            <Save className="w-4 h-4" />
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
             Save Draft
           </button>
           <button
@@ -374,6 +452,7 @@ export const HomepageBuilder: React.FC = () => {
                     onOpenSettings={(s) => setActiveSectionEdit(s)}
                     onDelete={handleDeleteSection}
                     onDuplicate={handleDuplicateSection}
+                    builderMode={builderMode}
                   />
                 ))}
               </div>
@@ -448,16 +527,55 @@ export const HomepageBuilder: React.FC = () => {
                 >
                   <div className="text-2xl mb-1">{tmpl.icon}</div>
                   <p className="text-white font-semibold text-xs">{tmpl.label}</p>
-                  <p className="text-slate-500 text-[10px] mt-0.5">Template component</p>
+                  <p className="text-white font-semibold text-xs">{tmpl.label}</p>
                 </button>
               ))}
             </div>
-            <div className="flex justify-end pt-2">
+            <div className="flex justify-end pt-4 border-t border-white/10">
               <button
                 onClick={() => setShowAddModal(false)}
-                className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-semibold"
+                className="px-4 py-2 rounded-xl text-slate-400 hover:text-white font-semibold text-sm transition-colors"
               >
                 Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Stitch Import Modal */}
+      {showStitchModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-md p-6 rounded-2xl bg-slate-900 border border-white/10 space-y-4">
+            <h3 className="text-white font-bold text-base flex items-center gap-2">
+              <span className="text-xl">🎨</span> Import Google Stitch Design
+            </h3>
+            <p className="text-sm text-slate-400">
+              Enter the unique ID of the Google Stitch design you wish to convert into a live SDUI section.
+            </p>
+            <div>
+              <input
+                type="text"
+                placeholder="e.g. stitch-uuid-1234"
+                value={stitchDesignId}
+                onChange={(e) => setStitchDesignId(e.target.value)}
+                className="w-full bg-slate-950 border border-white/10 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-primary-500 transition-colors"
+              />
+            </div>
+            <div className="flex justify-end pt-4 gap-3">
+              <button
+                onClick={() => setShowStitchModal(false)}
+                className="px-4 py-2 rounded-xl text-slate-400 hover:text-white font-semibold text-sm transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleImportStitch}
+                disabled={importingStitch || !stitchDesignId.trim()}
+                className="px-4 py-2 rounded-xl bg-primary-600 hover:bg-primary-500 text-white font-semibold text-sm flex items-center gap-2 transition-colors disabled:opacity-50"
+              >
+                {importingStitch ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                Import Design
               </button>
             </div>
           </div>
