@@ -361,14 +361,15 @@ router.post('/:id/accept', verifyToken, async (req: AuthRequest, res: Response) 
   try {
     const { id } = req.params;
     const userRole = req.user?.role;
-    if (userRole !== 'owner') return res.status(403).json({ error: 'Unauthorized' });
+    const uid = req.user?.uid;
+    if (userRole !== 'owner' || !uid) return res.status(403).json({ error: 'Unauthorized' });
 
     await adminDb.collection('orders').doc(id).update({
       status: 'preparing',
       updatedAt: new Date()
     });
 
-    orderEventService.emitStatusChange(id, 'preparing', req.user.uid);
+    orderEventService.emitStatusChange(id, 'preparing', uid);
     res.json({ success: true, status: 'preparing' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to accept order' });
@@ -380,7 +381,8 @@ router.post('/:id/reject', verifyToken, async (req: AuthRequest, res: Response) 
   try {
     const { id } = req.params;
     const userRole = req.user?.role;
-    if (userRole !== 'owner') return res.status(403).json({ error: 'Unauthorized' });
+    const uid = req.user?.uid;
+    if (userRole !== 'owner' || !uid) return res.status(403).json({ error: 'Unauthorized' });
 
     await adminDb.collection('orders').doc(id).update({
       status: 'cancelled',
@@ -388,7 +390,7 @@ router.post('/:id/reject', verifyToken, async (req: AuthRequest, res: Response) 
       updatedAt: new Date()
     });
 
-    orderEventService.emitStatusChange(id, 'cancelled', req.user.uid);
+    orderEventService.emitStatusChange(id, 'cancelled', uid);
     res.json({ success: true, status: 'cancelled' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to reject order' });

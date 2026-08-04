@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router';
 import {
   Layout,
   Palette,
@@ -45,7 +46,29 @@ const TABS = [
 ];
 
 export const WebsiteManagerHub: React.FC = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState('homepage');
+
+  useEffect(() => {
+    // Extract the last part of the path, e.g. /owner/website-manager/theme -> theme
+    const pathParts = location.pathname.split('/');
+    const lastPart = pathParts[pathParts.length - 1];
+    if (lastPart && lastPart !== 'website-manager' && lastPart !== 'sdui') {
+      const validTab = TABS.find(t => t.id === lastPart || t.id.replace('_', '-') === lastPart);
+      if (validTab) {
+        setActiveTab(validTab.id);
+      }
+    } else {
+      setActiveTab('homepage');
+    }
+  }, [location.pathname]);
+
+  const handleTabClick = (tabId: string) => {
+    setActiveTab(tabId);
+    const routeId = tabId.replace('_', '-');
+    navigate(`/owner/website-manager/${routeId}`);
+  };
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 p-4 sm:p-8 space-y-8">
@@ -72,7 +95,7 @@ export const WebsiteManagerHub: React.FC = () => {
           return (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => handleTabClick(tab.id)}
               className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
                 isActive
                   ? 'bg-primary-600 text-white shadow-lg shadow-primary-500/20'

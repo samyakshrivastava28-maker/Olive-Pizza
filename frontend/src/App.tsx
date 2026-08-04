@@ -321,8 +321,8 @@ function AppContent() {
                   <Route path="email" element={<OwnerEmailCenter />} />
                   <Route path="special-categories" element={<OwnerSpecialCategories />} />
                   <Route path="homepage" element={<OwnerHomepageManager />} />
-                  <Route path="website-manager" element={<WebsiteManagerHub />} />
-                  <Route path="sdui" element={<WebsiteManagerHub />} />
+                  <Route path="website-manager/*" element={<WebsiteManagerHub />} />
+                  <Route path="sdui/*" element={<WebsiteManagerHub />} />
                   <Route path="notifications" element={<OwnerNotificationCenter />} />
                   <Route path="verification-metrics" element={<OwnerVerificationMetrics />} />
                   <Route path="versions" element={<OwnerVersionManagement />} />

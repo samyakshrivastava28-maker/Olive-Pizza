@@ -589,6 +589,18 @@ export class DeliveryTemplates {
 // CUSTOMER TEMPLATES
 // =============================================================================
 export class CustomerTemplates {
+  /**
+   * Generic informational notification
+   */
+  static informational(title: string, body: string, url: string = '/'): NotificationPayload {
+    return buildPayload(title, body, {
+      priority: 'high',
+      url,
+      sound: 'default',
+      tag: 'informational',
+      channelId: ANDROID_CHANNELS.SYSTEM
+    });
+  }
 
   /**
    * Live order tracker — ONE notification per order, updated in-place.

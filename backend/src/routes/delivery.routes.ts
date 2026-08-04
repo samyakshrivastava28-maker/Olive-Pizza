@@ -240,7 +240,7 @@ const handleLocationUpdate = async (req: AuthRequest, res: Response) => {
         acknowledged: false
       });
       // Optionally emit websocket event to owner dashboard
-      webSocketServer.emitToAdmins('radius_warning', { partnerId: deliveryPartnerId, distance, maxRadius });
+      webSocketServer.broadcastToRole('owner', { type: 'radius_warning', data: { partnerId: deliveryPartnerId, distance, maxRadius } });
     }
 
     res.json({ success: true });

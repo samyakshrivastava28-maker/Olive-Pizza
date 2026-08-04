@@ -310,7 +310,7 @@ export const HomepageBuilder: React.FC = () => {
     setSaving(true);
     try {
       const token = await auth.currentUser?.getIdToken();
-      await fetch(`${BACKEND}/api/website-manager/draft/homepage`, {
+      await fetch(`${BACKEND}/api/website-manager/homepage/draft`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -329,7 +329,7 @@ export const HomepageBuilder: React.FC = () => {
     setSaving(true);
     try {
       const token = await auth.currentUser?.getIdToken();
-      const res = await fetch(`${BACKEND}/api/website-manager/publish/homepage`, {
+      const res = await fetch(`${BACKEND}/api/website-manager/homepage/publish`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -355,7 +355,7 @@ export const HomepageBuilder: React.FC = () => {
     if (!confirm('Are you sure you want to discard all unpublished draft changes?')) return;
     try {
       const token = await auth.currentUser?.getIdToken();
-      await fetch(`${BACKEND}/api/website-manager/draft/homepage`, {
+      await fetch(`${BACKEND}/api/website-manager/homepage/draft`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
