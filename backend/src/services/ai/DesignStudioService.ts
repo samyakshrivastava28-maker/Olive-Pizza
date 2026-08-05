@@ -79,24 +79,17 @@ function getOpenRouterClient(): OpenAI | null {
 // Pipeline models: each has a specific role
 const PIPELINE_MODELS = [
   {
+    id: 'deepseek_pro',
+    name: 'DeepSeek V4 Pro (Head Orchestrator)',
+    model: 'deepseek-ai/deepseek-v4-pro',
+    role: 'Head Orchestrator & Component Designer',
+    provider: 'nvidia',
+  },
+  {
     id: 'glm',
     name: 'GLM 5.2',
     model: 'z-ai/glm-5.2',
     role: 'UI Reasoning & Layout Structure',
-    provider: 'nvidia',
-  },
-  {
-    id: 'deepseek_pro',
-    name: 'DeepSeek V4 Pro',
-    model: 'deepseek-ai/deepseek-v4-pro',
-    role: 'Architecture & Component Design',
-    provider: 'nvidia',
-  },
-  {
-    id: 'deepseek_flash',
-    name: 'DeepSeek V4 Flash',
-    model: 'deepseek-ai/deepseek-v4-flash',
-    role: 'Fast Layout Generation',
     provider: 'nvidia',
   },
   {
@@ -107,24 +100,31 @@ const PIPELINE_MODELS = [
     provider: 'nvidia',
   },
   {
-    id: 'qwen',
-    name: 'Qwen 3',
-    model: 'meta/llama-3.3-70b-instruct',
-    role: 'Component Improvements & Refinement',
+    id: 'deepseek_flash',
+    name: 'DeepSeek V4 Flash',
+    model: 'deepseek-ai/deepseek-v4-flash',
+    role: 'Fast Layout Generation',
     provider: 'nvidia',
   },
   {
-    id: 'gemma',
-    name: 'Gemma 4',
-    model: 'google/gemma-4-31b-it',
-    role: 'Accessibility & Mobile Compliance',
+    id: 'qwen_image',
+    name: 'Qwen Image',
+    model: 'qwen-image',
+    role: 'Premium Food Photography',
     provider: 'nvidia',
   },
   {
-    id: 'gpt_oss',
-    name: 'GPT OSS 120B',
-    model: 'openai/gpt-oss-120b',
-    role: 'Final Merge & Reasoning',
+    id: 'flux',
+    name: 'FLUX',
+    model: 'flux-1-dev',
+    role: 'Modern Vector Asset Generation',
+    provider: 'nvidia',
+  },
+  {
+    id: 'sd3',
+    name: 'Stable Diffusion 3 Large',
+    model: 'stabilityai/stable-diffusion-3.5-large',
+    role: 'High Fidelity Brand Assets',
     provider: 'nvidia',
   },
 ];
@@ -179,135 +179,100 @@ export class DesignStudioService {
     const activeClient = openrouter || nvidia;
 
     const pipelineResults: DesignPipelineResult['pipelineResults'] = [];
-    const suggestions: string[] = [];
-
-    for (const step of PIPELINE_MODELS) {
-      const stepStart = Date.now();
-      const client = step.provider === 'openrouter' ? (openrouter || nvidia) : (nvidia || openrouter);
-
-      if (!client) {
-        pipelineResults.push({
-          modelId: step.id,
-          modelName: step.name,
-          role: step.role,
-          suggestion: 'AI client not configured.',
-          latencyMs: 0,
-          success: false,
-        });
-        continue;
-      }
-
-      try {
-        const prevSuggestions = suggestions.join('\n---\n');
-        const prompt = `
-Owner's Request: "${ownerPrompt}"
-Current Homepage Layout (SDUI JSON): ${JSON.stringify(currentLayout, null, 2).slice(0, 1000)}
-
-Previous model suggestions so far:
-${prevSuggestions || 'None yet - you are the first model.'}
-
-Your Role: ${step.role}
-
-Based on the above, provide your specific design suggestion as a concise JSON fragment or improvement notes.
-Keep your output under 300 tokens. Be concrete and actionable.
-REMEMBER: Only use Olive Pizza brand colors (#55775a, #f97316, #f59e0b, #0a0a0a).
-        `;
-
-        const result = await callModel(
-          client,
-          step.model,
-          OLIVE_PIZZA_BRAND_SYSTEM,
-          prompt,
-          500
-        );
-
-        suggestions.push(`[${step.name} - ${step.role}]: ${result}`);
-        pipelineResults.push({
-          modelId: step.id,
-          modelName: step.name,
-          role: step.role,
-          suggestion: result,
-          latencyMs: Date.now() - stepStart,
-          success: true,
-        });
-      } catch (e: any) {
-        console.warn(`[DesignStudio] ${step.name} failed:`, e.message);
-        pipelineResults.push({
-          modelId: step.id,
-          modelName: step.name,
-          role: step.role,
-          suggestion: `Error: ${e.message}`,
-          latencyMs: Date.now() - stepStart,
-          success: false,
-        });
-      }
+    let mergedLayout: any = currentLayout;
+    
+    if (!activeClient) {
+      throw new Error('No AI client configured.');
     }
 
-    // Final merge pass — synthesize all suggestions into SDUI layout
-    let mergedLayout: any = currentLayout;
-    let explanation = 'AI design pipeline completed. Review suggestions and approve to publish.';
-
-    if (activeClient) {
-      try {
-        const mergePrompt = `
-You are the final design synthesis AI for Olive Pizza.
-All specialist models have reviewed the owner's request and provided suggestions.
-
-Owner's Request: "${ownerPrompt}"
-Current Layout: ${JSON.stringify(currentLayout, null, 2).slice(0, 800)}
-
-All Specialist Suggestions:
-${suggestions.join('\n---\n').slice(0, 2000)}
-
-YOUR TASK:
-1. Synthesize all suggestions into the optimal final homepage sections array.
-2. Apply the best ideas from each specialist.
-3. Ensure strict Olive Pizza brand colors only.
-4. Output ONLY a valid JSON object:
-{
-  "explanation": "1-2 sentence summary of what changed",
-  "sections": [...updated sections array...]
-}
-NO markdown. NO code fences. Pure JSON only.
-        `;
-
-        const mergeResult = await callModel(
-          activeClient,
-          PIPELINE_MODELS[0].model, // GLM 5.2 for final merge & debugging
-          OLIVE_PIZZA_BRAND_SYSTEM,
-          mergePrompt,
-          1500
-        );
-
-        const cleaned = mergeResult.replace(/```json/gi, '').replace(/```/g, '').trim();
-        const parsed = JSON.parse(cleaned);
-        
-        if (parsed.sections && Array.isArray(parsed.sections)) {
-          // Enforce brand colors and recursively remove undefined values
-          const cleanUndefined = (obj: any): any => {
-            if (Array.isArray(obj)) return obj.map(cleanUndefined).filter(v => v !== undefined);
-            if (obj !== null && typeof obj === 'object') {
-              return Object.fromEntries(
-                Object.entries(obj)
-                  .filter(([_, v]) => v !== undefined)
-                  .map(([k, v]) => [k, cleanUndefined(v)])
-              );
-            }
-            return obj;
-          };
-
-          const cleanedSections = parsed.sections.map((s: any) => ({
-            ...s,
-            style: s.style ? StitchColorMapper.enforceBrandColors(s.style) : s.style,
-          }));
-
-          mergedLayout = { sections: cleanUndefined(cleanedSections) };
-        }
-        explanation = parsed.explanation || explanation;
-      } catch (e: any) {
-        console.warn('[DesignStudio] Final merge failed:', e.message);
-        explanation = `Design pipeline complete. ${pipelineResults.filter(r => r.success).length}/${PIPELINE_MODELS.length} models contributed suggestions.`;
+    // 1. DeepSeek V4 Pro: Orchestration & Google Stitch Access
+    const headModel = PIPELINE_MODELS.find(m => m.id === 'deepseek_pro');
+    let stitchContext = 'No Stitch designs found.';
+    try {
+      const designs = await StitchService.listDesigns(5);
+      if (designs.length > 0) {
+        stitchContext = JSON.stringify(designs.map(d => ({ id: d.id, name: d.name })));
       }
+    } catch {}
+
+    const orchestratorPrompt = `
+You are the Head Orchestrator. The owner wants: "${ownerPrompt}".
+Available Google Stitch Components: ${stitchContext}
+Current Layout: ${JSON.stringify(currentLayout).slice(0, 500)}
+
+Plan the layout. Provide a JSON map of sections we need to build or modify.
+`;
+    let plan = '';
+    const step1Start = Date.now();
+    try {
+      plan = await callModel(activeClient, headModel!.model, OLIVE_PIZZA_BRAND_SYSTEM, orchestratorPrompt, 400);
+      pipelineResults.push({ modelId: headModel!.id, modelName: headModel!.name, role: headModel!.role, suggestion: plan, latencyMs: Date.now() - step1Start, success: true });
+    } catch (e: any) {
+      console.warn('Head Orchestrator failed:', e);
+    }
+
+    // 2. Sub-models parallel execution
+    const subModels = PIPELINE_MODELS.filter(m => ['glm', 'kimi', 'deepseek_flash'].includes(m.id));
+    const subTasks = subModels.map(async (step) => {
+      const stepStart = Date.now();
+      try {
+        const prompt = `Owner Request: "${ownerPrompt}".\nOrchestrator Plan:\n${plan}\nYour Role: ${step.role}.\nDraft your contribution concisely.`;
+        const result = await callModel(activeClient, step.model, OLIVE_PIZZA_BRAND_SYSTEM, prompt, 400);
+        pipelineResults.push({ modelId: step.id, modelName: step.name, role: step.role, suggestion: result, latencyMs: Date.now() - stepStart, success: true });
+        return `[${step.name}]: ${result}`;
+      } catch (e: any) {
+        return `[${step.name}]: Failed - ${e.message}`;
+      }
+    });
+
+    const subResults = await Promise.all(subTasks);
+
+    // 3. DeepSeek V4 Pro: Final Merge
+    const mergeStart = Date.now();
+    let explanation = 'AI orchestrator pipeline completed.';
+    try {
+      const mergePrompt = `
+Owner: "${ownerPrompt}"
+Orchestrator Plan: ${plan}
+Sub-Model Contributions:
+${subResults.join('\n\n')}
+
+Current Layout:
+${JSON.stringify(currentLayout)}
+
+Generate the FINAL fully updated valid SDUI JSON configuration for the layout. Ensure all brand rules and Stitch IDs are applied correctly. Return pure JSON.
+      `;
+      const finalJsonStr = await callModel(activeClient, headModel!.model, OLIVE_PIZZA_BRAND_SYSTEM, mergePrompt, 2000);
+      
+      const cleaned = finalJsonStr.replace(/```json/gi, '').replace(/```/g, '').trim();
+      let parsed = JSON.parse(cleaned);
+      
+      if (parsed.sections && Array.isArray(parsed.sections)) {
+        // Enforce brand colors and recursively remove undefined values to prevent Firestore crashes
+        const cleanUndefined = (obj: any): any => {
+          if (Array.isArray(obj)) return obj.map(cleanUndefined).filter(v => v !== undefined);
+          if (obj !== null && typeof obj === 'object') {
+            return Object.fromEntries(
+              Object.entries(obj)
+                .filter(([_, v]) => v !== undefined)
+                .map(([k, v]) => [k, cleanUndefined(v)])
+            );
+          }
+          return obj;
+        };
+
+        const cleanedSections = parsed.sections.map((s: any) => ({
+          ...s,
+          style: s.style ? StitchColorMapper.enforceBrandColors(s.style) : s.style,
+        }));
+
+        mergedLayout = { sections: cleanUndefined(cleanedSections) };
+        explanation = parsed.explanation || explanation;
+      }
+      pipelineResults.push({ modelId: headModel!.id, modelName: headModel!.name, role: 'Final Synthesis', suggestion: 'Successfully merged layout', latencyMs: Date.now() - mergeStart, success: true });
+    } catch (e: any) {
+      console.warn('Merge failed, falling back to current layout:', e);
+      pipelineResults.push({ modelId: headModel!.id, modelName: headModel!.name, role: 'Final Synthesis', suggestion: `Merge failed: ${e.message}`, latencyMs: Date.now() - mergeStart, success: false });
     }
 
     return {
