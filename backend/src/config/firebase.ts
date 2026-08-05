@@ -49,6 +49,7 @@ if (getApps().length === 0) {
 
 try {
   adminDbInstance = getFirestore();
+  adminDbInstance.settings({ ignoreUndefinedProperties: true });
   adminAuthInstance = getAuth();
   adminMessagingInstance = getMessaging();
 } catch (e) {

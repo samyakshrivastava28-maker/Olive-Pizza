@@ -41,6 +41,15 @@ DO NOT use blue, purple, pink, cyan, or any random colors.
 DO NOT use TailwindCSS utilities that don't match the brand palette.
 All output must use CSS variables, brand tokens, or inline hex from the list above ONLY.
 Output format: Valid JSON representing Olive Pizza SDUI sections array.
+
+STITCH COMPONENT SYSTEM:
+You have access to Google Stitch component logic. When suggesting layouts, prefer mapping them to rich React components wrapped in Framer Motion animations. Use `framer-motion` for transitions (e.g., initial, animate, exit properties). 
+Stitch UI elements:
+- Interactive Floating Elements
+- Glassmorphic Cards
+- Animated Data Displays
+
+Ensure your generated SDUI JSON translates beautifully into React & Framer Motion.
 `;
 
 function getNvidiaClient(): OpenAI | null {
@@ -74,49 +83,49 @@ const PIPELINE_MODELS = [
     name: 'GLM 5.2',
     model: 'thudm/glm-4-9b-chat',
     role: 'UI Reasoning & Layout Structure',
-    provider: 'openrouter',
+    provider: 'nvidia',
   },
   {
     id: 'deepseek_pro',
     name: 'DeepSeek V4 Pro',
     model: 'deepseek/deepseek-chat',
     role: 'Architecture & Component Design',
-    provider: 'openrouter',
+    provider: 'nvidia',
   },
   {
     id: 'deepseek_flash',
     name: 'DeepSeek V4 Flash',
     model: 'deepseek/deepseek-r1-distill-qwen-7b',
     role: 'Fast Layout Generation',
-    provider: 'openrouter',
+    provider: 'nvidia',
   },
   {
     id: 'kimi',
     name: 'Kimi 2.6',
     model: 'moonshotai/kimi-2.6',
     role: 'Creative UX & User Flow Ideas',
-    provider: 'openrouter',
+    provider: 'nvidia',
   },
   {
     id: 'qwen',
     name: 'Qwen 3',
     model: 'qwen/qwen3-235b-a22b',
     role: 'Component Improvements & Refinement',
-    provider: 'openrouter',
+    provider: 'nvidia',
   },
   {
     id: 'gemma',
     name: 'Gemma 4',
     model: 'google/gemma-3-27b-it',
     role: 'Accessibility & Mobile Compliance',
-    provider: 'openrouter',
+    provider: 'nvidia',
   },
   {
     id: 'gpt_oss',
     name: 'GPT OSS 120B',
     model: 'meta-llama/llama-3.3-70b-instruct',
     role: 'Final Merge & Reasoning',
-    provider: 'openrouter',
+    provider: 'nvidia',
   },
 ];
 
@@ -264,7 +273,7 @@ NO markdown. NO code fences. Pure JSON only.
 
         const mergeResult = await callModel(
           activeClient,
-          PIPELINE_MODELS[6].model, // GPT OSS final merge
+          PIPELINE_MODELS[0].model, // GLM 5.2 for final merge & debugging
           OLIVE_PIZZA_BRAND_SYSTEM,
           mergePrompt,
           1500
@@ -274,11 +283,25 @@ NO markdown. NO code fences. Pure JSON only.
         const parsed = JSON.parse(cleaned);
         
         if (parsed.sections && Array.isArray(parsed.sections)) {
-          // Enforce brand colors on the generated layout
-          mergedLayout = { sections: parsed.sections.map((s: any) => ({
+          // Enforce brand colors and recursively remove undefined values
+          const cleanUndefined = (obj: any): any => {
+            if (Array.isArray(obj)) return obj.map(cleanUndefined).filter(v => v !== undefined);
+            if (obj !== null && typeof obj === 'object') {
+              return Object.fromEntries(
+                Object.entries(obj)
+                  .filter(([_, v]) => v !== undefined)
+                  .map(([k, v]) => [k, cleanUndefined(v)])
+              );
+            }
+            return obj;
+          };
+
+          const cleanedSections = parsed.sections.map((s: any) => ({
             ...s,
             style: s.style ? StitchColorMapper.enforceBrandColors(s.style) : s.style,
-          }))};
+          }));
+
+          mergedLayout = { sections: cleanUndefined(cleanedSections) };
         }
         explanation = parsed.explanation || explanation;
       } catch (e: any) {

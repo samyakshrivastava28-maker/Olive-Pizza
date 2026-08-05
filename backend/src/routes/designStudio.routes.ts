@@ -299,45 +299,20 @@ router.post('/generate-image', async (req: AuthRequest, res: Response) => {
     const { prompt, model = 'flux-schnell', imageType = 'product' } = req.body;
     if (!prompt) return res.status(400).json({ error: 'Prompt is required.' });
 
-    const key = process.env.NVIDIA_API_KEY;
-    if (!key) {
-      return res.status(400).json({
-        error: 'NVIDIA_API_KEY required for image generation.',
-        availableModels: ['Qwen Image', 'Stable Diffusion 3.5', 'FLUX.1-dev', 'FLUX.1-schnell'],
-      });
-    }
-
-    // NVIDIA NIM image API
-    const response = await fetch('https://integrate.api.nvidia.com/v1/images/generations', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${key}`,
-      },
-      body: JSON.stringify({
-        model: model === 'flux-schnell' ? 'black-forest-labs/flux-1-schnell' :
-               model === 'flux-dev' ? 'black-forest-labs/flux-1-dev' :
-               model === 'sd35' ? 'stabilityai/stable-diffusion-3.5-large' :
-               'black-forest-labs/flux-1-schnell',
-        prompt: `Olive Pizza premium restaurant, ${prompt}. High quality food photography, dark luxurious background, warm lighting, professional restaurant aesthetic.`,
-        n: 2,
-        size: '1024x1024',
-        response_format: 'url',
-      }),
-    });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      throw new Error(`NVIDIA Image API: ${errText}`);
-    }
-
-    const data: any = await response.json();
-    const imageUrls = data.data?.map((img: any) => img.url) || [];
+    // Use Pollinations AI for reliable free image generation without 404s
+    const encodedPrompt = encodeURIComponent(`Olive Pizza premium restaurant, ${prompt}. High quality food photography, dark luxurious background, warm lighting, professional restaurant aesthetic.`);
+    const seed1 = Math.floor(Math.random() * 100000);
+    const seed2 = Math.floor(Math.random() * 100000);
+    
+    const imageUrls = [
+      `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=1024&nologo=true&enhance=true&seed=${seed1}`,
+      `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=1024&nologo=true&enhance=true&seed=${seed2}`
+    ];
 
     res.json({
       success: true,
       images: imageUrls,
-      model,
+      model: model || 'pollinations-flux',
       prompt,
       message: 'Review images below. Click "Approve & Upload" to save to Cloudinary.',
     });

@@ -14,6 +14,7 @@ import {
   History,
   ShieldCheck,
   Bot,
+  Play,
 } from 'lucide-react';
 import HomepageBuilder from './HomepageBuilder';
 import ThemeManager from './ThemeManager';
@@ -28,10 +29,12 @@ import ABTesting from './ABTesting';
 import VersionHistory from './VersionHistory';
 import PermissionsManager from './PermissionsManager';
 import AIDesignStudio from './AIDesignStudio';
+import AILivePreview from './AILivePreview';
 
 const TABS = [
   { id: 'homepage', label: 'Homepage Builder', icon: Layout },
   { id: 'ai_studio', label: 'AI Design Studio', icon: Bot },
+  { id: 'ai_preview', label: 'AI Live Preview', icon: Play },
   { id: 'theme', label: 'Theme & Tokens', icon: Palette },
   { id: 'navigation', label: 'Navigation & Footer', icon: Compass },
   { id: 'announcements', label: 'Announcement Bar', icon: Bell },
@@ -113,6 +116,7 @@ export const WebsiteManagerHub: React.FC = () => {
       <div>
         {activeTab === 'homepage' && <HomepageBuilder />}
         {activeTab === 'ai_studio' && <AIDesignStudio />}
+        {activeTab === 'ai_preview' && <AILivePreview />}
         {activeTab === 'theme' && <ThemeManager />}
         {activeTab === 'navigation' && <NavigationBuilder />}
         {activeTab === 'announcements' && <AnnouncementManager />}
