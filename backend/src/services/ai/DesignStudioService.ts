@@ -43,7 +43,7 @@ All output must use CSS variables, brand tokens, or inline hex from the list abo
 Output format: Valid JSON representing Olive Pizza SDUI sections array.
 
 STITCH COMPONENT SYSTEM:
-You have access to Google Stitch component logic. When suggesting layouts, prefer mapping them to rich React components wrapped in Framer Motion animations. Use `framer-motion` for transitions (e.g., initial, animate, exit properties). 
+You have access to Google Stitch component logic. When suggesting layouts, prefer mapping them to rich React components wrapped in Framer Motion animations. Use 'framer-motion' for transitions (e.g., initial, animate, exit properties).
 Stitch UI elements:
 - Interactive Floating Elements
 - Glassmorphic Cards
@@ -81,49 +81,49 @@ const PIPELINE_MODELS = [
   {
     id: 'glm',
     name: 'GLM 5.2',
-    model: 'thudm/glm-4-9b-chat',
+    model: 'glm-5.2',
     role: 'UI Reasoning & Layout Structure',
     provider: 'nvidia',
   },
   {
     id: 'deepseek_pro',
     name: 'DeepSeek V4 Pro',
-    model: 'deepseek/deepseek-chat',
+    model: 'deepseek-v4-pro',
     role: 'Architecture & Component Design',
     provider: 'nvidia',
   },
   {
     id: 'deepseek_flash',
     name: 'DeepSeek V4 Flash',
-    model: 'deepseek/deepseek-r1-distill-qwen-7b',
+    model: 'deepseek-v4-flash',
     role: 'Fast Layout Generation',
     provider: 'nvidia',
   },
   {
     id: 'kimi',
     name: 'Kimi 2.6',
-    model: 'moonshotai/kimi-2.6',
+    model: 'moonshotai/kimi-k2.6',
     role: 'Creative UX & User Flow Ideas',
     provider: 'nvidia',
   },
   {
     id: 'qwen',
     name: 'Qwen 3',
-    model: 'qwen/qwen3-235b-a22b',
+    model: 'qwen3-next-80b-a3b-instruct',
     role: 'Component Improvements & Refinement',
     provider: 'nvidia',
   },
   {
     id: 'gemma',
     name: 'Gemma 4',
-    model: 'google/gemma-3-27b-it',
+    model: 'gemma-4-31b-it',
     role: 'Accessibility & Mobile Compliance',
     provider: 'nvidia',
   },
   {
     id: 'gpt_oss',
     name: 'GPT OSS 120B',
-    model: 'meta-llama/llama-3.3-70b-instruct',
+    model: 'gpt-oss-120b',
     role: 'Final Merge & Reasoning',
     provider: 'nvidia',
   },
