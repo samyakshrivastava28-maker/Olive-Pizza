@@ -12,16 +12,51 @@
  *   POST   /api/section-designer/publish       — Publish to live
  */
 
-import { Router } from 'express';
+import { Router, Request } from 'express';
 import { requireAuth, requireRole, AuthRequest } from '../middleware/auth.middleware.js';
 import { AgentStreamService } from '../services/sectionDesigner/AgentStreamService.js';
 import { OrchestratorService } from '../services/sectionDesigner/OrchestratorService.js';
 import { StitchService } from '../services/stitch/StitchService.js';
-import { adminDb } from '../config/firebase.js';
+import { adminDb, adminAuth } from '../config/firebase.js';
 import { v4 as uuidv4 } from 'uuid';
 import { Response } from 'express';
 
 const router = Router();
+
+/**
+ * Middleware that accepts a Bearer token from either:
+ * - Authorization header (standard)
+ * - ?token= query param (needed for browser EventSource / SSE)
+ */
+async function flexAuth(req: AuthRequest, res: Response, next: any): Promise<void> {
+  let token: string | undefined;
+
+  const authHeader = req.headers.authorization;
+  if (authHeader?.startsWith('Bearer ')) {
+    token = authHeader.split('Bearer ')[1];
+  } else if (req.query.token && typeof req.query.token === 'string') {
+    token = req.query.token;
+  }
+
+  if (!token) {
+    res.status(401).json({ error: 'Unauthorized: No token provided' });
+    return;
+  }
+
+  try {
+    const decoded = await adminAuth.verifyIdToken(token);
+    let role = decoded.role as string;
+    if (!role || role === 'customer') {
+      if (decoded.email?.toLowerCase() === 'olivepizzarjn@gmail.com' || decoded.email?.toLowerCase() === 'webhub2811@gmail.com') {
+        role = 'owner';
+      }
+    }
+    req.user = { uid: decoded.uid, email: decoded.email, role: role || 'customer' };
+    next();
+  } catch {
+    res.status(401).json({ error: 'Unauthorized: Invalid token' });
+  }
+}
 
 /**
  * POST /api/section-designer/start
@@ -52,8 +87,10 @@ router.post('/start', requireAuth, requireRole(['owner', 'admin', 'developer']),
 /**
  * GET /api/section-designer/stream/:sessionId
  * SSE endpoint — client subscribes to receive agent events.
+ * Note: Uses flexAuth to accept token from ?token= query param
+ * because browser EventSource API cannot set custom headers.
  */
-router.get('/stream/:sessionId', requireAuth, (req: AuthRequest, res: Response) => {
+router.get('/stream/:sessionId', flexAuth, (req: AuthRequest, res: Response) => {
   const { sessionId } = req.params;
   AgentStreamService.register(sessionId, res);
   // Note: response is kept open by AgentStreamService. No res.json() here.

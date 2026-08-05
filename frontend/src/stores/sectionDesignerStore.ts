@@ -7,6 +7,8 @@
 import { create } from 'zustand';
 import { auth } from '../lib/firebase';
 
+const BACKEND = import.meta.env.VITE_BACKEND_URL || '';
+
 export type AgentEventType =
   | 'session_started' | 'planning' | 'question' | 'question_answered'
   | 'stitch_fetching' | 'stitch_selected' | 'subagent_started' | 'subagent_done'
@@ -144,7 +146,7 @@ export const useSectionDesignerStore = create<SectionDesignerStore>((set, get) =
 
     try {
       const headers = await getAuthHeaders();
-      const res = await fetch('/api/section-designer/start', {
+      const res = await fetch(`${BACKEND}/api/section-designer/start`, {
         method: 'POST',
         headers,
         body: JSON.stringify({ prompt, referenceImages }),
@@ -159,11 +161,7 @@ export const useSectionDesignerStore = create<SectionDesignerStore>((set, get) =
       _currentSessionId = sessionId;
       set({ sessionId });
 
-      // Subscribe to SSE stream
-      const token = await auth.currentUser?.getIdToken();
-      const sseUrl = `/api/section-designer/stream/${sessionId}${token ? `?token=${encodeURIComponent(token)}` : ''}`;
-      
-      // Use fetch-based SSE to send auth header
+      // Subscribe to SSE stream — uses full backend URL
       _subscribeToStream(sessionId, set, get);
 
     } catch (err: any) {
@@ -188,7 +186,7 @@ export const useSectionDesignerStore = create<SectionDesignerStore>((set, get) =
     if (sessionId) {
       try {
         const headers = await getAuthHeaders();
-        await fetch(`/api/section-designer/session/${sessionId}`, {
+        await fetch(`${BACKEND}/api/section-designer/session/${sessionId}`, {
           method: 'DELETE',
           headers,
         });
@@ -206,7 +204,7 @@ export const useSectionDesignerStore = create<SectionDesignerStore>((set, get) =
 
     try {
       const headers = await getAuthHeaders();
-      await fetch(`/api/section-designer/answer/${sessionId}`, {
+      await fetch(`${BACKEND}/api/section-designer/answer/${sessionId}`, {
         method: 'POST',
         headers,
         body: JSON.stringify({ questionId, answer }),
@@ -224,7 +222,7 @@ export const useSectionDesignerStore = create<SectionDesignerStore>((set, get) =
     if (!sessionId) return;
 
     const headers = await getAuthHeaders();
-    await fetch('/api/section-designer/save-draft', {
+    await fetch(`${BACKEND}/api/section-designer/save-draft`, {
       method: 'POST',
       headers,
       body: JSON.stringify({ sessionId }),
@@ -236,7 +234,7 @@ export const useSectionDesignerStore = create<SectionDesignerStore>((set, get) =
     if (!sessionId) return;
 
     const headers = await getAuthHeaders();
-    await fetch('/api/section-designer/publish', {
+    await fetch(`${BACKEND}/api/section-designer/publish`, {
       method: 'POST',
       headers,
       body: JSON.stringify({ sessionId }),
@@ -253,16 +251,15 @@ export const useSectionDesignerStore = create<SectionDesignerStore>((set, get) =
   },
 }));
 
-// Fetch-based SSE subscription (supports auth headers)
+// SSE subscription using full backend URL
 function _subscribeToStream(
   sessionId: string,
   set: any,
   get: () => SectionDesignerStore
 ): void {
   auth.currentUser?.getIdToken().then(token => {
-    const evtSource = new EventSource(
-      `/api/section-designer/stream/${sessionId}?token=${encodeURIComponent(token || '')}`
-    );
+    const sseUrl = `${BACKEND}/api/section-designer/stream/${sessionId}?token=${encodeURIComponent(token || '')}`;
+    const evtSource = new EventSource(sseUrl);
     _sseSource = evtSource;
 
     evtSource.onmessage = (e) => {
