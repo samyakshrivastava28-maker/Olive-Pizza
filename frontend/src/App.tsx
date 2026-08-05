@@ -159,6 +159,7 @@ const OwnerNotificationDiagnostics = lazyWithRetry(() => import('./pages/owner/O
 const OwnerDataManager = lazyWithRetry(() => import('./pages/owner/DataManager'));
 const WebsiteManagerHub = lazyWithRetry(() => import('./pages/owner/WebsiteManager'));
 const DeveloperDashboard = lazyWithRetry(() => import('./pages/owner/DeveloperDashboard'));
+const SectionDesigner = lazyWithRetry(() => import('./pages/owner/SectionDesigner'));
 
 
 // Lazy loaded delivery pages
@@ -331,6 +332,11 @@ function AppContent() {
                   <Route path="notification-diagnostics" element={<OwnerNotificationDiagnostics />} />
                   <Route path="data-manager/*" element={<OwnerDataManager />} />
                 </Route>
+              </Route>
+
+              {/* Section Designer — Full Screen (outside OwnerLayout) */}
+              <Route element={<OwnerGuard />}>
+                <Route path="/owner/section-designer" element={<SectionDesigner />} />
               </Route>
 
               {/* Developer Routes */}

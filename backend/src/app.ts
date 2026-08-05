@@ -240,8 +240,13 @@ app.use('/stitch', stitchRoutes);
 app.use('/api/stitch', stitchRoutes);
 
 import designStudioRoutes from './routes/designStudio.routes.js';
+import sectionDesignerRoutes from './routes/sectionDesigner.routes.js';
 app.use('/design-studio', designStudioRoutes);
 app.use('/api/design-studio', designStudioRoutes);
+
+// Section Designer — AI Multimodal Orchestration (rate limited as expensive AI)
+app.use('/api/section-designer', expensiveLimiter);
+app.use('/api/section-designer', sectionDesignerRoutes);
 
 // Start background payment reconciliation cron job
 PaymentReconciliationService.startCronJob();

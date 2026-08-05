@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useWebsiteConfigStore } from '../../../stores/websiteConfigStore';
+import { auth } from '../../../lib/firebase';
 import { RefreshCw, Code, Smartphone, Monitor, Send, Sparkles, Bot, AlertCircle, Settings, Layers, Box, ImageIcon } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -45,7 +46,7 @@ export default function SectionDesigner() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('owner_token')}`,
+          'Authorization': `Bearer ${await auth.currentUser?.getIdToken()}`,
         },
         body: JSON.stringify({ prompt }),
       });
