@@ -23,12 +23,8 @@ import {
 import { auth } from '../../lib/firebase';
 import toast from 'react-hot-toast';
 import AIDiagnosticsConsole from '../../components/developer/AIDiagnosticsConsole';
-import DevWebsiteManager from '../../components/developer/sdui/DevWebsiteManager';
-import DevRealtimeMonitor from '../../components/developer/sdui/DevRealtimeMonitor';
-import DevLiveInspector from '../../components/developer/sdui/DevLiveInspector';
-import DevPerformanceAnalytics from '../../components/developer/sdui/DevPerformanceAnalytics';
 
-const BACKEND = import.meta.env.VITE_BACKEND_URL || 'https://olive-pizza-backend.onrender.com';
+const BACKEND = import.meta.env.VITE_BACKEND_URL || (import.meta.env.DEV ? 'http://localhost:3000' : 'https://olive-pizza-backend.onrender.com');
 
 async function devGet(path: string) {
   const token = await auth.currentUser?.getIdToken();
@@ -375,12 +371,21 @@ export default function DeveloperDashboard() {
         {/* SDUI Master Controls */}
         {activeTab === 'sdui' && (
           <motion.div key="sdui" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
-            <DevWebsiteManager />
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <DevRealtimeMonitor />
-              <DevPerformanceAnalytics />
+            <div className="p-6 rounded-3xl bg-slate-900 border border-white/10 space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="p-3 rounded-2xl bg-primary-500/20 text-primary-400 text-xl font-bold">🎨</div>
+                <div>
+                  <h3 className="text-xl font-black text-white">Unified Website Manager (SDUI)</h3>
+                  <p className="text-xs text-slate-400">All Server-Driven UI master tools are unified under Website Manager Hub.</p>
+                </div>
+              </div>
+              <a
+                href="/owner/website-manager"
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary-500 hover:bg-primary-600 font-bold text-xs text-white shadow-lg shadow-primary-500/20"
+              >
+                Launch Website Manager Hub →
+              </a>
             </div>
-            <DevLiveInspector />
           </motion.div>
         )}
 

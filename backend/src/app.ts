@@ -82,19 +82,15 @@ app.use(cors({
 
 // Restrict JSON Body Payload to 1MB to prevent memory exhaustion / DoS
 app.use(express.json({ limit: '1mb' }));
-app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+app.use(express.urlencoded({ extended: true }));
 
 // API Performance Tracker
 app.use((req, res, next) => {
   const start = process.hrtime();
   res.on('finish', () => {
-    const diff = process.hrtime(start);
-    const time = diff[0] * 1e3 + diff[1] * 1e-6;
-    if (time > 500) {
-      console.warn(`[PERF ALERT] Slow API detected: ${req.method} ${req.originalUrl} - ${time.toFixed(2)}ms`);
-    } else {
-      console.log(`[API] ${req.method} ${req.originalUrl} - ${time.toFixed(2)}ms`);
-    }
+    const elapsed = process.hrtime(start);
+    const ms = (elapsed[0] * 1000) + (elapsed[1] / 1e6);
+    console.log(`[API TRACE] ${req.method} ${req.originalUrl} -> HTTP ${res.statusCode} (${ms.toFixed(2)}ms)`);
   });
   next();
 });
@@ -191,9 +187,6 @@ app.use('/api/tracking', trackingRoutes);
 app.use('/email', emailRoutes);
 app.use('/api/email', emailRoutes);
 
-app.use('/google-drive', googleDriveRoutes);
-app.use('/api/google-drive', googleDriveRoutes);
-
 app.use('/heartbeat', heartbeatRoutes);
 app.use('/api/heartbeat', heartbeatRoutes);
 
@@ -240,13 +233,12 @@ app.use('/stitch', stitchRoutes);
 app.use('/api/stitch', stitchRoutes);
 
 import designStudioRoutes from './routes/designStudio.routes.js';
-import sectionDesignerRoutes from './routes/sectionDesigner.routes.js';
+import knowledgeRoutes from './routes/knowledge.routes.js';
 app.use('/design-studio', designStudioRoutes);
 app.use('/api/design-studio', designStudioRoutes);
 
-// Section Designer — AI Multimodal Orchestration (rate limited as expensive AI)
-app.use('/section-designer', expensiveLimiter);
-app.use('/section-designer', sectionDesignerRoutes);
+app.use('/knowledge', knowledgeRoutes);
+app.use('/api/knowledge', knowledgeRoutes);
 
 // Start background payment reconciliation cron job
 PaymentReconciliationService.startCronJob();

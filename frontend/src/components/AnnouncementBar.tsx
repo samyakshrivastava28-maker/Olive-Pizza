@@ -1,12 +1,14 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ExternalLink } from 'lucide-react';
 import { Link } from 'react-router';
-import { useWebsiteConfigStore } from '../stores/websiteConfigStore';
+import { useSDUIStore } from '../stores/sduiStore';
 
 export const AnnouncementBar: React.FC = () => {
-  const activeAnnouncement = useWebsiteConfigStore((state) => state.activeAnnouncement);
-  const dismissAnnouncement = useWebsiteConfigStore((state) => state.dismissAnnouncement);
+  const announcements = useSDUIStore((state) => state.announcements);
+  const [dismissedIds, setDismissedIds] = useState<string[]>([]);
+
+  const activeAnnouncement = announcements.find((a) => a.isActive && !dismissedIds.includes(a.id));
 
   if (!activeAnnouncement) return null;
 
@@ -17,7 +19,7 @@ export const AnnouncementBar: React.FC = () => {
         animate={{ height: 'auto', opacity: 1 }}
         exit={{ height: 0, opacity: 0 }}
         style={{
-          backgroundColor: activeAnnouncement.backgroundColor || '#f97316',
+          backgroundColor: activeAnnouncement.bgColor || '#ea580c',
           color: activeAnnouncement.textColor || '#ffffff',
         }}
         className="w-full relative z-50 text-xs md:text-sm font-semibold overflow-hidden shadow-md"
@@ -37,15 +39,13 @@ export const AnnouncementBar: React.FC = () => {
             )}
           </div>
 
-          {activeAnnouncement.closeable && (
-            <button
-              onClick={() => dismissAnnouncement(activeAnnouncement.id)}
-              className="p-1 rounded-full hover:bg-black/10 transition-colors"
-              aria-label="Dismiss Announcement"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          )}
+          <button
+            onClick={() => setDismissedIds([...dismissedIds, activeAnnouncement.id])}
+            className="p-1 rounded-full hover:bg-black/10 transition-colors"
+            aria-label="Dismiss Announcement"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
         </div>
       </motion.div>
     </AnimatePresence>

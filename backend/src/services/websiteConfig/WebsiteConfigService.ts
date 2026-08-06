@@ -1,4 +1,6 @@
 import { adminDb as db } from '../../config/firebase.js';
+import { CloudflareR2Service } from '../storage/CloudflareR2Service.js';
+import { KnowledgeGeneratorService } from '../knowledge/KnowledgeGeneratorService.js';
 import {
   HomepageConfig,
   ThemeConfig,
@@ -274,13 +276,13 @@ export class WebsiteConfigService {
       // Enforce Section Lock Protection: Prevent non-developers from modifying or deleting locked sections
       if (!isDeveloper && config.sections) {
         const lockedSectionMap = new Map<string, Section>();
-        currentDraft.sections.forEach((s) => {
+        currentDraft.sections.forEach((s: any) => {
           if (s.isLocked) lockedSectionMap.set(s.id, s);
         });
 
         // Ensure all locked sections remain present and untouched unless developer
         lockedSectionMap.forEach((lockedSec, id) => {
-          const incoming = config.sections?.find((s) => s.id === id);
+          const incoming = config.sections?.find((s: any) => s.id === id);
           if (!incoming) {
             throw new Error(`Section "${lockedSec.label}" is locked by platform developer and cannot be deleted.`);
           }
@@ -334,6 +336,18 @@ export class WebsiteConfigService {
         publishedBy: { uid: userId, email: userEmail, role: isDeveloper ? 'developer' : 'owner' },
         changelog: newPublishedConfig.changelog,
         snapshot: { homepage: newPublishedConfig },
+      });
+
+      // 3. Upload SDUI JSON Backup to Cloudflare R2
+      try {
+        await CloudflareR2Service.uploadJson(`sdui_backups/sdui_v${newVersionNumber}_${Date.now()}.json`, newPublishedConfig);
+      } catch (r2Err: any) {
+        console.warn('[WebsiteConfigService] R2 SDUI backup notice:', r2Err.message);
+      }
+
+      // 4. Trigger Knowledge Sync for Website Pages & Layout
+      KnowledgeGeneratorService.onDataChanged(['website_pages.json', 'theme.json', 'navigation.json']).catch(err => {
+        console.warn('[WebsiteConfigService] Knowledge sync notice:', err.message);
       });
 
       return newPublishedConfig;

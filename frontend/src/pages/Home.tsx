@@ -25,7 +25,6 @@ import SpecialCategorySection from "../components/ui/SpecialCategorySection";
 import LuxuryHero from "../components/ui/LuxuryHero";
 import LuxuryProductCard from "../components/ui/LuxuryProductCard";
 import { useAuthStore, useCartStore } from "../lib/store";
-import { useHomeLayoutStore } from "../lib/homeLayout";
 import { useNetworkStore } from "../lib/networkQuality";
 import { filterActive } from "../lib/scheduling";
 import { subscribeToWishlist } from "../lib/wishlist";
@@ -42,7 +41,7 @@ import FeaturedShowcase from "../components/home/FeaturedShowcase";
 import AppDownloadSection from "../components/home/AppDownloadSection";
 import FlagshipFooter from "../components/home/FlagshipFooter";
 import HomepageRenderer from "../components/sdui/HomepageRenderer";
-import { useWebsiteConfigStore } from "../stores/websiteConfigStore";
+import { useSDUIStore } from "../stores/sduiStore";
 
 // ─── Premium Skeleton ─────────────────────────────────────────────────────────
 function SectionSkeleton({ rows = 3 }: { rows?: number }) {
@@ -138,16 +137,7 @@ export default function Home() {
   const addItem = useCartStore((s) => s.addItem);
   const navigate = useNavigate();
 
-  // ─── Home Layout ─────────────────────────────────────────────────────────
-  const { sections, subscribePublished } = useHomeLayoutStore();
-  const activeSections = [...sections]
-    .sort((a, b) => a.order - b.order)
-    .filter((s) => s.isEnabled);
 
-  useEffect(() => {
-    const unsub = subscribePublished();
-    return unsub;
-  }, []);
 
   // ─── Data State ───────────────────────────────────────────────────────────
   const {
@@ -233,193 +223,7 @@ export default function Home() {
   const isStoreOpen =
     storeStatus.isRestaurantOpen && storeStatus.isWithinBusinessHours;
 
-  // ─── Render a section by type ─────────────────────────────────────────────
-  const renderSection = (section: (typeof activeSections)[0]) => {
-    switch (section.type) {
-      case "hero":
-        return null;
 
-      case "ads":
-        if (!isInitialized) return <SectionSkeleton rows={1} />;
-        if (ads.length === 0) return null;
-        return (
-          <PremiumSectionWrapper
-            id="ads"
-            key="ads"
-            onView={() => trackEvent({ type: "section_view", sectionId: "ads" })}
-          >
-            <BannerCarousel
-              banners={ads.map((a) => ({
-                id: a.id,
-                title: a.title,
-                description: a.description,
-                mediaUrl: a.mediaUrl,
-                mediaType: a.mediaType,
-                ctaText: a.ctaText,
-                ctaLink: a.ctaLink,
-                ctaType: a.ctaType,
-              }))}
-            />
-          </PremiumSectionWrapper>
-        );
-
-      case "coupons":
-        if (!isInitialized) return <SectionSkeleton rows={1} />;
-        if (coupons.length === 0) return null;
-        return (
-          <PremiumSectionWrapper
-            id="coupons"
-            key="coupons"
-            onView={() => trackEvent({ type: "section_view", sectionId: "coupons" })}
-          >
-            <PremiumSectionHeader
-              title="Active Offers"
-              subtitle="Grab these deals before they expire!"
-              accent="🎟️"
-            />
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {coupons.map((coupon, i) => (
-                <CouponCard key={coupon.id} coupon={coupon} index={i} />
-              ))}
-            </div>
-          </PremiumSectionWrapper>
-        );
-
-      case "special_categories":
-        if (!isInitialized) return <SectionSkeleton rows={2} />;
-        if (specialCategories.length === 0) return null;
-        return (
-          <div key="special_categories" className="space-y-12">
-            {specialCategories.map((cat, i) => (
-              <SpecialCategorySection
-                key={cat.id}
-                category={cat}
-                allProducts={allProducts}
-                wishlistIds={wishlistIds}
-                index={i}
-              />
-            ))}
-          </div>
-        );
-
-      case "top_selling":
-        if (!isInitialized) return <SectionSkeleton rows={2} />;
-        if (topSelling.length === 0) return null;
-        return (
-          <PremiumSectionWrapper
-            id="top_selling"
-            key="top_selling"
-            onView={() => trackEvent({ type: "section_view", sectionId: "top_selling" })}
-          >
-            <PremiumSectionHeader
-              title="Top Selling"
-              subtitle="Our customers' absolute favourites"
-              accent="🔥"
-            />
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-5">
-              {topSelling.map((p, i) => (
-                <LuxuryProductCard
-                  key={p.id}
-                  product={p}
-                  wishlistIds={wishlistIds}
-                  index={i}
-                />
-              ))}
-            </div>
-          </PremiumSectionWrapper>
-        );
-
-      case "menu":
-        return null;
-
-      case "personalization":
-        if (!isAuthenticated) return null;
-        if (!isInitialized || allProducts.length === 0) return null;
-        const recommended = [...allProducts].sort(() => Math.random() - 0.5).slice(0, 4);
-        return (
-          <PremiumSectionWrapper
-            id="personalization"
-            key="personalization"
-            onView={() => trackEvent({ type: "section_view", sectionId: "personalization" })}
-          >
-            <PremiumSectionHeader
-              title="Recommended For You"
-              subtitle="Picks tailored to your taste"
-              accent="✨"
-            />
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-5">
-              {recommended.map((p, i) => (
-                <LuxuryProductCard key={p.id} product={p} wishlistIds={wishlistIds} index={i} />
-              ))}
-            </div>
-          </PremiumSectionWrapper>
-        );
-
-      case "order_again":
-        if (!isAuthenticated || previousOrders.length === 0) return null;
-        const recentOrder = previousOrders[0];
-        const recentProducts = allProducts.filter((p) =>
-          recentOrder?.items?.some((i: any) => i.productId === p.id || i.id === p.id)
-        );
-        if (recentProducts.length === 0) return null;
-        return (
-          <PremiumSectionWrapper
-            id="order_again"
-            key="order_again"
-            onView={() => trackEvent({ type: "section_view", sectionId: "order_again" })}
-          >
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
-              <PremiumSectionHeader
-                title="Order Again"
-                subtitle={`From your last order • ${new Date(recentOrder.createdAt).toLocaleDateString()}`}
-                accent="🔄"
-                noMargin
-              />
-              <motion.button
-                onClick={() => handleReorderAll(recentOrder)}
-                whileTap={{ scale: 0.95 }}
-                className="flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-sm text-white transition-all"
-                style={{
-                  background: "linear-gradient(135deg, #ea580c, #f97316)",
-                  boxShadow: "0 4px 16px rgba(249,115,22,0.3)",
-                }}
-              >
-                <RefreshCw className="w-4 h-4" /> Re-order All
-              </motion.button>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-5">
-              {recentProducts.slice(0, 4).map((p, i) => (
-                <LuxuryProductCard key={p.id} product={p} wishlistIds={wishlistIds} index={i} />
-              ))}
-            </div>
-          </PremiumSectionWrapper>
-        );
-
-      case "wishlist":
-        if (!isAuthenticated || savedProducts.length === 0) return null;
-        return (
-          <PremiumSectionWrapper
-            id="wishlist"
-            key="wishlist"
-            onView={() => trackEvent({ type: "section_view", sectionId: "wishlist" })}
-          >
-            <PremiumSectionHeader
-              title="Saved Products"
-              subtitle="Items you've hearted"
-              accent="❤️"
-            />
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-5">
-              {savedProducts.map((p, i) => (
-                <LuxuryProductCard key={p.id} product={p} wishlistIds={wishlistIds} index={i} />
-              ))}
-            </div>
-          </PremiumSectionWrapper>
-        );
-
-      default:
-        return null;
-    }
-  };
 
   return (
     <>

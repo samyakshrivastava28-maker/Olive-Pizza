@@ -106,8 +106,14 @@ async function setupVite() {
     }
   })();
 
-  // Initialize AI Knowledge Base (auto-syncs with Firestore in real-time)
+  // Initialize AI Knowledge Base & Cloudflare R2 Knowledge Sync Service
   kb.initialize().catch(err => console.warn('[KB] Non-fatal init error:', err.message));
+  try {
+    const { KnowledgeSyncService } = await import('./src/services/knowledge/KnowledgeSyncService.js');
+    KnowledgeSyncService.initializeSync();
+  } catch (err: any) {
+    console.warn('[KnowledgeSync] Initialization warning:', err.message);
+  }
 
   // Initialize Pinecone Vector DB — verify connection, then auto-sync KB data
   pineconeService.getStatus().then(async (status: { ok: boolean; vectorCount?: number; error?: string }) => {

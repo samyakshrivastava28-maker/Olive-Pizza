@@ -20,6 +20,7 @@ import kb, { KBProduct, KBPolicy, KBFaq } from '../KnowledgeBaseService.js';
 import { recommendationEngine } from './RecommendationEngine.js';
 import { staticKB } from './StaticKnowledgeLoader.js';
 import { syncWorker } from './PineconeSyncWorker.js';
+import { KnowledgeMemoryStore } from '../knowledge/KnowledgeSyncService.js';
 
 export type QueryIntent = 'RESTAURANT' | 'NON_RESTAURANT';
 
@@ -187,6 +188,12 @@ export class AIContextBuilder {
 
     let contextStr = `=== OLIVE PIZZA VERIFIED RESTAURANT KNOWLEDGE (100% PURE VEGETARIAN 🟢) ===\n`;
     contextStr += `Location: Rajnandgaon, Chhattisgarh | Dietary: 100% Pure Vegetarian (Zero Meat/Eggs)\n\n`;
+
+    // 0. Cloudflare R2 RAM Knowledge Store Injection
+    const ramContext = KnowledgeMemoryStore.getFullContext();
+    if (ramContext.restaurant) {
+      contextStr += `LIVE RESTAURANT INFO: ${JSON.stringify(ramContext.restaurant)}\n\n`;
+    }
 
     // 1. Store Details & Hours
     if (storeSettings) {

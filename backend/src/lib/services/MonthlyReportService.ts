@@ -1,6 +1,6 @@
 import { adminDb } from '../../config/firebase.js';
 import { pgPool } from '../../config/postgres.js';
-import { googleDriveService } from '../../services/googleDrive.service.js';
+import { CloudflareReportService } from '../../services/reports/CloudflareReportService.js';
 import { queueEmail } from '../../services/email.service.js';
 import { pdfGenerator, MonthlyReportMetrics } from './PdfGenerator.js';
 
@@ -18,30 +18,20 @@ export interface ReportGenerationResult {
 }
 
 export class MonthlyReportService {
-    /**
-     * Main entry point for generating & processing a monthly report.
-     * Can be run automatically via cron (1st day of every month) or triggered
-     * manually from the Owner Dashboard.
-     *
-     * This runs as a BACKGROUND TASK — never during an HTTP request.
-     */
     public async generateAndProcessReport(targetDate?: Date): Promise<ReportGenerationResult> {
         const now = targetDate || new Date();
 
-        // If triggered on the 1st day of a month, report is for the PREVIOUS month.
-        // E.g., On Aug 1, 2026, generate July 2026 report.
         let reportYear = now.getFullYear();
-        let reportMonth = now.getMonth(); // 0-indexed: 0 = Jan, 6 = July
+        let reportMonth = now.getMonth();
 
         if (reportMonth === 0 && !targetDate) {
-            reportMonth = 12; // December of previous year
+            reportMonth = 12;
             reportYear = reportYear - 1;
         }
 
-        // If a targetDate is provided, use its month/year directly
         if (targetDate) {
             reportYear = targetDate.getFullYear();
-            reportMonth = targetDate.getMonth() + 1; // 1-indexed for the report
+            reportMonth = targetDate.getMonth() + 1;
         }
 
         const startDate = new Date(reportYear, reportMonth - 1, 1, 0, 0, 0, 0);
@@ -51,31 +41,22 @@ export class MonthlyReportService {
         const monthStr = `${monthName} ${reportYear}`;
         const docId = `${reportYear}-${reportMonth.toString().padStart(2, '0')}`;
 
-        console.log(`[MonthlyReportService] Generating report for period: ${monthStr} (${startDate.toISOString()} to ${endDate.toISOString()})`);
+        console.log(`[MonthlyReportService] Generating report for period: ${monthStr}`);
 
-        // 1. Collect Data from Firestore & Infrastructure DB
         const metrics = await this.collectMetrics(startDate, endDate, monthName, reportYear, reportMonth);
-
-        // 2. Generate PDF Buffer via PDFKit
         const pdfBuffer = await pdfGenerator.generateMonthlyReport(metrics);
-        console.log(`[MonthlyReportService] PDF buffer generated (${pdfBuffer.length} bytes).`);
 
-        // 3. Upload PDF to Google Drive (folder structure: Olive Pizza Reports/{Year}/{MonthName})
+        // Upload PDF to Cloudflare R2 (reports/{Year}/OlivePizza_MonthlyReport_...)
         let driveLink = '';
         let driveFileId = '';
         const fileName = `OlivePizza_MonthlyReport_${reportYear}_${reportMonth.toString().padStart(2, '0')}.pdf`;
 
-        if (googleDriveService.isEnabled) {
-            try {
-                const driveResult = await googleDriveService.uploadReportPdf(fileName, pdfBuffer, reportYear, monthName);
-                driveLink = driveResult.driveLink;
-                driveFileId = driveResult.fileId;
-                console.log(`[MonthlyReportService] Uploaded to Google Drive successfully: ${driveLink}`);
-            } catch (driveErr: any) {
-                console.error('[MonthlyReportService] Google Drive upload error:', driveErr.message);
-            }
-        } else {
-            console.warn('[Google Drive] Service is not configured. Drive upload skipped.');
+        try {
+            const r2Result = await CloudflareReportService.uploadPdfReport(reportYear, monthName, pdfBuffer);
+            driveLink = r2Result.publicUrl || '';
+            console.log(`[MonthlyReportService] Uploaded to Cloudflare R2: ${r2Result.cloudflarePath}`);
+        } catch (r2Err: any) {
+            console.warn('[MonthlyReportService] Cloudflare R2 upload notice:', r2Err.message);
         }
 
         // 4. Save metadata to Firestore collection `reports` and legacy `monthly_reports`

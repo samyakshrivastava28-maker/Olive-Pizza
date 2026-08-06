@@ -1,6 +1,5 @@
 import { adminDb } from '../../config/firebase.js';
 import { pgPool } from '../../config/postgres.js';
-import { googleDriveService } from '../../services/googleDrive.service.js';
 import { queueEmail } from '../../services/email.service.js';
 import { pdfGenerator, WeeklyReportMetrics } from './PdfGenerator.js';
 
@@ -75,31 +74,18 @@ export class WeeklyReportService {
     const pdfBuffer = await pdfGenerator.generateReport(metrics);
     console.log(`[WeeklyReportService] PDF buffer rendered (${pdfBuffer.length} bytes).`);
 
-    // 3. Upload to Google Drive (Olive Pizza Reports / {Year} / Week {XX})
+    // 3. Upload PDF to Cloudflare R2 (reports/{Year}/OlivePizza_Weekly_Report_...)
     let driveLink = '';
     let driveFileId = '';
     const fileName = `OlivePizza_Weekly_Report_${weekInfo.year}_W${weekInfo.formattedWeekNum}.pdf`;
 
-    if (googleDriveService.isEnabled) {
-      try {
-        const driveResult = await googleDriveService.uploadReportPdf(fileName, pdfBuffer, weekInfo.year, weekInfo.subfolderName);
-        driveLink = driveResult.driveLink;
-        driveFileId = driveResult.fileId;
-        console.log(`[WeeklyReportService] Uploaded to Google Drive: ${driveLink}`);
-      } catch (driveErr: any) {
-        console.error('[WeeklyReportService] Google Drive upload failed:', driveErr.message);
-        try {
-          const { DevAlertService } = await import('../../services/email/DevAlertService.js');
-          DevAlertService.sendAlert({
-            service: 'WeeklyReportService',
-            action: 'GoogleDriveUpload',
-            error: driveErr,
-            context: { weekLabel: weekInfo.weekLabel, fileName }
-          }).catch(() => {});
-        } catch(e) {}
-      }
-    } else {
-      console.warn('[Google Drive] Service disabled or credentials missing. Drive upload skipped.');
+    try {
+      const { CloudflareReportService } = await import('../../services/reports/CloudflareReportService.js');
+      const r2Result = await CloudflareReportService.uploadPdfReport(weekInfo.year, `W${weekInfo.formattedWeekNum}`, pdfBuffer);
+      driveLink = r2Result.publicUrl || '';
+      console.log(`[WeeklyReportService] Uploaded to Cloudflare R2: ${r2Result.cloudflarePath}`);
+    } catch (r2Err: any) {
+      console.warn('[WeeklyReportService] Cloudflare R2 upload notice:', r2Err.message);
     }
 
     // 4. Store Metadata in Firestore Collection `reports` (document ID e.g. 2026-W29)

@@ -50,9 +50,9 @@ export class VersionHistoryService {
     // Preserve locked sections if rolled back by non-developer
     let finalSections = targetHomepage.sections || [];
     if (!isDeveloper && currentData?.sections) {
-      const lockedSections = currentData.sections.filter((s) => s.isLocked);
-      finalSections = finalSections.map((s) => {
-        const matchingLocked = lockedSections.find((ls) => ls.id === s.id);
+      const lockedSections = currentData.sections.filter((s: any) => s.isLocked);
+      finalSections = finalSections.map((s: any) => {
+        const matchingLocked = lockedSections.find((ls: any) => ls.id === s.id);
         return matchingLocked ? matchingLocked : s;
       });
     }

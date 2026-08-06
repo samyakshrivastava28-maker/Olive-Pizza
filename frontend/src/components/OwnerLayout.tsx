@@ -50,8 +50,6 @@ export default function OwnerLayout() {
     { name: 'Email Center', path: '/owner/email', icon: '✉️' },
     { name: 'Special Categories', path: '/owner/special-categories', icon: '🎪' },
     { name: 'Website Manager (SDUI)', path: '/owner/website-manager', icon: '🎨' },
-    { name: '✨ Section Designer (AI)', path: '/owner/section-designer', icon: '🤖' },
-    { name: 'Homepage Manager', path: '/owner/homepage', icon: '🏗️' },
     { name: 'Versions', path: '/owner/versions', icon: '🚀' },
     { name: 'AI Knowledge', path: '/owner/ai-knowledge', icon: '🧠' },
     { name: 'AI Monitor', path: '/owner/ai-monitor', icon: '🤖' },

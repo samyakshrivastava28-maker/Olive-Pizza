@@ -1,46 +1,36 @@
-/**
- * Server-Driven UI (SDUI) Platform & Website Manager Type Definitions
- * Shared across Backend and Frontend with complete developer & owner schemas
- */
-
 export type SectionType =
-  | 'hero'
   | 'categories'
   | 'coupons'
   | 'ads'
+  | 'hero'
+  | 'gallery'
+  | 'testimonials'
+  | 'video'
+  | 'faq'
+  | 'best_sellers'
+  | 'trending'
   | 'recommendations'
   | 'download_app'
-  | 'testimonials'
-  | 'custom'
-  | 'video'
-  | 'gallery'
-  | 'stats'
-  | 'faq'
   | 'timeline'
-  | 'bestsellers'
-  | 'trending'
-  | 'festival';
+  | 'stats'
+  | 'blogs'
+  | 'contact'
+  | 'maps'
+  | 'instagram'
+  | 'custom_html'
+  | 'custom_react'
+  | 'blank';
 
-export interface SectionAnalyticsConfig {
-  trackViews?: boolean;
-  trackClicks?: boolean;
-  trackScrollDepth?: boolean;
-}
-
-export interface Section<TConfig = Record<string, any>> {
+export interface Section {
   id: string;
-  type: SectionType;
+  type: string;
+  label: string;
+  subtitle?: string;
   isVisible: boolean;
   order: number;
-  label: string;
-  config: TConfig;
-  analytics?: SectionAnalyticsConfig;
-  // Developer Platform Controls
-  isLocked?: boolean;       // If true, owner cannot modify or delete
-  isProtected?: boolean;    // If true, requires developer elevation to modify
-  version?: number;
-  lastModifiedBy?: string;
-  lastModifiedAt?: string;
+  config: Record<string, any>;
+  isLocked?: boolean;
+  isProtected?: boolean;
 }
 
 export interface HomepageConfig {
@@ -49,277 +39,98 @@ export interface HomepageConfig {
   version: number;
   sections: Section[];
   changelog?: string;
-  isLocked?: boolean;
-}
-
-export interface ThemeColors {
-  primary: string;
-  accent: string;
-  background: string;
-  surface: string;
-  text: string;
-  textMuted: string;
-  border: string;
-  success: string;
-  error: string;
-}
-
-export interface ThemeFonts {
-  heading: string;
-  body: string;
-  mono: string;
-}
-
-export interface ThemeBorderRadius {
-  sm: string;
-  md: string;
-  lg: string;
-  xl: string;
-  full: string;
-}
-
-export interface ThemeEffects {
-  glassmorphism: boolean;
-  neumorphism: boolean;
-  animations: 'smooth' | 'snappy' | 'subtle' | 'off';
-  animationSpeed: number;
-  blur: string;
-  shadowIntensity: 'none' | 'sm' | 'md' | 'lg' | 'xl' | 'glow';
 }
 
 export interface ThemeConfig {
   publishedAt?: string | null;
   version: number;
-  colors: ThemeColors;
-  fonts: ThemeFonts;
-  borderRadius: ThemeBorderRadius;
-  effects: ThemeEffects;
-  mode: 'dark' | 'light' | 'system' | 'scheduled';
-  spacing: 'compact' | 'comfortable' | 'spacious';
-  cardStyle: 'glass' | 'solid' | 'outline' | 'minimal' | 'elevated' | '3d';
-  seasonalTheme?: 'diwali' | 'christmas' | 'holi' | 'independence' | 'eid' | null;
-  seasonalExpiresAt?: string | null;
-}
-
-export interface NavLinkItem {
-  id: string;
-  label: string;
-  path: string;
-  icon?: string;
-  visibility: 'all' | 'desktop' | 'mobile' | 'authenticated' | 'guest';
-  badge?: string;
-  children?: NavLinkItem[];
+  colors: Record<string, string>;
+  fonts: Record<string, string>;
+  borderRadius: Record<string, string>;
+  effects: Record<string, any>;
+  mode: string;
+  spacing?: string;
+  cardStyle?: string;
 }
 
 export interface NavigationConfig {
   publishedAt?: string | null;
   version: number;
-  header: {
-    logoUrl?: string;
-    logoPosition: 'left' | 'center';
-    links: NavLinkItem[];
-    ctaButton?: { label: string; link: string; style: string; isVisible: boolean };
-    style: 'transparent' | 'solid' | 'glass' | 'blur';
-    height: 'sm' | 'md' | 'lg';
-    isSticky: boolean;
-    showSearch: boolean;
-  };
-  bottomNav: {
-    items: NavLinkItem[];
-    activeColor?: string;
-    showBadges: boolean;
-  };
-  footer: {
-    columns: Array<{
-      heading: string;
-      links: Array<{ label: string; url: string; isExternal?: boolean }>;
-    }>;
-    socialLinks: Array<{ platform: string; url: string; icon: string }>;
-    copyrightText: string;
-    locationText?: string;
-    showDeveloperCredit: boolean;
-    developerCreditUrl?: string;
-  };
+  header: any;
+  bottomNav: any;
+  footer?: any;
 }
 
-export interface Banner {
-  id: string;
-  type: 'image' | 'video' | 'offer' | 'festival' | 'countdown';
-  label: string;
-  imageUrl?: string;
-  videoUrl?: string;
-  headline?: string;
-  subheadline?: string;
-  ctaText?: string;
-  ctaLink?: string;
-  ctaStyle?: 'primary' | 'outline' | 'ghost';
-  overlayColor?: string;
-  overlayOpacity?: number;
-  textColor?: string;
-  textAlign?: 'left' | 'center' | 'right';
-  animation?: 'slide' | 'fade' | 'zoom' | 'none';
-  schedule?: {
-    enabled: boolean;
-    startAt?: string | null;
-    endAt?: string | null;
-  };
-  priority: number;
-  isActive: boolean;
-  targetAudience?: 'all' | 'authenticated' | 'guest' | 'new_user';
-  countdownTarget?: string | null;
-}
-
-export interface Campaign {
-  id: string;
-  name: string;
-  type: 'festival' | 'flash_sale' | 'weekend' | 'holiday' | 'custom';
-  isActive: boolean;
-  schedule?: {
-    startAt?: string | null;
-    endAt?: string | null;
-  };
-  theme?: {
-    primaryColor?: string;
-    accentColor?: string;
-    backgroundGradient?: string;
-    particleType?: 'fireworks' | 'stars' | 'snowflakes' | 'petals' | 'none';
-    overlayPattern?: string | null;
-  };
-  homepageSections?: string[];
-  activateBanners?: string[];
-  activateCoupons?: string[];
-  overrideTheme?: boolean;
-  announcement?: {
-    enabled: boolean;
-    text: string;
-    style: 'scrolling' | 'static';
-    backgroundColor: string;
-    textColor: string;
-  };
+export interface FeatureFlags {
+  [key: string]: any;
 }
 
 export interface Announcement {
   id: string;
   isActive: boolean;
-  type: 'scrolling' | 'static' | 'banner';
+  type: string;
   text: string;
   emoji?: string;
   link?: string | null;
   linkText?: string | null;
-  backgroundColor: string;
-  textColor: string;
-  closeable: boolean;
-  priority: number;
-  schedule?: {
-    startAt?: string | null;
-    endAt?: string | null;
-  };
-  targetRoutes: string[];
-  targetAudience: 'all' | 'authenticated' | 'guest';
+  backgroundColor?: string;
+  textColor?: string;
+  closeable?: boolean;
+  priority?: number;
 }
 
-export interface FeatureFlags {
-  coupons: { enabled: boolean; description: string; rolloutPercent?: number; isKillSwitched?: boolean };
-  wallet: { enabled: boolean; description: string; rolloutPercent?: number; isKillSwitched?: boolean };
-  aiAssistant: { enabled: boolean; description: string; rolloutPercent?: number; isKillSwitched?: boolean };
-  voiceAssistant: { enabled: boolean; description: string; rolloutPercent?: number; isKillSwitched?: boolean };
-  recommendations: { enabled: boolean; description: string; rolloutPercent?: number; isKillSwitched?: boolean };
-  referral: { enabled: boolean; description: string; rolloutPercent?: number; isKillSwitched?: boolean };
-  reviews: { enabled: boolean; description: string; rolloutPercent?: number; isKillSwitched?: boolean };
-  tracking: { enabled: boolean; description: string; rolloutPercent?: number; isKillSwitched?: boolean };
-  notifications: { enabled: boolean; description: string; rolloutPercent?: number; isKillSwitched?: boolean };
-  socialLogin: { enabled: boolean; description: string; rolloutPercent?: number; isKillSwitched?: boolean };
-  guestCheckout: { enabled: boolean; description: string; rolloutPercent?: number; isKillSwitched?: boolean };
-  darkMode: { enabled: boolean; description: string; rolloutPercent?: number; isKillSwitched?: boolean };
-  offlineMode: { enabled: boolean; description: string; rolloutPercent?: number; isKillSwitched?: boolean };
-  abTesting: { enabled: boolean; description: string; rolloutPercent?: number; isKillSwitched?: boolean };
-  betaFeatures: { enabled: boolean; description: string; rolloutPercent?: number; isKillSwitched?: boolean };
-  maintenanceMode: { enabled: boolean; description: string; rolloutPercent?: number; isKillSwitched?: boolean };
+export interface Campaign {
+  id: string;
+  name: string;
+  type: string;
+  isActive: boolean;
+  theme?: any;
+  announcement?: any;
 }
 
-export interface ABTestVariant {
-  label: string;
-  sectionConfig: any;
-  impressions: number;
-  clicks: number;
-  orders: number;
-  revenue?: number;
+export interface Banner {
+  id: string;
+  title: string;
+  imageUrl: string;
+  link?: string;
+  isActive: boolean;
+  priority?: number;
+  [key: string]: any;
+}
+
+export interface RolePermissions {
+  [role: string]: string[];
 }
 
 export interface ABTest {
   id: string;
   name: string;
-  status: 'draft' | 'running' | 'completed' | 'paused';
-  traffic: number; // 0 to 100 percentage for variant B
-  startAt: string;
-  endAt?: string | null;
-  variants: {
-    A: ABTestVariant;
-    B: ABTestVariant;
-  };
-  winner?: 'A' | 'B' | null;
-  autoApplyWinner?: boolean;
+  status: string;
+  traffic?: any;
+  startAt?: any;
+  variants?: any;
+  [key: string]: any;
+}
+
+export interface WebsiteAnalyticsEvent {
+  id: string;
+  eventType: string;
+  sectionId?: string;
+  sectionType?: string;
+  sessionId?: string;
+  userId?: string;
+  metadata?: any;
+  createdAt?: string;
+  timestamp: string;
+  [key: string]: any;
 }
 
 export interface WebsiteVersion {
   versionId: string;
   version: number;
-  type: 'homepage' | 'theme' | 'navigation' | 'full';
+  type: string;
   publishedAt: string;
-  publishedBy: { uid: string; name?: string; email?: string; role?: string };
+  publishedBy: any;
   changelog?: string;
-  snapshot: {
-    homepage?: HomepageConfig;
-    theme?: ThemeConfig;
-    navigation?: NavigationConfig;
-    featureFlags?: FeatureFlags;
-    announcements?: Announcement[];
-    campaigns?: Campaign[];
-  };
-}
-
-export interface MediaAsset {
-  id: string;
-  type: 'image' | 'video' | 'lottie' | 'svg' | 'pdf';
-  name: string;
-  url: string;
-  thumbnailUrl?: string;
-  folder: string;
-  tags: string[];
-  width?: number;
-  height?: number;
-  sizeBytes?: number;
-  format?: string;
-  uploadedBy?: string;
-  uploadedAt: string;
-  usedIn?: string[];
-}
-
-export interface RolePermissions {
-  websiteManager: boolean;
-  homepageBuilder: boolean;
-  themeManager: boolean;
-  navigationBuilder: boolean;
-  bannerManager: boolean;
-  campaignManager: boolean;
-  featureFlags: boolean;
-  analytics: boolean;
-  abTesting: boolean;
-  versionHistory: boolean;
-  permissionsManager: boolean;
-  mediaLibrary: boolean;
-  publish: boolean;
-  rollback: boolean;
-  rawJsonEditor?: boolean;
-  sectionLocking?: boolean;
-}
-
-export interface WebsiteAnalyticsEvent {
-  eventType: 'section_view' | 'section_click' | 'section_scroll_50' | 'section_scroll_100' | 'cta_click' | 'product_click' | 'banner_click' | 'web_vital';
-  sectionId?: string;
-  sectionType?: string;
-  sessionId: string;
-  userId?: string;
-  metadata?: Record<string, any>;
-  createdAt?: string;
+  snapshot: any;
 }

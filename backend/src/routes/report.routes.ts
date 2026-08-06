@@ -2,7 +2,10 @@ import { Router, Response } from 'express';
 import { adminDb } from '../config/firebase.js';
 import { verifyToken, AuthRequest } from '../middleware/auth.middleware.js';
 import { weeklyReportService } from '../lib/services/WeeklyReportService.js';
-import { googleDriveService } from '../services/googleDrive.service.js';
+import { CloudflareReportService } from '../services/reports/CloudflareReportService.js';
+import { MonthlyReportGenerator } from '../services/reports/MonthlyReportGenerator.js';
+import { CloudflareR2Service } from '../services/storage/CloudflareR2Service.js';
+import { GoogleSheetsReportService } from '../services/reports/GoogleSheetsReportService.js';
 import { pgPool } from '../config/postgres.js';
 import crypto from 'crypto';
 
@@ -19,9 +22,61 @@ const requireOwnerOrAdmin = (req: AuthRequest, res: Response, next: any) => {
 };
 
 /**
+ * GET /api/reports/monthly
+ * Lists all monthly reports stored in Cloudflare R2 and Firestore.
+ */
+router.get('/monthly', verifyToken, requireOwnerOrAdmin, async (_req: AuthRequest, res: Response) => {
+  try {
+    const reports = await CloudflareReportService.listMonthlyReports();
+    const spreadsheetId = await GoogleSheetsReportService.getSpreadsheetId();
+    const currentSheetTitle = GoogleSheetsReportService.getMonthSheetTitle();
+
+    res.json({
+      success: true,
+      reports,
+      liveSheet: {
+        spreadsheetId,
+        currentSheetTitle,
+        url: spreadsheetId ? `https://docs.google.com/spreadsheets/d/${spreadsheetId}` : null,
+      },
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/reports/generate-monthly
+ * Triggers monthly PDF generation, Cloudflare R2 upload, and owner email notification.
+ */
+router.post('/generate-monthly', verifyToken, requireOwnerOrAdmin, async (req: AuthRequest, res: Response) => {
+  try {
+    const { month, year } = req.body;
+    const report = await MonthlyReportGenerator.generateAndArchiveMonthlyReport(month, year);
+    res.json({ success: true, report });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * DELETE /api/reports/monthly/:id
+ * Deletes a monthly report from Cloudflare R2 and Firestore.
+ */
+router.delete('/monthly/:id', verifyToken, requireOwnerOrAdmin, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { cloudflarePath } = req.body;
+    const success = await CloudflareReportService.deleteReport(id, cloudflarePath);
+    res.json({ success });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
  * POST /api/reports/generate
- * Queues weekly report generation as an asynchronous background task.
- * Does NOT block the HTTP response!
+ * Queues weekly report generation as a background task.
  */
 router.post('/generate', verifyToken, requireOwnerOrAdmin, async (req: AuthRequest, res: Response) => {
   try {
@@ -32,7 +87,6 @@ router.post('/generate', verifyToken, requireOwnerOrAdmin, async (req: AuthReque
     const taskId = crypto.randomUUID();
     const taskName = `weekly_report_${weekInfo.docId}`;
 
-    // 1. Record task in PostgreSQL background_tasks infrastructure table
     await pgPool.query(`
       INSERT INTO background_tasks (id, task_name, status, payload, created_at)
       VALUES ($1, $2, 'processing', $3, CURRENT_TIMESTAMP)
@@ -40,38 +94,32 @@ router.post('/generate', verifyToken, requireOwnerOrAdmin, async (req: AuthReque
     `, [taskId, taskName, JSON.stringify({ docId: weekInfo.docId, weekLabel: weekInfo.weekLabel })])
     .catch(e => console.warn('[Report Route] Postgres task log warning:', e.message));
 
-    // 2. Launch processing asynchronously in background (Non-blocking response!)
     setImmediate(async () => {
       try {
         console.log(`[Background Task ${taskId}] Starting weekly report generation for ${weekInfo.weekLabel}...`);
-        const result = await weeklyReportService.generateAndProcessReport(targetDate);
+        await weeklyReportService.generateAndProcessReport(targetDate);
         
         await pgPool.query(`
           UPDATE background_tasks 
-          SET status = 'completed', result = $2, updated_at = CURRENT_TIMESTAMP 
+          SET status = 'completed', updated_at = CURRENT_TIMESTAMP 
           WHERE id = $1
-        `, [taskId, JSON.stringify(result)])
-        .catch(() => {});
-
-        console.log(`[Background Task ${taskId}] Weekly report generation completed successfully.`);
+        `, [taskId]).catch(() => {});
       } catch (err: any) {
-        console.error(`[Background Task ${taskId}] Weekly report generation failed:`, err.message);
+        console.error(`[Background Task ${taskId}] Error:`, err);
         await pgPool.query(`
           UPDATE background_tasks 
           SET status = 'failed', error_message = $2, updated_at = CURRENT_TIMESTAMP 
           WHERE id = $1
-        `, [taskId, err.message])
-        .catch(() => {});
+        `, [taskId, err.message]).catch(() => {});
       }
     });
 
-    // 3. Return immediate response
     res.json({
       success: true,
-      message: 'Weekly report generation task started in background.',
       taskId,
+      message: `Weekly report generation for ${weekInfo.weekLabel} started in background.`,
+      docId: weekInfo.docId,
       weekLabel: weekInfo.weekLabel,
-      dateRange: weekInfo.dateRange,
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -79,25 +127,7 @@ router.post('/generate', verifyToken, requireOwnerOrAdmin, async (req: AuthReque
 });
 
 /**
- * GET /api/reports/history
- * Fetches historical weekly reports stored in Firestore.
- */
-router.get('/history', verifyToken, requireOwnerOrAdmin, async (req: AuthRequest, res: Response) => {
-  try {
-    const snapshot = await adminDb.collection('reports')
-      .orderBy('generatedAt', 'desc')
-      .get();
-
-    const reports = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    res.json({ success: true, reports });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-/**
  * POST /api/reports/email-again
- * Resends a previously generated weekly report email to the owner.
  */
 router.post('/email-again', verifyToken, requireOwnerOrAdmin, async (req: AuthRequest, res: Response) => {
   try {
@@ -110,8 +140,6 @@ router.post('/email-again', verifyToken, requireOwnerOrAdmin, async (req: AuthRe
     }
 
     const data = reportDoc.data()!;
-    
-    // Trigger background generation & email resend
     setImmediate(async () => {
       await weeklyReportService.generateAndProcessReport(new Date(data.generatedAt || Date.now()));
     });
@@ -124,36 +152,33 @@ router.post('/email-again', verifyToken, requireOwnerOrAdmin, async (req: AuthRe
 
 /**
  * GET /api/reports/diagnostics
- * Provides production diagnostics for PDF Generation, Google Drive Upload, Email Queue, and Retries.
+ * Provides production diagnostics for PDF Generation, Cloudflare R2, Google Sheets, and Email.
  */
-router.get('/diagnostics', verifyToken, requireOwnerOrAdmin, async (req: AuthRequest, res: Response) => {
+router.get('/diagnostics', verifyToken, requireOwnerOrAdmin, async (_req: AuthRequest, res: Response) => {
   try {
-    const driveStatus = await googleDriveService.getHealthStatus();
+    const isR2Configured = CloudflareR2Service.isConfigured();
+    const spreadsheetId = await GoogleSheetsReportService.getSpreadsheetId();
 
-    // Query email queue metrics from PostgreSQL
     const emailQueueStats = await pgPool.query(`
       SELECT status, COUNT(*) as count
       FROM email_queue
       GROUP BY status
     `).catch(() => ({ rows: [] }));
 
-    // Query recent failed tasks from PostgreSQL
-    const failedTasks = await pgPool.query(`
-      SELECT id, task_name, error_message, created_at, updated_at
-      FROM background_tasks
-      WHERE status = 'failed'
-      ORDER BY updated_at DESC
-      LIMIT 5
-    `).catch(() => ({ rows: [] }));
-
-    // Count reports in Firestore
-    const reportsSnap = await adminDb.collection('reports').get().catch(() => ({ size: 0 }));
+    const reportsSnap = await adminDb.collection('monthly_reports').get().catch(() => ({ size: 0 }));
 
     res.json({
       success: true,
       timestamp: new Date().toISOString(),
-      pdfGenerator: { status: 'healthy', format: 'PDFKit 4-Page Executive Weekly Layout' },
-      googleDrive: driveStatus,
+      pdfGenerator: { status: 'healthy', format: 'jsPDF + Cloudflare R2 PDF Engine' },
+      cloudflareR2: {
+        status: isR2Configured ? 'healthy' : 'unconfigured',
+        bucket: process.env.CLOUDFLARE_R2_BUCKET_NAME || 'olive-pizza-r2',
+      },
+      googleSheets: {
+        status: spreadsheetId ? 'active' : 'unconfigured',
+        spreadsheetId,
+      },
       emailQueue: {
         statusBreakdown: emailQueueStats.rows,
         smtpHost: process.env.SMTP_HOST || 'smtp.gmail.com',
@@ -162,7 +187,6 @@ router.get('/diagnostics', verifyToken, requireOwnerOrAdmin, async (req: AuthReq
       reportsSummary: {
         totalGenerated: reportsSnap.size,
       },
-      recentFailures: failedTasks.rows,
     });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });

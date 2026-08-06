@@ -62,9 +62,9 @@ export class SchedulerManagerService {
     const jobs = [
       {
         id: 'weekly_business_report',
-        name: 'Weekly Executive Report & Drive Backup',
+        name: 'Weekly Executive Report & Cloudflare R2 Backup',
         schedulePattern: 'Every Monday @ 08:00 AM IST',
-        description: 'Generates 4-page executive PDF report, backs up to Google Drive, and emails owner with attachment.'
+        description: 'Generates 4-page executive PDF report, backs up to Cloudflare R2, and emails owner with attachment.'
       },
       {
         id: 'email_queue_worker',

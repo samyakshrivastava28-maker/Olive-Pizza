@@ -12,7 +12,7 @@ import NativeAppUpdater from './components/NativeAppUpdater';
 import CartSyncManager from './components/CartSyncManager';
 import { NotificationDiagnosticsOverlay } from './components/ui/NotificationDiagnosticsOverlay';
 import AnnouncementBar from './components/AnnouncementBar';
-import { useWebsiteConfigStore } from './stores/websiteConfigStore';
+import { useSDUIStore } from './stores/sduiStore';
 
 // Custom lazy loading with retry for chunk errors (prevents black screen on PWA update)
 const lazyWithRetry = <T extends ComponentType<any>>(
@@ -150,7 +150,6 @@ const OwnerSecurity = lazyWithRetry(() => import('./pages/owner/OwnerSecurity'))
 const OwnerEmailCenter = lazyWithRetry(() => import('./pages/owner/OwnerEmailCenter'));
 const OwnerSpecialCategories = lazyWithRetry(() => import('./pages/owner/OwnerSpecialCategories'));
 const OwnerVerificationMetrics = lazyWithRetry(() => import('./pages/owner/OwnerVerificationMetrics'));
-const OwnerHomepageManager = lazyWithRetry(() => import('./pages/owner/OwnerHomepageManager'));
 const OwnerVersionManagement = lazyWithRetry(() => import('./pages/owner/OwnerVersionManagement'));
 const OwnerAIKnowledge = lazyWithRetry(() => import('./pages/owner/OwnerAIKnowledge'));
 const OwnerNotificationCenter = lazyWithRetry(() => import('./pages/owner/OwnerNotificationCenter'));
@@ -159,7 +158,6 @@ const OwnerNotificationDiagnostics = lazyWithRetry(() => import('./pages/owner/O
 const OwnerDataManager = lazyWithRetry(() => import('./pages/owner/DataManager'));
 const WebsiteManagerHub = lazyWithRetry(() => import('./pages/owner/WebsiteManager'));
 const DeveloperDashboard = lazyWithRetry(() => import('./pages/owner/DeveloperDashboard'));
-const SectionDesigner = lazyWithRetry(() => import('./pages/owner/SectionDesigner'));
 
 
 // Lazy loaded delivery pages
@@ -232,7 +230,7 @@ function AppContent() {
 
   // Realtime Server-Driven UI & Theme Subscription
   useEffect(() => {
-    const unsubscribe = useWebsiteConfigStore.getState().subscribe();
+    const unsubscribe = useSDUIStore.getState().subscribe();
     return () => unsubscribe();
   }, []);
 
@@ -321,9 +319,10 @@ function AppContent() {
                   <Route path="customers" element={<OwnerCustomers />} />
                   <Route path="email" element={<OwnerEmailCenter />} />
                   <Route path="special-categories" element={<OwnerSpecialCategories />} />
-                  <Route path="homepage" element={<OwnerHomepageManager />} />
+                  <Route path="homepage" element={<WebsiteManagerHub />} />
                   <Route path="website-manager/*" element={<WebsiteManagerHub />} />
                   <Route path="sdui/*" element={<WebsiteManagerHub />} />
+                  <Route path="section-designer/*" element={<WebsiteManagerHub />} />
                   <Route path="notifications" element={<OwnerNotificationCenter />} />
                   <Route path="verification-metrics" element={<OwnerVerificationMetrics />} />
                   <Route path="versions" element={<OwnerVersionManagement />} />
@@ -334,10 +333,7 @@ function AppContent() {
                 </Route>
               </Route>
 
-              {/* Section Designer — Full Screen (outside OwnerLayout) */}
-              <Route element={<OwnerGuard />}>
-                <Route path="/owner/section-designer" element={<SectionDesigner />} />
-              </Route>
+
 
               {/* Developer Routes */}
               <Route element={<DeveloperGuard />}>
