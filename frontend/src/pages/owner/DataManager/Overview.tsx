@@ -23,7 +23,7 @@ const PROVIDERS = [
   { id: 'supabase',      label: 'PostgreSQL',        icon: Database,  color: '#6B8E23', endpoint: 'supabase' },
   { id: 'cloudinary',    label: 'Cloudinary',        icon: Cloud,     color: '#FFC107', endpoint: 'cloudinary' },
   { id: 'google-drive',  label: 'Google Drive',      icon: HardDrive, color: '#4285F4', endpoint: 'google-drive' },
-  { id: 'qdrant',        label: 'Qdrant (AI)',        icon: Layers,    color: '#E91E63', endpoint: 'qdrant' },
+  { id: 'qdrant',        label: 'Pinecone (AI)',      icon: Layers,    color: '#E91E63', endpoint: 'qdrant' },
   { id: 'email',         label: 'Email Queue',        icon: Mail,      color: '#9C27B0', endpoint: 'email' },
   { id: 'notifications', label: 'Notifications',     icon: Bell,      color: '#00BCD4', endpoint: 'notifications' },
   { id: 'app-storage',   label: 'App Storage',       icon: Server,    color: '#FF5722', endpoint: 'app-storage' },

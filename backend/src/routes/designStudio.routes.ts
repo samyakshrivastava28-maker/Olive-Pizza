@@ -50,7 +50,7 @@ router.post('/generate-homepage', async (req: AuthRequest, res: Response) => {
     await db.collection('generated_homepages').add({
       userId: req.user?.uid,
       prompt,
-      sections: result.sections.map(s => ({
+      sections: (result.sections || []).map((s: any) => ({
         componentName: s.componentName,
         sectionType: s.sectionType,
         animationsUsed: s.animationsUsed,
@@ -139,8 +139,7 @@ router.post('/command', async (req: AuthRequest, res: Response) => {
     const { command } = req.body;
     if (!command) return res.status(400).json({ error: 'Command is required.' });
 
-    const currentLayout = await WebsiteConfigService.getHomepageDraft();
-    const result = await DesignStudioService.processCommandWithStitch(command, currentLayout);
+    const result = await DesignStudioService.processCommandWithStitch(command, req.body.stitchDesignId);
 
     // Apply diff immediately
     if (result.diff?.sections) {

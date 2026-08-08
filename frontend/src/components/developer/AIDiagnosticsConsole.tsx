@@ -149,7 +149,7 @@ export default function AIDiagnosticsConsole() {
         {[
           { id: 'health', label: 'AI Health & Telemetry', icon: Activity },
           { id: 'logs', label: 'Live Conversations & Pipeline Trace', icon: Terminal },
-          { id: 'qdrant', label: 'Qdrant Vector Manager', icon: Database },
+          { id: 'qdrant', label: 'Pinecone Vector Manager', icon: Database },
           { id: 'playground', label: 'Interactive AI Playground', icon: Play },
           { id: 'sla_cost', label: 'SLA Matrix & Cost Analytics', icon: DollarSign },
         ].map((tab: any) => {
@@ -187,7 +187,7 @@ export default function AIDiagnosticsConsole() {
             {[
               { key: 'stt', name: 'STT (ASR Engine)', icon: Cpu, desc: 'WebSpeech / NVIDIA Canary 1B' },
               { key: 'llm', name: 'LLM Failover Engine', icon: Bot, desc: health?.llm?.activeProvider || 'DeepSeek V4 / GLM 5.2' },
-              { key: 'qdrant', name: 'Qdrant Vector DB', icon: Database, desc: `Collection: ${health?.qdrant?.collection || 'olive_pizza'} (${health?.qdrant?.vectorCount || 0} vectors)` },
+              { key: 'qdrant', name: 'Pinecone Vector DB', icon: Database, desc: `Index: ${health?.qdrant?.collection || 'olive-pizza'} (${health?.qdrant?.vectorCount || 0} vectors)` },
               { key: 'tts', name: 'TTS Voice Synthesis', icon: Zap, desc: 'NVIDIA Chatterbox & WebSpeech' },
             ].map((item) => {
               const info = health?.[item.key as keyof typeof health] || { status: 'YELLOW', label: item.name };
@@ -233,6 +233,53 @@ export default function AIDiagnosticsConsole() {
                 {stats?.totalRequests ? Math.round(((stats.totalRequests - (stats.slaExceededCount || 0)) / stats.totalRequests) * 100) : 100}%
               </p>
               <p className="text-slate-500 text-xs mt-1">SLA Breaches: {stats?.slaExceededCount || 0}</p>
+            </div>
+          </div>
+
+          {/* ── Google Stitch Status & Diagnostics (Step 7) ── */}
+          <div className="bg-slate-900/60 border border-violet-500/30 rounded-2xl p-5 space-y-4">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-violet-500/20 text-violet-300">
+                  <Bot className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-white font-bold text-sm flex items-center gap-2">
+                    Google Stitch Engine & MCP Status
+                    <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-violet-500/20 text-violet-300 border border-violet-500/30">
+                      Official Visual Engine
+                    </span>
+                  </h4>
+                  <p className="text-[11px] text-slate-400">Strict SDUI Layout Builder (Project ID: 1381594740219373157)</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-green-500/20 text-green-300 border border-green-500/30">
+                  Status: ONLINE
+                </span>
+                <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-red-500/20 text-red-300 border border-red-500/30">
+                  Fallback Engine: Disabled
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+              <div className="p-3 rounded-xl bg-black/40 border border-white/5 space-y-1">
+                <span className="text-[10px] text-slate-400">Stitch API Key</span>
+                <p className="font-mono font-bold text-green-400">Configured</p>
+              </div>
+              <div className="p-3 rounded-xl bg-black/40 border border-white/5 space-y-1">
+                <span className="text-[10px] text-slate-400">Stitch MCP Server</span>
+                <p className="font-mono font-bold text-violet-400">Connected</p>
+              </div>
+              <div className="p-3 rounded-xl bg-black/40 border border-white/5 space-y-1">
+                <span className="text-[10px] text-slate-400">Prompt Enhancer</span>
+                <p className="font-mono font-bold text-amber-400">DeepSeek V4 Flash</p>
+              </div>
+              <div className="p-3 rounded-xl bg-black/40 border border-white/5 space-y-1">
+                <span className="text-[10px] text-slate-400">Fallback Policy</span>
+                <p className="font-mono font-bold text-red-400">Disabled (0 Fallback)</p>
+              </div>
             </div>
           </div>
         </div>

@@ -104,7 +104,7 @@ export default function OwnerAIKnowledge() {
   };
 
   const handleReindex = async () => {
-    if (!confirm('Are you sure you want to completely rebuild the Qdrant database from Firestore? This may take a moment.')) return;
+    if (!confirm('Are you sure you want to completely rebuild the Pinecone database from Firestore? This may take a moment.')) return;
     
     setIsSyncing(true);
     try {
@@ -129,7 +129,7 @@ export default function OwnerAIKnowledge() {
   };
 
   if (isLoading) {
-    return <div className="p-8 text-center text-white">Loading Qdrant Status...</div>;
+    return <div className="p-8 text-center text-white">Loading Pinecone Status...</div>;
   }
 
   return (
@@ -140,7 +140,7 @@ export default function OwnerAIKnowledge() {
             <Database className="text-orange-500" /> 
             AI Knowledge Base
           </h1>
-          <p className="text-slate-400">Manage Qdrant Vector Embeddings and Semantic Search</p>
+          <p className="text-slate-400">Manage Pinecone Vector Embeddings and Semantic Search</p>
         </div>
         <button
           onClick={handleReindex}
@@ -148,7 +148,7 @@ export default function OwnerAIKnowledge() {
           className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl transition-all disabled:opacity-50"
         >
           <RefreshCw className={`w-5 h-5 ${isSyncing ? 'animate-spin' : ''}`} />
-          {isSyncing ? 'Syncing...' : 'Sync Firestore to Qdrant'}
+          {isSyncing ? 'Syncing...' : 'Sync Firestore to Pinecone'}
         </button>
       </div>
 
@@ -156,7 +156,7 @@ export default function OwnerAIKnowledge() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700">
           <div className="flex items-center justify-between mb-2">
-            <h3 className="text-slate-400 font-medium">Qdrant Status</h3>
+            <h3 className="text-slate-400 font-medium">Pinecone Status</h3>
             {health?.ok ? <CheckCircle2 className="text-emerald-500" /> : <XCircle className="text-red-500" />}
           </div>
           <p className="text-3xl font-bold text-white">{health?.ok ? 'Connected' : 'Offline'}</p>
@@ -214,7 +214,7 @@ export default function OwnerAIKnowledge() {
               disabled={!file || isUploading}
               className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 rounded-xl transition-all disabled:opacity-50"
             >
-              {isUploading ? 'Extracting & Indexing...' : 'Upload & Index to Qdrant'}
+              {isUploading ? 'Extracting & Indexing...' : 'Upload & Index to Pinecone'}
             </button>
           </form>
         </div>

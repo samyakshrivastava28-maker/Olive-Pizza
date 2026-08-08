@@ -31,3 +31,7 @@ backend/logs/
 coverage/
 scratch/
 test_fast2sms.ts
+
+# AI Skills
+.agents/skills/andrej-karpathy-skills/
+skills/

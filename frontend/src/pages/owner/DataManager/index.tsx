@@ -11,7 +11,7 @@ const navItems = [
   { id: 'supabase', label: 'PostgreSQL', icon: Database, path: 'supabase', color: '#6B8E23' },
   { id: 'cloudinary', label: 'Cloudinary', icon: Cloud, path: 'cloudinary', color: '#FFC107' },
   { id: 'google-drive', label: 'Google Drive', icon: HardDrive, path: 'google-drive', color: '#4285F4' },
-  { id: 'qdrant', label: 'Qdrant', icon: Layers, path: 'qdrant', color: '#E91E63' },
+  { id: 'qdrant', label: 'Pinecone', icon: Layers, path: 'qdrant', color: '#E91E63' },
   { id: 'email', label: 'Email', icon: Mail, path: 'email', color: '#9C27B0' },
   { id: 'notifications', label: 'Notifications', icon: Bell, path: 'notifications', color: '#00BCD4' },
   { id: 'app-storage', label: 'App Storage', icon: Server, path: 'app-storage', color: '#FF5722' },

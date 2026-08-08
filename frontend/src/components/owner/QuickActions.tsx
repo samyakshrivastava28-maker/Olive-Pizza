@@ -2,6 +2,7 @@ import { Link } from 'react-router';
 
 export default function QuickActions() {
   const actions = [
+    { name: '🎨 Olive Studio', icon: '🍕', path: '/owner/studio', color: 'bg-orange-500/30 text-orange-300 ring-2 ring-orange-500/50' },
     { name: 'Add Product', icon: '🍕', path: '/owner/products', color: 'bg-orange-100 text-orange-600 dark:bg-orange-500/20 dark:text-orange-400' },
     { name: 'Create Coupon', icon: '🎟️', path: '/owner/coupons', color: 'bg-green-100 text-green-600 dark:bg-green-500/20 dark:text-green-400' },
     { name: 'New Ad Campaign', icon: '📢', path: '/owner/ads', color: 'bg-pink-100 text-pink-600 dark:bg-pink-500/20 dark:text-pink-400' },

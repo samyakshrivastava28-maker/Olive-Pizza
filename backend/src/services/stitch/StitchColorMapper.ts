@@ -54,6 +54,15 @@ const UNAUTHORIZED_COLOR_MAPPINGS: Record<string, string> = {
 };
 
 export class StitchColorMapper {
+  static mapToOlivePizzaPalette(stitchLayout: any): any {
+    return {
+      primary: OLIVE_PIZZA_COLORS.primary,
+      secondary: OLIVE_PIZZA_COLORS.secondary,
+      accent: OLIVE_PIZZA_COLORS.accent,
+      ...this.enforceBrandColors(stitchLayout),
+    };
+  }
+
   /**
    * Recursively traverses a Google Stitch AST/JSON object and enforces Olive Pizza colors.
    */

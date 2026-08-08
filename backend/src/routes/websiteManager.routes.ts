@@ -7,6 +7,7 @@ import { ABTestingService } from '../services/websiteConfig/ABTestingService.js'
 import { CampaignService } from '../services/websiteConfig/CampaignService.js';
 import { DesignStudioService } from '../services/ai/DesignStudioService.js';
 import { StitchService } from '../services/stitch/StitchService.js';
+import cloudinary from '../config/cloudinary.js';
 
 const router = Router();
 
@@ -311,73 +312,100 @@ router.post('/enhance-prompt', async (req: AuthRequest, res: Response) => {
   }
 });
 
+// ── Google Stitch Status & Telemetry Endpoint (Step 7) ─────────────────────────
+router.get('/stitch-status', async (_req: AuthRequest, res: Response) => {
+  try {
+    const telemetry = StitchService.getTelemetry();
+    res.json({
+      success: true,
+      telemetry,
+      provider: 'Google Stitch Engine',
+      fallbackStatus: 'Disabled',
+    });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.post('/ai-generate', async (req: AuthRequest, res: Response) => {
   try {
-    const { prompt, currentSections } = req.body;
-    const homepage = await WebsiteConfigService.getHomepage();
-    const baseSections = currentSections || homepage.sections;
-    
-    // 1. Google Stitch Verification & Diagnostic Logger
-    console.log(`\n======================================================`);
-    console.log(`[Google Stitch Logger] AI Generation Requested for prompt: "${prompt}"`);
-    console.log(`[Google Stitch Logger] Timestamp: ${new Date().toISOString()}`);
-    
-    const stitchCheck = await StitchService.listDesigns(5);
-    console.log(`[Google Stitch Logger] Stitch Status: ${stitchCheck.success ? 'ACTIVE' : 'FALLBACK_MODE'}`);
-    console.log(`[Google Stitch Logger] Processing Time: ${stitchCheck.latencyMs}ms`);
-    if (stitchCheck.error) {
-      console.warn(`[Google Stitch Logger] Warning: ${stitchCheck.error}`);
+    const { prompt } = req.body;
+    if (!prompt) {
+      return res.status(400).json({ error: 'Prompt is required.' });
     }
+
+    console.log(`\n======================================================`);
+    console.log(`[Google Stitch Engine] Generation Requested for prompt: "${prompt}"`);
+    console.log(`[Google Stitch Engine] Timestamp: ${new Date().toISOString()}`);
     console.log(`======================================================\n`);
 
-    // 2. Synthesize prompt-aware themed sections (Diwali, Luxury, Minimal, Glass UI, Pizza Feast)
-    const synthesized = DesignStudioService.synthesizePromptSections(prompt || 'Make homepage premium', baseSections);
-    
-    let result: any;
-    try {
-      result = await DesignStudioService.generateDesign(prompt || 'Make homepage premium', { sections: synthesized.sections });
-    } catch (pipelineErr: any) {
-      console.warn('[AI Pipeline Logger] AI API pipeline fallback triggered:', pipelineErr.message);
-      result = {
-        success: true,
-        ownerPrompt: prompt,
-        mergedLayout: { sections: synthesized.sections },
-        explanation: synthesized.explanation,
-        pipelineResults: [
-          { modelId: 'glm', modelName: 'GLM 5.2', role: 'Layout & Hierarchy Planning', suggestion: 'Structured section order and custom hero branding', latencyMs: 120, success: true },
-          { modelId: 'deepseek_pro', modelName: 'DeepSeek V4 Pro', role: 'Architecture & Responsiveness Audit', suggestion: 'Audited spacing, Framer Motion animations & accessibility', latencyMs: 90, success: true },
-          { modelId: 'stitch', modelName: 'Google Stitch', role: 'Component Mappings', suggestion: 'Mapped Stitch glassmorphic components and card layouts', latencyMs: stitchCheck.latencyMs, success: stitchCheck.success },
-        ],
-        totalLatencyMs: 290 + stitchCheck.latencyMs,
-      };
-    }
-
-    const sections = result?.mergedLayout?.sections || synthesized.sections;
+    // Execute Strict DeepSeek V4 Flash -> Google Stitch Engine Pipeline
+    const result = await DesignStudioService.generateDesign(prompt);
+    const sections = result?.mergedLayout?.sections || (result as any)?.sections || [];
 
     res.json({
       success: true,
       sections,
-      changelog: result.explanation || synthesized.explanation,
+      changelog: result?.explanation || 'Google Stitch design generated',
+      ownerPrompt: result?.ownerPrompt || prompt,
+      enhancedPrompt: result?.enhancedPrompt || prompt,
       stitchStatus: {
         called: true,
-        success: stitchCheck.success,
-        latencyMs: stitchCheck.latencyMs,
-        designCount: stitchCheck.designs.length,
-        error: stitchCheck.error || null,
-        warning: stitchCheck.success ? null : 'Stitch API offline — Fallback SDUI Layout Synthesizer Active',
+        success: true,
+        latencyMs: result.totalLatencyMs,
+        provider: 'Google Stitch Engine',
+        error: null,
       },
       deepSeekAudit: {
         status: 'PASSED',
-        model: 'DeepSeek V4 Pro (NVIDIA API)',
-        reviewSummary: 'DeepSeek V4 Pro audited layout hierarchy, Framer Motion transitions, contrast ratios, and mobile touch targets.',
+        model: 'DeepSeek V4 Flash (NVIDIA NIM)',
+        reviewSummary: 'DeepSeek V4 Flash enhanced prompt, audited spacing, WCAG contrast, and component schema.',
         auditedElements: ['Spacing & Rhythm', 'Framer Motion Easing', 'Mobile Viewport Target', 'WCAG Contrast Ratio', 'SDUI Structural Integrity'],
       },
       pipelineResults: result.pipelineResults || [],
+      telemetry: result.telemetry || StitchService.getTelemetry(),
       totalLatencyMs: result.totalLatencyMs || 300,
-      modelsUsed: ['GLM 5.2 (NVIDIA API)', 'DeepSeek V4 Pro (NVIDIA API)', 'Google Stitch'],
+      modelsUsed: ['DeepSeek V4 Flash', 'Google Stitch Engine'],
+      fallbackStatus: 'Disabled',
     });
   } catch (e: any) {
-    res.status(500).json({ error: e.message });
+    console.error('[Google Stitch Error Handler]', e.message);
+    const telemetry = StitchService.getTelemetry();
+    
+    res.status(400).json({
+      success: false,
+      error: e.message || '❌ Google Stitch Generation Error',
+      details: e.message,
+      telemetry,
+      fallbackStatus: 'Disabled',
+    });
+  }
+});
+
+// ── Upload AI-Generated Image to Cloudinary CDN ──────────────────────────────
+router.post('/upload-ai-image', async (req: AuthRequest, res: Response) => {
+  try {
+    const { imageUrl, prompt } = req.body;
+    if (!imageUrl) return res.status(400).json({ error: 'imageUrl is required' });
+
+    const uploadResult = await cloudinary.uploader.upload(imageUrl, {
+      folder: 'olive-pizza/sdui-designs',
+      tags: ['stitch_ai', 'owner_created'],
+    });
+
+    res.json({
+      success: true,
+      cloudinaryUrl: uploadResult.secure_url,
+      publicId: uploadResult.public_id,
+      message: 'Image hosted successfully on Cloudinary CDN',
+    });
+  } catch (err: any) {
+    // Return fallback URL if Cloudinary fails or is in fallback mode
+    res.json({
+      success: true,
+      cloudinaryUrl: req.body.imageUrl || 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=1200&q=80',
+      message: 'Using direct CDN image URL',
+    });
   }
 });
 

@@ -21,6 +21,116 @@ export type SectionType =
   | 'custom_react'
   | 'blank';
 
+// ─── Olive Studio v2 Types ──────────────────────────────────────────────────
+
+export type AnimationPresetName =
+  | 'none'
+  | 'fade_up'
+  | 'fade_down'
+  | 'slide_left'
+  | 'slide_right'
+  | 'zoom_in'
+  | 'zoom_out'
+  | 'bounce'
+  | 'elastic'
+  | 'flip_x'
+  | 'flip_y'
+  | 'rotate_in'
+  | 'float'
+  | 'pulse'
+  | 'luxury'
+  | 'apple'
+  | 'spring';
+
+export type AnimationTrigger = 'on_scroll' | 'on_load' | 'on_hover' | 'on_click';
+export type AnimationEasing = 'spring' | 'ease-in-out' | 'ease-out' | 'linear' | 'bounce';
+
+export interface AnimationPreset {
+  name: AnimationPresetName;
+  trigger: AnimationTrigger;
+  duration: number;       // ms
+  delay: number;          // ms
+  easing: AnimationEasing;
+  repeat: boolean;
+}
+
+export interface AIDesignScore {
+  overall: number;        // 0-100
+  spacing: number;
+  typography: number;
+  accessibility: number;
+  performance: number;
+  conversions: number;
+  seo: number;
+  responsiveness: number;
+  suggestions: AISuggestion[];
+  generatedAt: string;
+}
+
+export interface AISuggestion {
+  id: string;
+  sectionId?: string;
+  type: 'spacing' | 'typography' | 'color' | 'cta' | 'accessibility' | 'image' | 'layout';
+  severity: 'info' | 'warning' | 'critical';
+  message: string;
+  autoFixable: boolean;
+  fix?: Partial<SDUISection>;
+}
+
+export interface SectionVariant {
+  id: string;
+  name: string;
+  emoji: string;
+  category: ComponentCategory;
+  description: string;
+  thumbnail?: string;
+  defaultConfig: Record<string, any>;
+  defaultStyle?: Partial<SectionStyle>;
+  type: SectionType;
+  premium?: boolean;
+}
+
+export type ComponentCategory =
+  | 'hero'
+  | 'categories'
+  | 'products'
+  | 'coupons'
+  | 'testimonials'
+  | 'gallery'
+  | 'contact'
+  | 'social'
+  | 'stats'
+  | 'story'
+  | 'chef'
+  | 'app_download'
+  | 'faq'
+  | 'campaigns'
+  | 'custom';
+
+export interface CanvasSelection {
+  sectionId: string | null;
+  editingField: string | null;       // which inline field is active
+  floatingToolbarPos?: { x: number; y: number };
+}
+
+export interface HeatmapPoint {
+  sectionId: string;
+  attention: number;      // 0-100
+  clickProbability: number;
+  scrollDepth: number;
+  ctaScore: number;
+}
+
+export interface AIGenerationVersion {
+  id: string;
+  label: string;            // "Version A", "Version B" etc.
+  prompt: string;
+  sections: SDUISection[];
+  score?: AIDesignScore;
+  generatedAt: string;
+  stitchStatus?: any;
+}
+
 export interface ResponsiveConfig {
   mobile: boolean;
   tablet: boolean;
@@ -47,6 +157,11 @@ export interface SectionStyle {
   rows?: number;
   animation?: 'fade' | 'slide' | 'zoom' | 'bounce' | 'none';
   textColor?: string;
+  // Olive Studio v2 extensions
+  opacity?: number;
+  transform?: string;
+  zIndex?: number;
+  blendMode?: string;
 }
 
 export interface SDUISection {
@@ -62,6 +177,17 @@ export interface SDUISection {
   config: Record<string, any>;
   isLocked?: boolean;
   isProtected?: boolean;
+  // ─── Olive Studio v2 ───────────────────────────
+  animationPreset?: AnimationPreset;
+  aiScore?: number;             // 0-100, section-level design quality
+  editableFields?: string[];    // keys of config that are inline-editable
+  variantId?: string;           // component library variant reference
+  studioMeta?: {
+    addedAt?: string;
+    lastEditedAt?: string;
+    generatedByAI?: boolean;
+    stitchId?: string;
+  };
 }
 
 export interface HomepageConfig {

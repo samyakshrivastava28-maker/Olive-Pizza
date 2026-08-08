@@ -165,11 +165,8 @@ export class PineconeSyncWorker {
         throw new Error('Failed to generate embedding vector from provider');
       }
 
-      // 5. Delete old vectors for this document to prevent duplicates
-      await pineconeService.deleteDocument(job.docId);
-
-      // 6. Upsert new vector to Pinecone
-      const pointId = crypto.randomUUID();
+      // 5. Upsert vector to Pinecone using stable vector ID (Requirement 14)
+      const pointId = `${job.docType}:${job.docId}`;
       await pineconeService.upsertPoints([{
         id: pointId,
         values: vector,

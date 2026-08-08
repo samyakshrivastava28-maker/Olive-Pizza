@@ -157,6 +157,7 @@ const AIHealthMonitor = lazyWithRetry(() => import('./pages/owner/AIHealthMonito
 const OwnerNotificationDiagnostics = lazyWithRetry(() => import('./pages/owner/OwnerNotificationDiagnostics'));
 const OwnerDataManager = lazyWithRetry(() => import('./pages/owner/DataManager'));
 const WebsiteManagerHub = lazyWithRetry(() => import('./pages/owner/WebsiteManager'));
+const OliveStudio = lazyWithRetry(() => import('./pages/owner/OliveStudio'));
 const DeveloperDashboard = lazyWithRetry(() => import('./pages/owner/DeveloperDashboard'));
 
 
@@ -323,6 +324,8 @@ function AppContent() {
                   <Route path="website-manager/*" element={<WebsiteManagerHub />} />
                   <Route path="sdui/*" element={<WebsiteManagerHub />} />
                   <Route path="section-designer/*" element={<WebsiteManagerHub />} />
+                  <Route path="studio" element={<OliveStudio />} />
+                  <Route path="olive-studio" element={<OliveStudio />} />
                   <Route path="notifications" element={<OwnerNotificationCenter />} />
                   <Route path="verification-metrics" element={<OwnerVerificationMetrics />} />
                   <Route path="versions" element={<OwnerVersionManagement />} />

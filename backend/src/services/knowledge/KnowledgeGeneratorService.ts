@@ -242,14 +242,35 @@ export class KnowledgeGeneratorService {
       const nextVersion = this.currentVersion;
       const updatedAt = new Date().toISOString();
 
+      // Build collections hash manifest for version.json (Requirement 4)
+      const collectionsManifest: Record<string, { version: number; hash: string }> = {};
+      this.checksumCache.forEach((hash, file) => {
+        const colName = file.replace('.json', '');
+        collectionsManifest[colName] = {
+          version: nextVersion,
+          hash,
+        };
+      });
+
+      const versionManifest = {
+        version: nextVersion,
+        generatedAt: updatedAt,
+        collections: collectionsManifest,
+        changedFiles,
+      };
+
+      // Upload central version.json manifest to Cloudflare R2
+      await CloudflareR2Service.uploadJson('knowledge/version.json', versionManifest);
+
       // Update Firestore knowledgeVersion trigger document for Olive Pizza AI
       await db.collection('website').doc('knowledgeVersion').set({
         version: nextVersion,
         updatedAt,
         changedFiles,
+        collections: collectionsManifest,
       });
 
-      console.log(`[KnowledgeGenerator] 🚀 Updated knowledgeVersion to v${nextVersion} (Changed: ${changedFiles.join(', ')})`);
+      console.log(`[KnowledgeGenerator] 🚀 Updated knowledgeVersion to v${nextVersion} (Uploaded version.json, Changed: ${changedFiles.join(', ')})`);
       return { updatedFiles: changedFiles, version: nextVersion };
     }
 

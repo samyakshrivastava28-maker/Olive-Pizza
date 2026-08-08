@@ -20,7 +20,7 @@ const getProviderInfo = (providerId: string) => {
     case 'supabase':      return { label: 'PostgreSQL',      color: '#6B8E23', icon: Database };
     case 'cloudinary':    return { label: 'Cloudinary',      color: '#FFC107', icon: Cloud };
     case 'google-drive':  return { label: 'Google Drive',    color: '#4285F4', icon: HardDrive };
-    case 'qdrant':        return { label: 'Qdrant (AI)',      color: '#E91E63', icon: Layers };
+    case 'qdrant':        return { label: 'Pinecone (AI)',    color: '#E91E63', icon: Layers };
     case 'email':         return { label: 'Email Queue',     color: '#9C27B0', icon: Mail };
     case 'notifications': return { label: 'Notifications',   color: '#00BCD4', icon: Bell };
     case 'app-storage':   return { label: 'App Storage',     color: '#FF5722', icon: Server };

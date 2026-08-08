@@ -156,7 +156,13 @@ export default function OwnerLayout() {
 
         {/* Scrollable Page Content */}
         <div className="flex-1 overflow-y-auto flex flex-col">
-          <div className={`p-4 md:p-8 flex-1 ${location.pathname === '/owner/dashboard' ? '' : 'bg-[#1E293B] border border-white/10 rounded-tl-[40px] shadow-[0_0_50px_rgba(0,0,0,0.5)] m-4 md:m-6 relative z-10'}`}>
+          <div className={`flex-1 ${
+            location.pathname.startsWith('/owner/studio') || location.pathname.startsWith('/owner/olive-studio')
+              ? 'p-2 md:p-4 relative z-10'
+              : location.pathname === '/owner/dashboard'
+                ? 'p-4 md:p-8'
+                : 'p-4 md:p-8 bg-[#1E293B] border border-white/10 rounded-tl-[40px] shadow-[0_0_50px_rgba(0,0,0,0.5)] m-4 md:m-6 relative z-10'
+          }`}>
             <Suspense fallback={
               <div className="w-full h-full flex flex-col items-center justify-center min-h-[400px]">
                 <div className="w-10 h-10 border-4 border-dark-800 border-t-primary-500 rounded-full animate-spin" />
