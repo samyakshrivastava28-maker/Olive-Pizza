@@ -3,8 +3,11 @@ import { verifyToken, requireRole, AuthRequest } from '../middleware/auth.middle
 import { DesignStudioService } from '../services/ai/DesignStudioService.js';
 import { ReactComponentGenerator } from '../services/ai/ReactComponentGenerator.js';
 import { WebsiteConfigService } from '../services/websiteConfig/WebsiteConfigService.js';
+import { SDUIVersioningService } from '../services/sdui/SDUIVersioningService.js';
+import { OlivePizzaAISDK } from '../services/OlivePizzaAISDK.js';
 import { adminDb as db } from '../config/firebase.js';
 import { pgPool } from '../config/postgres.js';
+
 
 const router = Router();
 router.use(verifyToken);
@@ -321,4 +324,184 @@ router.post('/generate-image', async (req: AuthRequest, res: Response) => {
   }
 });
 
+// ── SDUI Design Agent Routes ──────────────────────────────────────────────────
+
+/**
+ * POST /api/design-studio/sdui/generate
+ * Full 5-step multi-model pipeline:
+ *   DeepSeek V4 Pro → GLM 5.2 → DeepSeek V4 Flash → Google Stitch → Safety Review
+ * All AI via OlivePizzaAISDK. Google Stitch is the ONLY visual design engine.
+ */
+router.post('/sdui/generate', async (req: AuthRequest, res: Response) => {
+  try {
+    const { prompt } = req.body;
+    if (!prompt) return res.status(400).json({ error: 'prompt is required.' });
+
+    const result = await DesignStudioService.runMultiModelStitchPipeline(prompt);
+
+    // Audit log to Firestore
+    await db.collection('sdui_design_agent_sessions').add({
+      userId: req.user?.uid,
+      userEmail: req.user?.email,
+      prompt,
+      pipelineSteps: result.pipelineResults?.length ?? 0,
+      safetyScore: result.safetyReview?.overallScore,
+      success: result.success,
+      totalLatencyMs: result.totalLatencyMs,
+      createdAt: new Date().toISOString(),
+    }).catch(() => {});
+
+    res.json(result);
+  } catch (e: any) {
+    console.error('[DesignStudio SDUI] generate error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+/**
+ * POST /api/design-studio/sdui/save
+ * Save a generated design draft to Cloudflare R2 with versioning.
+ */
+router.post('/sdui/save', async (req: AuthRequest, res: Response) => {
+  try {
+    const { sections, ownerPrompt, explanation, safetyScore, designReasoning, pipelineModels } = req.body;
+    if (!sections || !Array.isArray(sections)) {
+      return res.status(400).json({ error: 'sections array is required.' });
+    }
+
+    const record = await SDUIVersioningService.saveDesign({
+      sections,
+      ownerPrompt,
+      explanation,
+      safetyScore,
+      designReasoning,
+      pipelineModels,
+      publishedBy: req.user?.uid,
+    });
+
+    res.json({ success: true, version: record, message: `Design draft saved as version ${record.versionNumber}.` });
+  } catch (e: any) {
+    console.error('[DesignStudio SDUI] save error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+/**
+ * POST /api/design-studio/sdui/publish
+ * Publish a saved draft version as the live SDUI.
+ * Archives the previous live version. Updates Firestore SDUI config.
+ */
+router.post('/sdui/publish', async (req: AuthRequest, res: Response) => {
+  try {
+    const { versionId, sections, changelog } = req.body;
+    if (!versionId) return res.status(400).json({ error: 'versionId is required.' });
+    if (!sections || !Array.isArray(sections)) return res.status(400).json({ error: 'sections array is required.' });
+
+    // 1. Save versioned package to R2 and update manifest
+    const result = await SDUIVersioningService.publishDesign({
+      versionId,
+      publishedBy: req.user?.uid || 'owner',
+      publishedByEmail: req.user?.email,
+      sections,
+    });
+
+    // 2. Update the live Firestore SDUI homepage config (realtime listeners pick this up)
+    await WebsiteConfigService.saveHomepageDraft({ sections }, req.user?.uid || 'owner');
+    await WebsiteConfigService.publishHomepage(
+      req.user?.uid || 'owner',
+      req.user?.email,
+      changelog || `Published SDUI Design Agent version ${versionId}`,
+    );
+
+    res.json({
+      success: true,
+      liveVersionId: result.liveVersionId,
+      archivedVersionId: result.archivedVersionId,
+      message: `Version ${versionId} is now LIVE. Previous version archived.`,
+    });
+  } catch (e: any) {
+    console.error('[DesignStudio SDUI] publish error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+/**
+ * POST /api/design-studio/sdui/rollback
+ * Rollback to a previous version or restore the default UI.
+ */
+router.post('/sdui/rollback', async (req: AuthRequest, res: Response) => {
+  try {
+    const { targetVersionId, restoreDefault } = req.body;
+    const publishedBy = req.user?.uid || 'owner';
+
+    let result: { success: boolean; message: string };
+
+    if (restoreDefault) {
+      result = await SDUIVersioningService.restoreDefaultUI(publishedBy);
+    } else {
+      if (!targetVersionId) return res.status(400).json({ error: 'targetVersionId or restoreDefault is required.' });
+      result = await SDUIVersioningService.rollbackToVersion({ targetVersionId, publishedBy });
+    }
+
+    res.json(result);
+  } catch (e: any) {
+    console.error('[DesignStudio SDUI] rollback error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+/**
+ * GET /api/design-studio/sdui/versions
+ * List all saved design versions from the R2 manifest.
+ */
+router.get('/sdui/versions', async (req: AuthRequest, res: Response) => {
+  try {
+    const manifest = await SDUIVersioningService.listVersions();
+    res.json({ success: true, manifest });
+  } catch (e: any) {
+    console.error('[DesignStudio SDUI] versions error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+/**
+ * POST /api/design-studio/sdui/ai-review
+ * Run DeepSeek V4 Pro safety review on current sections via OlivePizzaAISDK.
+ * Returns visual score, functional score, button mapping, and suggestions.
+ */
+router.post('/sdui/ai-review', async (req: AuthRequest, res: Response) => {
+  try {
+    const { sections, ownerPrompt } = req.body;
+    if (!sections || !Array.isArray(sections)) {
+      return res.status(400).json({ error: 'sections array is required.' });
+    }
+
+    const review = await OlivePizzaAISDK.reviewDesignSafety({
+      sections,
+      ownerPrompt: ownerPrompt || 'Olive Pizza homepage review',
+    });
+
+    res.json({ success: true, review });
+  } catch (e: any) {
+    console.error('[DesignStudio SDUI] ai-review error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+/**
+ * GET /api/design-studio/sdui/version/:versionId
+ * Get the full sections payload for a specific version.
+ */
+router.get('/sdui/version/:versionId', async (req: AuthRequest, res: Response) => {
+  try {
+    const { versionId } = req.params;
+    const sections = await SDUIVersioningService.getVersionSections(versionId);
+    res.json({ success: true, versionId, sections });
+  } catch (e: any) {
+    console.error('[DesignStudio SDUI] version get error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 export default router;
+

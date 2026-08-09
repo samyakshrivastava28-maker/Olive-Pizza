@@ -158,8 +158,8 @@ const OwnerNotificationDiagnostics = lazyWithRetry(() => import('./pages/owner/O
 const OwnerDataManager = lazyWithRetry(() => import('./pages/owner/DataManager'));
 const WebsiteManagerHub = lazyWithRetry(() => import('./pages/owner/WebsiteManager'));
 const OliveStudio = lazyWithRetry(() => import('./pages/owner/OliveStudio'));
+const SectionDesignerPage = lazyWithRetry(() => import('./pages/owner/SectionDesigner'));
 const DeveloperDashboard = lazyWithRetry(() => import('./pages/owner/DeveloperDashboard'));
-
 
 // Lazy loaded delivery pages
 const CustomerDashboard = lazyWithRetry(() => import('./pages/CustomerDashboard'));
@@ -323,7 +323,7 @@ function AppContent() {
                   <Route path="homepage" element={<WebsiteManagerHub />} />
                   <Route path="website-manager/*" element={<WebsiteManagerHub />} />
                   <Route path="sdui/*" element={<WebsiteManagerHub />} />
-                  <Route path="section-designer/*" element={<WebsiteManagerHub />} />
+                  <Route path="section-designer" element={<SectionDesignerPage />} />
                   <Route path="studio" element={<OliveStudio />} />
                   <Route path="olive-studio" element={<OliveStudio />} />
                   <Route path="notifications" element={<OwnerNotificationCenter />} />

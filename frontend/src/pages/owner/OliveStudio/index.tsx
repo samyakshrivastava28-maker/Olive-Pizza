@@ -45,6 +45,7 @@ export default function OliveStudio() {
   const [previewVersionIdx, setPreviewVersionIdx] = useState<number | null>(null);
   const [leftPanelOpen, setLeftPanelOpen] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [lastGenerationPrompt, setLastGenerationPrompt] = useState('');  // For AIReviewModal context
   const autosaveRef = useRef<ReturnType<typeof setInterval>>();
 
   // ─── Sync sections from store ────────────────────────────────────────────────
@@ -57,6 +58,19 @@ export default function OliveStudio() {
     const src = draftHomepage || homepage;
     if (src?.sections) setSections(src.sections);
   }, [draftHomepage, homepage]);
+
+  // ─── Listen for preview-version events from OwnerMadeUIs ─────────────────────────
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { sections: previewSections } = (e as CustomEvent).detail;
+      if (Array.isArray(previewSections)) {
+        setSections(previewSections);
+        toast.success('Loaded saved version into canvas. Click Publish to go live.');
+      }
+    };
+    window.addEventListener('sdui-preview-version', handler);
+    return () => window.removeEventListener('sdui-preview-version', handler);
+  }, []);
 
   // ─── Autosave every 5 seconds ────────────────────────────────────────────────
   useEffect(() => {
@@ -128,6 +142,7 @@ export default function OliveStudio() {
   // ─── AI Generation (Google Stitch Only) ───────────────────────────────────────
   const handleAIGenerate = useCallback(async (prompt: string) => {
     setIsGenerating(true);
+    setLastGenerationPrompt(prompt);  // Store for AIReviewModal context
     try {
       const res = await fetch('/api/website-manager/ai-generate', {
         method: 'POST',
@@ -385,6 +400,7 @@ export default function OliveStudio() {
         {showReview && (
           <AIReviewModal
             sections={sections}
+            ownerPrompt={lastGenerationPrompt}
             onClose={() => setShowReview(false)}
             onApplySuggestions={(fixedSections) => {
               updateSections(fixedSections);

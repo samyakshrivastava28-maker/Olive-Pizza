@@ -232,6 +232,11 @@ app.use('/api/media-library', mediaLibraryRoutes);
 app.use('/stitch', stitchRoutes);
 app.use('/api/stitch', stitchRoutes);
 
+import sectionDesignerProxyRoutes from './routes/sectionDesignerProxy.routes.js';
+// Section Designer proxy → delegates to Olive Pizza Studio (SDUI) backend
+app.use('/section-designer', expensiveLimiter, sectionDesignerProxyRoutes);
+app.use('/api/section-designer', expensiveLimiter, sectionDesignerProxyRoutes);
+
 import designStudioRoutes from './routes/designStudio.routes.js';
 import knowledgeRoutes from './routes/knowledge.routes.js';
 app.use('/design-studio', designStudioRoutes);

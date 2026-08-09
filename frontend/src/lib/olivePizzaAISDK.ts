@@ -6,7 +6,7 @@
  */
 
 export const OLIVE_PIZZA_AI_PLATFORM_URL =
-  import.meta.env.VITE_OLIVE_PIZZA_AI_URL || 'https://olive-pizza-ai-frontend.vercel.app';
+  import.meta.env.VITE_OLIVE_PIZZA_AI_URL || 'https://olive-pizza-ai.onrender.com';
 
 export class OlivePizzaAIClient {
   /**

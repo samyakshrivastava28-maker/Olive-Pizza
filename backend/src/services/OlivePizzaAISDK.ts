@@ -11,7 +11,7 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const OLIVE_PIZZA_AI_URL = process.env.OLIVE_PIZZA_AI_URL || 'https://olive-pizza-ai-frontend.vercel.app';
+const OLIVE_PIZZA_AI_URL = process.env.OLIVE_PIZZA_AI_URL || 'https://olive-pizza-ai.onrender.com';
 const AI_GATEWAY_SECRET = process.env.AI_GATEWAY_SECRET || 'olive-ai-gateway-secret-change-in-prod';
 
 export interface ChatMessage {
@@ -333,4 +333,260 @@ export class OlivePizzaAISDK {
       return { ok: false, platform: 'Olive Pizza AI Platform', version: 'offline' };
     }
   }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // SDUI Design Agent Methods — All delegated to Olive Pizza AI via SDK
+  // No local AI, no local RAG, no local LLM. Olive Pizza AI is the ONLY intelligence platform.
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Route design reasoning request to DeepSeek V4 Pro on Olive Pizza AI.
+   * Analyzes owner prompt and returns structured design intent + layout strategy.
+   */
+  static async requestDesignReasoning(options: {
+    ownerPrompt: string;
+    context?: { restaurantInfo?: any; activeProducts?: number; activeCoupons?: number };
+  }): Promise<{ reasoning: string; layoutStrategy: string; keyElements: string[]; modelUsed: string; latencyMs: number }> {
+    const startTime = Date.now();
+    try {
+      const url = `${this.getBaseUrl()}/api/ai/design-reasoning`;
+      const headers = this.generateHeaders(options);
+
+      const res = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(options),
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        console.warn(`[OlivePizzaAISDK] Design reasoning failed (${res.status}): ${errText}`);
+        return {
+          reasoning: `Analyzing prompt: "${options.ownerPrompt}". Focus on mobile-first premium layout with Olive Pizza brand system.`,
+          layoutStrategy: 'Hero → Categories → Best Sellers → Coupons → Offers → Download App',
+          keyElements: ['Hero banner', 'Category cards', 'Product grid', 'Coupon carousel'],
+          modelUsed: 'DeepSeek V4 Pro (fallback)',
+          latencyMs: Date.now() - startTime,
+        };
+      }
+
+      const data = await res.json();
+      return {
+        reasoning: data.reasoning || data.explanation || '',
+        layoutStrategy: data.layoutStrategy || data.strategy || '',
+        keyElements: data.keyElements || data.elements || [],
+        modelUsed: data.modelUsed || 'DeepSeek V4 Pro',
+        latencyMs: Date.now() - startTime,
+      };
+    } catch (err: any) {
+      console.error('[OlivePizzaAISDK] Design reasoning error:', err.message);
+      return {
+        reasoning: `Layout strategy for: "${options.ownerPrompt}"`,
+        layoutStrategy: 'Hero → Categories → Best Sellers → Coupons',
+        keyElements: ['Hero', 'Categories', 'Products', 'Coupons'],
+        modelUsed: 'DeepSeek V4 Pro (sdk_error)',
+        latencyMs: Date.now() - startTime,
+      };
+    }
+  }
+
+  /**
+   * Route design advice request to GLM 5.2 on Olive Pizza AI.
+   * Provides second-opinion layout strategy and design tips.
+   */
+  static async requestDesignAdvice(options: {
+    ownerPrompt: string;
+    reasoningFromDeepSeek: string;
+  }): Promise<{ advice: string; improvements: string[]; colorSuggestions: string[]; modelUsed: string; latencyMs: number }> {
+    const startTime = Date.now();
+    try {
+      const url = `${this.getBaseUrl()}/api/ai/design-advice`;
+      const headers = this.generateHeaders(options);
+
+      const res = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(options),
+      });
+
+      if (!res.ok) {
+        return {
+          advice: `Complement with glassmorphic card sections and smooth Framer Motion animations for a premium feel.`,
+          improvements: ['Add testimonials section', 'Use gradient hero background', 'Increase card border-radius'],
+          colorSuggestions: ['#f97316 (primary orange)', '#0d0e12 (surface dark)', '#f59e0b (gold accent)'],
+          modelUsed: 'GLM 5.2 (fallback)',
+          latencyMs: Date.now() - startTime,
+        };
+      }
+
+      const data = await res.json();
+      return {
+        advice: data.advice || data.suggestion || '',
+        improvements: data.improvements || [],
+        colorSuggestions: data.colorSuggestions || [],
+        modelUsed: data.modelUsed || 'GLM 5.2',
+        latencyMs: Date.now() - startTime,
+      };
+    } catch (err: any) {
+      console.error('[OlivePizzaAISDK] Design advice error:', err.message);
+      return {
+        advice: 'Focus on mobile-first layout with glassmorphic elements.',
+        improvements: ['Add section animations', 'Improve CTA contrast'],
+        colorSuggestions: ['#f97316', '#0d0e12'],
+        modelUsed: 'GLM 5.2 (sdk_error)',
+        latencyMs: Date.now() - startTime,
+      };
+    }
+  }
+
+  /**
+   * Route Stitch prompt formatting to DeepSeek V4 Flash on Olive Pizza AI.
+   * Converts reasoning+advice into an optimized Google Stitch design specification.
+   */
+  static async enhanceStitchPrompt(options: {
+    ownerPrompt: string;
+    reasoning: string;
+    advice: string;
+  }): Promise<{ stitchPrompt: string; modelUsed: string; latencyMs: number }> {
+    const startTime = Date.now();
+    try {
+      const url = `${this.getBaseUrl()}/api/ai/enhance-stitch-prompt`;
+      const headers = this.generateHeaders(options);
+
+      const res = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(options),
+      });
+
+      if (!res.ok) {
+        // Construct a rich Stitch spec as fallback
+        const spec = `👑 [Google Stitch Design Specification — Olive Pizza]\nPrompt: "${options.ownerPrompt}"\n${options.reasoning}\nDesign Notes: ${options.advice}\nVisual Theme: Ultra-luxury artisanal wood-fired pizzeria, dark obsidian canvas (#06070a), primary orange (#f97316), secondary gold (#f59e0b).\nComponents: Cinematic hero banner, 3D glassmorphic cards, certified wood-fired badges, responsive mobile-first layout.`;
+        return { stitchPrompt: spec, modelUsed: 'DeepSeek V4 Flash (fallback)', latencyMs: Date.now() - startTime };
+      }
+
+      const data = await res.json();
+      return {
+        stitchPrompt: data.stitchPrompt || data.enhancedPrompt || options.ownerPrompt,
+        modelUsed: data.modelUsed || 'DeepSeek V4 Flash',
+        latencyMs: Date.now() - startTime,
+      };
+    } catch (err: any) {
+      console.error('[OlivePizzaAISDK] Stitch prompt error:', err.message);
+      return {
+        stitchPrompt: `Premium Olive Pizza layout: ${options.ownerPrompt}. Dark theme, glassmorphic cards, orange accent.`,
+        modelUsed: 'DeepSeek V4 Flash (sdk_error)',
+        latencyMs: Date.now() - startTime,
+      };
+    }
+  }
+
+  /**
+   * Route design safety review to DeepSeek V4 Pro on Olive Pizza AI.
+   * Validates generated sections for visual quality + business action preservation.
+   */
+  static async reviewDesignSafety(options: {
+    sections: any[];
+    ownerPrompt: string;
+  }): Promise<{
+    overallScore: number;
+    visualScore: number;
+    functionalScore: number;
+    ragScore: number;
+    buttonMapping: Array<{ buttonText: string; action: string; isSafe: boolean; suggestedAction?: string }>;
+    unmappedButtons: string[];
+    suggestions: Array<{ severity: 'info' | 'warning' | 'critical'; message: string }>;
+    modelUsed: string;
+    latencyMs: number;
+  }> {
+    const startTime = Date.now();
+
+    // Supported business actions — NEVER allow bypassing these mappings
+    const SUPPORTED_ACTIONS = [
+      'ADD_TO_CART', 'OPEN_MENU', 'OPEN_CART', 'OPEN_CHECKOUT',
+      'APPLY_COUPON', 'LOGIN', 'LOGOUT', 'TRACK_ORDER', 'VIEW_PRODUCT',
+      'OPEN_OFFERS', 'NAVIGATE', 'SCROLL_TO',
+    ];
+
+    try {
+      const url = `${this.getBaseUrl()}/api/ai/review-design-safety`;
+      const headers = this.generateHeaders(options);
+
+      const res = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(options),
+      });
+
+      if (!res.ok) {
+        // Local safety analysis when AI is unavailable
+        return this._localSafetyAnalysis(options.sections, SUPPORTED_ACTIONS, startTime);
+      }
+
+      const data = await res.json();
+      return {
+        overallScore: data.overallScore ?? 80,
+        visualScore: data.visualScore ?? 80,
+        functionalScore: data.functionalScore ?? 85,
+        ragScore: data.ragScore ?? 75,
+        buttonMapping: data.buttonMapping || [],
+        unmappedButtons: data.unmappedButtons || [],
+        suggestions: data.suggestions || [],
+        modelUsed: data.modelUsed || 'DeepSeek V4 Pro',
+        latencyMs: Date.now() - startTime,
+      };
+    } catch (err: any) {
+      console.error('[OlivePizzaAISDK] Design safety review error:', err.message);
+      return this._localSafetyAnalysis(options.sections, SUPPORTED_ACTIONS, startTime);
+    }
+  }
+
+  /**
+   * Local structural safety analysis when Olive Pizza AI is unavailable.
+   * Does NOT call any local LLM or RAG — purely structural inspection.
+   */
+  private static _localSafetyAnalysis(
+    sections: any[],
+    supportedActions: string[],
+    startTime: number,
+  ) {
+    const hasHero = sections.some((s: any) => s.type === 'hero');
+    const hasCoupons = sections.some((s: any) => s.type === 'coupons');
+    const hasCategories = sections.some((s: any) => s.type === 'categories');
+    const buttonMapping: Array<{ buttonText: string; action: string; isSafe: boolean; suggestedAction?: string }> = [];
+    const unmappedButtons: string[] = [];
+    const suggestions: Array<{ severity: 'info' | 'warning' | 'critical'; message: string }> = [];
+
+    // Scan sections for button actions
+    sections.forEach((s: any) => {
+      const ctaText = s.config?.ctaText || s.config?.buttonText;
+      const ctaAction = s.config?.ctaAction;
+      if (ctaText) {
+        const isSafe = !ctaAction || supportedActions.includes(ctaAction);
+        buttonMapping.push({ buttonText: ctaText, action: ctaAction || 'OPEN_MENU', isSafe });
+        if (!isSafe) unmappedButtons.push(ctaText);
+      }
+    });
+
+    if (!hasHero) suggestions.push({ severity: 'critical', message: 'Missing Hero section — this is the first thing customers see.' });
+    if (!hasCoupons) suggestions.push({ severity: 'warning', message: 'Add a Coupons section to boost conversion rates.' });
+    if (!hasCategories) suggestions.push({ severity: 'warning', message: 'Menu Categories help customers navigate faster.' });
+
+    const visualScore = (hasHero ? 30 : 0) + (hasCategories ? 20 : 0) + (hasCoupons ? 15 : 0) + 35;
+    const functionalScore = unmappedButtons.length === 0 ? 95 : Math.max(60, 95 - unmappedButtons.length * 10);
+    const ragScore = 75; // Structural check only, no RAG access on main project
+
+    return {
+      overallScore: Math.round((visualScore + functionalScore + ragScore) / 3),
+      visualScore,
+      functionalScore,
+      ragScore,
+      buttonMapping,
+      unmappedButtons,
+      suggestions,
+      modelUsed: 'Local Safety Check (Olive Pizza AI Offline)',
+      latencyMs: Date.now() - startTime,
+    };
+  }
 }
+

@@ -49,6 +49,7 @@ const PROGRESS_STEPS = [
 // ─── AI Assistant Panel ───────────────────────────────────────────────────────
 import { saveOwnerCustomSection } from '../../../utils/ownerCustomSections';
 import { Plus, Star } from 'lucide-react';
+import { OwnerMadeUIs } from './OwnerMadeUIs';
 
 // ─── AI Assistant Panel ───────────────────────────────────────────────────────
 const AIPanel: React.FC<{ onGenerate: (p: string) => Promise<void>; isGenerating: boolean; aiVersions: AIGenerationVersion[]; onApplyVersion: (i: number) => void }> = ({
@@ -535,10 +536,14 @@ export const OliveStudioRightPanel: React.FC<Props> = ({
               </div>
             )}
             {mode === 'history' && (
-              <div className="flex flex-col items-center justify-center h-full text-center p-6 gap-3">
-                <span className="text-4xl">📜</span>
-                <p className="text-sm font-black text-white">Version History</p>
-                <p className="text-xs text-slate-500">Full version history available in the Publish & Rollback tab</p>
+              <div className="flex flex-col h-full overflow-hidden">
+                <OwnerMadeUIs
+                  onSelectVersionSections={(sections, versionId) => {
+                    // When owner previews a version from history, load sections into canvas
+                    const event = new CustomEvent('sdui-preview-version', { detail: { sections, versionId } });
+                    window.dispatchEvent(event);
+                  }}
+                />
               </div>
             )}
           </motion.div>

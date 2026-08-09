@@ -1,4 +1,4 @@
-import dotenv from 'dotenv';
+﻿import dotenv from 'dotenv';
 import { StitchService, StitchTelemetry } from '../stitch/StitchService.js';
 import { StitchColorMapper } from '../stitch/StitchColorMapper.js';
 import { OlivePizzaAISDK } from '../OlivePizzaAISDK.js';
@@ -23,175 +23,70 @@ export interface DesignPipelineResult {
   totalLatencyMs: number;
   telemetry?: StitchTelemetry;
   fallbackStatus: 'Disabled';
+  designReasoning?: string;
+  designAdvice?: string;
+  safetyReview?: any;
 }
 
 export class DesignStudioService {
-  /**
-   * Primary Stitch Design Generator Entrypoint.
-   * STRICT OBJECTIVE: Google Stitch is the ONLY visual design engine.
-   * Step 4 (DeepSeek Prompt Enhancement) -> Step 1/3 (Google Stitch Engine) -> SDUI Output.
-   */
   static async generateDesign(ownerPrompt: string, _currentDraft: any = []): Promise<DesignPipelineResult> {
-    return this.runStitchPipeline(ownerPrompt);
+    return this.runMultiModelStitchPipeline(ownerPrompt);
   }
-
   static async generateSection(_sectionType: string, ownerPrompt: string): Promise<any> {
-    return this.runStitchPipeline(ownerPrompt);
+    return this.runMultiModelStitchPipeline(ownerPrompt);
   }
-
   static async processCommandWithStitch(ownerPrompt: string, stitchDesignId?: string): Promise<any> {
-    return stitchDesignId ? this.importFromStitch(stitchDesignId) : this.runStitchPipeline(ownerPrompt);
+    return stitchDesignId ? this.importFromStitch(stitchDesignId) : this.runMultiModelStitchPipeline(ownerPrompt);
   }
-
-  /**
-   * Step 4 — DeepSeek V4 Flash Prompt Enhancement
-   */
   static async enhancePrompt(ownerPrompt: string): Promise<{ enhancedPrompt: string; explanation: string }> {
     const startTime = Date.now();
-    let enhanced = ownerPrompt;
     try {
       const res = await OlivePizzaAISDK.enhancePrompt({ prompt: ownerPrompt, targetType: 'sdui' });
-      if (res.enhancedPrompt) {
-        enhanced = res.enhancedPrompt;
-      }
-    } catch {}
-
-    const enhancedSpec = `👑 [DeepSeek V4 Flash — Google Stitch Design Specification]
-Prompt: "${enhanced}"
-Visual Theme: Ultra-luxury artisanal wood-fired pizzeria, dark obsidian canvas (#06070a), primary orange (#f97316), secondary gold (#f59e0b).
-Components: Cinematic hero banner, 3D glassmorphic cards, gold certified wood-fired badges, responsive mobile-first layout.`;
-
-    return {
-      enhancedPrompt: enhancedSpec,
-      explanation: `DeepSeek V4 Flash optimized prompt in ${Date.now() - startTime}ms`,
-    };
-  }
-
-  /**
-   * Step 1, 2, 3, 4 — Strict Google Stitch Pipeline.
-   * Fallback Status is ALWAYS Disabled.
-   */
-  static async runStitchPipeline(ownerPrompt: string): Promise<DesignPipelineResult> {
-    const startTime = Date.now();
-
-    // Step 4: DeepSeek V4 Flash Prompt Enhancement
-    const enhanced = await this.enhancePrompt(ownerPrompt);
-    const enhancedPrompt = enhanced.enhancedPrompt;
-
-    console.log(`[Stitch Pipeline] Owner Prompt: "${ownerPrompt}"`);
-    console.log(`[Stitch Pipeline] DeepSeek V4 Enhanced Prompt: "${enhancedPrompt}"`);
-
-    // Step 1: Connection & Credentials Check via StitchService
-    try {
-      const stitchResult = await StitchService.generateStitchDesign(enhancedPrompt);
-
-      const pipelineResults = [
-        {
-          modelId: 'deepseek_v4_flash',
-          modelName: 'DeepSeek V4 Flash',
-          role: 'Prompt Enhancement & Design Reasoning',
-          suggestion: 'Optimized user prompt with brand guidelines and visual component structure.',
-          latencyMs: 120,
-          success: true,
-        },
-        {
-          modelId: 'google_stitch',
-          modelName: 'Google Stitch Engine',
-          role: 'Visual Layout Synthesis & Design System',
-          suggestion: 'Generated 3D visual component layouts and color palettes.',
-          latencyMs: stitchResult.telemetry.lastLatencyMs,
-          success: true,
-        },
-      ];
-
-      return {
-        success: true,
-        ownerPrompt,
-        enhancedPrompt,
-        pipelineResults,
-        mergedLayout: { sections: stitchResult.sections },
-        explanation: stitchResult.explanation,
-        previewReady: true,
-        totalLatencyMs: Date.now() - startTime,
-        telemetry: stitchResult.telemetry,
-        fallbackStatus: 'Disabled',
-      };
-    } catch (err: any) {
-      console.error(`[Stitch Pipeline Logger] Error generating design: ${err.message}`);
-      
-      const telemetry = StitchService.getTelemetry();
-      const fallbackSections = [
-        {
-          id: `stitch_hero_${Date.now()}`,
-          type: 'hero',
-          label: `👑 Stitch: ${ownerPrompt.slice(0, 30)}`,
-          subtitle: 'Google Stitch Visual Layout Engine (Project 1381594740219373157)',
-          isVisible: true,
-          order: 0,
-          style: {
-            bgType: 'gradient',
-            bgGradient: 'linear-gradient(135deg, rgba(249,115,22,0.25), rgba(6,7,10,0.95))',
-            bgImage: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=1200&q=80',
-            borderRadius: '24px',
-            padding: '24px',
-          },
-          config: {
-            title: `🍕 ${ownerPrompt}`,
-            subtitle: 'Wood-fired artisanal pizza handcrafted with 72-hour naturally fermented dough.',
-            ctaText: 'Order Hot Pizza Now',
-            badge: '👑 Certified Wood-Fired',
-            imageUrl: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=1200&q=80',
-          },
-        },
-      ];
-
-      return {
-        success: true,
-        ownerPrompt,
-        enhancedPrompt,
-        pipelineResults: [
-          { modelId: 'deepseek_v4_flash', modelName: 'DeepSeek V4 Flash', role: 'Prompt Enhancement', suggestion: 'Enhanced owner prompt with Stitch specs', latencyMs: 100, success: true },
-          { modelId: 'google_stitch', modelName: 'Google Stitch Engine', role: 'Visual Component Mapping', suggestion: 'Generated Stitch SDUI layouts', latencyMs: 50, success: true },
-        ],
-        mergedLayout: { sections: fallbackSections },
-        explanation: `Google Stitch Engine created SDUI section layouts for "${ownerPrompt}".`,
-        previewReady: true,
-        totalLatencyMs: Date.now() - startTime,
-        telemetry,
-        fallbackStatus: 'Disabled',
-      };
+      return { enhancedPrompt: res.enhancedPrompt || ownerPrompt, explanation: `DeepSeek V4 Flash via OlivePizzaAISDK optimized prompt in ${Date.now() - startTime}ms` };
+    } catch {
+      return { enhancedPrompt: ownerPrompt, explanation: 'Passthrough (SDK unavailable)' };
     }
   }
-
-  /**
-   * Import layout structure from Google Stitch and map into Olive Pizza SDUI
-   */
+  static async runMultiModelStitchPipeline(ownerPrompt: string): Promise<DesignPipelineResult> {
+    const startTime = Date.now();
+    const pipelineResults: DesignPipelineResult['pipelineResults'] = [];
+    console.log(`\n[SDUI Design Agent] ========================================`);
+    console.log(`[SDUI Design Agent] Starting multi-model pipeline for: "${ownerPrompt}"`);
+    // Step 1: DeepSeek V4 Pro
+    const reasoning = await OlivePizzaAISDK.requestDesignReasoning({ ownerPrompt });
+    pipelineResults.push({ modelId: 'deepseek_v4_pro', modelName: 'DeepSeek V4 Pro', role: 'Design Reasoning & Requirement Analysis', suggestion: reasoning.layoutStrategy || reasoning.reasoning.slice(0, 120), latencyMs: reasoning.latencyMs, success: true });
+    // Step 2: GLM 5.2
+    const advice = await OlivePizzaAISDK.requestDesignAdvice({ ownerPrompt, reasoningFromDeepSeek: reasoning.reasoning });
+    pipelineResults.push({ modelId: 'glm_5_2', modelName: 'GLM 5.2', role: 'Design Advice & Second-Opinion Strategy', suggestion: advice.advice.slice(0, 120), latencyMs: advice.latencyMs, success: true });
+    // Step 3: DeepSeek V4 Flash
+    const stitchPromptResult = await OlivePizzaAISDK.enhanceStitchPrompt({ ownerPrompt, reasoning: reasoning.reasoning, advice: advice.advice });
+    const stitchPrompt = stitchPromptResult.stitchPrompt;
+    pipelineResults.push({ modelId: 'deepseek_v4_flash', modelName: 'DeepSeek V4 Flash', role: 'Stitch Prompt Optimization', suggestion: 'Formatted optimized design spec for Google Stitch Engine.', latencyMs: stitchPromptResult.latencyMs, success: true });
+    // Step 4: Google Stitch
+    let stitchResult: any = null;
+    try {
+      stitchResult = await StitchService.generateStitchDesign(stitchPrompt);
+      pipelineResults.push({ modelId: 'google_stitch', modelName: 'Google Stitch Engine', role: 'Visual Layout Synthesis (Project 1381594740219373157)', suggestion: `Generated ${stitchResult.sections.length} visual component layouts.`, latencyMs: stitchResult.telemetry.lastLatencyMs, success: true });
+    } catch (stitchErr: any) {
+      const telemetry = StitchService.getTelemetry();
+      pipelineResults.push({ modelId: 'google_stitch', modelName: 'Google Stitch Engine', role: 'Visual Layout Synthesis', suggestion: `Stitch Error: ${stitchErr.message}`, latencyMs: telemetry.lastLatencyMs || 0, success: false });
+      return { success: false, ownerPrompt, enhancedPrompt: stitchPrompt, pipelineResults, mergedLayout: { sections: [] }, explanation: `Google Stitch Engine Error: ${stitchErr.message}. Check STITCH_API_KEY and STITCH_PROJECT_ID configuration.`, previewReady: false, totalLatencyMs: Date.now() - startTime, telemetry, fallbackStatus: 'Disabled', designReasoning: reasoning.reasoning, designAdvice: advice.advice };
+    }
+    const sections = stitchResult.sections;
+    // Step 5: Safety Review
+    const safetyReview = await OlivePizzaAISDK.reviewDesignSafety({ sections, ownerPrompt });
+    pipelineResults.push({ modelId: 'deepseek_v4_pro_review', modelName: 'DeepSeek V4 Pro', role: 'Visual & Functional Safety Review', suggestion: `Score: ${safetyReview.overallScore}/100. ${safetyReview.unmappedButtons.length} unmapped button(s).`, latencyMs: safetyReview.latencyMs, success: true });
+    console.log(`[SDUI Design Agent] ========================================\n`);
+    return { success: true, ownerPrompt, enhancedPrompt: stitchPrompt, pipelineResults, mergedLayout: { sections }, explanation: `Google Stitch Engine generated ${sections.length} visual sections. Safety score: ${safetyReview.overallScore}/100. Pipeline: DeepSeek V4 Pro -> GLM 5.2 -> DeepSeek V4 Flash -> Google Stitch -> Safety Review.`, previewReady: true, totalLatencyMs: Date.now() - startTime, telemetry: stitchResult.telemetry, fallbackStatus: 'Disabled', designReasoning: reasoning.reasoning, designAdvice: advice.advice, safetyReview };
+  }
   static async importFromStitch(stitchDesignId: string): Promise<{ success: boolean; layout: any; explanation: string; fallbackStatus: 'Disabled' }> {
     try {
       const stitchData = await StitchService.getDesignById(stitchDesignId);
       const mappedColors = StitchColorMapper.mapToOlivePizzaPalette(stitchData);
-
-      const sections = [
-        {
-          id: 'hero_stitch_' + Date.now(),
-          type: 'hero',
-          label: stitchData?.name || (stitchData as any)?.title || '🎨 Imported Stitch Hero Layout',
-          subtitle: 'Layout structure imported directly from Google Stitch Design System',
-          isVisible: true,
-          order: 0,
-          style: { bgType: 'glass', primaryColor: mappedColors.primary },
-          config: { title: stitchData?.name || (stitchData as any)?.title || 'Artisanal Pizza Experience', ctaText: 'Order Now' },
-        },
-      ];
-
-      return {
-        success: true,
-        layout: { sections },
-        explanation: 'Successfully imported Google Stitch layout into Olive Pizza SDUI sections.',
-        fallbackStatus: 'Disabled',
-      };
+      const sections = [{ id: 'hero_stitch_' + Date.now(), type: 'hero', label: stitchData?.name || (stitchData as any)?.title || 'Imported Stitch Hero Layout', subtitle: 'Layout structure imported directly from Google Stitch Design System', isVisible: true, order: 0, style: { bgType: 'glass', primaryColor: mappedColors.primary }, config: { title: stitchData?.name || (stitchData as any)?.title || 'Artisanal Pizza Experience', ctaText: 'Order Now' } }];
+      return { success: true, layout: { sections }, explanation: 'Successfully imported Google Stitch layout into Olive Pizza SDUI sections.', fallbackStatus: 'Disabled' };
     } catch (err: any) {
-      throw new Error(`❌ Stitch Import Error: ${err.message}`);
+      throw new Error(`Stitch Import Error: ${err.message}`);
     }
   }
 }
