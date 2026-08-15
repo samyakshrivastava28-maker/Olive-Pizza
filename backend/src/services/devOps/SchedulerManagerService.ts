@@ -127,6 +127,12 @@ export class SchedulerManagerService {
       } else if (jobId === 'email_queue_worker') {
         const { processEmailQueue } = await import('../email.service.js');
         await processEmailQueue();
+      } else if (jobId === 'notification_queue_worker') {
+        const { notificationQueue } = await import('../notification/NotificationQueueService.js');
+        await notificationQueue.runCleanup();
+      } else if (jobId === 'fcm_token_cleanup') {
+        const { fcmTokenCache } = await import('../notification/FCMTokenCache.js');
+        await fcmTokenCache.cleanup();
       }
 
       const duration = Date.now() - start;
@@ -144,7 +150,7 @@ export class SchedulerManagerService {
         status: 'SUCCESS'
       });
 
-      return { success: true, message: `Cron job ${jobId} executed successfully in ${duration}ms` };
+      return { success: true, message: `Cron job '${jobId}' executed successfully in ${duration}ms` };
     } catch (err: any) {
       await pgPool.query(`
         UPDATE scheduled_cron_jobs 

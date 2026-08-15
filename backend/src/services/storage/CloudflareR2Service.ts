@@ -82,6 +82,7 @@ export class CloudflareR2Service {
 
   /**
    * Uploads a JSON object to Cloudflare R2 with automatic retry logic.
+   * If credentials are missing, falls back to local disk (.r2_mock).
    */
   static async uploadJson(key: string, data: any, retries: number = 3): Promise<{ key: string; checksum: string; url?: string }> {
     const jsonString = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
@@ -89,7 +90,13 @@ export class CloudflareR2Service {
     const checksum = crypto.createHash('sha256').update(buffer).digest('hex');
 
     if (!this.isConfigured()) {
-      console.warn(`[Cloudflare R2] Credentials not set. Simulating JSON upload for key: "${key}"`);
+      const fs = await import('fs');
+      const path = await import('path');
+      const mockDir = path.join(process.cwd(), '.r2_mock');
+      const filePath = path.join(mockDir, key);
+      fs.mkdirSync(path.dirname(filePath), { recursive: true });
+      fs.writeFileSync(filePath, buffer);
+      console.warn(`[Cloudflare R2] Credentials not set. Wrote JSON to local mock: "${filePath}"`);
       return { key, checksum };
     }
 
@@ -133,11 +140,22 @@ export class CloudflareR2Service {
 
   /**
    * Downloads a JSON object from Cloudflare R2.
+   * If credentials are missing, falls back to local disk (.r2_mock).
    */
   static async downloadJson<T = any>(key: string): Promise<T | null> {
     if (!this.isConfigured()) {
-      console.warn(`[Cloudflare R2] Credentials missing. Cannot download "${key}".`);
-      return null;
+      try {
+        const fs = await import('fs');
+        const path = await import('path');
+        const filePath = path.join(process.cwd(), '.r2_mock', key);
+        if (fs.existsSync(filePath)) {
+          const str = fs.readFileSync(filePath, 'utf-8');
+          return JSON.parse(str) as T;
+        }
+        return null;
+      } catch (e) {
+        return null;
+      }
     }
 
     try {
@@ -189,10 +207,22 @@ export class CloudflareR2Service {
   }
 
   /**
+  /**
    * Uploads raw File Buffer (images, PDFs, documents).
+   * If R2 is unconfigured, saves buffer to local disk (.r2_mock).
    */
   static async uploadBuffer(key: string, buffer: Buffer, contentType: string = 'application/octet-stream'): Promise<{ key: string; url?: string }> {
     if (!this.isConfigured()) {
+      try {
+        const fs = await import('fs');
+        const path = await import('path');
+        const filePath = path.join(process.cwd(), '.r2_mock', key);
+        fs.mkdirSync(path.dirname(filePath), { recursive: true });
+        fs.writeFileSync(filePath, buffer);
+        console.log(`[Cloudflare R2] R2 unconfigured. Saved buffer to local mock: "${filePath}"`);
+      } catch (err: any) {
+        console.warn(`[Cloudflare R2] Failed writing local mock buffer:`, err.message);
+      }
       return { key };
     }
 
@@ -213,6 +243,44 @@ export class CloudflareR2Service {
     const publicUrl = publicUrlBase ? `${publicUrlBase.replace(/\/$/, '')}/${key}` : undefined;
 
     return { key, url: publicUrl };
+  }
+
+  /**
+   * Reads raw File Buffer from R2 or local disk fallback (.r2_mock).
+   */
+  static async getBuffer(key: string): Promise<Buffer | null> {
+    if (!this.isConfigured()) {
+      try {
+        const fs = await import('fs');
+        const path = await import('path');
+        const filePath = path.join(process.cwd(), '.r2_mock', key);
+        if (fs.existsSync(filePath)) {
+          return fs.readFileSync(filePath);
+        }
+        return null;
+      } catch (err) {
+        return null;
+      }
+    }
+
+    try {
+      const client = this.getClient();
+      const bucket = this.getBucketName();
+
+      const response = await client.send(
+        new GetObjectCommand({
+          Bucket: bucket,
+          Key: key,
+        })
+      );
+
+      if (!response.Body) return null;
+      const arrayBytes = await response.Body.transformToByteArray();
+      return Buffer.from(arrayBytes);
+    } catch (err: any) {
+      console.warn(`[Cloudflare R2] Error getting buffer for "${key}":`, err.message);
+      return null;
+    }
   }
 
   /**

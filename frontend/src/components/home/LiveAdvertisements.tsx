@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Sparkles, ChevronLeft, ChevronRight, Play, Volume2, VolumeX, ExternalLink, Tag } from "lucide-react";
 import { useDataStore } from "../../lib/dataStore";
+import { isItemActiveAndValid } from "../../lib/scheduling";
 import { Link } from "react-router";
 
 interface AdItem {
@@ -15,6 +16,9 @@ interface AdItem {
   ctaType?: "internal" | "external";
   tag?: string; // New Product, Festival Offer, Running Offer, Upcoming Offer, Announcement
   isActive?: boolean;
+  startDate?: string;
+  endDate?: string;
+  expiryDate?: string;
 }
 
 export default function LiveAdvertisements() {
@@ -23,7 +27,7 @@ export default function LiveAdvertisements() {
   const [isMuted, setIsMuted] = useState(true);
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  const activeAds: AdItem[] = (ads || []).filter((ad: any) => ad.isActive !== false);
+  const activeAds: AdItem[] = (ads || []).filter((ad: any) => isItemActiveAndValid(ad));
 
   // Auto rotate banner every 7 seconds
   useEffect(() => {

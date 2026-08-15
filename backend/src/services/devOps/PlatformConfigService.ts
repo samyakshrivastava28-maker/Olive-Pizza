@@ -86,7 +86,7 @@ export class PlatformConfigService {
           tagline: 'Premium Pizza Delivery · Rajnandgaon',
           primaryColor: '#f97316',
           darkBgColor: '#0B0F14',
-          logoUrl: 'https://res.cloudinary.com/ditkqli2i/image/upload/v1782113833/olive-pizza-logo_nsoh49.webp'
+          logoUrl: 'https://res.cloudinary.com/dxmlvkff1/image/upload/v1782376898/olive-pizza/brand/logo.png'
         },
         description: 'Global Visual Identity & Theme'
       },
@@ -205,6 +205,28 @@ export class PlatformConfigService {
 
       const targetValue = history.rows[0].value_json;
       return await this.setConfig(key, targetValue, 'rollback', developerEmail);
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  }
+
+  public static async deleteConfig(key: string, developerEmail: string): Promise<{ success: boolean; error?: string }> {
+    await this.initTable();
+    try {
+      const existing = await pgPool.query(`SELECT value_json FROM platform_configs WHERE key = $1`, [key]);
+      const beforeState = existing.rows[0]?.value_json || null;
+
+      await pgPool.query(`DELETE FROM platform_configs WHERE key = $1`, [key]);
+
+      await DevAuditService.logAction({
+        developerEmail,
+        actionType: 'DELETE_CONFIG',
+        targetModule: `config:${key}`,
+        beforeState,
+        status: 'SUCCESS'
+      });
+
+      return { success: true };
     } catch (err: any) {
       return { success: false, error: err.message };
     }

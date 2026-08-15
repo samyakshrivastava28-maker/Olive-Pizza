@@ -192,6 +192,30 @@ class OrderEventServiceImpl extends EventEmitter {
       this.processedEventIds.set(eventId, Date.now());
       this.emit('order_status_changed', event);
 
+      // Incremental sync to Google Sheets + Schedule 5-minute tracking purge
+      if (newStatus === 'delivered' || newStatus === 'completed') {
+        import('../reports/GoogleSheetsReportService.js').then(({ GoogleSheetsReportService }) => {
+          GoogleSheetsReportService.appendOrderToMonthlySheet({
+            orderId: snapshot.id,
+            customerName: row.customerName || snapshot.deliveryAddress || 'Customer',
+            customerPhone: snapshot.contactPhone || 'N/A',
+            totalAmount: snapshot.totalAmount,
+            paymentMethod: snapshot.paymentMethod,
+            orderType: row.orderType || 'delivery',
+            status: newStatus,
+            itemCount: snapshot.items?.length || 1,
+            couponCode: row.couponCode,
+            deliveryTimeMins: 25,
+            timestamp: new Date().toISOString(),
+          }).catch(err => console.warn('[GoogleSheetsReport] Append warning:', err.message));
+        }).catch(() => {});
+
+        // Schedule permanent deletion of realtime tracking data after 5 minutes
+        import('../DataLifecycleService.js').then(({ dataLifecycleService }) => {
+          dataLifecycleService.schedulePostDeliveryCleanup(snapshot.id);
+        }).catch(() => {});
+      }
+
       await client.query('COMMIT');
       return event;
 

@@ -16,6 +16,16 @@ import { validateEnvironmentVariables } from './src/config/validator.js';
 
 dotenv.config();
 
+// ─── Process Crash Resilience ────────────────────────────────────────────────
+process.on('uncaughtException', (err: any) => {
+  console.error('[Process] Uncaught Exception caught (prevented crash):', err?.message || err);
+  if (err?.stack) console.error(err.stack);
+});
+
+process.on('unhandledRejection', (reason: any) => {
+  console.warn('[Process] Unhandled Rejection caught (prevented crash):', reason?.message || reason);
+});
+
 // ─── Environment Audit ────────────────────────────────────────────────────────
 validateEnvironmentVariables();
 

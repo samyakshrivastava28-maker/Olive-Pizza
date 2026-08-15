@@ -8,9 +8,12 @@ import { Request, Response, NextFunction } from 'express';
 
 const getEnvNumber = (key: string, defaultValue: number): number => {
   const val = process.env[key];
-  if (!val) return defaultValue;
-  const parsed = parseInt(val, 10);
-  return isNaN(parsed) ? defaultValue : parsed;
+  if (val) {
+    const parsed = parseInt(val, 10);
+    if (!isNaN(parsed)) return parsed;
+  }
+  const isDev = process.env.NODE_ENV !== 'production';
+  return isDev ? defaultValue * 10 : defaultValue;
 };
 
 // Auth Limiter: Login, Signup, OTP Sending, Phone Verification, Truecaller

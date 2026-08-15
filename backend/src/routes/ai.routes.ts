@@ -10,8 +10,33 @@ import { detectLanguage } from '../services/ai/languageDetector.js';
 import { conversationMemory } from '../services/ai/conversationMemory.js';
 import { executeBackendTool } from '../services/ai/toolExecutor.js';
 import { embeddingCache } from '../services/ai/embeddingCache.js';
+import { AIFirewallFilter } from '../services/ai/AIFirewallFilter.js';
 
 const router = express.Router();
+
+// ─── AI Message Rate Limiter — 100 Messages Per Hour Per User / IP ─────────────
+const hourlyMessageCounts = new Map<string, number[]>();
+
+export function aiHourlyMessageLimiter(req: AuthRequest, res: any, next: any) {
+  const identifier = req.user?.uid || req.ip || 'anonymous';
+  const now = Date.now();
+  const windowMs = 60 * 60 * 1000; // 1 hour
+  const maxMessages = 100; // 100 messages per hour per user/IP
+
+  const timestamps = (hourlyMessageCounts.get(identifier) || []).filter((t) => now - t < windowMs);
+
+  if (timestamps.length >= maxMessages) {
+    return res.status(429).json({
+      success: false,
+      error: 'Rate limit exceeded: Maximum 100 AI messages per hour allowed.',
+      reply: 'You have reached your limit of 100 AI messages per hour. Please try again in an hour! 🍕',
+    });
+  }
+
+  timestamps.push(now);
+  hourlyMessageCounts.set(identifier, timestamps);
+  next();
+}
 
 // ─── KB Health & Status ───────────────────────────────────────────────────────
 router.get('/kb-status', async (_req, res) => {
@@ -50,7 +75,7 @@ router.post('/kb-rebuild', requireAuth, requireRole(['owner', 'admin']), async (
 import { aiOperationsStore } from '../services/devOps/AIOperationsService.js';
 
 // ─── Primary Chat Route — Intent-Aware Routing + Full Role Intelligence ────────
-router.post('/chat', optionalAuth, async (req: AuthRequest, res) => {
+router.post('/chat', optionalAuth, aiHourlyMessageLimiter, async (req: AuthRequest, res) => {
   const routeStart = Date.now();
   try {
     const { message, history, frontendContext, sessionId } = req.body;
@@ -82,8 +107,9 @@ router.post('/chat', optionalAuth, async (req: AuthRequest, res) => {
     // ── TIER 1: Local KB Quick Answer (0 API calls) ───────────────────────────
     const quickAnswer = kb.quickAnswer(message);
     if (quickAnswer) {
-      conversationMemory.addMessage(activeSessionId, { role: 'assistant', content: quickAnswer });
-      return res.json({ success: true, reply: quickAnswer, source: 'local_kb', products: [] });
+      const sanitizedQuick = AIFirewallFilter.sanitizeResponse(quickAnswer, { userRole });
+      conversationMemory.addMessage(activeSessionId, { role: 'assistant', content: sanitizedQuick });
+      return res.json({ success: true, reply: sanitizedQuick, source: 'local_kb', products: [] });
     }
 
     // ── Intent Classification + Qdrant Routing ────────────────────────────────
@@ -138,6 +164,9 @@ router.post('/chat', optionalAuth, async (req: AuthRequest, res) => {
     const elapsedTotal = Date.now() - routeStart;
 
     if (result.success && result.reply) {
+      // 🛡️ Pass through AI Firewall Filter (intercepts & blocks raw source code output)
+      result.reply = AIFirewallFilter.sanitizeResponse(result.reply, { userRole });
+
       // Store AI reply in session memory
       conversationMemory.addMessage(activeSessionId, { role: 'assistant', content: result.reply });
 
@@ -271,7 +300,7 @@ router.post('/chat', optionalAuth, async (req: AuthRequest, res) => {
 });
 
 // ─── SSE Streaming Chat Route — Sub-1s first-token latency ────────────────────
-router.post('/chat-stream', optionalAuth, async (req: AuthRequest, res: any) => {
+router.post('/chat-stream', optionalAuth, aiHourlyMessageLimiter, async (req: AuthRequest, res: any) => {
   const routeStart = Date.now();
   try {
     const { message, history, frontendContext, sessionId } = req.body;
@@ -347,9 +376,10 @@ router.post('/chat-stream', optionalAuth, async (req: AuthRequest, res: any) => 
           { ...frontendContext, kbContext, role: userRole, isAuthenticated: !!req.user },
           (token: string) => sendEvent('token', { token }),
           (fullReply: string, action: any, source: string) => {
-            conversationMemory.addMessage(activeSessionId, { role: 'assistant', content: fullReply });
+            const sanitizedReply = AIFirewallFilter.sanitizeResponse(fullReply, { userRole });
+            conversationMemory.addMessage(activeSessionId, { role: 'assistant', content: sanitizedReply });
             sendEvent('done', {
-              reply: fullReply,
+              reply: sanitizedReply,
               action,
               source,
               totalLatencyMs: Date.now() - routeStart,
@@ -362,8 +392,9 @@ router.post('/chat-stream', optionalAuth, async (req: AuthRequest, res: any) => 
           ...frontendContext, kbContext, role: userRole, isAuthenticated: !!req.user,
         });
         if (result.reply) {
-          conversationMemory.addMessage(activeSessionId, { role: 'assistant', content: result.reply });
-          sendEvent('done', { reply: result.reply, action: result.action, source: result.source, totalLatencyMs: Date.now() - routeStart });
+          const sanitizedReply = AIFirewallFilter.sanitizeResponse(result.reply, { userRole });
+          conversationMemory.addMessage(activeSessionId, { role: 'assistant', content: sanitizedReply });
+          sendEvent('done', { reply: sanitizedReply, action: result.action, source: result.source, totalLatencyMs: Date.now() - routeStart });
         }
       }
     } catch (llmErr: any) {
@@ -391,14 +422,22 @@ router.post('/session-clear', optionalAuth, async (req: AuthRequest, res) => {
   }
 });
 
-// ─── Email Generation ─────────────────────────────────────────────────────────
+import { DeepSeekV4FlashGenerator } from '../services/ai/DeepSeekV4FlashGenerator.js';
+
+// ─── Email Generation (DeepSeek V4 Flash) ──────────────────────────────────────
 router.post('/generate-email', async (req, res) => {
   try {
     const { prompt, selectedProducts, audienceType } = req.body;
-    if (!prompt) return res.status(400).json({ error: 'Prompt is required' });
-    const result = await generateEmailTemplate(prompt, selectedProducts || [], audienceType || 'all');
-    if (result.success) res.json(result); else res.status(500).json({ error: result.error });
-  } catch (error: any) { res.status(500).json({ error: 'Internal server error' }); }
+    if (!prompt) return res.status(400).json({ success: false, error: 'Prompt is required' });
+    const result = await DeepSeekV4FlashGenerator.generateEmailTemplate({
+      prompt,
+      selectedProducts: selectedProducts || [],
+      targetAudience: audienceType || 'all customers',
+    });
+    res.json({ success: true, html: result.bodyHtml, subject: result.subject, model: result.model });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message || 'Email generation error' });
+  }
 });
 
 router.post('/generate-image', async (req, res) => {
@@ -415,32 +454,54 @@ router.post('/generate-image', async (req, res) => {
   } catch (error: any) { res.status(500).json({ error: 'Internal server error during image generation' }); }
 });
 
+// ─── Product & Combo Description Generator (DeepSeek V4 Flash) ──────────────────
 router.post('/product-description', async (req, res) => {
   try {
-    const { messages } = req.body;
-    if (!messages || !Array.isArray(messages)) return res.status(400).json({ error: 'Messages array is required' });
-    const result = await generateProductDescription(messages);
-    if (result.success) res.json(result); else res.status(500).json({ error: result.error });
-  } catch (error: any) { res.status(500).json({ error: 'Internal server error' }); }
+    const { name, productName, category, type, items, messages } = req.body;
+    const itemName = name || productName || (Array.isArray(messages) ? messages.map((m: any) => m.content).join(' ') : 'Special Food Item');
+    const result = await DeepSeekV4FlashGenerator.generateDescription({
+      name: itemName,
+      category,
+      type: type || 'product',
+      items,
+    });
+    res.json({ success: true, description: result.description, highlights: result.highlights, model: result.model });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message || 'Description generation error' });
+  }
 });
 
-router.post('/generate-product-image', async (req, res) => {
+router.post('/generate-description', async (req, res) => {
   try {
-    const { productName, description, category, ingredients, toppings, sizes, crusts, imageType, customPrompt, modelName, baseImageUrl } = req.body;
-    if (!productName) return res.status(400).json({ error: 'Product name is required' });
-    const result = await generateProductImage({ productName, description, category, ingredients, toppings, sizes, crusts, imageType, customPrompt, modelName, baseImageUrl });
-    if (result.success) res.json(result);
-    else res.status(422).json({ error: result.error || 'Product image generation failed', imageUrl: null, success: false });
-  } catch (error: any) { res.status(500).json({ error: 'Internal server error' }); }
+    const { name, productName, category, type, items } = req.body;
+    const itemName = name || productName || 'Special Food Item';
+    const result = await DeepSeekV4FlashGenerator.generateDescription({
+      name: itemName,
+      category,
+      type: type || 'product',
+      items,
+    });
+    res.json({ success: true, description: result.description, highlights: result.highlights, model: result.model });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message || 'Description generation error' });
+  }
 });
 
-router.post('/enhance-prompt', async (req, res) => {
+// ─── Interactive Assistant Chatbox (DeepSeek V4 Flash) ──────────────────────────
+router.post('/interactive-assistant', async (req, res) => {
   try {
-    const { prompt, type } = req.body;
-    if (!prompt) return res.status(400).json({ error: 'Prompt is required' });
-    const result = await enhancePrompt(prompt, type || 'general');
-    if (result.success) res.json(result); else res.status(500).json({ error: result.error });
-  } catch (error: any) { res.status(500).json({ error: 'Internal server error' }); }
+    const { mode, message, history, contextData } = req.body;
+    if (!message) return res.status(400).json({ success: false, error: 'Message is required' });
+    const result = await DeepSeekV4FlashGenerator.handleInteractiveChat({
+      mode: mode || 'product-description',
+      message,
+      history: history || [],
+      contextData: contextData || {},
+    });
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message || 'Interactive assistant error' });
+  }
 });
 
 // ─── STT Transcription Endpoint (Whisper 3 Large -> Canary 1B ASR) ───────────

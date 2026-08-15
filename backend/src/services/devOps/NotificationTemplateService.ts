@@ -198,19 +198,41 @@ export class NotificationTemplateService {
     }
   }
 
-  public static async sendTestNotification(targetUid: string, templateId: string): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  public static async sendTestNotification(targetUid: string, templateId: string): Promise<{ success: boolean; messageId?: string; message?: string; error?: string }> {
+    await this.initTable();
     try {
-      const result = await notificationEngine.sendBulk([targetUid], {
+      const templateRes = await pgPool.query(`SELECT * FROM notification_templates WHERE id = $1`, [templateId]);
+      const template = templateRes.rows[0];
+
+      const title = template?.title_pattern ? template.title_pattern.replace('{orderNumber}', '108').replace('{orderId}', 'ord_test') : '🔔 Test Notification Dispatch';
+      const body = template?.body_pattern ? template.body_pattern.replace('{totalAmount}', '₹499').replace('{itemsSummary}', 'Farmhouse Special Pizza') : `Test push sent using template '${templateId}'`;
+
+      let targets = targetUid ? [targetUid] : [];
+      if (targets.length === 0) {
+        const tokensRes = await pgPool.query(`SELECT DISTINCT user_id FROM fcm_tokens WHERE is_active = TRUE LIMIT 5`);
+        targets = tokensRes.rows.map(r => r.user_id).filter(Boolean);
+      }
+
+      if (targets.length === 0) {
+        return { success: true, message: `Test push created for template '${templateId}' (0 active client device tokens connected).` };
+      }
+
+      const result = await notificationEngine.sendBulk(targets, {
         notification: {
-          title: '🧪 Test Notification Dispatch',
-          body: `Test push sent using template '${templateId}'`
+          title,
+          body
         },
         data: {
-          category: 'system'
+          category: template?.category || 'system',
+          templateId,
+          test: 'true'
         }
       }, { priority: 'high' });
 
-      return { success: true, messageId: result.successCount > 0 ? 'success' : undefined };
+      return {
+        success: true,
+        message: `Dispatched test push to ${result.tokensFound} device tokens (${result.successCount} delivered).`
+      };
     } catch (err: any) {
       return { success: false, error: err.message };
     }

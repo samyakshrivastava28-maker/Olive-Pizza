@@ -138,7 +138,7 @@ export default function Register() {
 
       if (phone.trim() !== "") {
         try {
-          // 🚨 DEVELOPMENT BYPASS: Allow any string/number format
+          // ðŸš¨ DEVELOPMENT BYPASS: Allow any string/number format
           formattedPhone = phone.trim();
           if (!formattedPhone.startsWith('+')) {
             formattedPhone = `+91${formattedPhone}`;
@@ -225,6 +225,17 @@ export default function Register() {
           },
           { merge: true }
         ), "Create User Doc");
+
+        useAuthStore.getState().setUser({
+          uid: userCredential.user.uid,
+          email: userEmail,
+          name: name || "",
+          phone: formattedPhone,
+          photoURL: userCredential.user.photoURL,
+          phoneSetupCompleted: true,
+          locationSetupCompleted: false,
+          emailVerified: userCredential.user.emailVerified,
+        }, initialRole as "customer" | "owner" | "delivery_partner" | "admin");
 
         // Trigger Welcome Email
         fetch("/api/email/auth/welcome", {
@@ -349,9 +360,17 @@ export default function Register() {
           </motion.div>
         )}
       </AnimatePresence>
-      <h1 className="text-3xl font-bold mb-6 text-center text-primary-600 relative z-10">
-        Create Account
-      </h1>
+      <div className="flex flex-col items-center mb-6 relative z-10">
+        <img
+          src="/logo-transparent.png"
+          alt="Olive Pizza Logo"
+          className="h-16 w-auto object-contain mb-3 bg-transparent drop-shadow-lg"
+        />
+        <h1 className="text-3xl font-extrabold text-center text-primary-500 tracking-tight">
+          Create Account
+        </h1>
+        <p className="text-xs text-slate-400 mt-1">Join Olive Pizza for exclusive offers & fast checkout</p>
+      </div>
       {error && (
         <div className="bg-red-100 text-red-700 p-3 rounded-lg mb-4 text-sm font-medium relative z-10">
           {error}
@@ -460,3 +479,4 @@ export default function Register() {
     </div>
   );
 }
+

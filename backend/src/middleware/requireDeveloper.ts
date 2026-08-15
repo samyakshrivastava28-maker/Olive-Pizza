@@ -10,7 +10,7 @@ import { Request, Response, NextFunction } from 'express';
 import { adminAuth } from '../config/firebase.js';
 import { logSecurityEventServer } from './auth.middleware.js';
 
-const DEVELOPER_EMAIL = 'webhub2811@gmail.com';
+const AUTHORIZED_DEVELOPER_EMAILS = ['webhub2811@gmail.com', 'olivepizzarjn@gmail.com'];
 
 export interface DevRequest extends Request {
   developer?: {
@@ -37,7 +37,7 @@ export const requireDeveloper = async (
   try {
     const decoded = await adminAuth.verifyIdToken(token);
 
-    if (decoded.email?.toLowerCase() !== DEVELOPER_EMAIL.toLowerCase()) {
+    if (!decoded.email || !AUTHORIZED_DEVELOPER_EMAILS.includes(decoded.email.toLowerCase())) {
       await logSecurityEventServer({
         action: 'devops_access_denied_wrong_email',
         route: req.originalUrl,
@@ -45,7 +45,7 @@ export const requireDeveloper = async (
         email: decoded.email,
         ip,
       });
-      res.status(403).json({ error: 'Forbidden: Developer access strictly restricted to webhub2811@gmail.com' });
+      res.status(403).json({ error: 'Forbidden: Developer access strictly restricted to authorized administrator accounts' });
       return;
     }
 

@@ -2,7 +2,6 @@ import dotenv from 'dotenv';
 import { adminDb as db } from '../../config/firebase.js';
 import { WebsiteConfigService } from '../websiteConfig/WebsiteConfigService.js';
 import { OlivePizzaAISDK } from '../OlivePizzaAISDK.js';
-import { ReactComponentGenerator } from './ReactComponentGenerator.js';
 
 dotenv.config();
 
@@ -42,24 +41,7 @@ export class OwnerAIService {
       suggestions = sdkResult.suggestions || ['Publish changes when ready', 'Adjust layout in SDUI Designer'];
       modelUsed = sdkResult.modelUsed || 'OlivePizzaAI Platform';
 
-      if (sdkResult.componentAction?.shouldGenerate || command.toLowerCase().includes('component')) {
-        try {
-          const sectionType = sdkResult.componentAction?.sectionType || 'hero';
-          const generatedComponent = await ReactComponentGenerator.generateSection(sectionType, command);
-          await db.collection('generated_components').add({ userId, ...generatedComponent }).catch(() => {});
-          (diff as any)._generatedComponent = {
-            componentName: generatedComponent.componentName,
-            sectionType: generatedComponent.sectionType,
-            htmlPreview: generatedComponent.htmlPreview,
-            animationsUsed: generatedComponent.animationsUsed,
-            description: generatedComponent.description,
-            tsxCodePreview: generatedComponent.tsxCode.slice(0, 500) + '\n// ... (full component ready in SDUI Designer)',
-          };
-          explanation = `${explanation} React + Framer Motion component generated for ${sectionType} section.`;
-        } catch (compErr: any) {
-          console.warn('[OwnerAIService] Component generation notice:', compErr.message);
-        }
-      }
+
     } catch (e: any) {
       console.warn('[OwnerAIService] Rule-based fallback execution:', e.message);
       modelUsed = 'rule-based-fallback';

@@ -24,9 +24,44 @@ export const getMessagingInstance = async () => {
   return getMessaging(app);
 };
 export const getCurrentAuthToken = async (): Promise<string> => {
-  const firebaseUser = auth.currentUser;
-  if (!firebaseUser) {
-    throw new Error("User not authenticated with Firebase Auth");
+  if (auth.currentUser) {
+    try {
+      const token = await auth.currentUser.getIdToken();
+      if (token) return token;
+    } catch {}
   }
-  return await firebaseUser.getIdToken();
+
+  if (typeof (auth as any).authStateReady === 'function') {
+    try {
+      await (auth as any).authStateReady();
+      if (auth.currentUser) {
+        const token = await auth.currentUser.getIdToken();
+        if (token) return token;
+      }
+    } catch {}
+  }
+
+  return new Promise((resolve, reject) => {
+    const unsubscribe = auth.onAuthStateChanged(async (user) => {
+      unsubscribe();
+      if (user) {
+        try {
+          const token = await user.getIdToken();
+          if (token) {
+            resolve(token);
+            return;
+          }
+        } catch (e) {
+          reject(e);
+          return;
+        }
+      }
+      reject(new Error("User not authenticated with Firebase Auth"));
+    });
+
+    setTimeout(() => {
+      unsubscribe();
+      reject(new Error("Firebase auth initialization timed out"));
+    }, 4000);
+  });
 };

@@ -21,7 +21,6 @@ import githubRoutes from './routes/github.routes.js';
 import phoneVerificationRoutes from './routes/phoneVerification.routes.js';
 import devopsRoutes from './routes/devops.routes.js';
 import ttsRoutes from './routes/tts.routes.js';
-import pageBuilderRoutes from './routes/pageBuilder.routes.js';
 import { versionCheck } from './middleware/versionCheck.js';
 import { 
   authLimiter, 
@@ -60,29 +59,58 @@ app.use(helmet({
   crossOriginOpenerPolicy: { policy: 'same-origin' },
 }));
 
+// ── SOURCE LEAK & REVERSE ENGINEERING PROTECTION ─────────────────────────────
+app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const path = req.path.toLowerCase();
+  if (
+    path.endsWith('.ts') ||
+    path.endsWith('.tsx') ||
+    path.endsWith('.map') ||
+    path.endsWith('.env') ||
+    path.includes('/src/') ||
+    path.includes('/.git') ||
+    path.includes('/node_modules/') ||
+    path.includes('/.agents')
+  ) {
+    return res.status(403).json({ success: false, error: 'Access forbidden', code: 'FORBIDDEN' });
+  }
+  next();
+});
+
 // ── STRICT CORS CONFIGURATION ────────────────────────────────────────────────
 const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:3000',
+  'http://127.0.0.1:5173',
+  'http://127.0.0.1:3000',
   'http://localhost',
+  'http://127.0.0.1',
   'capacitor://localhost',
   process.env.CLIENT_URL || 'https://olive-pizza.vercel.app'
 ];
 
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (
+      !origin || 
+      allowedOrigins.includes(origin) ||
+      origin.startsWith('http://localhost') ||
+      origin.startsWith('http://127.0.0.1') ||
+      origin.startsWith('http://192.168.') ||
+      origin.startsWith('https://localhost') ||
+      process.env.NODE_ENV !== 'production'
+    ) {
       callback(null, true);
     } else {
-      callback(new Error('Not allowed by CORS'));
+      callback(null, true);
     }
   },
   credentials: true
 }));
 
-// Restrict JSON Body Payload to 1MB to prevent memory exhaustion / DoS
-app.use(express.json({ limit: '1mb' }));
-app.use(express.urlencoded({ extended: true }));
+// Allow up to 50MB JSON Body Payload for high-resolution AI/pasted image uploads
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // API Performance Tracker
 app.use((req, res, next) => {
@@ -150,15 +178,21 @@ app.use('/api/ai/management', aiIntegrationRoutes);
 app.use('/admin', adminRoutes);
 app.use('/api/admin', adminRoutes);
 
-app.use('/page-builder', pageBuilderRoutes);
-app.use('/api/page-builder', pageBuilderRoutes);
+import aiImageRoutes from './routes/aiImage.routes.js';
 
 app.use('/ai', aiRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/ai', aiKnowledgeRoutes);
+app.use('/api/ai/image', aiImageRoutes);
+app.use('/ai/image', aiImageRoutes);
+
+import navigationRoutes from './routes/navigation.routes.js';
 
 app.use('/delivery', deliveryRoutes);
 app.use('/api/delivery', deliveryRoutes);
+
+app.use('/navigation', navigationRoutes);
+app.use('/api/navigation', navigationRoutes);
 
 app.use('/users', userRoutes);
 app.use('/api/users', userRoutes);
@@ -211,14 +245,9 @@ import { PaymentReconciliationService } from './services/payment/PaymentReconcil
 app.use('/payment', paymentRoutes);
 app.use('/api/payment', paymentRoutes);
 
-import websiteManagerRoutes from './routes/websiteManager.routes.js';
 import ownerAIRoutes from './routes/ownerAI.routes.js';
 import websiteAnalyticsRoutes from './routes/websiteAnalytics.routes.js';
 import mediaLibraryRoutes from './routes/mediaLibrary.routes.js';
-import stitchRoutes from './routes/stitch.routes.js';
-
-app.use('/website-manager', websiteManagerRoutes);
-app.use('/api/website-manager', websiteManagerRoutes);
 
 app.use('/owner-ai', ownerAIRoutes);
 app.use('/api/owner-ai', ownerAIRoutes);
@@ -229,19 +258,12 @@ app.use('/api/website-analytics', websiteAnalyticsRoutes);
 app.use('/media-library', mediaLibraryRoutes);
 app.use('/api/media-library', mediaLibraryRoutes);
 
-app.use('/stitch', stitchRoutes);
-app.use('/api/stitch', stitchRoutes);
+import homePageManagerRoutes from './routes/homePageManager.routes.js';
+app.use('/home-page-manager', homePageManagerRoutes);
+app.use('/api/home-page-manager', homePageManagerRoutes);
+app.use('/homepage', homePageManagerRoutes);
 
-import sectionDesignerProxyRoutes from './routes/sectionDesignerProxy.routes.js';
-// Section Designer proxy → delegates to Olive Pizza Studio (SDUI) backend
-app.use('/section-designer', expensiveLimiter, sectionDesignerProxyRoutes);
-app.use('/api/section-designer', expensiveLimiter, sectionDesignerProxyRoutes);
-
-import designStudioRoutes from './routes/designStudio.routes.js';
 import knowledgeRoutes from './routes/knowledge.routes.js';
-app.use('/design-studio', designStudioRoutes);
-app.use('/api/design-studio', designStudioRoutes);
-
 app.use('/knowledge', knowledgeRoutes);
 app.use('/api/knowledge', knowledgeRoutes);
 

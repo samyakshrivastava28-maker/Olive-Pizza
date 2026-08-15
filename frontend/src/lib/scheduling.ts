@@ -1,7 +1,7 @@
 /**
- * Global Scheduling Engine
- * Used by: Ads, Coupons, Special Categories, Featured Products, Homepage Sections
- * Architecture: Firestore-only. No Supabase/Postgres business logic.
+ * Global Scheduling & Expiry Engine
+ * Used by: Ads, Coupons, Combos, Offers, Banners, Special Categories, Featured Products, Homepage Sections
+ * Architecture: Firestore & React Runtime Safe
  */
 
 export type RecurringRule =
@@ -14,33 +14,123 @@ export type RecurringRule =
 
 export interface ScheduledItem {
   isActive?: boolean;
-  status?: 'draft' | 'published' | 'archived';
-  startDate?: string; // ISO string or date string
-  endDate?: string;
+  isArchived?: boolean;
+  status?: 'draft' | 'published' | 'archived' | string;
+  startDate?: string | any;
+  endDate?: string | any;
+  expiryDate?: string | any;
+  validUntil?: string | any;
+  validTo?: string | any;
+  expiresAt?: string | any;
+  validTill?: string | any;
+  expireDate?: string | any;
+  expiresOn?: string | any;
+  expirationDate?: string | any;
+  validFrom?: string | any;
+  startsAt?: string | any;
   specificTime?: string; // "HH:MM"
   recurringRule?: RecurringRule;
 }
 
 /**
- * Determines if a scheduled item is currently visible/active.
- * Applies to: ads, coupons, special_categories, home sections, combos.
+ * Universal Date parser handling Firestore Timestamps, ISO strings, YYYY-MM-DD, and numbers
  */
-export function isCurrentlyScheduled(item: ScheduledItem): boolean {
-  // Must be active and published (not draft)
+export function extractDate(raw: any, isEndOfDay = false): Date | null {
+  if (!raw) return null;
+
+  // Handle Firestore Timestamp object
+  if (typeof raw === 'object' && typeof raw.toDate === 'function') {
+    return raw.toDate();
+  }
+  if (typeof raw === 'object' && raw._seconds !== undefined) {
+    return new Date(raw._seconds * 1000);
+  }
+  if (typeof raw === 'object' && raw.seconds !== undefined) {
+    return new Date(raw.seconds * 1000);
+  }
+
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim();
+    if (!trimmed) return null;
+
+    // If date format YYYY-MM-DD
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+      const [year, month, day] = trimmed.split('-').map(Number);
+      if (isEndOfDay) {
+        return new Date(year, month - 1, day, 23, 59, 59, 999);
+      } else {
+        return new Date(year, month - 1, day, 0, 0, 0, 0);
+      }
+    }
+
+    const d = new Date(trimmed);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  if (typeof raw === 'number') {
+    const d = new Date(raw);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  if (raw instanceof Date) {
+    return isNaN(raw.getTime()) ? null : raw;
+  }
+
+  return null;
+}
+
+/**
+ * Extracts the start date from any item supporting multiple field synonyms
+ */
+export function getItemStartDate(item: ScheduledItem | any): Date | null {
+  if (!item) return null;
+  const raw = item.startDate || item.validFrom || item.startsAt || item.effectiveFrom;
+  return extractDate(raw, false);
+}
+
+/**
+ * Extracts the expiration date from any item supporting multiple field synonyms
+ */
+export function getItemExpiryDate(item: ScheduledItem | any): Date | null {
+  if (!item) return null;
+  const raw =
+    item.endDate ||
+    item.expiryDate ||
+    item.validUntil ||
+    item.validTo ||
+    item.expiresAt ||
+    item.expiresOn ||
+    item.validTill ||
+    item.expireDate ||
+    item.expirationDate;
+
+  return extractDate(raw, true);
+}
+
+/**
+ * Determines if a scheduled item is currently visible, active, and NOT expired.
+ * Applies to: ads, coupons, special_categories, home sections, combos, banners.
+ */
+export function isCurrentlyScheduled(item: ScheduledItem | any): boolean {
+  if (!item) return false;
+
+  // Must be active and not archived
   if (item.isActive === false) return false;
+  if (item.isArchived === true) return false;
   if (item.status === 'draft' || item.status === 'archived') return false;
 
   const now = new Date();
 
-  // Check date range
-  if (item.startDate) {
-    const start = new Date(item.startDate);
-    if (now < start) return false;
+  // Check Start Date
+  const start = getItemStartDate(item);
+  if (start && now < start) {
+    return false;
   }
 
-  if (item.endDate) {
-    const end = new Date(item.endDate);
-    if (now > end) return false;
+  // Check Expiry Date
+  const end = getItemExpiryDate(item);
+  if (end && now > end) {
+    return false;
   }
 
   // Check specific time window (hour-level granularity)
@@ -85,13 +175,16 @@ export function isCurrentlyScheduled(item: ScheduledItem): boolean {
   return true;
 }
 
+export const isItemActiveAndValid = isCurrentlyScheduled;
+
 /**
- * Filters an array of scheduled items to only return currently active ones.
+ * Filters an array of scheduled items to only return currently active and unexpired ones.
  * Sorts by priority (higher first) and then by creation date.
  */
 export function filterActive<T extends ScheduledItem & { priority?: number; createdAt?: string }>(
   items: T[]
 ): T[] {
+  if (!Array.isArray(items)) return [];
   return items
     .filter(isCurrentlyScheduled)
     .sort((a, b) => {
@@ -108,20 +201,26 @@ export function filterActive<T extends ScheduledItem & { priority?: number; crea
 /**
  * Returns a human-readable status label for an item.
  */
-export function getScheduleStatus(item: ScheduledItem): {
+export function getScheduleStatus(item: ScheduledItem | any): {
   label: string;
   color: 'green' | 'orange' | 'red' | 'slate';
 } {
+  if (!item) return { label: 'Inactive', color: 'slate' };
   if (item.status === 'draft') return { label: 'Draft', color: 'slate' };
-  if (item.isActive === false) return { label: 'Paused', color: 'orange' };
+  if (item.isArchived || item.status === 'archived') return { label: 'Archived', color: 'red' };
+  if (item.isActive === false) return { label: 'Inactive', color: 'orange' };
 
   const now = new Date();
-  if (item.startDate && now < new Date(item.startDate)) {
+  const start = getItemStartDate(item);
+  if (start && now < start) {
     return { label: 'Scheduled', color: 'orange' };
   }
-  if (item.endDate && now > new Date(item.endDate)) {
+
+  const end = getItemExpiryDate(item);
+  if (end && now > end) {
     return { label: 'Expired', color: 'red' };
   }
+
   if (isCurrentlyScheduled(item)) return { label: 'Live', color: 'green' };
   return { label: 'Inactive', color: 'slate' };
 }
@@ -129,11 +228,11 @@ export function getScheduleStatus(item: ScheduledItem): {
 /**
  * Returns milliseconds until an item expires, or null if permanent.
  */
-export function msUntilExpiry(item: ScheduledItem): number | null {
-  if (!item.endDate) return null;
-  const end = new Date(item.endDate).getTime();
+export function msUntilExpiry(item: ScheduledItem | any): number | null {
+  const end = getItemExpiryDate(item);
+  if (!end) return null;
   const now = Date.now();
-  return Math.max(0, end - now);
+  return Math.max(0, end.getTime() - now);
 }
 
 /**

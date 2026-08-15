@@ -50,21 +50,27 @@ export class CloudflareReportService {
 
   /**
    * Generates secure time-limited view and download URLs for a report.
+   * If R2 is unconfigured, uses the backend API endpoint (/api/reports/pdf/:reportId).
    */
-  static async getReportUrls(cloudflarePath: string, expiresInSeconds: number = 86400): Promise<{ viewUrl: string | null; downloadUrl: string | null }> {
-    if (!CloudflareR2Service.isConfigured()) {
-      return { viewUrl: null, downloadUrl: null };
+  static async getReportUrls(cloudflarePath: string, reportId?: string, expiresInSeconds: number = 86400): Promise<{ viewUrl: string; downloadUrl: string }> {
+    if (CloudflareR2Service.isConfigured()) {
+      try {
+        const viewUrl = await CloudflareR2Service.generatePreSignedUrl(cloudflarePath, expiresInSeconds);
+        if (viewUrl) {
+          const downloadUrl = `${viewUrl}&response-content-disposition=attachment`;
+          return { viewUrl, downloadUrl };
+        }
+      } catch (err: any) {
+        console.warn(`[CloudflareReportService] R2 pre-signed URL warning for "${cloudflarePath}":`, err.message);
+      }
     }
 
-    try {
-      const viewUrl = await CloudflareR2Service.generatePreSignedUrl(cloudflarePath, expiresInSeconds);
-      const downloadUrl = viewUrl ? `${viewUrl}&response-content-disposition=attachment` : null;
+    // Fallback: API endpoint route
+    const fallbackId = reportId || cloudflarePath.split('/').pop()?.replace('.pdf', '') || 'latest';
+    const apiViewUrl = `/api/reports/pdf/${fallbackId}`;
+    const apiDownloadUrl = `/api/reports/pdf/${fallbackId}?download=true`;
 
-      return { viewUrl, downloadUrl };
-    } catch (err: any) {
-      console.error(`[CloudflareReportService] Error generating URLs for "${cloudflarePath}":`, err.message);
-      return { viewUrl: null, downloadUrl: null };
-    }
+    return { viewUrl: apiViewUrl, downloadUrl: apiDownloadUrl };
   }
 
   /**
@@ -84,7 +90,7 @@ export class CloudflareReportService {
    */
   static async deleteReport(reportId: string, cloudflarePath?: string): Promise<boolean> {
     try {
-      if (cloudflarePath) {
+      if (cloudflarePath && CloudflareR2Service.isConfigured()) {
         await CloudflareR2Service.deleteObject(cloudflarePath);
       }
       await db.collection('monthly_reports').doc(reportId).delete();
@@ -106,11 +112,9 @@ export class CloudflareReportService {
 
       for (const doc of snap.docs) {
         const item = doc.data() as MonthlyReportMetadata;
-        if (item.cloudflarePath) {
-          const urls = await this.getReportUrls(item.cloudflarePath);
-          item.reportUrl = urls.viewUrl || item.reportUrl;
-          item.downloadUrl = urls.downloadUrl || item.downloadUrl;
-        }
+        const urls = await this.getReportUrls(item.cloudflarePath || `reports/${item.id}.pdf`, item.id);
+        item.reportUrl = urls.viewUrl;
+        item.downloadUrl = urls.downloadUrl;
         reports.push(item);
       }
 

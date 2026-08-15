@@ -122,7 +122,7 @@ class FCMTokenCache {
     }
   }
 
-  private cleanup(): void {
+  public cleanup(): void {
     const now = Date.now();
     let evicted = 0;
     for (const [userId, entry] of this.cache.entries()) {

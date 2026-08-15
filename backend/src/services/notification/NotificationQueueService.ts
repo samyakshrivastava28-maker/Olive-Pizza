@@ -121,8 +121,9 @@ export class NotificationQueueService {
     priorityOverride?: 'normal' | 'high' | 'silent',
     options: EnqueueOptions = {}
   ): Promise<string> {
-    const client = await pgPool.connect();
+    let client: any = null;
     try {
+      client = await pgPool.connect();
       // ── Canonical user key: Firebase UID ──────────────────────────────────
       // The entire infrastructure schema (fcm_tokens.user_id, notification_queue.target_user_id,
       // notification_inbox.user_id, notification_preferences.user_id) stores the Firebase UID
@@ -221,7 +222,7 @@ export class NotificationQueueService {
 
       return queueId;
     } finally {
-      client.release();
+      if (client) client.release();
     }
   }
 
@@ -230,8 +231,9 @@ export class NotificationQueueService {
     token: string,
     deviceInfo: { oldToken?: string; deviceId?: string; deviceName?: string; platform?: string; browser?: string; appVersion?: string }
   ): Promise<void> {
-    const client = await pgPool.connect();
+    let client: any = null;
     try {
+      client = await pgPool.connect();
       let pgUserId = firebaseUserId;
       if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(firebaseUserId)) {
         const userRes = { rows: [{ id: firebaseUserId }] };
@@ -294,7 +296,7 @@ export class NotificationQueueService {
       // Evict stale cache
       fcmTokenCache.evict(pgUserId);
     } finally {
-      client.release();
+      if (client) client.release();
     }
   }
 

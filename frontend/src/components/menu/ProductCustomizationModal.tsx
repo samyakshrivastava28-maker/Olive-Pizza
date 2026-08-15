@@ -23,9 +23,10 @@ export default function ProductCustomizationModal({ item, onClose }: Props) {
   if (!item) return null;
 
   const basePrice = item.pricingMode === 'offer' && item.offerPrice ? item.offerPrice : item.basePrice;
-  const crustPrice = selectedCrust === 'Pan' ? 40 : selectedCrust === 'Thin' ? 20 : 0;
-  const cheesePrice = cheeseLevel > 5 ? 30 : 0;
-  const toppingsPrice = selectedToppings.length * 25;
+  const isPizza = item.category === 'pizza' || (item.crusts && item.crusts.length > 0) || item.name.toLowerCase().includes('pizza');
+  const crustPrice = isPizza ? (selectedCrust === 'Pan' ? 40 : selectedCrust === 'Thin' ? 20 : 0) : 0;
+  const cheesePrice = isPizza && cheeseLevel > 5 ? 30 : 0;
+  const toppingsPrice = isPizza ? selectedToppings.length * 25 : 0;
   const unitPrice = basePrice + crustPrice + cheesePrice + toppingsPrice;
   const totalPrice = unitPrice * quantity;
 
@@ -37,21 +38,21 @@ export default function ProductCustomizationModal({ item, onClose }: Props) {
 
   const handleAddToCart = (e: React.MouseEvent) => {
     addItem({
-      id: `${item.id}-${selectedCrust}-${cheeseLevel}-${selectedToppings.join('-')}`,
+      id: `${item.id}-${isPizza ? selectedCrust : 'Standard'}-${isPizza ? cheeseLevel : 0}-${isPizza ? selectedToppings.join('-') : 'None'}`,
       menuItemId: item.id || '',
-      name: `${item.name} (${selectedCrust} Crust)`,
+      name: isPizza ? `${item.name} (${selectedCrust} Crust)` : item.name,
       price: unitPrice,
       quantity,
       image: item.image,
       isVegetarian: item.isVegetarian,
-      crust: `${selectedCrust} Crust`,
+      crust: isPizza ? `${selectedCrust} Crust` : undefined,
       size: 'Medium',
-      addons: selectedToppings
+      addons: isPizza ? selectedToppings : []
     });
 
     triggerAnimation(e, item.image);
     window.dispatchEvent(new CustomEvent('cart-item-added'));
-    toast.success(`Customized ${item.name} added! 🍕`);
+    toast.success(`Added ${item.name} to order! 🍕`);
     onClose();
   };
 
@@ -71,7 +72,9 @@ export default function ProductCustomizationModal({ item, onClose }: Props) {
               <img src={item.image} alt={item.name} className="w-12 h-12 rounded-xl object-cover border border-white/10" />
               <div>
                 <h3 className="font-bold text-white text-base sm:text-lg">{item.name}</h3>
-                <p className="text-xs text-slate-400">Customize your crust, cheese & toppings</p>
+                <p className="text-xs text-slate-400">
+                  {isPizza ? 'Customize your crust, cheese & toppings' : 'Select quantity & add to cart'}
+                </p>
               </div>
             </div>
             <button 
@@ -102,70 +105,75 @@ export default function ProductCustomizationModal({ item, onClose }: Props) {
             </div>
           </div>
 
-          {/* Crust Selection (Reference Aligned) */}
-          <div className="space-y-2">
-            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider">Crust Selection</label>
-            <div className="grid grid-cols-3 gap-2">
-              {(['Classic', 'Thin', 'Pan'] as const).map(crust => (
-                <button
-                  key={crust}
-                  onClick={() => setSelectedCrust(crust)}
-                  className={`py-2.5 px-3 rounded-xl text-xs font-bold transition-all border min-touch-target ${
-                    selectedCrust === crust 
-                      ? 'bg-primary-600 text-white border-primary-400 shadow-md' 
-                      : 'bg-dark-950 text-slate-400 border-dark-800 hover:text-white'
-                  }`}
-                >
-                  {crust} {crust === 'Pan' ? '(+₹40)' : crust === 'Thin' ? '(+₹20)' : ''}
-                </button>
-              ))}
-            </div>
-          </div>
+          {/* Render Pizza Customizations ONLY if product is a Pizza */}
+          {isPizza && (
+            <>
+              {/* Crust Selection */}
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider">Crust Selection</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {(['Classic', 'Thin', 'Pan'] as const).map(crust => (
+                    <button
+                      key={crust}
+                      onClick={() => setSelectedCrust(crust)}
+                      className={`py-2.5 px-3 rounded-xl text-xs font-bold transition-all border min-touch-target ${
+                        selectedCrust === crust 
+                          ? 'bg-primary-600 text-white border-primary-400 shadow-md' 
+                          : 'bg-dark-950 text-slate-400 border-dark-800 hover:text-white'
+                      }`}
+                    >
+                      {crust} {crust === 'Pan' ? '(+₹40)' : crust === 'Thin' ? '(+₹20)' : ''}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-          {/* Cheese Level Slider */}
-          <div className="space-y-2">
-            <div className="flex justify-between items-center text-xs">
-              <span className="font-bold text-slate-400 uppercase tracking-wider">Cheese Level</span>
-              <span className="font-bold text-accent-400">{cheeseLevel > 7 ? 'Extra Cheese 🧀' : cheeseLevel > 3 ? 'Standard' : 'Light'}</span>
-            </div>
-            <input 
-              type="range"
-              min="0"
-              max="10"
-              value={cheeseLevel}
-              onChange={(e) => setCheeseLevel(Number(e.target.value))}
-              className="w-full accent-primary-500 bg-dark-950 h-2 rounded-lg cursor-pointer"
-            />
-            <div className="flex justify-between text-[10px] text-slate-500 font-bold">
-              <span>Zero</span>
-              <span>Classic</span>
-              <span>Ten</span>
-            </div>
-          </div>
+              {/* Cheese Level Slider */}
+              <div className="space-y-2">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="font-bold text-slate-400 uppercase tracking-wider">Cheese Level</span>
+                  <span className="font-bold text-accent-400">{cheeseLevel > 7 ? 'Extra Cheese 🧀' : cheeseLevel > 3 ? 'Standard' : 'Light'}</span>
+                </div>
+                <input 
+                  type="range"
+                  min="0"
+                  max="10"
+                  value={cheeseLevel}
+                  onChange={(e) => setCheeseLevel(Number(e.target.value))}
+                  className="w-full accent-primary-500 bg-dark-950 h-2 rounded-lg cursor-pointer"
+                />
+                <div className="flex justify-between text-[10px] text-slate-500 font-bold">
+                  <span>Zero</span>
+                  <span>Classic</span>
+                  <span>Ten</span>
+                </div>
+              </div>
 
-          {/* Extra Toppings */}
-          <div className="space-y-2">
-            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider">Extra Toppings (+₹25 each)</label>
-            <div className="grid grid-cols-2 gap-2">
-              {['Extra Cheese', 'Jalapeños', 'Fresh Olives', 'Crispy Paneer', 'Mushrooms', 'Red Paprika'].map(topping => {
-                const isSelected = selectedToppings.includes(topping);
-                return (
-                  <button
-                    key={topping}
-                    onClick={() => toggleTopping(topping)}
-                    className={`py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-between border min-touch-target ${
-                      isSelected 
-                        ? 'bg-emerald-950/60 text-emerald-400 border-emerald-500/40' 
-                        : 'bg-dark-950 text-slate-400 border-dark-800'
-                    }`}
-                  >
-                    <span>{topping}</span>
-                    {isSelected && <Check size={14} />}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+              {/* Extra Toppings */}
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider">Extra Toppings (+₹25 each)</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {['Extra Cheese', 'Jalapeños', 'Fresh Olives', 'Crispy Paneer', 'Mushrooms', 'Red Paprika'].map(topping => {
+                    const isSelected = selectedToppings.includes(topping);
+                    return (
+                      <button
+                        key={topping}
+                        onClick={() => toggleTopping(topping)}
+                        className={`py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-between border min-touch-target ${
+                          isSelected 
+                            ? 'bg-emerald-950/60 text-emerald-400 border-emerald-500/40' 
+                            : 'bg-dark-950 text-slate-400 border-dark-800'
+                        }`}
+                      >
+                        <span>{topping}</span>
+                        {isSelected && <Check size={14} />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </>
+          )}
 
           {/* Live Price Footer & Add Button */}
           <div className="pt-4 border-t border-white/10 flex items-center justify-between gap-4">

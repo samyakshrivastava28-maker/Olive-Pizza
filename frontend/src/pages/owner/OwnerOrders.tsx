@@ -46,7 +46,11 @@ export default function OwnerOrders() {
           // Check for new orders and status changes
           snapshot.docChanges().forEach((change) => {
             const order = { id: change.doc.id, ...change.doc.data() } as Order;
-            if (change.type === 'modified') {
+            if (change.type === 'added') {
+              // LOUD ALARM ON NEW ORDER ADDED
+              playNotificationSound('new_order');
+              toast.success(`🍕 New Order Received! ${order.dailyOrderNumber ? '#' + order.dailyOrderNumber : ''}`, { duration: 6000 });
+            } else if (change.type === 'modified') {
               const prevStatus = prevStatusMap.get(order.id!);
               if (prevStatus && prevStatus !== order.status) {
                 const soundType = statusToSoundType(order.status || '');
@@ -340,72 +344,81 @@ export default function OwnerOrders() {
               </div>
 
               <div className="w-full md:w-56 flex flex-col gap-3">
-                {order.status === "pending" && (
-                  <button
-                    disabled={processingId === order.id}
-                    onClick={() => updateStatus(order, "accepted")}
-                    className="w-full bg-green-500 hover:bg-green-600 disabled:opacity-50 text-white p-3 rounded-xl font-bold shadow-sm transition-transform hover:-translate-y-1"
-                  >
-                    {processingId === order.id ? 'Processing...' : 'Accept Order'}
-                  </button>
-                )}
-                {order.status === "accepted" && (
-                  <button
-                    disabled={processingId === order.id}
-                    onClick={() => updateStatus(order, "preparing")}
-                    className="w-full bg-yellow-500 hover:bg-yellow-600 disabled:opacity-50 text-white p-3 rounded-xl font-bold shadow-sm transition-transform hover:-translate-y-1"
-                  >
-                    {processingId === order.id ? 'Processing...' : 'Start Cooking'}
-                  </button>
-                )}
-                {order.status === "preparing" && (
-                  <button
-                    disabled={processingId === order.id}
-                    onClick={() => updateStatus(order, "ready")}
-                    className="w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white p-3 rounded-xl font-bold shadow-sm transition-transform hover:-translate-y-1"
-                  >
-                    {processingId === order.id ? 'Processing...' : 'Mark as Ready'}
-                  </button>
-                )}
-                {order.status === "ready" && (
-                  <div className="flex flex-col gap-2">
-                    <select
-                      className="p-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-[#1E293B] dark:bg-slate-800 text-sm font-bold"
-                      value={selectedPartners[order.id!] || ""}
-                      disabled={processingId === order.id}
-                      onChange={(e) =>
-                        setSelectedPartners({
-                          ...selectedPartners,
-                          [order.id!]: e.target.value,
-                        })
-                      }
-                    >
-                      <option value="">Select Delivery Partner...</option>
-                      {partners
-                        .filter((p) => p.approvalStatus === "approved")
-                        .map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.status === "online" ? "🟢" : "⚪"}{" "}
-                            {p.name || p.email}
-                          </option>
-                        ))}
-                    </select>
-                    <button
-                      disabled={processingId === order.id}
-                      onClick={() => {
-                        const pid = selectedPartners[order.id!];
-                        if (!pid)
-                          return alert(
-                            "Please select a delivery partner first!",
-                          );
-                        updateStatus(order, "partner_assigned", pid);
-                      }}
-                      className="w-full bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white p-3 rounded-xl font-bold shadow-sm transition-transform hover:-translate-y-1"
-                    >
-                      {processingId === order.id ? 'Processing...' : 'Assign Partner'}
-                    </button>
-                  </div>
-                )}
+                {(() => {
+                  const st = (order.status || '').toLowerCase();
+                  const isInitialState = !['accepted', 'preparing', 'ready', 'partner_assigned', 'picked_up', 'out_for_delivery', 'delivered', 'completed', 'cancelled', 'rejected'].includes(st);
+
+                  return (
+                    <>
+                      {isInitialState && (
+                        <button
+                          disabled={processingId === order.id}
+                          onClick={() => updateStatus(order, "accepted")}
+                          className="w-full bg-green-500 hover:bg-green-600 disabled:opacity-50 text-white p-3 rounded-xl font-bold shadow-md transition-transform hover:-translate-y-1 cursor-pointer flex items-center justify-center gap-2"
+                        >
+                          <span>✅</span> {processingId === order.id ? 'Processing...' : 'Accept Order'}
+                        </button>
+                      )}
+                      {st === "accepted" && (
+                        <button
+                          disabled={processingId === order.id}
+                          onClick={() => updateStatus(order, "preparing")}
+                          className="w-full bg-yellow-500 hover:bg-yellow-600 disabled:opacity-50 text-white p-3 rounded-xl font-bold shadow-md transition-transform hover:-translate-y-1 cursor-pointer flex items-center justify-center gap-2"
+                        >
+                          <span>🍳</span> {processingId === order.id ? 'Processing...' : 'Start Cooking'}
+                        </button>
+                      )}
+                      {st === "preparing" && (
+                        <button
+                          disabled={processingId === order.id}
+                          onClick={() => updateStatus(order, "ready")}
+                          className="w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white p-3 rounded-xl font-bold shadow-md transition-transform hover:-translate-y-1 cursor-pointer flex items-center justify-center gap-2"
+                        >
+                          <span>📦</span> {processingId === order.id ? 'Processing...' : 'Mark as Ready'}
+                        </button>
+                      )}
+                      {['accepted', 'preparing', 'ready', 'partner_assigned'].includes(st) && (
+                        <div className="flex flex-col gap-2">
+                          <select
+                            className="p-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-[#1E293B] dark:bg-slate-800 text-sm font-bold text-white"
+                            value={selectedPartners[order.id!] || ""}
+                            disabled={processingId === order.id}
+                            onChange={(e) =>
+                              setSelectedPartners({
+                                ...selectedPartners,
+                                [order.id!]: e.target.value,
+                              })
+                            }
+                          >
+                            <option value="">Select Delivery Partner...</option>
+                            {partners
+                              .filter((p) => p.role === "delivery_partner" || p.approvalStatus === "approved" || !p.approvalStatus)
+                              .map((p) => (
+                                <option key={p.id} value={p.id}>
+                                  {p.status === "online" ? "🟢" : "⚪"}{" "}
+                                  {p.name || p.email}
+                                </option>
+                              ))}
+                          </select>
+                          <button
+                            disabled={processingId === order.id}
+                            onClick={() => {
+                              const pid = selectedPartners[order.id!];
+                              if (!pid)
+                                return alert(
+                                  "Please select a delivery partner first!",
+                                );
+                              updateStatus(order, "partner_assigned", pid);
+                            }}
+                            className="w-full bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white p-3 rounded-xl font-bold shadow-md transition-transform hover:-translate-y-1 cursor-pointer flex items-center justify-center gap-2"
+                          >
+                            <span>🛵</span> {processingId === order.id ? 'Processing...' : 'Assign Partner'}
+                          </button>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
                 {/* Track Live Button — shown when delivery is active */}
                 {['partner_assigned', 'picked_up', 'out_for_delivery'].includes(order.status) && order.deliveryPartnerId && (
                   <button

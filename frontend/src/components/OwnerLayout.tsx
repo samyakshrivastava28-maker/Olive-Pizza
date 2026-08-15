@@ -2,10 +2,11 @@ import { Outlet, Link, useLocation, useNavigate } from 'react-router';
 import { useAuthStore } from '../lib/store';
 import { useState, useEffect, Suspense } from 'react';
 import { db } from '../lib/firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { collection, query, orderBy, limit, onSnapshot, doc, getDoc } from 'firebase/firestore';
 import { PremiumBackground } from './ui/glass/PremiumBackground';
 import { GlassPanel } from './ui/glass/GlassSystem';
 import OwnerAlertManager from './owner/OwnerAlertManager';
+import NewOrderEmergencyOverlay from './owner/NewOrderEmergencyOverlay';
 import PixelSnow from './ui/PixelSnow';
 
 export default function OwnerLayout() {
@@ -15,6 +16,7 @@ export default function OwnerLayout() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [profilePic, setProfilePic] = useState('https://ui-avatars.com/api/?name=Owner&background=random');
   const [ownerName, setOwnerName] = useState(user?.name || 'Restaurant Owner');
+  const [emergencyOrder, setEmergencyOrder] = useState<any | null>(null);
 
   useEffect(() => {
     // Attempt to load custom profile pic if available
@@ -33,6 +35,27 @@ export default function OwnerLayout() {
     fetchProfile();
   }, [user]);
 
+  // Real-time listener for NEW incoming customer orders (triggers emergency overlay for pending orders only)
+  useEffect(() => {
+    let isInitial = true;
+    const q = query(collection(db, 'orders'), orderBy('createdAt', 'desc'), limit(1));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      if (isInitial) {
+        isInitial = false;
+        return;
+      }
+      snapshot.docChanges().forEach((change) => {
+        if (change.type === 'added') {
+          const newOrderData = { id: change.doc.id, ...change.doc.data() } as any;
+          if (['pending', 'placed', 'created', 'new_order'].includes(newOrderData.status)) {
+            setEmergencyOrder(newOrderData);
+          }
+        }
+      });
+    });
+    return () => unsubscribe();
+  }, []);
+
   const navLinks = [
     { name: 'Back to Home Page', path: '/', icon: '🏠' },
     { name: 'Dashboard', path: '/owner/dashboard', icon: '📊' },
@@ -42,20 +65,19 @@ export default function OwnerLayout() {
     { name: 'Products', path: '/owner/products', icon: '🍕' },
     { name: 'Promotions & Ads', path: '/owner/ads', icon: '📢' },
     { name: 'Coupons', path: '/owner/coupons', icon: '🎟️' },
-    { name: 'Media Library', path: '/owner/media', icon: '📂' },
+    { name: 'Media Library', path: '/owner/media', icon: '📁' },
     { name: 'Customers', path: '/owner/customers', icon: '👥' },
     { name: 'Delivery Partners', path: '/owner/partners', icon: '🛵' },
     { name: 'Reports', path: '/owner/reports', icon: '📑' },
-    { name: 'Data Manager', path: '/owner/data-manager', icon: '💽' },
     { name: 'Email Center', path: '/owner/email', icon: '✉️' },
     { name: 'Special Categories', path: '/owner/special-categories', icon: '🎪' },
-    { name: 'Website Manager (SDUI)', path: '/owner/website-manager', icon: '🎨' },
+    { name: 'Home Page Manager', path: '/owner/home-page-manager', icon: '🏠' },
     { name: 'Versions', path: '/owner/versions', icon: '🚀' },
     { name: 'AI Knowledge', path: '/owner/ai-knowledge', icon: '🧠' },
     { name: 'AI Monitor', path: '/owner/ai-monitor', icon: '🤖' },
     { name: 'Notification Diagnostics', path: '/owner/notification-diagnostics', icon: '📡' },
     { name: 'Verification Diagnostics', path: '/owner/verification-metrics', icon: '🛡️' },
-    ...(user?.email?.toLowerCase() === 'webhub2811@gmail.com' ? [{ name: 'Developer Ops Center', path: '/owner/developer', icon: '💻' }] : []),
+    ...(['webhub2811@gmail.com', 'olivepizzarjn@gmail.com'].includes(user?.email?.toLowerCase() || '') ? [{ name: 'Developer Ops Center', path: '/developer', icon: '💻' }] : []),
     { name: 'Settings', path: '/owner/settings', icon: '⚙️' },
   ];
 
@@ -75,6 +97,7 @@ export default function OwnerLayout() {
         />
       </div>
       <OwnerAlertManager />
+      <NewOrderEmergencyOverlay order={emergencyOrder} onClose={() => setEmergencyOrder(null)} />
       
       {/* Mobile Sidebar Overlay */}
       {isMobileMenuOpen && (
@@ -83,11 +106,18 @@ export default function OwnerLayout() {
 
       {/* Sidebar */}
       <GlassPanel className={`fixed md:sticky top-0 left-0 h-[100dvh] w-64 flex flex-col z-50 transform transition-transform duration-300 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
-        <div className="p-6 flex items-center justify-between border-b border-white/10">
-          <Link to="/" className="text-2xl font-black text-white tracking-tight flex items-center gap-2 drop-shadow-md">
-            🍕 <span className="hidden md:inline">Olive Pizza</span>
+        <div className="p-5 flex items-center justify-between border-b border-white/10">
+          <Link to="/" className="flex items-center gap-2.5 group">
+            <img
+              src="/logo-transparent.png"
+              alt="Olive Pizza Logo"
+              className="h-8 md:h-9 w-auto object-contain bg-transparent transition-transform duration-200 group-hover:scale-105"
+            />
+            <span className="text-lg md:text-xl font-black text-white tracking-tight group-hover:text-primary-400 transition-colors">
+              Olive Pizza
+            </span>
           </Link>
-          <button className="md:hidden text-slate-300" onClick={() => setIsMobileMenuOpen(false)}>✕</button>
+          <button className="md:hidden text-slate-300 p-1 hover:text-white" onClick={() => setIsMobileMenuOpen(false)}>âœ•</button>
         </div>
         
         <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
@@ -115,7 +145,7 @@ export default function OwnerLayout() {
         <header className="h-20 bg-white/5 backdrop-blur-xl border-b border-white/10 flex items-center justify-between px-6 z-30 sticky top-0 shadow-[0_8px_40px_rgba(0,0,0,0.15)]">
           <div className="flex items-center gap-4">
             <button className="md:hidden p-2 text-white" onClick={() => setIsMobileMenuOpen(true)}>
-              ☰
+              â˜°
             </button>
             <div className="hidden sm:block">
               <h2 className="text-xl font-black text-white">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</h2>
@@ -157,10 +187,10 @@ export default function OwnerLayout() {
         {/* Scrollable Page Content */}
         <div className="flex-1 overflow-y-auto flex flex-col">
           <div className={`flex-1 ${
-            location.pathname.startsWith('/owner/studio') || location.pathname.startsWith('/owner/olive-studio')
-              ? 'p-2 md:p-4 relative z-10'
-              : location.pathname === '/owner/dashboard'
-                ? 'p-4 md:p-8'
+            location.pathname === '/owner/dashboard'
+              ? 'p-4 md:p-8'
+              : location.pathname.startsWith('/owner/home-page-manager')
+                ? 'p-2 md:p-4 relative z-10'
                 : 'p-4 md:p-8 bg-[#1E293B] border border-white/10 rounded-tl-[40px] shadow-[0_0_50px_rgba(0,0,0,0.5)] m-4 md:m-6 relative z-10'
           }`}>
             <Suspense fallback={
@@ -181,3 +211,4 @@ export default function OwnerLayout() {
     </div>
   );
 }
+

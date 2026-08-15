@@ -131,11 +131,26 @@ export default function OrderSuccessScreen() {
         <div className="bg-dark-900 border border-dark-800 rounded-2xl p-6 w-full max-w-md shadow-2xl backdrop-blur-sm">
           <div className="flex justify-between items-center mb-4 pb-4 border-b border-dark-800">
             <span className="text-slate-400">Order Reference</span>
-            <span className="font-bold text-white tracking-wider">{orderId || 'NEW ORDER'}</span>
+            <span className="font-bold text-white tracking-wider">#{orderId?.slice(-6).toUpperCase() || 'NEW'}</span>
           </div>
-          <div className="flex justify-between items-center">
+          <div className="flex justify-between items-center mb-5">
             <span className="text-slate-400">Restaurant</span>
             <span className="font-bold text-white">Olive Pizza</span>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-3">
+            <button
+              onClick={() => navigate(orderId ? `/order-tracking/${orderId}` : '/')}
+              className="flex-1 bg-gradient-to-r from-primary-600 to-primary-500 hover:from-primary-500 hover:to-primary-400 text-white font-bold py-3 px-4 rounded-xl shadow-lg transition-transform hover:-translate-y-0.5 active:scale-95 text-sm flex items-center justify-center gap-2 cursor-pointer"
+            >
+              🗺️ Track Order Live
+            </button>
+            <button
+              onClick={() => navigate('/', { replace: true })}
+              className="flex-1 bg-white/10 hover:bg-white/15 text-white font-bold py-3 px-4 rounded-xl transition-colors text-sm flex items-center justify-center gap-2 cursor-pointer"
+            >
+              🏠 Home
+            </button>
           </div>
         </div>
       </div>

@@ -34,11 +34,11 @@ class DeliveryAlarmManagerClass {
 
     this.currentPartnerId = partnerId;
 
-    // Delivery Partner is assigned when status is 'partner_assigned' and deliveryPartnerId matches
+    // Delivery Partner ringtone alarm fires ONLY when status is 'partner_assigned' (pending rider acceptance)
     const q = query(
       collection(db, "orders"),
       where("deliveryPartnerId", "==", partnerId),
-      where("status", "in", ["partner_assigned", "out_for_delivery"])
+      where("status", "==", "partner_assigned")
     );
     
     // First, direct fetch
@@ -52,6 +52,10 @@ class DeliveryAlarmManagerClass {
     }, (error) => {
       console.error("[DeliveryAlarmManager] Firestore listener error:", error);
     });
+  }
+
+  public stopAlarm() {
+    this.stopAlarmCycle();
   }
 
   public destroy() {

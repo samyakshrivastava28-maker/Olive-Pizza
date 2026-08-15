@@ -1,4 +1,4 @@
-import { Routes, Route, useLocation, useNavigate } from 'react-router';
+import { Routes, Route, useLocation, useNavigate, Navigate } from 'react-router';
 import { HelmetProvider } from 'react-helmet-async';
 import { AnimatePresence, MotionConfig } from 'framer-motion';
 import { Toaster } from 'react-hot-toast';
@@ -12,7 +12,6 @@ import NativeAppUpdater from './components/NativeAppUpdater';
 import CartSyncManager from './components/CartSyncManager';
 import { NotificationDiagnosticsOverlay } from './components/ui/NotificationDiagnosticsOverlay';
 import AnnouncementBar from './components/AnnouncementBar';
-import { useSDUIStore } from './stores/sduiStore';
 
 // Custom lazy loading with retry for chunk errors (prevents black screen on PWA update)
 const lazyWithRetry = <T extends ComponentType<any>>(
@@ -155,15 +154,27 @@ const OwnerAIKnowledge = lazyWithRetry(() => import('./pages/owner/OwnerAIKnowle
 const OwnerNotificationCenter = lazyWithRetry(() => import('./pages/owner/OwnerNotificationCenter'));
 const AIHealthMonitor = lazyWithRetry(() => import('./pages/owner/AIHealthMonitor'));
 const OwnerNotificationDiagnostics = lazyWithRetry(() => import('./pages/owner/OwnerNotificationDiagnostics'));
-const OwnerDataManager = lazyWithRetry(() => import('./pages/owner/DataManager'));
-const WebsiteManagerHub = lazyWithRetry(() => import('./pages/owner/WebsiteManager'));
-const OliveStudio = lazyWithRetry(() => import('./pages/owner/OliveStudio'));
-const SectionDesignerPage = lazyWithRetry(() => import('./pages/owner/SectionDesigner'));
-const DeveloperDashboard = lazyWithRetry(() => import('./pages/owner/DeveloperDashboard'));
+const HomePageManager = lazyWithRetry(() => import('./pages/owner/HomePageManager'));
+const DeveloperLayout = lazyWithRetry(() => import('./components/developer/DeveloperLayout'));
+const DeveloperHealthPage = lazyWithRetry(() => import('./pages/developer/DeveloperHealthPage'));
+const DeveloperDataManager = lazyWithRetry(() => import('./pages/developer/DeveloperDataManager'));
+const DeveloperAIPage = lazyWithRetry(() => import('./pages/developer/DeveloperAIPage'));
+const DeveloperSchedulerPage = lazyWithRetry(() => import('./pages/developer/DeveloperSchedulerPage'));
+const DeveloperErrorCenterPage = lazyWithRetry(() => import('./pages/developer/DeveloperErrorCenterPage'));
+const DeveloperConfigsPage = lazyWithRetry(() => import('./pages/developer/DeveloperConfigsPage'));
+const DeveloperAuditPage = lazyWithRetry(() => import('./pages/developer/DeveloperAuditPage'));
+const DeveloperTemplatesPage = lazyWithRetry(() => import('./pages/developer/DeveloperTemplatesPage'));
+const DeveloperPaymentPage = lazyWithRetry(() => import('./pages/developer/DeveloperPaymentPage'));
+const DeveloperEmailPage = lazyWithRetry(() => import('./pages/developer/DeveloperEmailPage'));
+const DeveloperMonitorPage = lazyWithRetry(() => import('./pages/developer/DeveloperMonitorPage'));
+const DeveloperDiagnosticsPage = lazyWithRetry(() => import('./pages/developer/DeveloperDiagnosticsPage'));
+const DeveloperLogsPage = lazyWithRetry(() => import('./pages/developer/DeveloperLogsPage'));
+const DeveloperSetupPage = lazyWithRetry(() => import('./pages/developer/DeveloperSetupPage'));
 
 // Lazy loaded delivery pages
 const CustomerDashboard = lazyWithRetry(() => import('./pages/CustomerDashboard'));
 const DeliveryDashboard = lazyWithRetry(() => import('./pages/delivery/DeliveryDashboard'));
+const DeliveryNavigationPage = lazyWithRetry(() => import('./pages/delivery/DeliveryNavigationPage'));
 const DeliveryEarnings = lazyWithRetry(() => import('./pages/delivery/DeliveryEarnings'));
 const DeliveryPerformance = lazyWithRetry(() => import('./pages/delivery/DeliveryPerformance'));
 const DeliveryProfile = lazyWithRetry(() => import('./pages/delivery/DeliveryProfile'));
@@ -229,11 +240,6 @@ function AppContent() {
     }
   }, [isAuthenticated, role, location.pathname, navigate]);
 
-  // Realtime Server-Driven UI & Theme Subscription
-  useEffect(() => {
-    const unsubscribe = useSDUIStore.getState().subscribe();
-    return () => unsubscribe();
-  }, []);
 
   // Global Session Initializer Blocker
   // This completely stops the app from rendering while we restore the persisted session.
@@ -307,6 +313,7 @@ function AppContent() {
                   <Route path="menu" element={<OwnerProducts />} />
                   <Route path="products" element={<OwnerProducts />} />
                   <Route path="orders" element={<OwnerOrders />} />
+                  <Route path="live-orders" element={<OwnerOrders />} />
                   <Route path="order-history" element={<OwnerOrderHistory />} />
                   <Route path="analytics" element={<OwnerAnalytics />} />
                   <Route path="partners" element={<DeliveryPartners />} />
@@ -320,19 +327,15 @@ function AppContent() {
                   <Route path="customers" element={<OwnerCustomers />} />
                   <Route path="email" element={<OwnerEmailCenter />} />
                   <Route path="special-categories" element={<OwnerSpecialCategories />} />
-                  <Route path="homepage" element={<WebsiteManagerHub />} />
-                  <Route path="website-manager/*" element={<WebsiteManagerHub />} />
-                  <Route path="sdui/*" element={<WebsiteManagerHub />} />
-                  <Route path="section-designer" element={<SectionDesignerPage />} />
-                  <Route path="studio" element={<OliveStudio />} />
-                  <Route path="olive-studio" element={<OliveStudio />} />
                   <Route path="notifications" element={<OwnerNotificationCenter />} />
                   <Route path="verification-metrics" element={<OwnerVerificationMetrics />} />
                   <Route path="versions" element={<OwnerVersionManagement />} />
+                  <Route path="home-page-manager" element={<HomePageManager />} />
+                  <Route path="website-manager" element={<HomePageManager />} />
+                  <Route path="website-manager/*" element={<HomePageManager />} />
                   <Route path="ai-knowledge" element={<OwnerAIKnowledge />} />
                   <Route path="ai-monitor" element={<AIHealthMonitor />} />
                   <Route path="notification-diagnostics" element={<OwnerNotificationDiagnostics />} />
-                  <Route path="data-manager/*" element={<OwnerDataManager />} />
                 </Route>
               </Route>
 
@@ -340,15 +343,36 @@ function AppContent() {
 
               {/* Developer Routes */}
               <Route element={<DeveloperGuard />}>
-                <Route path="/owner/developer" element={<DeveloperDashboard />} />
-                <Route path="/developer" element={<DeveloperDashboard />} />
-                <Route path="/developer/devops" element={<DeveloperDashboard />} />
+                <Route path="/developer" element={<DeveloperLayout />}>
+                  <Route index element={<DeveloperHealthPage />} />
+                  <Route path="health" element={<DeveloperHealthPage />} />
+                  <Route path="data-manager" element={<DeveloperDataManager />} />
+                  <Route path="data-manager/*" element={<DeveloperDataManager />} />
+                  <Route path="ai" element={<DeveloperAIPage />} />
+                  <Route path="scheduler" element={<DeveloperSchedulerPage />} />
+                  <Route path="errors" element={<DeveloperErrorCenterPage />} />
+                  <Route path="configs" element={<DeveloperConfigsPage />} />
+                  <Route path="audit" element={<DeveloperAuditPage />} />
+                  <Route path="templates" element={<DeveloperTemplatesPage />} />
+                  <Route path="payment" element={<DeveloperPaymentPage />} />
+                  <Route path="email" element={<DeveloperEmailPage />} />
+                  <Route path="monitor" element={<DeveloperMonitorPage />} />
+                  <Route path="diagnostics" element={<DeveloperDiagnosticsPage />} />
+                  <Route path="logs" element={<DeveloperLogsPage />} />
+                  <Route path="setup" element={<DeveloperSetupPage />} />
+                  <Route path="devops" element={<Navigate to="/developer" replace />} />
+                  <Route path="*" element={<Navigate to="/developer" replace />} />
+                </Route>
+                <Route path="/owner/developer" element={<Navigate to="/developer" replace />} />
+                <Route path="/owner/developer/*" element={<Navigate to="/developer" replace />} />
               </Route>
 
               {/* Delivery Routes */}
               <Route element={<DeliveryGuard />}>
                 <Route path="/delivery" element={<DeliveryLayout />}>
                   <Route path="dashboard" element={<DeliveryDashboard />} />
+                  <Route path="navigation/:orderId" element={<DeliveryNavigationPage />} />
+                  <Route path="navigation" element={<DeliveryNavigationPage />} />
                   <Route path="earnings" element={<DeliveryEarnings />} />
                   <Route path="performance" element={<DeliveryPerformance />} />
                   <Route path="profile" element={<DeliveryProfile />} />

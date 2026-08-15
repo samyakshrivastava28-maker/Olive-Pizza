@@ -75,6 +75,17 @@ router.post('/configs', async (req: DevRequest, res: Response) => {
   }
 });
 
+router.delete('/configs/:key', async (req: DevRequest, res: Response) => {
+  try {
+    const { key } = req.params;
+    const email = req.developer?.email || 'webhub2811@gmail.com';
+    const result = await PlatformConfigService.deleteConfig(key, email);
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // ── 4. Multi-Database Manager ───────────────────────────────────────────────
 router.get('/databases', async (req: DevRequest, res: Response) => {
   try {
@@ -87,9 +98,63 @@ router.get('/databases', async (req: DevRequest, res: Response) => {
 
 router.post('/databases', async (req: DevRequest, res: Response) => {
   try {
-    const { id, name, type, connectionUri } = req.body;
+    const { id, name, type, providerId, connectionUri, baseUrl, healthEndpoint, currentRole, dataClassification, criticality, failoverAlternative } = req.body;
     const email = req.developer?.email || 'webhub2811@gmail.com';
-    const result = await DatabaseManagerService.addDatabase(id, name, type, connectionUri, email);
+    const result = await DatabaseManagerService.addDatabase({
+      id: id || `${type}_${Date.now()}`,
+      name: name || id,
+      providerId: providerId || type || 'custom_rest_db',
+      category: req.body.category || 'sql',
+      connectionUri,
+      baseUrl,
+      healthEndpoint,
+      currentRole,
+      dataClassification,
+      criticality,
+      failoverAlternative
+    }, email);
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /devops/purge-job-logs
+ * Permanently deletes old pg_cron job_run_details logs & realtime tracking logs from PostgreSQL.
+ */
+router.post('/purge-job-logs', async (_req: DevRequest, res: Response) => {
+  try {
+    const { dataLifecycleService } = await import('../services/DataLifecycleService.js');
+    const result = await dataLifecycleService.purgePostgresLogsAndReclaimSpace();
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /devops/test-alert
+ * Sends a test developer alert email to webhub2811@gmail.com
+ */
+router.post('/test-alert', async (_req: DevRequest, res: Response) => {
+  try {
+    const result = await DevOpsService.sendTestDevAlert();
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /devops/email-retry/:id
+ * Retries a failed email by resetting its status to pending in email_queue
+ */
+router.post('/email-retry/:id', async (req: DevRequest, res: Response) => {
+  try {
+    const emailId = parseInt(req.params.id, 10);
+    if (isNaN(emailId)) return res.status(400).json({ success: false, error: 'Invalid email ID' });
+    const result = await DevOpsService.retryFailedEmail(emailId);
     res.json(result);
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });

@@ -46,20 +46,20 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
                     earnings: data.earnings,
                     metrics: data.metrics,
                   },
-                  data.role || 'customer'
+                  data.role || (['olivepizzarjn@gmail.com', 'webhub2811@gmail.com'].includes(firebaseUser.email?.toLowerCase() || '') ? 'owner' : 'customer')
                 );
 
                   // Request / refresh Web Push notification permissions for all users
                   requestNotificationPermission(firebaseUser.uid);
               } else {
-                const fallbackRole = firebaseUser.email?.toLowerCase() === 'olivepizzarjn@gmail.com' ? 'owner' : 'customer';
+                const fallbackRole = ['olivepizzarjn@gmail.com', 'webhub2811@gmail.com'].includes(firebaseUser.email?.toLowerCase() || '') ? 'owner' : 'customer';
                 setUser({ uid: firebaseUser.uid, email: firebaseUser.email, onboardingComplete: false, emailVerified: firebaseUser.emailVerified }, fallbackRole);
               }
             } catch (error: any) {
               console.warn('[AuthProvider] Firestore read failed:', error?.code || error?.message);
               // auth/network-request-failed — user is logged in but network is unavailable
               // Still set user with cached data so app doesn't lock out
-              const fallbackRole = firebaseUser.email?.toLowerCase() === 'olivepizzarjn@gmail.com' ? 'owner' : 'customer';
+              const fallbackRole = ['olivepizzarjn@gmail.com', 'webhub2811@gmail.com'].includes(firebaseUser.email?.toLowerCase() || '') ? 'owner' : 'customer';
               setUser({ uid: firebaseUser.uid, email: firebaseUser.email, onboardingComplete: false, emailVerified: firebaseUser.emailVerified }, fallbackRole);
               
               // Retry Firestore read after 5 seconds

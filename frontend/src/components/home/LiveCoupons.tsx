@@ -1,18 +1,25 @@
-import React, { useState, useEffect, useMemo } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Ticket, Copy, Check, Clock, Tag, Sparkles, Flame, ShieldAlert } from "lucide-react";
+import React, { useState, useMemo } from "react";
+import { motion } from "framer-motion";
+import { Ticket, Copy, Check, Clock, Sparkles, Flame } from "lucide-react";
 import { useDataStore } from "../../lib/dataStore";
+import { isItemActiveAndValid, getItemExpiryDate } from "../../lib/scheduling";
 import toast from "react-hot-toast";
 
 interface Coupon {
   id: string;
   code: string;
-  discountType: "percentage" | "fixed";
+  type?: "percentage" | "fixed" | "tier" | "free_delivery";
+  discountType?: "percentage" | "fixed";
   discountValue: number;
   minOrderAmount?: number;
+  minOrderValue?: number;
   maxDiscountAmount?: number;
+  maxDiscount?: number;
+  startDate?: string;
+  endDate?: string;
   expiryDate?: string;
   isActive?: boolean;
+  isArchived?: boolean;
   description?: string;
 }
 
@@ -23,21 +30,7 @@ export default function LiveCoupons() {
   // Filter only valid, active, non-expired coupons
   const activeCoupons = useMemo(() => {
     if (!coupons || coupons.length === 0) return [];
-
-    const now = new Date().getTime();
-
-    return coupons.filter((coupon: Coupon) => {
-      // Must be active
-      if (coupon.isActive === false) return false;
-
-      // Check expiry date if specified
-      if (coupon.expiryDate) {
-        const expiryTime = new Date(coupon.expiryDate).getTime();
-        if (isNaN(expiryTime) || expiryTime <= now) return false;
-      }
-
-      return true;
-    });
+    return coupons.filter((coupon: Coupon) => isItemActiveAndValid(coupon));
   }, [coupons]);
 
   const handleCopyCode = (code: string) => {
@@ -85,10 +78,14 @@ export default function LiveCoupons() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {activeCoupons.map((coupon: Coupon, idx: number) => {
             const isCopied = copiedCode === coupon.code;
+            const type = coupon.discountType || coupon.type || "percentage";
             const discountLabel =
-              coupon.discountType === "percentage"
+              type === "percentage"
                 ? `${coupon.discountValue}% OFF`
                 : `₹${coupon.discountValue} OFF`;
+
+            const minAmount = coupon.minOrderAmount || coupon.minOrderValue || 0;
+            const expiryDate = getItemExpiryDate(coupon);
 
             return (
               <motion.div
@@ -127,9 +124,9 @@ export default function LiveCoupons() {
                       <span className="text-2xl sm:text-3xl font-black text-amber-400 tracking-tight">
                         {discountLabel}
                       </span>
-                      {coupon.minOrderAmount && coupon.minOrderAmount > 0 && (
+                      {minAmount > 0 && (
                         <p className="text-[11px] text-slate-400 font-semibold">
-                          On orders above ₹{coupon.minOrderAmount}
+                          On orders above ₹{minAmount}
                         </p>
                       )}
                     </div>
@@ -140,10 +137,10 @@ export default function LiveCoupons() {
                   </p>
 
                   {/* Expiry Badge */}
-                  {coupon.expiryDate && (
+                  {expiryDate && (
                     <div className="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-400 bg-white/5 px-2.5 py-1 rounded-lg border border-white/5 mb-5">
                       <Clock className="w-3.5 h-3.5 text-orange-400" />
-                      <span>Valid till {new Date(coupon.expiryDate).toLocaleDateString()}</span>
+                      <span>Valid till {expiryDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                     </div>
                   )}
                 </div>

@@ -88,7 +88,7 @@ export default function OwnerReports() {
   };
 
   const handleGenerateMonthlyReport = async () => {
-    const toastId = toast.loading("Generating monthly report PDF & syncing to Cloudflare R2...");
+    const toastId = toast.loading("Generating monthly report PDF, emailing owner & syncing...");
     setGenerating(true);
     try {
       const token = await auth.currentUser?.getIdToken();
@@ -101,7 +101,7 @@ export default function OwnerReports() {
       });
       const data = await res.json();
       if (data.success) {
-        toast.success(`Monthly Report for ${data.report.id} generated & archived!`, { id: toastId });
+        toast.success(`Monthly Report for ${data.report.id} generated, emailed & archived!`, { id: toastId });
         fetchBackendReports();
       } else {
         throw new Error(data.error || "Failed to generate monthly report");
@@ -110,6 +110,56 @@ export default function OwnerReports() {
       toast.error(err.message || "Report generation failed", { id: toastId });
     } finally {
       setGenerating(false);
+    }
+  };
+
+  const handleSyncGoogleSheet = async () => {
+    const toastId = toast.loading("Syncing orders to Google Sheets...");
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch("/api/reports/google-sheet/sync", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success(`Synced ${data.syncedCount} orders to Google Sheet!`, { id: toastId });
+        fetchBackendReports();
+      } else {
+        throw new Error(data.error || "Google Sheet sync failed");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Google Sheet sync failed", { id: toastId });
+    }
+  };
+
+  const handleSetSpreadsheetId = async () => {
+    const inputId = window.prompt("Enter Google Spreadsheet ID (from docs.google.com/spreadsheets/d/<ID>/edit):", liveSheetInfo?.spreadsheetId || "");
+    if (!inputId) return;
+
+    const toastId = toast.loading("Saving Google Sheet ID...");
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch("/api/reports/google-sheet/set-id", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ spreadsheetId: inputId }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success("Google Sheet ID updated!", { id: toastId });
+        fetchBackendReports();
+      } else {
+        throw new Error(data.error || "Failed to set Google Sheet ID");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Failed to set Google Sheet ID", { id: toastId });
     }
   };
 
@@ -173,14 +223,31 @@ export default function OwnerReports() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2.5">
             <button
               onClick={handleGenerateMonthlyReport}
               disabled={generating}
-              className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-primary-500 to-amber-500 hover:from-primary-600 hover:to-amber-600 text-white font-bold rounded-xl shadow-lg shadow-primary-500/20 transition-all disabled:opacity-50 cursor-pointer"
+              className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-primary-500 to-amber-500 hover:from-primary-600 hover:to-amber-600 text-white font-bold rounded-xl shadow-lg shadow-primary-500/20 transition-all disabled:opacity-50 cursor-pointer min-touch-target"
             >
               <Sparkles className={`w-4 h-4 ${generating ? "animate-spin" : ""}`} />
               {generating ? "Generating..." : "Generate Monthly Report"}
+            </button>
+
+            <button
+              onClick={handleSyncGoogleSheet}
+              className="flex items-center gap-1.5 px-4 py-2.5 bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-bold rounded-xl hover:bg-emerald-500/25 transition-all cursor-pointer min-touch-target"
+              title="Sync all orders into live Google Sheet"
+            >
+              <Table className="w-4 h-4" />
+              Sync Google Sheet
+            </button>
+
+            <button
+              onClick={handleSetSpreadsheetId}
+              className="flex items-center gap-1.5 px-3.5 py-2.5 bg-white/5 border border-white/10 text-slate-300 font-semibold rounded-xl hover:bg-white/10 transition-all cursor-pointer min-touch-target text-xs"
+              title="Set or update Google Spreadsheet ID"
+            >
+              Set Sheet ID
             </button>
 
             {liveSheetInfo?.url && (
@@ -188,10 +255,10 @@ export default function OwnerReports() {
                 href={liveSheetInfo.url}
                 target="_blank"
                 rel="noreferrer"
-                className="flex items-center gap-2 px-4 py-2.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-semibold rounded-xl hover:bg-emerald-500/20 transition-all"
+                className="flex items-center gap-2 px-4 py-2.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-semibold rounded-xl hover:bg-emerald-500/20 transition-all min-touch-target text-xs"
               >
-                <Table className="w-4 h-4" />
-                Live Google Sheet
+                <ExternalLink className="w-3.5 h-3.5" />
+                Open Sheet
               </a>
             )}
           </div>

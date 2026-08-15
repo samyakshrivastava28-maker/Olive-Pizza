@@ -79,11 +79,12 @@ function playTone(
 // ── Sound definitions per event ───────────────────────────────────────────────
 
 const SOUNDS: Record<SoundType, (ctx: AudioContext) => void> = {
-  /** 🍕 New Order — upbeat ascending 3-note chime */
+  /** 🍕 New Order — loud commanding 4-note emergency alarm chime */
   new_order: (ctx) => {
-    playTone(523, 0.2, 'sine', 0.4, 0,    ctx); // C5
-    playTone(659, 0.2, 'sine', 0.4, 0.15, ctx); // E5
-    playTone(784, 0.3, 'sine', 0.4, 0.30, ctx); // G5
+    playTone(880,  0.25, 'triangle', 0.8, 0,    ctx); // A5
+    playTone(1174, 0.25, 'sine',     0.8, 0.15, ctx); // D6
+    playTone(880,  0.25, 'triangle', 0.8, 0.30, ctx); // A5
+    playTone(1174, 0.35, 'sine',     0.9, 0.45, ctx); // D6
   },
 
   /** ✅ Accepted — warm positive double-bell */
@@ -192,8 +193,11 @@ export function playNotificationSound(type: SoundType) {
  * Map an order status string to a SoundType
  */
 export function statusToSoundType(status: string): SoundType | null {
+  const s = (status || '').toLowerCase();
+  if (['pending', 'new_order', 'placed', 'order_placed', 'created', 'paid', 'payment_success'].includes(s)) {
+    return 'new_order';
+  }
   const map: Record<string, SoundType> = {
-    pending:          'new_order',
     accepted:         'accepted',
     preparing:        'preparing',
     packed:           'packed',
@@ -201,11 +205,12 @@ export function statusToSoundType(status: string): SoundType | null {
     out_for_delivery: 'out_for_delivery',
     delivered:        'delivered',
     cancelled:        'cancelled',
+    rejected:         'cancelled',
     payment_failed:   'payment_failed',
     failed:           'payment_failed',
     security_alert:   'security',
   };
-  return map[status] || null;
+  return map[s] || null;
 }
 
 // ── Continuous Loop Sequences ──────────────────────────────────────────────────

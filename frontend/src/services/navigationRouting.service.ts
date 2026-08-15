@@ -180,3 +180,40 @@ export function formatDuration(seconds: number): string {
   const m = mins % 60;
   return m > 0 ? `${h}h ${m}m` : `${h}h`;
 }
+
+/** Haversine distance in meters */
+export function haversineDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371000;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+/** Check if current rider location is off the route polyline */
+export function isOffRoute(currentPos: LatLng, routeCoordinates: [number, number][], thresholdMeters = 50): boolean {
+  if (!routeCoordinates || routeCoordinates.length === 0) return false;
+  let minDistance = Infinity;
+  for (const [lng, lat] of routeCoordinates) {
+    const d = haversineDistanceMeters(currentPos.lat, currentPos.lng, lat, lng);
+    if (d < minDistance) minDistance = d;
+  }
+  return minDistance > thresholdMeters;
+}
+
+/** Formats ETA arrival time in Indian Standard Time (IST, Asia/Kolkata) */
+export function formatISTArrivalTime(durationSeconds: number): string {
+  const arrivalDate = new Date(Date.now() + durationSeconds * 1000);
+  const options: Intl.DateTimeFormatOptions = {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+    timeZone: 'Asia/Kolkata',
+  };
+  const timeStr = new Intl.DateTimeFormat('en-IN', options).format(arrivalDate);
+  return `Expected arrival: ${timeStr} IST`;
+}

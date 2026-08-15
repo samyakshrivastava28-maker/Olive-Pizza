@@ -1,7 +1,7 @@
-import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
+﻿import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
 import { motion, AnimatePresence, useAnimation } from 'framer-motion';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 interface AnimationData {
   id: number;
   startX: number;
@@ -35,7 +35,7 @@ const getCartTarget = (): { x: number; y: number } => {
   return { x: typeof window !== 'undefined' ? window.innerWidth / 2 : 200, y: typeof window !== 'undefined' ? window.innerHeight - 40 : 600 };
 };
 
-// ─── Provider ─────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Provider â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export function CartAnimationProvider({ children }: { children: React.ReactNode }) {
   const [queue, setQueue] = useState<AnimationData[]>([]);
   const [activeAnim, setActiveAnim] = useState<AnimationData | null>(null);
@@ -93,7 +93,7 @@ export function CartAnimationProvider({ children }: { children: React.ReactNode 
   );
 }
 
-// ─── Realistic 3D Pizza Box Component ─────────────────────────────────────────
+// â”€â”€â”€ Realistic 3D Pizza Box Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function PremiumFlyingBox({ anim, onComplete }: { anim: AnimationData; onComplete: () => void }) {
   const boxControls = useAnimation();
   const lidControls = useAnimation();
@@ -224,7 +224,7 @@ function PremiumFlyingBox({ anim, onComplete }: { anim: AnimationData; onComplet
 
   return (
     <>
-      {/* ── 3D Realistic Pizza Box Assembly ── */}
+      {/* â”€â”€ 3D Realistic Pizza Box Assembly â”€â”€ */}
       <motion.div
         className="absolute z-[10000] pointer-events-none"
         style={{ width: BOX_SIZE, height: BOX_SIZE }}
@@ -300,10 +300,10 @@ function PremiumFlyingBox({ anim, onComplete }: { anim: AnimationData; onComplet
               padding: 12
             }}>
               <img 
-                src="https://res.cloudinary.com/dxmlvkff1/image/upload/v1782376898/olive-pizza/brand/logo.png" 
+                src="/logo-transparent.png" 
                 alt="Olive Pizza Logo"
                 onError={(e) => {
-                  (e.target as HTMLImageElement).src = "https://res.cloudinary.com/ditkqli2i/image/upload/v1782113833/olive-pizza-logo_nsoh49.webp";
+                  (e.target as HTMLImageElement).src = "/logo-transparent.png";
                 }}
                 style={{ width: 75, height: 75, objectFit: 'contain', zIndex: 2, filter: 'drop-shadow(0 6px 12px rgba(0,0,0,0.5))' }}
               />
@@ -315,7 +315,7 @@ function PremiumFlyingBox({ anim, onComplete }: { anim: AnimationData; onComplet
         </div>
       </motion.div>
 
-      {/* ── Flying Item Image (Flies into box) ── */}
+      {/* â”€â”€ Flying Item Image (Flies into box) â”€â”€ */}
       <motion.img
         src={anim.image}
         alt="Item"
@@ -327,9 +327,10 @@ function PremiumFlyingBox({ anim, onComplete }: { anim: AnimationData; onComplet
   );
 }
 
-// ─── Hook ─────────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Hook â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export const useCartAnimation = () => {
   const context = useContext(CartAnimationContext);
   if (!context) throw new Error('useCartAnimation must be used within CartAnimationProvider');
   return context;
 };
+

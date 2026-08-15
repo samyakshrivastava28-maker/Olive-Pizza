@@ -35,9 +35,13 @@ export const useAuthStore = create<AuthState>()(
       setUser: (user, role) => {
         set({ user, role, isAuthenticated: !!user, isLoading: false });
         if (user && (role === 'owner' || role === 'delivery_partner')) {
-          import('../plugins/AlarmPermission').then(({ AlarmPermission }) => {
-            AlarmPermission.setupPermissions().catch(err => console.warn('[AlarmPermission]', err));
-          }).catch(console.error);
+          import('../lib/platform').then(({ isCapacitorNative }) => {
+            if (isCapacitorNative()) {
+              import('../plugins/AlarmPermission').then(({ AlarmPermission }) => {
+                AlarmPermission.setupPermissions().catch(err => console.warn('[AlarmPermission]', err));
+              }).catch(console.error);
+            }
+          });
         }
       },
       logout: () => {

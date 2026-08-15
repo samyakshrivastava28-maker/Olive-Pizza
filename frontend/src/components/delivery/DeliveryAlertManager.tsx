@@ -7,7 +7,7 @@ import { useAuthStore } from '../../lib/store';
 
 export default function DeliveryAlertManager() {
   const navigate = useNavigate();
-  const { user } = useAuthStore();
+  const { user, role } = useAuthStore();
   const [alarmState, setAlarmState] = useState<DeliveryAlarmState>({
     isAlarming: false,
     needsInteraction: false,
@@ -15,13 +15,15 @@ export default function DeliveryAlertManager() {
   });
 
   useEffect(() => {
-    if (!user?.uid) return;
+    if (!user?.uid || role !== 'delivery_partner') return;
     DeliveryAlarmManager.init(user.uid);
     const unsubscribe = DeliveryAlarmManager.subscribe(setAlarmState);
     return () => {
       unsubscribe();
     };
-  }, [user?.uid]);
+  }, [user?.uid, role]);
+
+  if (!user || role !== 'delivery_partner') return null;
 
   return (
     <AnimatePresence>

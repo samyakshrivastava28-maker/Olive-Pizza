@@ -10,6 +10,7 @@ import {
 } from "firebase/firestore";
 import { logActivity } from "../../lib/logger";
 import { useAuthStore } from "../../lib/store";
+import { getScheduleStatus, getItemExpiryDate, getItemStartDate } from "../../lib/scheduling";
 
 export default function OwnerCoupons() {
   const { user } = useAuthStore();
@@ -45,6 +46,8 @@ export default function OwnerCoupons() {
       await addDoc(collection(db, "coupons"), {
         ...newCoupon,
         code: newCoupon.code.toUpperCase(),
+        expiryDate: newCoupon.endDate || null,
+        validUntil: newCoupon.endDate || null,
         createdAt: new Date().toISOString(),
       });
       await logActivity(
@@ -368,6 +371,20 @@ export default function OwnerCoupons() {
                   {coupon.type.replace("_", " ")}
                 </p>
               </div>
+
+              {(() => {
+                const status = getScheduleStatus(coupon);
+                const badgeColor =
+                  status.color === 'green' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' :
+                  status.color === 'red' ? 'bg-red-500/20 text-red-400 border-red-500/30' :
+                  status.color === 'orange' ? 'bg-orange-500/20 text-orange-400 border-orange-500/30' :
+                  'bg-slate-500/20 text-slate-400 border-slate-500/30';
+                return (
+                  <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border ${badgeColor}`}>
+                    {status.label}
+                  </span>
+                );
+              })()}
             </div>
 
             <div className="text-sm text-slate-300 space-y-1">
@@ -398,11 +415,16 @@ export default function OwnerCoupons() {
               {coupon.minOrderValue > 0 && (
                 <p>Min Order: ₹{coupon.minOrderValue}</p>
               )}
-              {coupon.endDate && (
-                <p className="text-xs mt-2 text-slate-400">
-                  Expires: {new Date(coupon.endDate).toLocaleDateString()}
-                </p>
-              )}
+              {(() => {
+                const expiry = getItemExpiryDate(coupon);
+                if (!expiry) return null;
+                const isPast = expiry < new Date();
+                return (
+                  <p className={`text-xs mt-2 font-medium ${isPast ? 'text-red-400 font-bold' : 'text-slate-400'}`}>
+                    Expires: {expiry.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} {isPast ? '(Expired)' : ''}
+                  </p>
+                );
+              })()}
             </div>
 
             <div className="flex gap-2 mt-auto pt-4 border-t border-slate-100 dark:border-slate-700">

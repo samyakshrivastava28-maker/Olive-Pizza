@@ -1,4 +1,4 @@
-import { Outlet, Link, useNavigate, useLocation } from 'react-router';
+﻿import { Outlet, Link, useNavigate, useLocation } from 'react-router';
 import { useAuthStore, useCartStore, useAppStore } from '../lib/store';
 import { performUpdate } from '../lib/versionManager';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -121,7 +121,7 @@ export default function MainLayout() {
         )}
       </AnimatePresence>
 
-      {/* ─── Premium Floating Glass Navbar ───────────────────────────────────── */}
+      {/* â”€â”€â”€ Premium Floating Glass Navbar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <motion.header
         initial={{ y: -80, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
@@ -148,9 +148,9 @@ export default function MainLayout() {
             {/* Logo */}
             <Link to="/" className="flex items-center gap-2.5 group">
               <img
-                src="https://res.cloudinary.com/ditkqli2i/image/upload/v1782113833/olive-pizza-logo_nsoh49.webp"
+                src="/logo-transparent.png"
                 alt="Olive Pizza Logo"
-                className="h-7 md:h-9 w-auto object-contain"
+                className="h-8 md:h-10 w-auto object-contain bg-transparent transition-transform duration-200 group-hover:scale-105"
               />
               <span className="text-lg md:text-xl font-black tracking-tight hidden sm:block text-white group-hover:text-orange-400 transition-colors duration-200">
                 Olive Pizza
@@ -367,7 +367,7 @@ export default function MainLayout() {
         </Suspense>
       </main>
 
-      {/* ─── Premium Floating Glass Bottom Nav (Mobile) ──────────────────────── */}
+      {/* â”€â”€â”€ Premium Floating Glass Bottom Nav (Mobile) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <nav
         className="md:hidden fixed bottom-3 left-3 right-3 z-[70] rounded-2xl flex items-center justify-between px-2"
         style={{
@@ -434,3 +434,4 @@ export default function MainLayout() {
     </div>
   );
 }
+

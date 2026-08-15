@@ -156,7 +156,25 @@ export const processEmailQueue = async () => {
 
         let parsedAttachments;
         if (email.attachments) {
-          parsedAttachments = typeof email.attachments === 'string' ? JSON.parse(email.attachments) : email.attachments;
+          const rawAtt = typeof email.attachments === 'string' ? JSON.parse(email.attachments) : email.attachments;
+          if (Array.isArray(rawAtt)) {
+            parsedAttachments = rawAtt.map((att: any) => {
+              if (att && att.content) {
+                if (typeof att.content === 'object' && att.content.type === 'Buffer' && Array.isArray(att.content.data)) {
+                  return { ...att, content: Buffer.from(att.content.data) };
+                }
+                if (typeof att.content === 'object' && Array.isArray(att.content.data)) {
+                  return { ...att, content: Buffer.from(att.content.data) };
+                }
+                if (typeof att.content === 'string' && att.encoding === 'base64') {
+                  return { ...att, content: Buffer.from(att.content, 'base64') };
+                }
+              }
+              return att;
+            });
+          } else {
+            parsedAttachments = rawAtt;
+          }
         }
 
         const info = await transporter.sendMail({

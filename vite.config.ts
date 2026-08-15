@@ -18,6 +18,8 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist/client',
+    sourcemap: false,
+    cssCodeSplit: true,
     rollupOptions: {
       output: {
         manualChunks: {

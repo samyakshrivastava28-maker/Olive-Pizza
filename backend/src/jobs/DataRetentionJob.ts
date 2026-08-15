@@ -66,6 +66,28 @@ export class DataRetentionJob {
         console.error('[DataRetentionJob] Firestore cleanup failed:', err);
       }
       
+      // 7. Navigation Telemetry Auto-Expiry Cleanup (5-minute retention after STOPPED / DELIVERED)
+      try {
+        const deletedPoints = await client.query(`
+          DELETE FROM navigation_points 
+          WHERE session_id IN (
+            SELECT id FROM navigation_sessions 
+            WHERE status IN ('STOPPED', 'DELIVERED') 
+            AND expires_at <= NOW()
+          );
+        `);
+        const deletedSessions = await client.query(`
+          DELETE FROM navigation_sessions 
+          WHERE status IN ('STOPPED', 'DELIVERED') 
+          AND expires_at <= NOW();
+        `);
+        if ((deletedPoints.rowCount ?? 0) > 0 || (deletedSessions.rowCount ?? 0) > 0) {
+          console.log(`[DataRetentionJob] Cleaned up ${deletedPoints.rowCount ?? 0} expired navigation points & ${deletedSessions.rowCount ?? 0} expired sessions.`);
+        }
+      } catch (navErr: any) {
+        console.warn('[DataRetentionJob] Navigation telemetry cleanup warning:', navErr.message);
+      }
+
       console.log(`[DataRetentionJob] Cleanup completed successfully.`);
     } catch (err) {
       console.error('[DataRetentionJob] Failed:', err);
@@ -74,10 +96,40 @@ export class DataRetentionJob {
     }
   }
 
+  public static async runNavigationCleanup(): Promise<void> {
+    try {
+      const client = await pgPool.connect();
+      try {
+        await client.query(`
+          DELETE FROM navigation_points 
+          WHERE session_id IN (
+            SELECT id FROM navigation_sessions 
+            WHERE status IN ('STOPPED', 'DELIVERED') 
+            AND expires_at <= NOW()
+          );
+        `);
+        await client.query(`
+          DELETE FROM navigation_sessions 
+          WHERE status IN ('STOPPED', 'DELIVERED') 
+          AND expires_at <= NOW();
+        `);
+      } finally {
+        client.release();
+      }
+    } catch (e: any) {
+      // Quiet fail on minutely background check
+    }
+  }
+
   public static schedule() {
-    // Run daily at 2:00 AM
+    // Run daily at 2:00 AM for full retention scan
     cron.schedule('0 2 * * *', () => {
       DataRetentionJob.run();
+    });
+
+    // Run every minute to enforce 5-minute navigation telemetry expiry
+    cron.schedule('* * * * *', () => {
+      DataRetentionJob.runNavigationCleanup();
     });
   }
 }

@@ -36,17 +36,20 @@ interface NotificationDebuggerState {
   closeOverlay: () => void;
 }
 
-export const useNotificationDebugger = create<NotificationDebuggerState>((set) => ({
+export const useNotificationDebugger = create<NotificationDebuggerState>((set, get) => ({
   isOpen: false,
-  isDebugMode: true, // Auto-enabled for this debug phase.
+  isDebugMode: false, // Disabled by default for production and standard operations
   activeTrace: null,
 
   toggleDebugMode: () => set((state) => ({ isDebugMode: !state.isDebugMode })),
   
-  startTrace: (route, action, orderId) => set({
-    isOpen: true,
-    activeTrace: { route, action, orderId, steps: [{ step: 'Initiated HTTP Request', status: 'started' }] }
-  }),
+  startTrace: (route, action, orderId) => {
+    if (!get().isDebugMode) return;
+    set({
+      isOpen: true,
+      activeTrace: { route, action, orderId, steps: [{ step: 'Initiated HTTP Request', status: 'started' }] }
+    });
+  },
 
   updateTrace: (trace) => set({ activeTrace: trace }),
 

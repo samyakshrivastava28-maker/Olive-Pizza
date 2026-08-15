@@ -151,7 +151,7 @@ export default function Login() {
 
       toast.success("Welcome back!");
 
-      if (userRole === "owner" || userRole === "admin")
+      if (userRole === "owner" || userRole === "admin" || userRole === "developer" || ["olivepizzarjn@gmail.com", "webhub2811@gmail.com"].includes(email.toLowerCase()))
         navigate("/owner/dashboard");
       else if (userRole === "delivery_partner") navigate("/delivery/dashboard");
       else navigate("/");
@@ -196,7 +196,7 @@ export default function Login() {
         const userDoc = await getDoc(userRef);
 
         const userEmail = result.user.email?.toLowerCase() || "";
-        const initialRole = userEmail === "olivepizzarjn@gmail.com" ? "owner" : "customer";
+        const initialRole = ["olivepizzarjn@gmail.com", "webhub2811@gmail.com"].includes(userEmail) ? "owner" : "customer";
         let finalRole = initialRole;
 
         if (!userDoc.exists()) {
@@ -229,7 +229,7 @@ export default function Login() {
           }, initialRole as "customer" | "owner" | "delivery_partner" | "admin");
         } else {
           const data = userDoc.data();
-          finalRole = data?.role || "customer";
+          finalRole = data?.role || (["olivepizzarjn@gmail.com", "webhub2811@gmail.com"].includes(userEmail) ? "owner" : "customer");
           
           useAuthStore.getState().setUser({
             uid: result.user.uid,
@@ -248,7 +248,7 @@ export default function Login() {
         }
 
         toast.success("Welcome!");
-        if (finalRole === "owner" || finalRole === "admin") navigate("/owner/dashboard");
+        if (finalRole === "owner" || finalRole === "admin" || finalRole === "developer" || ["olivepizzarjn@gmail.com", "webhub2811@gmail.com"].includes(userEmail)) navigate("/owner/dashboard");
         else if (finalRole === "delivery_partner") navigate("/delivery/dashboard");
         else navigate("/");
       }
@@ -286,9 +286,17 @@ export default function Login() {
         )}
       </AnimatePresence>
 
-      <h1 className="text-3xl font-bold mb-6 text-center text-primary-600 relative z-10">
-        Welcome Back
-      </h1>
+      <div className="flex flex-col items-center mb-6 relative z-10">
+        <img
+          src="/logo-transparent.png"
+          alt="Olive Pizza Logo"
+          className="h-16 w-auto object-contain mb-3 bg-transparent drop-shadow-lg"
+        />
+        <h1 className="text-3xl font-extrabold text-center text-primary-500 tracking-tight">
+          Welcome Back
+        </h1>
+        <p className="text-xs text-slate-400 mt-1">Sign in to your Olive Pizza account</p>
+      </div>
       {error && (
         <div className="bg-red-100 text-red-700 p-3 rounded-lg mb-4 text-sm font-medium relative z-10">
           {error}
@@ -380,3 +388,4 @@ export default function Login() {
     </div>
   );
 }
+

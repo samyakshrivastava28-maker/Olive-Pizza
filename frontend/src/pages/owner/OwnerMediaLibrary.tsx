@@ -30,6 +30,37 @@ export default function OwnerMediaLibrary() {
       collection(db, "media_library"),
       orderBy("uploadedAt", "desc"),
     );
+
+    const fetchCloudinaryDirect = async () => {
+      try {
+        const token = await getCurrentAuthToken();
+        const res = await fetch('/api/media/ai-images', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (data.success && Array.isArray(data.images)) {
+          const cloudinaryMapped = data.images.map((img: any) => ({
+            id: img.public_id,
+            mediaUrl: img.secure_url,
+            cloudinaryPublicId: img.public_id,
+            mediaType: img.resource_type || 'image',
+            format: img.format || 'jpg',
+            bytes: img.bytes || 0,
+            uploadedAt: img.created_at || new Date().toISOString(),
+            source: 'CLOUDINARY',
+          }));
+
+          setMedia((prev) => {
+            const existingIds = new Set(prev.map((m) => m.cloudinaryPublicId || m.id));
+            const newDirect = cloudinaryMapped.filter((m: any) => !existingIds.has(m.cloudinaryPublicId));
+            return [...prev, ...newDirect];
+          });
+        }
+      } catch (err) {
+        console.warn('Cloudinary direct fetch warning:', err);
+      }
+    };
+
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const mediaData = snapshot.docs.map((doc) => ({
         id: doc.id,
@@ -37,7 +68,12 @@ export default function OwnerMediaLibrary() {
       }));
       setMedia(mediaData);
       setLoading(false);
+      fetchCloudinaryDirect();
+    }, () => {
+      setLoading(false);
+      fetchCloudinaryDirect();
     });
+
     return () => unsubscribe();
   }, []);
 
@@ -96,12 +132,27 @@ export default function OwnerMediaLibrary() {
     }
   };
 
+  const [categoryFilter, setCategoryFilter] = useState("all");
+
   const filteredAndSortedMedia = useMemo(() => {
     let result = media;
 
-    // Filter by type
+    // Filter by category/type
+    if (categoryFilter !== "all") {
+      if (categoryFilter === "videos") {
+        result = result.filter((m) => m.mediaType?.startsWith("video"));
+      } else {
+        result = result.filter(
+          (m) =>
+            m.cloudinaryPublicId?.toLowerCase().includes(categoryFilter) ||
+            m.category?.toLowerCase() === categoryFilter ||
+            m.mediaUrl?.toLowerCase().includes(categoryFilter)
+        );
+      }
+    }
+
     if (filterType !== "all") {
-      result = result.filter((m) => m.mediaType.startsWith(filterType));
+      result = result.filter((m) => m.mediaType?.startsWith(filterType));
     }
 
     // Search
@@ -130,7 +181,7 @@ export default function OwnerMediaLibrary() {
     });
 
     return result;
-  }, [media, searchQuery, filterType, sortBy]);
+  }, [media, searchQuery, filterType, categoryFilter, sortBy]);
 
   const filteredAndSortedAiMedia = useMemo(() => {
     let result = aiImages;
@@ -187,28 +238,53 @@ export default function OwnerMediaLibrary() {
 
       {activeTab === 'general' ? (
         <>
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 custom-scrollbar">
+            {[
+              { id: 'all', label: 'All' },
+              { id: 'product', label: 'Products' },
+              { id: 'food', label: 'Food' },
+              { id: 'offer', label: 'Offers' },
+              { id: 'email', label: 'Email' },
+              { id: 'homepage', label: 'Homepage' },
+              { id: 'videos', label: 'Videos' },
+            ].map((cat) => (
+              <button
+                key={cat.id}
+                type="button"
+                onClick={() => setCategoryFilter(cat.id)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 transition-all ${
+                  categoryFilter === cat.id
+                    ? 'bg-primary-500 text-white shadow-md'
+                    : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white'
+                }`}
+              >
+                {cat.label}
+              </button>
+            ))}
+          </div>
+
           <div className="bg-[#1E293B] dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-white/10 flex flex-col md:flex-row gap-4 items-center">
-        <input
-          type="text"
-          placeholder="Search by Public ID..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="flex-1 p-3 rounded-lg border dark:bg-slate-900 dark:border-slate-700 w-full"
-        />
-        <select
-          value={filterType}
-          onChange={(e) => setFilterType(e.target.value)}
-          className="p-3 rounded-lg border dark:bg-slate-900 dark:border-slate-700 w-full md:w-48"
-        >
-          <option value="all">All Media</option>
-          <option value="image">Images</option>
-          <option value="video">Videos</option>
-        </select>
-        <select
-          value={sortBy}
-          onChange={(e) => setSortBy(e.target.value)}
-          className="p-3 rounded-lg border dark:bg-slate-900 dark:border-slate-700 w-full md:w-48"
-        >
+            <input
+              type="text"
+              placeholder="Search by Public ID..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="flex-1 p-3 rounded-lg border dark:bg-slate-900 dark:border-slate-700 w-full"
+            />
+            <select
+              value={filterType}
+              onChange={(e) => setFilterType(e.target.value)}
+              className="p-3 rounded-lg border dark:bg-slate-900 dark:border-slate-700 w-full md:w-48"
+            >
+              <option value="all">All Types</option>
+              <option value="image">Images</option>
+              <option value="video">Videos</option>
+            </select>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="p-3 rounded-lg border dark:bg-slate-900 dark:border-slate-700 w-full md:w-48"
+            >
           <option value="newest">Newest First</option>
           <option value="oldest">Oldest First</option>
           <option value="largest">Largest File</option>

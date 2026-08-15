@@ -80,8 +80,8 @@ router.get('/build-status', requireAuth, requireRole(['owner', 'admin']), async 
   }
 });
 
-// Get the latest APK Release
-router.get('/latest-release', requireAuth, requireRole(['owner', 'admin']), async (req, res) => {
+// Get the latest APK Release (Publicly readable so app homepage download banner works)
+router.get('/latest-release', async (req, res) => {
   try {
     const response = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/tags/android-latest`, {
       headers: {

@@ -63,7 +63,7 @@ export function CustomerGuard() {
     return <Navigate to="/delivery/dashboard" replace />;
   }
   
-  if (role === 'owner' || role === 'admin') {
+  if (role === 'owner' || role === 'admin' || (role as string) === 'developer') {
     return <Navigate to="/owner/dashboard" replace />;
   }
 
@@ -75,69 +75,87 @@ export function DeliveryGuard() {
   const { isAuthenticated, user, role, isLoading } = useAuthStore();
   const location = useLocation();
 
-  if (isLoading) return <div className="h-screen flex items-center justify-center">Verifying Access...</div>;
-  
-  if (!isAuthenticated || role !== 'delivery_partner') {
-    showNotFoundToast();
-    if (role && role !== 'delivery_partner') {
-      logSecurityEvent({
-        action: 'unauthorized_delivery_access_attempt',
-        route: location.pathname,
-        uid: user?.uid,
-        email: user?.email,
-        role: role
-      });
+  const isUnauthorized = !isAuthenticated || role !== 'delivery_partner';
+
+  React.useEffect(() => {
+    if (!isLoading && isUnauthorized) {
+      showNotFoundToast();
+      if (role && role !== 'delivery_partner') {
+        logSecurityEvent({
+          action: 'unauthorized_delivery_access_attempt',
+          route: location.pathname,
+          uid: user?.uid,
+          email: user?.email,
+          role: role
+        });
+      }
     }
-    return <Navigate to="/" replace />;
-  }
+  }, [isLoading, isUnauthorized, role, location.pathname, user?.uid, user?.email]);
+
+  if (isLoading) return <div className="h-screen flex items-center justify-center">Verifying Access...</div>;
+  if (isUnauthorized) return <Navigate to="/" replace />;
 
   return <Outlet />;
 }
 
-// 4. Owner Guard (Must be owner or admin)
+// 4. Owner Guard (Must be owner, admin, or developer)
 export function OwnerGuard() {
   const { isAuthenticated, user, role, isLoading } = useAuthStore();
   const location = useLocation();
 
-  if (isLoading) return <div className="h-screen flex items-center justify-center">Verifying Access...</div>;
-  
-  if (!isAuthenticated || (role !== 'owner' && role !== 'admin')) {
-    showNotFoundToast();
-    if (role && role !== 'owner' && role !== 'admin') {
-      logSecurityEvent({
-        action: 'unauthorized_owner_access_attempt',
-        route: location.pathname,
-        uid: user?.uid,
-        email: user?.email,
-        role: role
-      });
+  const AUTHORIZED_INTERNAL_EMAILS = ['olivepizzarjn@gmail.com', 'webhub2811@gmail.com'];
+  const emailOk = user?.email && AUTHORIZED_INTERNAL_EMAILS.includes(user.email.toLowerCase());
+  const isAllowed = role === 'owner' || role === 'admin' || (role as string) === 'developer' || emailOk;
+  const isUnauthorized = !isAuthenticated || !isAllowed;
+
+  React.useEffect(() => {
+    if (!isLoading && isUnauthorized) {
+      showNotFoundToast();
+      if (role && !isAllowed) {
+        logSecurityEvent({
+          action: 'unauthorized_owner_access_attempt',
+          route: location.pathname,
+          uid: user?.uid,
+          email: user?.email,
+          role: role
+        });
+      }
     }
-    return <Navigate to="/" replace />;
-  }
+  }, [isLoading, isUnauthorized, role, isAllowed, location.pathname, user?.uid, user?.email]);
+
+  if (isLoading) return <div className="h-screen flex items-center justify-center">Verifying Access...</div>;
+  if (isUnauthorized) return <Navigate to="/" replace />;
 
   return <Outlet />;
 }
 
-// 5. Admin Guard (Optional: Admins)
+// 5. Admin Guard (Optional: Admins / Owners / Developers)
 export function AdminGuard() {
   const { isAuthenticated, user, role, isLoading } = useAuthStore();
   const location = useLocation();
 
-  if (isLoading) return null;
-  
-  if (!isAuthenticated || (role !== 'admin' && role !== 'owner')) {
-    showNotFoundToast();
-    if (role && role !== 'admin' && role !== 'owner') {
-      logSecurityEvent({
-        action: 'unauthorized_admin_access_attempt',
-        route: location.pathname,
-        uid: user?.uid,
-        email: user?.email,
-        role: role
-      });
+  const AUTHORIZED_INTERNAL_EMAILS = ['olivepizzarjn@gmail.com', 'webhub2811@gmail.com'];
+  const emailOk = user?.email && AUTHORIZED_INTERNAL_EMAILS.includes(user.email.toLowerCase());
+  const isAllowed = role === 'admin' || role === 'owner' || (role as string) === 'developer' || emailOk;
+  const isUnauthorized = !isAuthenticated || !isAllowed;
+
+  React.useEffect(() => {
+    if (!isLoading && isUnauthorized) {
+      showNotFoundToast();
+      if (role && !isAllowed) {
+        logSecurityEvent({
+          action: 'unauthorized_admin_access_attempt',
+          route: location.pathname,
+          uid: user?.uid,
+          email: user?.email,
+          role: role
+        });
+      }
     }
-    return <Navigate to="/" replace />;
-  }
+  }, [isLoading, isUnauthorized, role, isAllowed, location.pathname, user?.uid, user?.email]);
+
+  if (isLoading) return null;
+  if (isUnauthorized) return <Navigate to="/" replace />;
 
   return <Outlet />;
 }
@@ -151,8 +169,8 @@ export function DeveloperGuard() {
     return <div className="h-screen flex items-center justify-center text-slate-400 text-sm font-bold bg-dark-950">Verifying developer access...</div>;
   }
 
-  const DEVELOPER_EMAIL = 'webhub2811@gmail.com';
-  const emailOk = user?.email?.toLowerCase() === DEVELOPER_EMAIL;
+  const AUTHORIZED_DEVELOPER_EMAILS = ['webhub2811@gmail.com', 'olivepizzarjn@gmail.com'];
+  const emailOk = user?.email && AUTHORIZED_DEVELOPER_EMAILS.includes(user.email.toLowerCase());
 
   if (!isAuthenticated || !emailOk) {
     if (isAuthenticated && user) {
@@ -162,7 +180,7 @@ export function DeveloperGuard() {
         uid: user?.uid,
         email: user?.email,
       });
-      toast.error('Developer access restricted to webhub2811@gmail.com');
+      toast.error('Developer access restricted to authorized administrator accounts');
     }
     return <Navigate to="/" replace />;
   }

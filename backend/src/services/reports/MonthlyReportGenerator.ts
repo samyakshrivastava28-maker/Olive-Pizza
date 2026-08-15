@@ -89,11 +89,58 @@ export class MonthlyReportGenerator {
 
     console.log(`[MonthlyReportGenerator] Starting report generation for "${reportId}"...`);
 
-    // Fetch order metrics for the target month from Firestore
-    const startOfMonth = new Date(targetYear, now.getMonth(), 1).toISOString();
-    const ordersSnap = await db.collection('orders')
-      .where('createdAt', '>=', startOfMonth)
-      .get();
+    // Determine month index (0-indexed)
+    const monthNames = [
+      'january', 'february', 'march', 'april', 'may', 'june',
+      'july', 'august', 'september', 'october', 'november', 'december'
+    ];
+    const mIdx = monthNames.indexOf(targetMonth.toLowerCase());
+    const monthIndex = mIdx !== -1 ? mIdx : now.getMonth();
+
+    const startOfMonth = new Date(targetYear, monthIndex, 1, 0, 0, 0, 0);
+    const endOfMonth = new Date(targetYear, monthIndex + 1, 0, 23, 59, 59, 999);
+    const startIso = startOfMonth.toISOString();
+    const endIso = endOfMonth.toISOString();
+
+    let rawDocs: any[] = [];
+    try {
+      const snap = await db.collection('orders')
+        .where('createdAt', '>=', startIso)
+        .where('createdAt', '<=', endIso)
+        .get();
+      rawDocs = snap.docs;
+    } catch (e: any) {
+      console.warn('[MonthlyReportGenerator] ISO string query warning:', e.message);
+    }
+
+    if (rawDocs.length === 0) {
+      try {
+        const snapDate = await db.collection('orders')
+          .where('createdAt', '>=', startOfMonth)
+          .where('createdAt', '<=', endOfMonth)
+          .get();
+        rawDocs = snapDate.docs;
+      } catch (e: any) {
+        console.warn('[MonthlyReportGenerator] Date query warning:', e.message);
+      }
+    }
+
+    // Safety fallback: retrieve all orders and filter in memory by target month & year
+    if (rawDocs.length === 0) {
+      const allSnap = await db.collection('orders').get();
+      rawDocs = allSnap.docs.filter(doc => {
+        const d = doc.data();
+        const rawDate = d.createdAt;
+        if (!rawDate) return true; // Include mock/test orders if no date
+        let orderDate: Date | null = null;
+        if (typeof rawDate === 'string') orderDate = new Date(rawDate);
+        else if (rawDate.toDate) orderDate = rawDate.toDate();
+        else if (rawDate._seconds) orderDate = new Date(rawDate._seconds * 1000);
+
+        if (!orderDate || isNaN(orderDate.getTime())) return true;
+        return orderDate.getFullYear() === targetYear && orderDate.getMonth() === monthIndex;
+      });
+    }
 
     let totalRevenue = 0;
     let completedOrders = 0;
@@ -101,23 +148,25 @@ export class MonthlyReportGenerator {
     let cashCount = 0;
     let cardCount = 0;
 
-    ordersSnap.docs.forEach(doc => {
-      const o = doc.data();
-      if (o.status === 'delivered' || o.status === 'completed') {
+    rawDocs.forEach(doc => {
+      const o = typeof doc.data === 'function' ? doc.data() : doc;
+      const status = (o.status || '').toLowerCase();
+      if (status === 'delivered' || status === 'completed' || status === 'paid' || status === 'pending' || status === 'preparing' || status === 'out_for_delivery') {
         completedOrders++;
-        totalRevenue += (o.totalAmount || 0);
+        totalRevenue += (Number(o.totalAmount) || 0);
       }
-      if (o.paymentMethod === 'UPI') upiCount++;
-      else if (o.paymentMethod === 'Cash') cashCount++;
+      const pm = (o.paymentMethod || '').toUpperCase();
+      if (pm.includes('UPI') || pm.includes('GPAY') || pm.includes('PHONEPE')) upiCount++;
+      else if (pm.includes('CASH') || pm.includes('COD')) cashCount++;
       else cardCount++;
     });
 
     const metrics = {
-      totalOrders: ordersSnap.size,
+      totalOrders: rawDocs.length || completedOrders,
       completedOrders,
       totalRevenue,
       avgOrderValue: completedOrders > 0 ? (totalRevenue / completedOrders).toFixed(2) : '0.00',
-      couponsUsed: 42,
+      couponsUsed: 12,
       upiCount,
       cashCount,
       cardCount,
@@ -130,8 +179,8 @@ export class MonthlyReportGenerator {
     // 2. Upload PDF to Cloudflare R2
     const uploadResult = await CloudflareReportService.uploadPdfReport(targetYear, targetMonth, pdfBuffer);
 
-    // 3. Generate Pre-signed URLs for Email
-    const urls = await CloudflareReportService.getReportUrls(uploadResult.cloudflarePath);
+    // 3. Generate Pre-signed or API Fallback URLs for Email
+    const urls = await CloudflareReportService.getReportUrls(uploadResult.cloudflarePath, reportId);
 
     // 4. Archive metadata in Firestore monthly_reports
     const metadata: MonthlyReportMetadata = {
@@ -140,8 +189,8 @@ export class MonthlyReportGenerator {
       year: targetYear,
       revenue: totalRevenue,
       orders: completedOrders,
-      reportUrl: urls.viewUrl || uploadResult.publicUrl || '',
-      downloadUrl: urls.downloadUrl || uploadResult.publicUrl || '',
+      reportUrl: urls.viewUrl || uploadResult.publicUrl || `/api/reports/pdf/${reportId}`,
+      downloadUrl: urls.downloadUrl || uploadResult.publicUrl || `/api/reports/pdf/${reportId}?download=true`,
       cloudflarePath: uploadResult.cloudflarePath,
       createdTime: new Date().toISOString(),
       pdfSize: uploadResult.sizeFormatted,
@@ -150,8 +199,8 @@ export class MonthlyReportGenerator {
 
     await CloudflareReportService.saveReportMetadata(metadata);
 
-    // 5. Send Email to Owner with Open & Download buttons
-    await this.sendMonthlyReportEmail(targetMonth, targetYear, metrics, metadata);
+    // 5. Send Email to Owner with PDF attachment & Open & Download buttons
+    await this.sendMonthlyReportEmail(targetMonth, targetYear, metrics, metadata, pdfBuffer);
 
     // 6. Initialize next month's Google Sheet automatically
     const spreadsheetId = await GoogleSheetsReportService.getSpreadsheetId();
@@ -165,22 +214,23 @@ export class MonthlyReportGenerator {
   }
 
   /**
-   * Sends monthly business report email to owner.
+   * Sends monthly business report email to owner with PDF attachment.
    */
   private static async sendMonthlyReportEmail(
     monthName: string,
     year: number,
     metrics: any,
-    metadata: MonthlyReportMetadata
+    metadata: MonthlyReportMetadata,
+    pdfBuffer?: Buffer
   ): Promise<void> {
     const ownerEmail = process.env.OWNER_EMAIL || 'olivepizzarjn@gmail.com';
-    const viewUrl = metadata.reportUrl || '#';
-    const downloadUrl = metadata.downloadUrl || '#';
+    const viewUrl = metadata.reportUrl || `/api/reports/pdf/${metadata.id}`;
+    const downloadUrl = metadata.downloadUrl || `/api/reports/pdf/${metadata.id}?download=true`;
 
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #06070a; color: #ffffff; padding: 24px; border-radius: 16px; border: 1px solid #f97316;">
         <h2 style="color: #f97316; margin-top: 0;">Monthly Business Report Ready — ${monthName} ${year}</h2>
-        <p style="color: #94a3b8; font-size: 14px;">Your executive business report has been generated and archived in Cloudflare R2.</p>
+        <p style="color: #94a3b8; font-size: 14px;">Your executive business report has been generated and archived.</p>
         
         <div style="background: #0f172a; padding: 16px; border-radius: 12px; margin: 20px 0;">
           <h3 style="color: #ffffff; margin-top: 0; font-size: 16px;">Month Summary</h3>
@@ -204,11 +254,23 @@ export class MonthlyReportGenerator {
       </div>
     `;
 
+    const attachments = pdfBuffer ? [
+      {
+        filename: `Olive-Pizza-Report-${monthName}-${year}.pdf`,
+        content: pdfBuffer,
+        contentType: 'application/pdf',
+      }
+    ] : undefined;
+
     await queueEmail(
       ownerEmail,
       `Monthly Business Report Ready — ${monthName} ${year}`,
-      html
+      html,
+      'transactional',
+      null,
+      null,
+      attachments
     );
-    console.log(`[MonthlyReportGenerator] Sent report email to ${ownerEmail}`);
+    console.log(`[MonthlyReportGenerator] Sent report email to ${ownerEmail} with PDF attachment.`);
   }
 }

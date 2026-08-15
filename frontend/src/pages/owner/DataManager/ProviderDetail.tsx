@@ -5,13 +5,17 @@ import { RefreshCw, AlertTriangle, Database, Cloud, HardDrive, Layers, Mail, Bel
 import { Line } from 'react-chartjs-2';
 import 'chart.js/auto';
 
-const formatBytes = (bytes: number, decimals = 2) => {
-  if (!+bytes) return '0 Bytes';
+const formatBytes = (bytes: number | string | undefined, decimals = 2) => {
+  if (bytes === undefined || bytes === null || bytes === 'Not available from provider') {
+    return 'Not available from provider';
+  }
+  const num = typeof bytes === 'number' ? bytes : parseInt(bytes, 10);
+  if (isNaN(num) || num <= 0) return 'Not available from provider';
   const k = 1024;
   const dm = decimals < 0 ? 0 : decimals;
   const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+  const i = Math.floor(Math.log(num) / Math.log(k));
+  return `${parseFloat((num / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
 };
 
 const getProviderInfo = (providerId: string) => {

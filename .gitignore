@@ -28,6 +28,8 @@ android/local.properties
 *.aab
 *.jks
 backend/logs/
+logs/
+.r2_mock/
 coverage/
 scratch/
 test_fast2sms.ts

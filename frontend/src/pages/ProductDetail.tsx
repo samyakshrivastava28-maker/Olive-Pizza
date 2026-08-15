@@ -91,23 +91,41 @@ export default function ProductDetail() {
             isVegetarian: isCombo ? false : data.isVegetarian,
             isAvailable: data.isActive,
             productIds: data.productIds,
-            variants: isCombo ? [] : data.variants || [
-              { name: "Regular", price: 0 },
-              { name: "Medium", price: 99 },
-              { name: "Large", price: 199 },
-            ],
-            crusts: isCombo ? [] : data.crusts || [
-              { name: "Classic Hand Tossed", price: 0 },
-              { name: "Cheese Burst", price: 99 },
-              { name: "Wheat Thin Crust", price: 49 },
-            ],
-            addons: isCombo ? [] : data.addons || [
-              { name: "Extra Cheese", price: 40 },
-              { name: "Black Olives", price: 30 },
-              { name: "Jalapeños", price: 30 },
-              { name: "Sweet Corn", price: 20 },
-              { name: "Paneer", price: 50 },
-            ],
+            variants: isCombo
+              ? []
+              : (data.variants && data.variants.length > 0)
+              ? data.variants
+              : data.category === 'pizza'
+              ? [
+                  { name: "Regular", price: 0 },
+                  { name: "Medium", price: 99 },
+                  { name: "Large", price: 199 },
+                ]
+              : [],
+            crusts: isCombo
+              ? []
+              : data.category === 'pizza'
+              ? (data.crusts && data.crusts.length > 0)
+                ? data.crusts
+                : [
+                    { name: "Classic Hand Tossed", price: 0 },
+                    { name: "Cheese Burst", price: 99 },
+                    { name: "Wheat Thin Crust", price: 49 },
+                  ]
+              : [],
+            addons: isCombo
+              ? []
+              : (data.addons && data.addons.length > 0)
+              ? data.addons
+              : data.category === 'pizza'
+              ? [
+                  { name: "Extra Cheese", price: 40 },
+                  { name: "Black Olives", price: 30 },
+                  { name: "Jalapeños", price: 30 },
+                  { name: "Sweet Corn", price: 20 },
+                  { name: "Paneer", price: 50 },
+                ]
+              : [],
           };
           setItem(productData);
 

@@ -199,177 +199,240 @@ export default function OwnerDashboard() {
 
   return (
     <>
-      <div className="relative z-10 space-y-6 md:space-y-8 pb-12 pt-6 w-full px-4 md:px-0">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 mb-4">
-        <h1 className="text-2xl md:text-3xl font-black text-white tracking-tight drop-shadow-md">
-          Overview
-        </h1>
-        <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
-          {isNative && (
-            <>
-              <button
-                onClick={async () => {
-                  const { Capacitor } = await import('@capacitor/core');
-                  if (!Capacitor.isNativePlatform()) {
-                    alert('Alarm permissions are native Android 14+ only.');
-                    return;
-                  }
-                  const { AlarmPermission } = await import('../../plugins/AlarmPermission');
-                  await AlarmPermission.setupPermissions().catch(err => alert(`Error: ${err.message}`));
-                  alert('Permission prompt triggered natively');
-                }}
-                className="w-full md:w-auto bg-primary-500 text-white border border-primary-500 hover:bg-primary-600 px-4 py-2.5 rounded-full font-bold text-sm transition-all backdrop-blur-md shadow-lg flex items-center justify-center gap-2 hover:scale-105 active:scale-95"
+      <div className="relative z-10 space-y-6 md:space-y-8 pb-12 pt-4 w-full px-2 sm:px-4 md:px-0">
+        
+        {/* Stitch Obsidian Crust Flagship Header HUD */}
+        <div className="bg-dark-900/90 border border-white/12 rounded-3xl p-5 md:p-6 shadow-2xl backdrop-blur-2xl relative overflow-hidden">
+          {/* Top subtle ambient glow */}
+          <div className="absolute -top-24 -right-24 w-96 h-96 bg-primary-500/10 rounded-full blur-3xl pointer-events-none" />
+          
+          <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 relative z-10">
+            <div>
+              <div className="flex items-center gap-3 mb-2 flex-wrap">
+                <h1 className="text-2xl md:text-4xl font-black text-white tracking-tight flex items-center gap-2">
+                  <span>Kitchen Command</span>
+                  <span className="text-primary-500 font-mono text-lg font-bold">HUD</span>
+                </h1>
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-bold bg-emerald-500/15 border border-emerald-500/30 text-emerald-400">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                  REALTIME FIRESTORE SYNC ACTIVE
+                </span>
+              </div>
+              <p className="text-xs md:text-sm text-slate-400 font-medium">
+                Live store metrics, realtime dispatch telemetry & revenue performance
+              </p>
+            </div>
+
+            {/* Quick Action Launchpad */}
+            <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto">
+              {isNative && (
+                <>
+                  <button
+                    onClick={async () => {
+                      const { Capacitor } = await import('@capacitor/core');
+                      if (!Capacitor.isNativePlatform()) {
+                        alert('Alarm permissions are native Android 14+ only.');
+                        return;
+                      }
+                      const { AlarmPermission } = await import('../../plugins/AlarmPermission');
+                      await AlarmPermission.setupPermissions().catch(err => alert(`Error: ${err.message}`));
+                      alert('Permission prompt triggered natively');
+                    }}
+                    className="bg-primary-500/20 text-primary-300 border border-primary-500/40 hover:bg-primary-500/30 px-3.5 py-2 rounded-2xl font-bold text-xs transition-all backdrop-blur-md flex items-center gap-1.5 min-touch-target"
+                  >
+                    🔔 Alarm System
+                  </button>
+                  <button
+                    onClick={async () => {
+                      try {
+                        const tokenModule = await import('../../lib/firebase');
+                        const token = await tokenModule.getCurrentAuthToken();
+                        const res = await fetch('/api/notifications/send-custom', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                          body: JSON.stringify({
+                            title: '🔔 Alarm Test',
+                            body: 'Testing continuous alarm. Tap Stop Alert to dismiss.',
+                            audience: 'owner',
+                            category: 'alarm_actionable',
+                            priority: 'critical'
+                          }),
+                        });
+                        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                        alert('Alarm test sent!');
+                      } catch (err: any) {
+                        alert(`Alarm test failed: ${err.message}`);
+                      }
+                    }}
+                    className="bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:bg-rose-500/30 px-3.5 py-2 rounded-2xl font-bold text-xs transition-all backdrop-blur-md flex items-center gap-1.5 min-touch-target"
+                  >
+                    🚨 Test Alarm
+                  </button>
+                </>
+              )}
+              <a
+                href="/owner/products"
+                className="bg-amber-500/15 text-amber-300 border border-amber-500/30 hover:bg-amber-500/25 px-3.5 py-2 rounded-2xl font-bold text-xs transition-all backdrop-blur-md flex items-center gap-1.5 min-touch-target"
               >
-                🔔 Enable Alarm System
-              </button>
-              <button
-                onClick={async () => {
-                  try {
-                    const tokenModule = await import('../../lib/firebase');
-                    const token = await tokenModule.getCurrentAuthToken();
-                    const res = await fetch('/api/notifications/send-custom', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                      body: JSON.stringify({
-                        title: '🔔 Alarm Test',
-                        body: 'Testing continuous alarm. Tap Stop Alert to dismiss.',
-                        audience: 'owner',
-                        category: 'alarm_actionable',
-                        priority: 'critical'
-                      }),
-                    });
-                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                    alert('Alarm test sent!');
-                  } catch (err: any) {
-                    alert(`Alarm test failed: ${err.message}`);
-                  }
-                }}
-                className="w-full md:w-auto bg-red-500 text-white border border-red-500 hover:bg-red-600 px-4 py-2.5 rounded-full font-bold text-sm transition-all backdrop-blur-md shadow-lg flex items-center justify-center gap-2 hover:scale-105 active:scale-95"
+                🍕 Add Product
+              </a>
+              <a
+                href="/owner/ads"
+                className="bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-500/25 px-3.5 py-2 rounded-2xl font-bold text-xs transition-all backdrop-blur-md flex items-center gap-1.5 min-touch-target"
               >
-                🚨 Test Alarm System
-              </button>
-            </>
-          )}
-          <a
-            href="/owner/reports"
-            className="w-full md:w-auto bg-white/10 text-white border border-white/20 hover:bg-white/20 px-4 py-2.5 rounded-full font-bold text-sm transition-all backdrop-blur-md shadow-lg flex items-center justify-center gap-2 hover:scale-105 active:scale-95"
-          >
-            📑 Quick View Reports
-          </a>
-          <a
-            href="/owner/data-manager"
-            className="w-full md:w-auto bg-indigo-500/20 text-white border border-indigo-500/30 hover:bg-indigo-500/30 px-4 py-2.5 rounded-full font-bold text-sm transition-all backdrop-blur-md shadow-lg flex items-center justify-center gap-2 hover:scale-105 active:scale-95"
-          >
-            💽 Data Manager
-          </a>
-        </div>
-      </div>
-
-      <ApkBuildStatus />
-
-      {/* 1. Top Section - 6 Premium KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 md:gap-6">
-        <StatCard
-          title="Live Revenue (Today)"
-          value={`₹${liveMetrics.todayRevenue.toFixed(2)}`}
-          icon="💰"
-          isPositive={metrics.revDiff >= 0}
-          trend={`${metrics.revDiff > 0 ? "+" : ""}${metrics.revDiff.toFixed(1)}% vs month`}
-          delay={0.1}
-          colorTheme="orange"
-        />
-        <StatCard
-          title="Live Orders (Today)"
-          value={liveMetrics.todayOrders}
-          icon="🛍️"
-          isPositive={metrics.ordDiff >= 0}
-          trend={`${metrics.ordDiff > 0 ? "+" : ""}${metrics.ordDiff.toFixed(1)}% vs month`}
-          delay={0.15}
-          colorTheme="blue"
-        />
-        <StatCard
-          title="Online Users"
-          value={liveMetrics.partnersOnline + liveMetrics.ownersOnline}
-          icon="👥"
-          isPositive={true}
-          trend="Live Now"
-          delay={0.2}
-          colorTheme="purple"
-        />
-        <StatCard
-          title="Active Deliveries"
-          value={liveMetrics.outForDelivery}
-          icon="🛵"
-          delay={0.25}
-          colorTheme="green"
-        />
-        <StatCard
-          title="Total Products"
-          value={metrics.totalProducts}
-          icon="🍕"
-          delay={0.3}
-          colorTheme="gold"
-        />
-        <StatCard
-          title="Growth Rate"
-          value={`${metrics.revDiff > 0 ? "+" : ""}${metrics.revDiff.toFixed(1)}%`}
-          icon="📈"
-          isPositive={metrics.revDiff >= 0}
-          delay={0.35}
-          colorTheme="red"
-        />
-      </div>
-
-      {/* System Health & Status Panels */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 w-full">
-        <div className="xl:col-span-2">
-          <SystemHealthPanel />
-        </div>
-        <div className="xl:col-span-1">
-          <SystemStatusPanel />
-        </div>
-      </div>
-      
-      <div className="mt-6">
-        <SystemDiagnostics />
-      </div>
-
-      {/* 5. Charts */}
-      <div className="w-full overflow-hidden">
-        <Suspense fallback={<DashboardCardSkeleton />}>
-          <DashboardCharts ordersData={chartOrders} productsData={[]} />
-        </Suspense>
-      </div>
-
-      {/* Business Intelligence & Delivery Performance */}
-      <Suspense fallback={<DashboardCardSkeleton />}>
-        <BusinessIntelligence ordersData={chartOrders} deliveryPartners={deliveryPartners} />
-      </Suspense>
-
-      {/* Live Map */}
-      <div className="w-full h-[400px] md:h-[500px] rounded-3xl overflow-hidden border border-dark-800">
-        <Suspense fallback={<div className="w-full h-full bg-dark-800 animate-pulse" />}>
-          <OwnerLiveMap />
-        </Suspense>
-      </div>
-
-      {/* 6. Live Feed & Control Center */}
-      <div className="flex flex-col xl:flex-row gap-6">
-        <GlassCard className="w-full xl:w-2/3 overflow-x-auto hide-scrollbar">
-          <div className="min-w-[600px] p-6">
-            <h2 className="text-xl font-bold text-white mb-4">Recent Orders</h2>
-            <LiveOrdersTable />
+                ✨ Marketing
+              </a>
+              <a
+                href="/owner/reports"
+                className="bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25 px-3.5 py-2 rounded-2xl font-bold text-xs transition-all backdrop-blur-md flex items-center gap-1.5 min-touch-target"
+              >
+                📑 View Reports
+              </a>
+              <a
+                href="/owner/data-manager"
+                className="bg-purple-500/15 text-purple-300 border border-purple-500/30 hover:bg-purple-500/25 px-3.5 py-2 rounded-2xl font-bold text-xs transition-all backdrop-blur-md flex items-center gap-1.5 min-touch-target"
+              >
+                💽 Data Manager
+              </a>
+            </div>
           </div>
-        </GlassCard>
-        <div className="w-full xl:w-1/3 flex flex-col gap-6">
-          <GlassCard className="p-6">
-            <h2 className="text-xl font-bold text-white mb-4">
-              Live Activity & Notifications
+
+          {/* Live Order Status Telemetry Bar */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6 pt-5 border-t border-white/10">
+            <div className="bg-amber-500/10 border border-amber-500/20 p-3 rounded-2xl flex items-center justify-between">
+              <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">Pending Orders</span>
+              <span className="font-mono text-lg font-black text-white">{liveMetrics.pending}</span>
+            </div>
+            <div className="bg-blue-500/10 border border-blue-500/20 p-3 rounded-2xl flex items-center justify-between">
+              <span className="text-xs font-bold text-blue-400 uppercase tracking-wider">Preparing</span>
+              <span className="font-mono text-lg font-black text-white">{liveMetrics.preparing}</span>
+            </div>
+            <div className="bg-emerald-500/10 border border-emerald-500/20 p-3 rounded-2xl flex items-center justify-between">
+              <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider">Out for Delivery</span>
+              <span className="font-mono text-lg font-black text-white">{liveMetrics.outForDelivery}</span>
+            </div>
+            <div className="bg-purple-500/10 border border-purple-500/20 p-3 rounded-2xl flex items-center justify-between">
+              <span className="text-xs font-bold text-purple-400 uppercase tracking-wider">Completed Today</span>
+              <span className="font-mono text-lg font-black text-white">{liveMetrics.completed}</span>
+            </div>
+          </div>
+        </div>
+
+        <ApkBuildStatus />
+
+        {/* 1. Top Section - 6 KPI Telemetry Cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 md:gap-5">
+          <StatCard
+            title="Live Revenue (Today)"
+            value={`₹${liveMetrics.todayRevenue.toFixed(2)}`}
+            icon="💰"
+            isPositive={metrics.revDiff >= 0}
+            trend={`${metrics.revDiff > 0 ? "+" : ""}${metrics.revDiff.toFixed(1)}% vs month`}
+            delay={0.1}
+            colorTheme="orange"
+          />
+          <StatCard
+            title="Live Orders (Today)"
+            value={liveMetrics.todayOrders}
+            icon="🛍️"
+            isPositive={metrics.ordDiff >= 0}
+            trend={`${metrics.ordDiff > 0 ? "+" : ""}${metrics.ordDiff.toFixed(1)}% vs month`}
+            delay={0.15}
+            colorTheme="blue"
+          />
+          <StatCard
+            title="Online Partners"
+            value={liveMetrics.partnersOnline + liveMetrics.ownersOnline}
+            icon="👥"
+            isPositive={true}
+            trend="Live Now"
+            delay={0.2}
+            colorTheme="purple"
+          />
+          <StatCard
+            title="Active Deliveries"
+            value={liveMetrics.outForDelivery}
+            icon="🛵"
+            delay={0.25}
+            colorTheme="green"
+          />
+          <StatCard
+            title="Total Products"
+            value={metrics.totalProducts}
+            icon="🍕"
+            delay={0.3}
+            colorTheme="gold"
+          />
+          <StatCard
+            title="Growth Rate"
+            value={`${metrics.revDiff > 0 ? "+" : ""}${metrics.revDiff.toFixed(1)}%`}
+            icon="📈"
+            isPositive={metrics.revDiff >= 0}
+            delay={0.35}
+            colorTheme="red"
+          />
+        </div>
+
+        {/* System Health & Status Panels */}
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 w-full">
+          <div className="xl:col-span-2">
+            <SystemHealthPanel />
+          </div>
+          <div className="xl:col-span-1">
+            <SystemStatusPanel />
+          </div>
+        </div>
+        
+        <div className="mt-6">
+          <SystemDiagnostics />
+        </div>
+
+        {/* 5. Realtime Charts */}
+        <div className="w-full overflow-hidden">
+          <Suspense fallback={<DashboardCardSkeleton />}>
+            <DashboardCharts ordersData={chartOrders} productsData={[]} />
+          </Suspense>
+        </div>
+
+        {/* Business Intelligence & Delivery Performance */}
+        <Suspense fallback={<DashboardCardSkeleton />}>
+          <BusinessIntelligence ordersData={chartOrders} deliveryPartners={deliveryPartners} />
+        </Suspense>
+
+        {/* Live Map Header & Container */}
+        <div className="bg-dark-900/90 border border-white/12 rounded-3xl p-4 md:p-6 shadow-2xl backdrop-blur-xl">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full bg-emerald-400 animate-ping" />
+              <h2 className="text-lg md:text-xl font-black text-white tracking-tight">Live Delivery Partner Fleet Map</h2>
+            </div>
+            <span className="text-xs font-mono text-slate-400 bg-dark-950 px-3 py-1 rounded-full border border-white/10">Realtime GPS</span>
+          </div>
+          <div className="w-full h-[350px] md:h-[480px] rounded-2xl overflow-hidden border border-white/10">
+            <Suspense fallback={<div className="w-full h-full bg-dark-800 animate-pulse" />}>
+              <OwnerLiveMap />
+            </Suspense>
+          </div>
+        </div>
+
+        {/* 6. Live Orders Stream & Activity Feed */}
+        <div className="flex flex-col xl:flex-row gap-6">
+          <div className="w-full xl:w-2/3 bg-dark-900/90 border border-white/12 rounded-3xl p-5 md:p-6 shadow-2xl backdrop-blur-xl overflow-x-auto">
+            <div className="min-w-[600px]">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-black text-white">Live Orders Feed</h2>
+                <span className="text-xs font-mono font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-3 py-1 rounded-full">Realtime Stream</span>
+              </div>
+              <LiveOrdersTable />
+            </div>
+          </div>
+          <div className="w-full xl:w-1/3 bg-dark-900/90 border border-white/12 rounded-3xl p-5 md:p-6 shadow-2xl backdrop-blur-xl">
+            <h2 className="text-xl font-black text-white mb-4">
+              Activity & Notifications
             </h2>
             <ActivityFeed />
-          </GlassCard>
+          </div>
         </div>
-      </div>
       </div>
     </>
   );

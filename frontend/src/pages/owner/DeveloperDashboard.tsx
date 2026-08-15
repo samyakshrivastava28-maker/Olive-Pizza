@@ -18,37 +18,91 @@ import {
   Activity, Bell, Mail, Database, Cpu, RefreshCw,
   CheckCircle2, XCircle, AlertTriangle, Clock, Search,
   ShieldCheck, Zap, Terminal, BarChart3, HardDrive, Wifi,
-  ChevronDown, ChevronRight, Copy, Check, Bot, Layout
+  ChevronDown, ChevronRight, Copy, Check, Bot, Layout, ExternalLink
 } from 'lucide-react';
-import { auth } from '../../lib/firebase';
+import { auth, getCurrentAuthToken } from '../../lib/firebase';
 import toast from 'react-hot-toast';
 import AIDiagnosticsConsole from '../../components/developer/AIDiagnosticsConsole';
 
 const BACKEND = import.meta.env.VITE_BACKEND_URL || (import.meta.env.DEV ? 'http://localhost:3000' : 'https://olive-pizza-backend.onrender.com');
+import DataManagerHub from './DataManager/DataManagerHub';
+
+class TabErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean; error?: Error }> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error: Error, info: any) {
+    console.error('[DeveloperDashboard Tab Error]', error, info);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="p-8 rounded-2xl bg-red-500/10 border border-red-500/30 text-center space-y-3">
+          <AlertTriangle className="w-8 h-8 text-red-400 mx-auto" />
+          <h3 className="text-white font-bold">This tab encountered an issue rendering</h3>
+          <p className="text-xs text-red-300 font-mono">{this.state.error?.message || 'Unknown error'}</p>
+          <button
+            onClick={() => this.setState({ hasError: false })}
+            className="px-4 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-semibold"
+          >
+            Retry Tab
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 async function devGet(path: string) {
-  const token = await auth.currentUser?.getIdToken();
-  const headers = { Authorization: `Bearer ${token}` };
   try {
-    const res = await fetch(`/api/devops${path}`, { headers });
+    const token = await getCurrentAuthToken();
+    const headers: Record<string, string> = {};
+    if (token) headers.Authorization = `Bearer ${token}`;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+    const res = await fetch(`/api/devops${path}`, { headers, signal: controller.signal });
+    clearTimeout(timeoutId);
+
     if (res.ok) return res.json();
-  } catch {}
-  const res = await fetch(`${BACKEND}/devops${path}`, { headers });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
+    const errorJson = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+    throw new Error(errorJson.error || errorJson.message || `HTTP ${res.status}`);
+  } catch (err: any) {
+    if (err.name === 'AbortError') {
+      throw new Error('DevOps endpoint timed out (8s)');
+    }
+    throw err;
+  }
 }
 
 async function devPost(path: string, body?: any) {
-  const token = await auth.currentUser?.getIdToken();
-  const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-  const payload = body ? JSON.stringify(body) : undefined;
   try {
-    const res = await fetch(`/api/devops${path}`, { method: 'POST', headers, body: payload });
+    const token = await getCurrentAuthToken();
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const payload = body ? JSON.stringify(body) : undefined;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    const res = await fetch(`/api/devops${path}`, { method: 'POST', headers, body: payload, signal: controller.signal });
+    clearTimeout(timeoutId);
+
     if (res.ok) return res.json();
-  } catch {}
-  const res = await fetch(`${BACKEND}/devops${path}`, { method: 'POST', headers, body: payload });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
+    const errorJson = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+    throw new Error(errorJson.error || errorJson.message || `HTTP ${res.status}`);
+  } catch (err: any) {
+    if (err.name === 'AbortError') {
+      throw new Error('DevOps action timed out');
+    }
+    throw err;
+  }
 }
 
 function StatCard({ icon: Icon, label, value, color = 'text-primary-400', sub }: {
@@ -253,7 +307,15 @@ export default function DeveloperDashboard() {
     finally { setClaimLoading(false); }
   };
 
-  useEffect(() => { fetchHealth(); }, [fetchHealth]);
+  useEffect(() => {
+    fetchHealth();
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      if (user) {
+        fetchHealth();
+      }
+    });
+    return () => unsubscribe();
+  }, [fetchHealth]);
   useEffect(() => {
     if (activeTab === 'audit') fetchAuditLogs();
     if (activeTab === 'databases') fetchDatabases();
@@ -284,6 +346,13 @@ export default function DeveloperDashboard() {
 
   const tabs = [
     { id: 'health', label: 'System Health', icon: Activity },
+    { id: 'databases', label: 'Data Manager', icon: Database },
+    { id: 'ai', label: 'AI Operations', icon: Cpu },
+    { id: 'scheduler', label: 'Crons & Scheduler', icon: Clock },
+    { id: 'errors', label: 'Error Center', icon: AlertTriangle },
+    { id: 'configs', label: 'Platform Configs', icon: HardDrive },
+    { id: 'audit', label: 'Audit Trail', icon: ShieldCheck },
+    { id: 'notif_templates', label: 'Notification Templates', icon: Bell },
     { id: 'sdui', label: 'SDUI Master Controls', icon: Layout },
     { id: 'payment', label: 'Payment Telemetry', icon: ShieldCheck },
     { id: 'email', label: 'Email Controls', icon: Mail },
@@ -293,11 +362,32 @@ export default function DeveloperDashboard() {
     { id: 'security', label: 'Setup', icon: ShieldCheck },
   ] as const;
 
+  const [purgingLogs, setPurgingLogs] = useState(false);
+
+  const handlePurgeJobLogs = async () => {
+    if (!window.confirm("Permanently delete all old pg_cron job_run_details logs & realtime tracking points from PostgreSQL?")) return;
+    const toastId = toast.loading("Purging job_run_details & realtime tracking logs from PostgreSQL...");
+    setPurgingLogs(true);
+    try {
+      const res = await devPost('/purge-job-logs');
+      if (res.success) {
+        toast.success(res.message || "Purge complete!", { id: toastId, duration: 5000 });
+        fetchHealth();
+      } else {
+        throw new Error(res.message || "Purge failed");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Purge failed", { id: toastId });
+    } finally {
+      setPurgingLogs(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 text-white p-4 md:p-6 lg:p-8 max-w-7xl mx-auto">
       {/* Header */}
       <div className="mb-8">
-        <div className="flex items-center gap-3 mb-2">
+        <div className="flex items-center gap-3 mb-2 flex-wrap">
           <div className="p-2 rounded-xl bg-primary-500/10 border border-primary-500/20">
             <Cpu className="w-6 h-6 text-primary-400" />
           </div>
@@ -305,7 +395,16 @@ export default function DeveloperDashboard() {
             <h1 className="text-2xl font-black text-white">Developer Dashboard</h1>
             <p className="text-slate-400 text-sm">Olive Pizza — Production System Monitor</p>
           </div>
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-2 flex-wrap">
+            <button
+              onClick={handlePurgeJobLogs}
+              disabled={purgingLogs}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold bg-red-500/15 border border-red-500/30 text-red-400 hover:bg-red-500/25 transition-all disabled:opacity-50 cursor-pointer min-touch-target"
+              title="Permanently delete old pg_cron job_run_details & realtime tracking logs from PostgreSQL"
+            >
+              <HardDrive className={`w-3.5 h-3.5 ${purgingLogs ? 'animate-spin' : ''}`} />
+              {purgingLogs ? 'Purging...' : 'Purge job_run_details'}
+            </button>
             <button
               onClick={() => setAutoRefresh(a => !a)}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${autoRefresh ? 'bg-green-500/15 border-green-500/30 text-green-400' : 'bg-white/5 border-white/10 text-slate-400 hover:text-white'}`}
@@ -334,39 +433,85 @@ export default function DeveloperDashboard() {
         </div>
       </div>
 
-      <AnimatePresence mode="wait">
-        {/* System Health */}
-        {activeTab === 'health' && (
-          <motion.div key="health" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
-            {healthError && (
-              <div className="mb-4 p-4 bg-red-500/10 border border-red-500/30 rounded-2xl flex items-center gap-3">
-                <XCircle className="w-5 h-5 text-red-400 flex-shrink-0" />
-                <p className="text-red-300 text-sm">{healthError}</p>
-              </div>
-            )}
-            {healthLoading ? (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {[...Array(7)].map((_, i) => <div key={i} className="h-24 bg-white/5 rounded-2xl animate-pulse" />)}
-              </div>
-            ) : health ? (
-              <>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-6">
-                  <StatCard icon={Clock} label="Uptime" value={fmt(health.uptimeSeconds)} color="text-green-400" />
-                  <StatCard icon={Cpu} label="Node" value={health.nodeVersion} color="text-blue-400" />
-                  <StatCard icon={HardDrive} label="RSS Memory" value={mb(health.memoryUsage.rss)} sub={`Heap: ${mb(health.memoryUsage.heapUsed)} / ${mb(health.memoryUsage.heapTotal)}`} color="text-purple-400" />
-                  <StatCard icon={Wifi} label="Active FCM Tokens" value={health.activeFcmTokensCount} color="text-primary-400" sub="registered devices" />
-                  <StatCard icon={Database} label="PG Pool Total" value={health.postgresPool.totalCount} color="text-orange-400" />
-                  <StatCard icon={Activity} label="PG Idle" value={health.postgresPool.idleCount} color="text-teal-400" />
-                  <StatCard icon={Zap} label="PG Waiting" value={health.postgresPool.waitingCount} color={health.postgresPool.waitingCount > 0 ? 'text-red-400' : 'text-slate-400'} />
+      <TabErrorBoundary>
+        <AnimatePresence mode="wait">
+          {/* System Health */}
+          {activeTab === 'health' && (
+            <motion.div key="health" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+              {healthError && (
+                <div className="mb-4 p-4 bg-red-500/10 border border-red-500/30 rounded-2xl flex items-center gap-3">
+                  <XCircle className="w-5 h-5 text-red-400 flex-shrink-0" />
+                  <p className="text-red-300 text-sm">{healthError}</p>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <QueueBreakdown title="Notification Queue" icon={Bell} data={health.notificationQueueStatus} />
-                  <QueueBreakdown title="Email Queue" icon={Mail} data={health.emailQueueStatus} />
+              )}
+              {healthLoading ? (
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {[...Array(7)].map((_, i) => <div key={i} className="h-24 bg-white/5 rounded-2xl animate-pulse" />)}
                 </div>
-              </>
-            ) : null}
-          </motion.div>
-        )}
+              ) : health ? (
+                <>
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-6">
+                    <StatCard icon={Clock} label="Uptime" value={fmt(health?.uptimeSeconds || 0)} color="text-green-400" />
+                    <StatCard icon={Cpu} label="Node" value={health?.nodeVersion || 'v20'} color="text-blue-400" />
+                    <StatCard icon={HardDrive} label="RSS Memory" value={mb(health?.memoryUsage?.rss || 0)} sub={`Heap: ${mb(health?.memoryUsage?.heapUsed || 0)} / ${mb(health?.memoryUsage?.heapTotal || 0)}`} color="text-purple-400" />
+                    <StatCard icon={Wifi} label="Active FCM Tokens" value={health?.activeFcmTokensCount ?? 0} color="text-primary-400" sub="registered devices" />
+                    <StatCard icon={Database} label="PG Pool Total" value={health?.postgresPool?.totalCount ?? 0} color="text-orange-400" />
+                    <StatCard icon={Activity} label="PG Idle" value={health?.postgresPool?.idleCount ?? 0} color="text-teal-400" />
+                    <StatCard icon={Zap} label="PG Waiting" value={health?.postgresPool?.waitingCount ?? 0} color={(health?.postgresPool?.waitingCount || 0) > 0 ? 'text-red-400' : 'text-slate-400'} />
+                  </div>
+
+                  {/* Quick Data Manager Banner */}
+                  <div className="mb-6 p-4 rounded-2xl bg-gradient-to-r from-primary-950/40 via-slate-900 to-slate-900 border border-primary-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <div className="p-3 bg-primary-500/10 rounded-xl border border-primary-500/30 text-primary-400">
+                        <Database className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-white text-sm">Multi-Database & Storage Manager</h3>
+                        <p className="text-xs text-slate-400">Real-time health, capacity planning, and safe orchestration for Firestore, PostgreSQL, R2, Cloudinary, and Pinecone.</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setActiveTab('databases')}
+                        className="px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Database className="w-3.5 h-3.5" />
+                        Open Data Manager
+                      </button>
+                      <a
+                        href="/developer/data-manager"
+                        className="px-3 py-2 bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white rounded-xl text-xs font-semibold border border-white/10 transition-all flex items-center gap-1"
+                        title="Open in dedicated full page"
+                      >
+                        <span>Full Page</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <QueueBreakdown title="Notification Queue" icon={Bell} data={health?.notificationQueueStatus || null} />
+                    <QueueBreakdown title="Email Queue" icon={Mail} data={health?.emailQueueStatus || null} />
+                  </div>
+                </>
+              ) : null}
+            </motion.div>
+          )}
+
+          {/* Data Manager Tab */}
+          {activeTab === 'databases' && (
+            <motion.div key="databases" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+              <React.Suspense fallback={
+                <div className="p-12 text-center text-slate-400 space-y-3">
+                  <div className="w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full animate-spin mx-auto" />
+                  <p className="text-xs">Loading Multi-Database Management Hub...</p>
+                </div>
+              }>
+                <DataManagerHub />
+              </React.Suspense>
+            </motion.div>
+          )}
 
         {/* SDUI Master Controls */}
         {activeTab === 'sdui' && (
@@ -407,7 +552,7 @@ export default function DeveloperDashboard() {
               <div className="flex flex-wrap gap-3">
                 <button
                   onClick={async () => {
-                    const token = await auth.currentUser?.getIdToken();
+                    const token = await getCurrentAuthToken().catch(() => '');
                     await fetch('/api/payment/config', {
                       method: 'PUT',
                       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -421,7 +566,7 @@ export default function DeveloperDashboard() {
                 </button>
                 <button
                   onClick={async () => {
-                    const token = await auth.currentUser?.getIdToken();
+                    const token = await getCurrentAuthToken().catch(() => '');
                     await fetch('/api/payment/config', {
                       method: 'PUT',
                       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -435,7 +580,7 @@ export default function DeveloperDashboard() {
                 </button>
                 <button
                   onClick={async () => {
-                    const token = await auth.currentUser?.getIdToken();
+                    const token = await getCurrentAuthToken().catch(() => '');
                     await fetch('/api/payment/config', {
                       method: 'PUT',
                       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -474,14 +619,9 @@ export default function DeveloperDashboard() {
                 <button
                   onClick={async () => {
                     try {
-                      const token = await auth.currentUser?.getIdToken();
-                      const res = await fetch(`${BACKEND}/data-manager/devops/test-alert`, {
-                        method: 'POST',
-                        headers: { Authorization: `Bearer ${token}` }
-                      });
-                      const data = await res.json();
-                      if (data.success) toast.success(data.message || 'Developer alert sent!');
-                      else toast.error(data.error || 'Failed to send alert');
+                      const res = await devPost('/test-alert');
+                      if (res.success) toast.success(res.message || 'Developer alert sent!');
+                      else toast.error(res.error || 'Failed to send alert');
                     } catch (e: any) {
                       toast.error(e.message);
                     }
@@ -514,17 +654,12 @@ export default function DeveloperDashboard() {
                       const emailId = input?.value;
                       if (!emailId) { toast.error('Please enter a Queue Email ID'); return; }
                       try {
-                        const token = await auth.currentUser?.getIdToken();
-                        const res = await fetch(`${BACKEND}/data-manager/devops/email-retry/${emailId}`, {
-                          method: 'POST',
-                          headers: { Authorization: `Bearer ${token}` }
-                        });
-                        const data = await res.json();
-                        if (data.success) {
-                          toast.success(data.message || 'Email queue item reset!');
+                        const res = await devPost(`/email-retry/${emailId}`);
+                        if (res.success) {
+                          toast.success(res.message || 'Email queue item reset!');
                           fetchHealth();
                         } else {
-                          toast.error(data.error || 'Retry failed');
+                          toast.error(res.error || 'Retry failed');
                         }
                       } catch (e: any) {
                         toast.error(e.message);
@@ -681,12 +816,7 @@ export default function DeveloperDashboard() {
                   <button
                     onClick={async () => {
                       try {
-                        const token = await auth.currentUser?.getIdToken();
-                        const res = await fetch(`${BACKEND}/devops/scheduler/jobs/trigger/${job.id}`, {
-                          method: 'POST',
-                          headers: { Authorization: `Bearer ${token}` }
-                        });
-                        const data = await res.json();
+                        const data = await devPost(`/scheduler/jobs/trigger/${job.id}`);
                         if (data.success) toast.success(data.message || 'Job triggered!');
                         else toast.error(data.error || 'Failed to trigger job');
                       } catch (e: any) { toast.error(e.message); }
@@ -979,6 +1109,7 @@ export default function DeveloperDashboard() {
           </motion.div>
         )}
       </AnimatePresence>
+      </TabErrorBoundary>
     </div>
   );
 }

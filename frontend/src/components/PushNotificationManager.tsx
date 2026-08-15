@@ -1,5 +1,5 @@
-/**
- * Olive Pizza — Enterprise Push Notification Manager (Production v3)
+﻿/**
+ * Olive Pizza â€” Enterprise Push Notification Manager (Production v3)
  *
  * Production Responsibilities:
  * 1. Request notification permission on first login (native Capacitor on Android)
@@ -15,7 +15,7 @@
  * IMPORTANT RULES:
  * - Notification failure NEVER blocks login.
  * - If notifications are unavailable: log and continue, do NOT crash.
- * - Battery optimization prompt is advisory only — never forced.
+ * - Battery optimization prompt is advisory only â€” never forced.
  * - Uses @capacitor/geolocation on native, browser geolocation on web.
  */
 
@@ -36,7 +36,7 @@ import { NOTIFICATION_CHANNELS, NOTIFICATION_ACTION_TYPES } from '../lib/notific
 const API_BASE = '/api';
 const BROADCAST_CHANNEL = 'olive_pizza_notifications';
 
-// ─── Persistent sound state ───────────────────────────────────────────────────
+// â”€â”€â”€ Persistent sound state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 let continuousAudio: HTMLAudioElement | null = null;
 
 function startContinuousAlert(soundName: string) {
@@ -79,7 +79,7 @@ function playNotificationSound(soundName: string) {
   } catch {}
 }
 
-// ─── Battery Optimization Check ───────────────────────────────────────────────
+// â”€â”€â”€ Battery Optimization Check â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function isBatteryOptimized(): Promise<boolean> {
   if (!Capacitor.isNativePlatform()) return false;
   try {
@@ -93,7 +93,7 @@ async function isBatteryOptimized(): Promise<boolean> {
   }
 }
 
-// ─── Component ────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export default function PushNotificationManager() {
   const [showNotifPrompt, setShowNotifPrompt] = useState(false);
   const [showBatteryPrompt, setShowBatteryPrompt] = useState(false);
@@ -111,7 +111,7 @@ export default function PushNotificationManager() {
   const messageUnsubRef = useRef<(() => void) | null>(null);
   const foregroundListenerSetupRef = useRef(false);
 
-  // ─── SW Registration ────────────────────────────────────────────────────────
+  // â”€â”€â”€ SW Registration â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const registerServiceWorker = useCallback(async (): Promise<ServiceWorkerRegistration | null> => {
     if (!('serviceWorker' in navigator)) return null;
     try {
@@ -126,7 +126,7 @@ export default function PushNotificationManager() {
     }
   }, []);
 
-  // ─── Create Android Notification Channels ────────────────────────────────────
+  // â”€â”€â”€ Create Android Notification Channels â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const createNativeChannels = useCallback(async () => {
     if (!Capacitor.isNativePlatform()) return;
     for (const channel of NOTIFICATION_CHANNELS) {
@@ -148,7 +148,7 @@ export default function PushNotificationManager() {
     }
   }, []);
 
-  // ─── Token Registration ──────────────────────────────────────────────────────
+  // â”€â”€â”€ Token Registration â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const registerToken = useCallback(async (uid: string): Promise<void> => {
     try {
       let token = '';
@@ -167,7 +167,7 @@ export default function PushNotificationManager() {
         // Always create channels before registering
         await createNativeChannels();
 
-        // Register with FCM — attach listeners FIRST so registration event is never missed
+        // Register with FCM â€” attach listeners FIRST so registration event is never missed
         token = await new Promise<string>((resolve, reject) => {
           const timeout = setTimeout(() => {
             reject(new Error('FCM token registration timeout (15s)'));
@@ -193,7 +193,7 @@ export default function PushNotificationManager() {
           });
         });
 
-        console.log('[PushManager] ✅ Native FCM token obtained');
+        console.log('[PushManager] âœ… Native FCM token obtained');
 
       } else {
         // WEB PWA FIREBASE REGISTRATION
@@ -241,7 +241,7 @@ export default function PushNotificationManager() {
 
       if (res.ok) {
         setTokenRegistered(true);
-        console.log('[PushManager] ✅ FCM token registered in backend (multi-device safe)');
+        console.log('[PushManager] âœ… FCM token registered in backend (multi-device safe)');
 
         // Forward auth token to Service Worker for web quick actions
         if (!Capacitor.isNativePlatform() && navigator.serviceWorker.controller) {
@@ -260,7 +260,7 @@ export default function PushNotificationManager() {
     }
   }, [registerServiceWorker, createNativeChannels]);
 
-  // ─── Foreground Message Listener ─────────────────────────────────────────────
+  // â”€â”€â”€ Foreground Message Listener â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const setupForegroundListener = useCallback((messaging: Messaging | null) => {
     // Prevent duplicate listeners
     if (foregroundListenerSetupRef.current && Capacitor.isNativePlatform()) return;
@@ -367,6 +367,16 @@ export default function PushNotificationManager() {
 
     const unsub = onMessage(messaging, async (payload) => {
       const { notification, data } = payload;
+
+      const targetRole = data?.targetRole || data?.role;
+      const category = data?.category;
+
+      // Role isolation guard: skip if notification belongs to another role
+      if (targetRole && targetRole !== userRole) return;
+      if ((category === 'alarm_actionable' || category === 'delivery') && userRole !== 'delivery_partner') return;
+      if ((category === 'owner_orders' || category === 'new_order') && userRole !== 'owner' && userRole !== 'admin') return;
+      if (category === 'customer' && userRole !== 'customer') return;
+
       const title = notification?.title || 'Olive Pizza';
       const body = notification?.body || '';
       const url = data?.url || '/';
@@ -392,7 +402,7 @@ export default function PushNotificationManager() {
           const swReg = await navigator.serviceWorker.ready;
           swReg.showNotification(title, {
             body,
-            icon: 'https://res.cloudinary.com/dxmlvkff1/image/upload/v1782376898/olive-pizza/brand/logo.png',
+            icon: '/logo-transparent.png',
             tag: data?.tag || `fg_${Date.now()}`,
             // @ts-ignore
             renotify: true,
@@ -476,13 +486,13 @@ export default function PushNotificationManager() {
                     }}
                     className="flex-1 bg-white/10 hover:bg-white/15 border border-white/10 text-white text-xs font-bold py-2 rounded-lg"
                   >
-                    🔕 Stop Alert
+                    ðŸ”• Stop Alert
                   </button>
                   <button
                     onClick={(e) => { e.stopPropagation(); toast.dismiss(t.id); navigate(url); }}
                     className="flex-1 bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold py-2 rounded-lg"
                   >
-                    📊 Open Order
+                    ðŸ“Š Open Order
                   </button>
                 </div>
               )}
@@ -496,10 +506,10 @@ export default function PushNotificationManager() {
     messageUnsubRef.current = unsub;
   }, [navigate]);
 
-  // ─── Web Permission Request ───────────────────────────────────────────────────
+  // â”€â”€â”€ Web Permission Request â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const requestWebPermission = useCallback(async (uid: string): Promise<void> => {
     try {
-      // Only for web — native is handled inside registerToken
+      // Only for web â€” native is handled inside registerToken
       if (Capacitor.isNativePlatform()) {
         setShowNotifPrompt(false);
         await registerToken(uid);
@@ -528,13 +538,13 @@ export default function PushNotificationManager() {
     }
   }, [registerToken, setupForegroundListener]);
 
-  // ─── SW BroadcastChannel Listener ────────────────────────────────────────────
+  // â”€â”€â”€ SW BroadcastChannel Listener â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     broadcastRef.current = new BroadcastChannel(BROADCAST_CHANNEL);
     broadcastRef.current.onmessage = (event) => {
       const { type, action, orderId, newStatus, sound } = event.data || {};
       if (type === 'ACTION_SUCCESS' || type === 'SYNC_ACTION_SUCCESS') {
-        toast.success(`✅ ${action} → ${newStatus}`, { duration: 3000 });
+        toast.success(`âœ… ${action} â†’ ${newStatus}`, { duration: 3000 });
         window.dispatchEvent(new CustomEvent('olive:order:updated', { detail: { orderId, newStatus } }));
       }
       if (type === 'GPS_UPDATE') {
@@ -546,7 +556,7 @@ export default function PushNotificationManager() {
     return () => broadcastRef.current?.close();
   }, []);
 
-  // ─── Main Init Effect ─────────────────────────────────────────────────────────
+  // â”€â”€â”€ Main Init Effect â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     if (!user) {
       // Clean up on logout
@@ -625,7 +635,7 @@ export default function PushNotificationManager() {
     };
   }, [user, userRole, tokenRegistered, registerToken, setupForegroundListener]);
 
-  // ─── Adaptive Heartbeat ───────────────────────────────────────────────────────
+  // â”€â”€â”€ Adaptive Heartbeat â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     if (!user) return;
     const intervalMs = userRole === 'delivery_partner' ? 30_000 : 5 * 60_000;
@@ -671,7 +681,7 @@ export default function PushNotificationManager() {
     };
   }, [user, userRole]);
 
-  // ─── Offline Recovery ─────────────────────────────────────────────────────────
+  // â”€â”€â”€ Offline Recovery â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     if (!user) return;
     const handleOnline = async () => {
@@ -687,7 +697,7 @@ export default function PushNotificationManager() {
     return () => window.removeEventListener('online', handleOnline);
   }, [user, tokenRegistered, registerToken, createNativeChannels]);
 
-  // ─── Render Prompts ──────────────────────────────────────────────────────────
+  // â”€â”€â”€ Render Prompts â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   return (
     <AnimatePresence>
       {/* Web Notification Permission Prompt */}
@@ -786,10 +796,10 @@ export default function PushNotificationManager() {
                 <BatteryWarning className="w-6 h-6 text-yellow-400" />
               </div>
               <div className="flex-1">
-                <h3 className="text-white font-black text-sm mb-1">⚡ Improve Order Alerts</h3>
+                <h3 className="text-white font-black text-sm mb-1">âš¡ Improve Order Alerts</h3>
                 <p className="text-slate-400 text-xs leading-relaxed mb-4">
                   Battery optimization can delay or block new order notifications. For reliable order alerts,
-                  go to <span className="text-yellow-400 font-bold">Settings → Battery → Olive Pizza → Unrestricted</span>.
+                  go to <span className="text-yellow-400 font-bold">Settings â†’ Battery â†’ Olive Pizza â†’ Unrestricted</span>.
                 </p>
                 <button
                   onClick={() => {
@@ -838,7 +848,7 @@ export default function PushNotificationManager() {
                 <MapPin className="w-6 h-6 text-blue-400" />
               </div>
               <div className="flex-1">
-                <h3 className="text-white font-black text-sm mb-1">📍 Enable Location</h3>
+                <h3 className="text-white font-black text-sm mb-1">ðŸ“ Enable Location</h3>
                 <p className="text-slate-400 text-xs leading-relaxed mb-4">
                   Share your location to receive accurate delivery assignments and let customers track their orders.
                 </p>
@@ -869,7 +879,7 @@ export default function PushNotificationManager() {
   );
 }
 
-// ─── Utilities ────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Utilities â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function getBrowserName(): string {
   const ua = navigator.userAgent;
   if (ua.includes('Chrome')) return 'Chrome';
@@ -878,3 +888,4 @@ function getBrowserName(): string {
   if (ua.includes('Edge')) return 'Edge';
   return 'Unknown';
 }
+

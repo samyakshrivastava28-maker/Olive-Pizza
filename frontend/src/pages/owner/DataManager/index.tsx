@@ -1,20 +1,22 @@
 import React, { useRef } from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Database, Cloud, HardDrive, Mail, Bell, Layers, BarChart2, Server, FileText } from 'lucide-react';
+import { Database, Cloud, HardDrive, Mail, Bell, Layers, BarChart2, Server, FileText, Cpu } from 'lucide-react';
+import DataManagerHub from './DataManagerHub';
 import Overview from './Overview';
 import ProviderDetail from './ProviderDetail';
 
 const navItems = [
-  { id: 'overview', label: 'Overview', icon: BarChart2, path: '', color: '#6B8E23' },
+  { id: 'hub', label: 'Multi-DB Orchestrator', icon: Server, path: '', color: '#6B8E23' },
+  { id: 'analytics', label: 'Storage Analytics', icon: BarChart2, path: 'analytics', color: '#00BCD4' },
   { id: 'firestore', label: 'Firestore', icon: Database, path: 'firestore', color: '#FF7A00' },
   { id: 'supabase', label: 'PostgreSQL', icon: Database, path: 'supabase', color: '#6B8E23' },
   { id: 'cloudinary', label: 'Cloudinary', icon: Cloud, path: 'cloudinary', color: '#FFC107' },
-  { id: 'google-drive', label: 'Google Drive', icon: HardDrive, path: 'google-drive', color: '#4285F4' },
-  { id: 'qdrant', label: 'Pinecone', icon: Layers, path: 'qdrant', color: '#E91E63' },
-  { id: 'email', label: 'Email', icon: Mail, path: 'email', color: '#9C27B0' },
+  { id: 'google-drive', label: 'Cloudflare R2', icon: HardDrive, path: 'google-drive', color: '#4285F4' },
+  { id: 'qdrant', label: 'Pinecone (AI)', icon: Layers, path: 'qdrant', color: '#E91E63' },
+  { id: 'email', label: 'Email Queue', icon: Mail, path: 'email', color: '#9C27B0' },
   { id: 'notifications', label: 'Notifications', icon: Bell, path: 'notifications', color: '#00BCD4' },
-  { id: 'app-storage', label: 'App Storage', icon: Server, path: 'app-storage', color: '#FF5722' },
+  { id: 'app-storage', label: 'App Storage', icon: Cpu, path: 'app-storage', color: '#FF5722' },
   { id: 'logs', label: 'Logs', icon: FileText, path: 'logs', color: '#607D8B' },
 ];
 
@@ -22,12 +24,13 @@ export default function DataManager() {
   const navigate = useNavigate();
   const location = useLocation();
   const scrollRef = useRef<HTMLDivElement>(null);
-  
+
   // Determine active tab from URL
-  const pathParts = location.pathname.split('/');
+  const pathParts = location.pathname.split('/').filter(Boolean);
   const lastPart = pathParts[pathParts.length - 1];
-  const activeId = lastPart === 'data-manager' ? 'overview' : lastPart;
-  const activeItem = navItems.find(n => n.path === activeId || (activeId === 'data-manager' && n.id === 'overview'));
+  const isBase = lastPart === 'data-manager';
+  const activeId = isBase ? 'hub' : lastPart;
+  const activeItem = navItems.find((n) => n.path === activeId || (isBase && n.id === 'hub'));
   const activeColor = activeItem?.color || '#6B8E23';
 
   return (
@@ -59,15 +62,23 @@ export default function DataManager() {
         {/* Header row */}
         <div className="px-6 pt-5 pb-0 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-black tracking-tight"
-              style={{ background: `linear-gradient(135deg, #fff 30%, ${activeColor})`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+            <h1
+              className="text-2xl font-black tracking-tight"
+              style={{
+                background: `linear-gradient(135deg, #fff 30%, ${activeColor})`,
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+              }}
+            >
               Data Manager
             </h1>
-            <p className="text-xs text-gray-500 font-medium mt-0.5">Real-time Cloud Storage Intelligence</p>
+            <p className="text-xs text-gray-400 font-medium mt-0.5">
+              Production Database & Storage Orchestration Engine
+            </p>
           </div>
           <div
-            className="h-2 w-2 rounded-full animate-pulse"
-            style={{ background: activeColor, boxShadow: `0 0 8px ${activeColor}` }}
+            className="h-2.5 w-2.5 rounded-full animate-pulse"
+            style={{ background: activeColor, boxShadow: `0 0 10px ${activeColor}` }}
           />
         </div>
 
@@ -84,12 +95,13 @@ export default function DataManager() {
         >
           <style>{`.dm-scroll::-webkit-scrollbar { display: none; }`}</style>
           {navItems.map((item) => {
-            const isActive = item.id === activeId || (activeId === 'data-manager' && item.id === 'overview');
+            const isActive =
+              item.id === activeId || (isBase && item.id === 'hub');
             return (
               <button
                 key={item.id}
                 onClick={() => navigate(item.path || '.')}
-                className="relative flex-shrink-0 flex items-center gap-2 px-4 py-3 text-sm font-semibold transition-all duration-200 whitespace-nowrap"
+                className="relative flex-shrink-0 flex items-center gap-2 px-4 py-3 text-xs sm:text-sm font-semibold transition-all duration-200 whitespace-nowrap"
                 style={{
                   color: isActive ? item.color : 'rgba(255,255,255,0.45)',
                   scrollSnapAlign: 'start',
@@ -116,7 +128,8 @@ export default function DataManager() {
       <div className="flex-1 overflow-y-auto relative z-10 p-4 md:p-8">
         <AnimatePresence mode="wait">
           <Routes location={location} key={location.pathname}>
-            <Route index element={<Overview />} />
+            <Route index element={<DataManagerHub />} />
+            <Route path="analytics" element={<Overview />} />
             <Route path=":provider" element={<ProviderDetail />} />
           </Routes>
         </AnimatePresence>

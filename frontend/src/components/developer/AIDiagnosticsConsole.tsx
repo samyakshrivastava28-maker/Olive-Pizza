@@ -5,20 +5,22 @@ import {
   Search, Terminal, Database, Cpu, Zap, Shield, ChevronDown, ChevronRight,
   Play, DollarSign, Layers, Check, Copy
 } from 'lucide-react';
-import { auth } from '../../lib/firebase';
+import { getCurrentAuthToken } from '../../lib/firebase';
 import toast from 'react-hot-toast';
 
-const BACKEND = import.meta.env.VITE_BACKEND_URL || (import.meta.env.DEV ? 'http://localhost:3000' : 'https://olive-pizza-backend.onrender.com');
-
 async function devFetch(path: string, options: any = {}) {
-  const token = await auth.currentUser?.getIdToken();
-  const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...(options.headers || {}) };
-  try {
-    const res = await fetch(`/api/devops${path}`, { ...options, headers });
-    if (res.ok) return res.json();
-  } catch {}
-  const res = await fetch(`${BACKEND}/devops${path}`, { ...options, headers });
-  if (!res.ok) throw new Error(await res.text());
+  const token = await getCurrentAuthToken().catch(() => '');
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options.headers || {})
+  };
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const res = await fetch(`/api/devops${path}`, { ...options, headers });
+  if (!res.ok) {
+    const errText = await res.text().catch(() => `HTTP ${res.status}`);
+    throw new Error(errText);
+  }
   return res.json();
 }
 

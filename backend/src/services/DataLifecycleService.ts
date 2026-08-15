@@ -7,82 +7,243 @@ export class DataLifecycleService {
   }
 
   private initCronJobs() {
-    // Run every minute for highly time-sensitive data
+    // Run minutely for highly time-sensitive realtime tracking cleanup & job_run_details pruning
     cron.schedule('* * * * *', () => {
       this.runMinutelyCleanup();
     });
 
-    // Run every hour
+    // Run hourly for temporary queue cleanup
     cron.schedule('0 * * * *', () => {
       this.runHourlyCleanup();
     });
 
-    // Run every night at 3 AM
+    // Run every night at 3 AM for aggressive history & pg_cron pruning
     cron.schedule('0 3 * * *', () => {
       this.runNightlyCleanup();
     });
   }
 
   /**
-   * Cleans up GPS data and navigation data strictly every minute
+   * Cleans up GPS data, realtime tracking, and pg_cron job_run_details strictly every minute
    */
   public async runMinutelyCleanup() {
-    const client = await pgPool.connect();
+    let client: any = null;
     try {
-      // Delete SQL live navigation data for orders that were updated/finished > 5 mins ago
+      client = await pgPool.connect();
+      // 1. Delete SQL live navigation data for active deliveries updated > 5 mins ago or completed orders > 5 mins ago
       await client.query(`
         DELETE FROM active_deliveries 
-        WHERE order_id::text IN (
-          SELECT order_id::text as id FROM background_tasks WHERE status = 'completed' AND finished_at < NOW() - INTERVAL '5 minutes'
-        ) OR updated_at < NOW() - INTERVAL '5 minutes'
-      `);
-    } catch (error) {
-      console.error('[DataLifecycle] Error during minutely cleanup:', error);
+        WHERE last_updated < NOW() - INTERVAL '5 minutes'
+           OR order_id::text IN (
+             SELECT id::text FROM orders WHERE status IN ('delivered', 'completed', 'cancelled') AND updated_at < NOW() - INTERVAL '5 minutes'
+           )
+      `).catch(() => {});
+
+      // 2. Delete stale delivery locations older than 15 minutes or completed orders > 5 mins ago
+      await client.query(`
+        DELETE FROM delivery_locations 
+        WHERE updated_at < NOW() - INTERVAL '15 minutes'
+           OR active_order_id::text IN (
+             SELECT id::text FROM orders WHERE status IN ('delivered', 'completed', 'cancelled') AND updated_at < NOW() - INTERVAL '5 minutes'
+           )
+      `).catch(() => {});
+
+      // 3. Permanently delete GPS location history points for completed deliveries > 5 mins ago
+      await client.query(`
+        DELETE FROM location_history 
+        WHERE timestamp < NOW() - INTERVAL '5 minutes'
+           OR order_id::text IN (
+             SELECT id::text FROM orders WHERE status IN ('delivered', 'completed', 'cancelled') AND updated_at < NOW() - INTERVAL '5 minutes'
+           )
+      `).catch(() => {});
+
+      // 4. Prune pg_cron job_run_details older than 12 hours to prevent runaway disk usage
+      await client.query(`
+        DELETE FROM cron.job_run_details 
+        WHERE start_time < NOW() - INTERVAL '12 hours'
+      `).catch(() => {});
+
+      await client.query(`
+        DELETE FROM job_run_details 
+        WHERE start_time < NOW() - INTERVAL '12 hours'
+      `).catch(() => {});
+
+    } catch (error: any) {
+      console.warn('[DataLifecycle] Warning during minutely cleanup:', error.message);
     } finally {
-      client.release();
+      if (client) client.release();
     }
   }
 
   /**
-   * Cleans up temporary state
+   * Schedules permanent deletion of realtime tracking data exactly 5 minutes after successful delivery
+   */
+  public schedulePostDeliveryCleanup(orderId: string, delayMs: number = 5 * 60 * 1000) {
+    console.log(`[DataLifecycle] ⏰ Scheduled 5-minute delayed tracking purge for order "${orderId}"`);
+    setTimeout(async () => {
+      await this.deleteOrderTrackingDataPermanently(orderId);
+    }, delayMs);
+  }
+
+  /**
+   * Permanently deletes all realtime tracking data for a specific order from PostgreSQL and Firestore
+   */
+  public async deleteOrderTrackingDataPermanently(orderId: string): Promise<boolean> {
+    if (!orderId) return false;
+    console.log(`[DataLifecycle] 🗑️ Executing 5-min post-delivery tracking purge for order "${orderId}"...`);
+    
+    // 1. PostgreSQL Cleanup
+    let client: any = null;
+    try {
+      client = await pgPool.connect();
+      await client.query(`DELETE FROM active_deliveries WHERE order_id::text = $1`, [orderId]).catch(() => {});
+      await client.query(`DELETE FROM delivery_locations WHERE active_order_id::text = $1`, [orderId]).catch(() => {});
+      await client.query(`DELETE FROM location_history WHERE order_id::text = $1`, [orderId]).catch(() => {});
+    } catch (err: any) {
+      console.warn(`[DataLifecycle] Postgres tracking purge notice for "${orderId}":`, err.message);
+    } finally {
+      if (client) client.release();
+    }
+
+    // 2. Firestore Cleanup
+    try {
+      const { adminDb } = await import('../config/firebase.js');
+      await adminDb.collection('active_deliveries').doc(orderId).delete().catch(() => {});
+      await adminDb.collection('delivery_locations').doc(orderId).delete().catch(() => {});
+      console.log(`[DataLifecycle] ✅ Permanently deleted all realtime tracking data for order "${orderId}".`);
+      return true;
+    } catch (err: any) {
+      console.warn(`[DataLifecycle] Firestore tracking purge notice for "${orderId}":`, err.message);
+      return false;
+    }
+  }
+
+  /**
+   * Cleans up temporary state & old tracking points
    */
   public async runHourlyCleanup() {
-    const client = await pgPool.connect();
+    let client: any = null;
     try {
-      // 1. Clear old heartbeats (older than 24 hours)
+      client = await pgPool.connect();
+      // 1. Clear old heartbeats (older than 12 hours)
       await client.query(`
-        DELETE FROM device_heartbeats WHERE last_seen < NOW() - INTERVAL '24 hours'
-      `);
+        DELETE FROM device_heartbeats WHERE last_seen < NOW() - INTERVAL '12 hours'
+      `).catch(() => {});
       
       // 2. Clear failed queue items older than 24 hours
       await client.query(`
-        DELETE FROM notification_queue WHERE status = 'failed' AND updated_at < NOW() - INTERVAL '24 hours'
-      `);
+        DELETE FROM notification_queue WHERE status IN ('sent', 'failed') AND created_at < NOW() - INTERVAL '24 hours'
+      `).catch(() => {});
+
+      // 3. Delete old location history points older than 24 hours
+      await client.query(`
+        DELETE FROM location_history WHERE timestamp < NOW() - INTERVAL '24 hours'
+      `).catch(() => {});
       
-      console.log('[DataLifecycle] Hourly cleanup completed.');
-    } catch (error) {
-      console.error('[DataLifecycle] Error during hourly cleanup:', error);
+    } catch (error: any) {
+      console.warn('[DataLifecycle] Warning during hourly cleanup:', error.message);
     } finally {
-      client.release();
+      if (client) client.release();
     }
   }
 
   /**
-   * Aggressively prunes history to keep storage < 500MB
+   * Aggressively prunes history & executes pg_cron cleanup to keep storage compact
    */
   public async runNightlyCleanup() {
-    const client = await pgPool.connect();
+    let client: any = null;
     try {
-      // Keep only 1 week's worth of notifications
+      client = await pgPool.connect();
+      // 1. Keep only 7 days worth of notification history
       await client.query(`
         DELETE FROM notification_history WHERE created_at < CURRENT_DATE - INTERVAL '7 days'
-      `);
+      `).catch(() => {});
+
+      // 2. Delete sent email queue logs older than 3 days
+      await client.query(`
+        DELETE FROM email_queue WHERE status = 'sent' AND created_at < CURRENT_DATE - INTERVAL '3 days'
+      `).catch(() => {});
+
+      // 3. Aggressively purge pg_cron job_run_details older than 6 hours
+      await client.query(`
+        DELETE FROM cron.job_run_details WHERE start_time < NOW() - INTERVAL '6 hours'
+      `).catch(() => {});
+
+      await client.query(`
+        DELETE FROM job_run_details WHERE start_time < NOW() - INTERVAL '6 hours'
+      `).catch(() => {});
+
+      // 4. Delete old analytics older than 30 days
+      await client.query(`
+        DELETE FROM website_analytics WHERE timestamp < CURRENT_DATE - INTERVAL '30 days'
+      `).catch(() => {});
       
       console.log('[DataLifecycle] Nightly history pruning completed.');
-    } catch (error) {
-      console.error('[DataLifecycle] Error during nightly cleanup:', error);
+    } catch (error: any) {
+      console.warn('[DataLifecycle] Warning during nightly cleanup:', error.message);
     } finally {
-      client.release();
+      if (client) client.release();
+    }
+  }
+
+  /**
+   * Manual Purge API: Permanently deletes all old pg_cron job_run_details & realtime tracking logs
+   */
+  public async purgePostgresLogsAndReclaimSpace(): Promise<{
+    success: boolean;
+    cronJobLogsDeleted: number;
+    realtimeTrackingDeleted: number;
+    sentEmailsDeleted: number;
+    notificationsDeleted: number;
+    message: string;
+  }> {
+    let client: any = null;
+    let cronJobLogsDeleted = 0;
+    let realtimeTrackingDeleted = 0;
+    let sentEmailsDeleted = 0;
+    let notificationsDeleted = 0;
+
+    try {
+      client = await pgPool.connect();
+      // 1. Delete pg_cron job_run_details
+      const resCron1 = await client.query(`DELETE FROM cron.job_run_details WHERE start_time < NOW() - INTERVAL '1 hour'`).catch(() => ({ rowCount: 0 }));
+      const resCron2 = await client.query(`DELETE FROM job_run_details WHERE start_time < NOW() - INTERVAL '1 hour'`).catch(() => ({ rowCount: 0 }));
+      cronJobLogsDeleted = (resCron1.rowCount || 0) + (resCron2.rowCount || 0);
+
+      // 2. Delete realtime tracking logs
+      const resDeliv = await client.query(`DELETE FROM active_deliveries WHERE last_updated < NOW() - INTERVAL '5 minutes'`).catch(() => ({ rowCount: 0 }));
+      const resLoc = await client.query(`DELETE FROM delivery_locations WHERE updated_at < NOW() - INTERVAL '15 minutes'`).catch(() => ({ rowCount: 0 }));
+      const resHist = await client.query(`DELETE FROM location_history WHERE timestamp < NOW() - INTERVAL '12 hours'`).catch(() => ({ rowCount: 0 }));
+      realtimeTrackingDeleted = (resDeliv.rowCount || 0) + (resLoc.rowCount || 0) + (resHist.rowCount || 0);
+
+      // 3. Delete sent email queue records
+      const resEmail = await client.query(`DELETE FROM email_queue WHERE status = 'sent' AND created_at < NOW() - INTERVAL '1 day'`).catch(() => ({ rowCount: 0 }));
+      sentEmailsDeleted = resEmail.rowCount || 0;
+
+      // 4. Delete old notifications
+      const resNotif = await client.query(`DELETE FROM notification_queue WHERE status = 'sent' AND created_at < NOW() - INTERVAL '1 day'`).catch(() => ({ rowCount: 0 }));
+      notificationsDeleted = resNotif.rowCount || 0;
+
+      return {
+        success: true,
+        cronJobLogsDeleted,
+        realtimeTrackingDeleted,
+        sentEmailsDeleted,
+        notificationsDeleted,
+        message: `Successfully purged ${cronJobLogsDeleted} job_run_details logs, ${realtimeTrackingDeleted} realtime tracking logs, ${sentEmailsDeleted} sent emails, and ${notificationsDeleted} notification records from PostgreSQL.`
+      };
+    } catch (err: any) {
+      console.error('[DataLifecycle] Manual purge error:', err.message);
+      return {
+        success: false,
+        cronJobLogsDeleted: 0,
+        realtimeTrackingDeleted: 0,
+        sentEmailsDeleted: 0,
+        notificationsDeleted: 0,
+        message: `Purge failed: ${err.message}`
+      };
+    } finally {
+      if (client) client.release();
     }
   }
 }

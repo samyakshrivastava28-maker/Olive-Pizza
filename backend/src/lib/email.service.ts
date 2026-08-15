@@ -6,7 +6,7 @@ dotenv.config();
 class EmailService {
   private transporter: nodemailer.Transporter;
   private readonly brandColor = '#658c3a';
-  private readonly logoUrl = 'https://res.cloudinary.com/ditkqli2i/image/upload/v1782113833/olive-pizza-logo_nsoh49.webp';
+  private readonly logoUrl = 'https://res.cloudinary.com/dxmlvkff1/image/upload/v1782376898/olive-pizza/brand/logo.png';
 
   constructor() {
     this.transporter = nodemailer.createTransport({

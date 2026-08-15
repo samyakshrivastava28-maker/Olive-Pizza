@@ -97,16 +97,18 @@ export class PineconeSyncWorker {
     }
   }
 
+  private backoffUntil: number = 0;
+
   private async processQueue() {
     if (this.isProcessing) return;
+    if (Date.now() < this.backoffUntil) return;
     this.isProcessing = true;
 
     try {
       const now = Date.now();
       const snapshot = await adminDb.collection('_pinecone_sync_queue_')
         .where('status', '==', 'pending')
-        .where('nextRetryAt', '<=', now)
-        .limit(10) // Process in small batches
+        .limit(25)
         .get();
 
       if (snapshot.empty) {
@@ -114,12 +116,22 @@ export class PineconeSyncWorker {
         return;
       }
 
-      for (const doc of snapshot.docs) {
+      const eligibleDocs = snapshot.docs.filter((doc) => {
+        const job = doc.data() as SyncJob;
+        return !job.nextRetryAt || job.nextRetryAt <= now;
+      }).slice(0, 10);
+
+      for (const doc of eligibleDocs) {
         const job = doc.data() as SyncJob;
         await this.processJob(doc.id, job);
       }
     } catch (err: any) {
-      console.error('[PineconeSyncWorker] Error processing queue:', err.message);
+      if (err.message?.includes('RESOURCE_EXHAUSTED') || err.message?.includes('Quota exceeded')) {
+        this.backoffUntil = Date.now() + 120000; // 2-min backoff
+        console.warn('[PineconeSyncWorker] Firestore read quota reached. Backing off sync worker for 2 minutes.');
+      } else {
+        console.error('[PineconeSyncWorker] Error processing queue:', err.message);
+      }
     } finally {
       this.isProcessing = false;
     }

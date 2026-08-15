@@ -12,7 +12,7 @@ const ENDPOINTS_TO_TEST = [
 async function makeRequest(endpoint) {
   return new Promise((resolve, reject) => {
     const options = {
-      hostname: 'localhost',
+      hostname: '127.0.0.1',
       port: 3000,
       path: endpoint.path,
       method: endpoint.method || 'GET',

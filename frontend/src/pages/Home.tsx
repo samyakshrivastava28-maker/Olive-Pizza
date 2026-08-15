@@ -40,8 +40,9 @@ import PreviouslyOrdered from "../components/home/PreviouslyOrdered";
 import FeaturedShowcase from "../components/home/FeaturedShowcase";
 import AppDownloadSection from "../components/home/AppDownloadSection";
 import FlagshipFooter from "../components/home/FlagshipFooter";
-import HomepageRenderer from "../components/sdui/HomepageRenderer";
-import { useSDUIStore } from "../stores/sduiStore";
+import PageRenderer from "../components/home/PageRenderer";
+import { PageSchema } from "../types/PageSchema";
+
 
 // ─── Premium Skeleton ─────────────────────────────────────────────────────────
 function SectionSkeleton({ rows = 3 }: { rows?: number }) {
@@ -138,8 +139,18 @@ export default function Home() {
   const navigate = useNavigate();
 
 
+  const [pageSchema, setPageSchema] = useState<PageSchema | null>(null);
 
-  // ─── Data State ───────────────────────────────────────────────────────────
+  useEffect(() => {
+    fetch('/api/homepage/live')
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && data.config) {
+          setPageSchema(data.config);
+        }
+      })
+      .catch(console.error);
+  }, []);  // ─── Data State ───────────────────────────────────────────────────────────
   const {
     ads,
     coupons,
@@ -255,8 +266,14 @@ export default function Home() {
             }}
           />
 
-          {/* Server-Driven Dynamic Homepage Layout */}
-          <HomepageRenderer />
+          {/* New Home Page Manager Dynamic Layout */}
+          {pageSchema ? (
+            <PageRenderer schema={pageSchema} />
+          ) : (
+            <div className="w-full flex flex-col gap-8 py-8 relative z-10 min-h-[600px] items-center justify-center">
+              <div className="w-12 h-12 border-4 border-primary-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          )}
         </main>
       </PageTransition>
     </>

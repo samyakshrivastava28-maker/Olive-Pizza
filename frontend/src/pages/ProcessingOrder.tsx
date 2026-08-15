@@ -110,10 +110,10 @@ export default function ProcessingOrder() {
         setStage('success');
         clearCart();
         
-        // Auto redirect home to show floating tracking widget
+        // Navigate to 3D Animated Order Success Screen
         setTimeout(() => {
-          navigate('/', { replace: true });
-        }, 4000);
+          navigate(`/order-success/${data.orderId}`, { replace: true });
+        }, 1200);
 
       } catch (err: any) {
         toast.error(err.message);

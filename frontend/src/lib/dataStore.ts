@@ -3,6 +3,7 @@ import { persist, createJSONStorage, StateStorage } from 'zustand/middleware';
 import { get, set, del } from 'idb-keyval';
 import { db } from './firebase';
 import { collection, onSnapshot, query, where, doc } from 'firebase/firestore';
+import { isItemActiveAndValid } from './scheduling';
 
 interface DataState {
   products: any[];
@@ -78,6 +79,15 @@ export const useDataStore = create<DataState>()(
           set((state) => ({ storeStatus: { ...state.storeStatus, isWithinBusinessHours: isWithinHours } }));
         });
 
+        // Filter any cached items from IDB to purge expired items immediately
+        const state = get();
+        set({
+          ads: (state.ads || []).filter(isItemActiveAndValid),
+          coupons: (state.coupons || []).filter(isItemActiveAndValid),
+          combos: (state.combos || []).filter(isItemActiveAndValid),
+          specialCategories: (state.specialCategories || []).filter(isItemActiveAndValid),
+        });
+
         const retryTimers: Record<string, ReturnType<typeof setTimeout>> = {};
         const backoffMap: Record<string, number> = {};
 
@@ -141,7 +151,8 @@ export const useDataStore = create<DataState>()(
           const unsubCombos = onSnapshot(
             query(collection(db, 'combos'), where('isActive', '==', true)),
             (snap) => {
-              const combos = snap.docs.map((doc) => ({ id: doc.id, ...doc.data(), isCombo: true }));
+              const rawCombos = snap.docs.map((doc) => ({ id: doc.id, ...doc.data(), isCombo: true }));
+              const combos = rawCombos.filter(isItemActiveAndValid);
               combos.sort((a: any, b: any) => (b.createdAt || 0) - (a.createdAt || 0));
               set({ combos });
               backoffMap['combos'] = 1000;
@@ -156,7 +167,8 @@ export const useDataStore = create<DataState>()(
           const unsubAds = onSnapshot(
             query(collection(db, 'ads'), where('isActive', '==', true)),
             (snap) => {
-              const ads = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+              const rawAds = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+              const ads = rawAds.filter(isItemActiveAndValid);
               ads.sort((a: any, b: any) => (b.createdAt || 0) - (a.createdAt || 0));
               set({ ads });
               backoffMap['ads'] = 1000;
@@ -171,7 +183,8 @@ export const useDataStore = create<DataState>()(
           const unsubSpecial = onSnapshot(
             query(collection(db, 'special_categories'), where('isActive', '==', true)),
             (snap) => {
-              const categories = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+              const rawCategories = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+              const categories = rawCategories.filter(isItemActiveAndValid);
               categories.sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
               set({ specialCategories: categories });
               backoffMap['special'] = 1000;
@@ -186,7 +199,8 @@ export const useDataStore = create<DataState>()(
           const unsubCoupons = onSnapshot(
             query(collection(db, 'coupons'), where('isActive', '==', true)),
             (snap) => {
-              const coupons = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+              const rawCoupons = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+              const coupons = rawCoupons.filter(isItemActiveAndValid);
               set({ coupons });
               backoffMap['coupons'] = 1000;
             },

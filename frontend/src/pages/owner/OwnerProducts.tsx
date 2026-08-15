@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Sparkles, Send } from "lucide-react";
+import { Sparkles, Send, Clipboard } from "lucide-react";
 import { db } from "../../lib/firebase";
 import {
   collection,
@@ -20,9 +20,13 @@ import { getCurrentAuthToken } from "../../lib/firebase";
 import { logActivity } from "../../lib/logger";
 import ProductCard from "../../components/ProductCard";
 import ComboBuilder from "../../components/owner/ComboBuilder";
+import InlineAIImageGenerator from "../../components/owner/InlineAIImageGenerator";
+import UnifiedImageSelectorHub from "../../components/owner/UnifiedImageSelectorHub";
+import AIDeepSeekAssistantChatbox from "../../components/owner/AIDeepSeekAssistantChatbox";
 import toast from "react-hot-toast";
 
 export default function OwnerProducts() {
+  const [isAIStudioOpen, setIsAIStudioOpen] = useState(false);
 
   const { user } = useAuthStore();
   const [items, setItems] = useState<any[]>([]);
@@ -254,10 +258,34 @@ export default function OwnerProducts() {
           cloudinaryPublicId: result.publicId,
         };
       } else if (aiGeneratedImageUrl) {
-        mediaData = {
-          imageUrl: aiGeneratedImageUrl,
-          cloudinaryPublicId: aiGeneratedPublicId || "",
-        };
+        if (aiGeneratedImageUrl.startsWith("data:") || aiGeneratedImageUrl.startsWith("blob:")) {
+          const token = await getCurrentAuthToken().catch(() => "");
+          const res = await fetch("/api/ai/image/approve", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              imageUrl: aiGeneratedImageUrl,
+              folder: "olive-pizza/ai-product-images",
+            }),
+          });
+          const data = await res.json();
+          if (data.success && data.cloudinaryUrl) {
+            mediaData = {
+              imageUrl: data.cloudinaryUrl,
+              cloudinaryPublicId: data.publicId || "",
+            };
+          } else {
+            throw new Error(data.error || "Failed to save preview image to Cloudinary");
+          }
+        } else {
+          mediaData = {
+            imageUrl: aiGeneratedImageUrl,
+            cloudinaryPublicId: aiGeneratedPublicId || "",
+          };
+        }
       }
 
       console.log("STEP 5: Saving product data to Firestore");
@@ -302,11 +330,40 @@ export default function OwnerProducts() {
     }
   };
 
+  const handleStartEdit = (item: any) => {
+    setEditingItem(item);
+    setNewItem({
+      productName: item.productName || item.name || "",
+      description: item.description || "",
+      category: item.category || "pizza",
+      pricingMode: item.pricingMode || (item.offerPrice ? "offer" : "fixed"),
+      basePrice: item.basePrice || item.price || 0,
+      offerPrice: item.offerPrice || 0,
+      discountPercentage: item.discountPercentage || 0,
+      isVegetarian: item.isVegetarian ?? true,
+      isActive: item.isAvailable ?? item.isActive ?? true,
+      isComboOnly: item.isComboOnly ?? false,
+      variants: item.variants || [],
+      crusts: item.crusts || [],
+      addons: item.addons || [],
+    });
+    setAiGeneratedImageUrl(item.imageUrl || item.image || null);
+    setAiGeneratedPublicId(item.cloudinaryPublicId || null);
+    setSelectedFile(null);
+    setIsAdding(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   const handleEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingItem?.id || !user) return;
+    setUploading(true);
     try {
-      let mediaData = {};
+      let mediaData: any = {
+        imageUrl: editingItem.imageUrl || editingItem.image || "",
+        cloudinaryPublicId: editingItem.cloudinaryPublicId || "",
+      };
+
       if (selectedFile) {
         const result = await handleUpload(selectedFile);
         mediaData = {
@@ -314,32 +371,81 @@ export default function OwnerProducts() {
           cloudinaryPublicId: result.publicId,
         };
 
-        // Delete old image from Cloudinary
         if (editingItem.cloudinaryPublicId) {
-          const token = await getCurrentAuthToken();
+          const token = await getCurrentAuthToken().catch(() => "");
           await deleteMediaFromCloudinary(
             editingItem.cloudinaryPublicId,
             token,
           ).catch((e) => console.error("Failed to delete old image", e));
         }
+      } else if (aiGeneratedImageUrl && aiGeneratedImageUrl !== (editingItem.imageUrl || editingItem.image)) {
+        if (aiGeneratedImageUrl.startsWith("data:") || aiGeneratedImageUrl.startsWith("blob:")) {
+          const token = await getCurrentAuthToken().catch(() => "");
+          const res = await fetch("/api/ai/image/approve", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              imageUrl: aiGeneratedImageUrl,
+              folder: "olive-pizza/ai-product-images",
+            }),
+          });
+          const data = await res.json();
+          if (data.success && data.cloudinaryUrl) {
+            mediaData = {
+              imageUrl: data.cloudinaryUrl,
+              cloudinaryPublicId: data.publicId || "",
+            };
+          }
+        } else {
+          mediaData = {
+            imageUrl: aiGeneratedImageUrl,
+            cloudinaryPublicId: aiGeneratedPublicId || "",
+          };
+        }
       }
 
       await updateDoc(doc(db, "products", editingItem.id), {
-        ...editingItem,
+        ...newItem,
         ...mediaData,
         updatedAt: new Date().toISOString(),
       });
 
       await logActivity(
         "Product Updated",
-        `Updated ${editingItem.productName}`,
+        `Updated ${newItem.productName}`,
         user?.email || undefined,
       );
 
+      toast.success(`Updated ${newItem.productName}!`);
+
       setEditingItem(null);
+      setIsAdding(false);
+      setNewItem({
+        productName: "",
+        description: "",
+        category: "pizza",
+        pricingMode: "fixed",
+        basePrice: 0,
+        offerPrice: 0,
+        discountPercentage: 0,
+        isVegetarian: true,
+        isActive: true,
+        isComboOnly: false,
+        variants: [],
+        crusts: [],
+        addons: [],
+      });
       setSelectedFile(null);
-    } catch (error) {
+      setAiGeneratedImageUrl(null);
+      setAiGeneratedPublicId(null);
+    } catch (error: any) {
       console.error("Error updating product", error);
+      toast.error("Error updating product: " + error.message);
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -378,10 +484,17 @@ export default function OwnerProducts() {
         <h1 className="text-3xl font-bold text-white">Menu Management</h1>
         {activeTab === 'products' && (
           <button
-            onClick={() => setIsAdding(!isAdding)}
-            className="bg-primary-500 hover:bg-primary-600 text-white px-6 py-2 rounded-lg font-bold transition-colors"
+            onClick={() => {
+              if (isAdding || editingItem) {
+                setIsAdding(false);
+                setEditingItem(null);
+              } else {
+                setIsAdding(true);
+              }
+            }}
+            className="bg-primary-500 hover:bg-primary-600 text-white px-6 py-2 rounded-lg font-bold transition-colors cursor-pointer"
           >
-            {isAdding ? "Cancel" : "+ Add New Product"}
+            {editingItem ? `Cancel Editing (${editingItem.productName})` : isAdding ? "Cancel" : "+ Add New Product"}
           </button>
         )}
       </div>
@@ -412,7 +525,7 @@ export default function OwnerProducts() {
       {activeTab === 'products' && isAdding && (
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
           <form
-            onSubmit={handleCreate}
+            onSubmit={editingItem ? handleEdit : handleCreate}
             className="xl:col-span-2 bg-[#1E293B] dark:bg-slate-800 p-8 rounded-xl shadow-sm border border-white/10 grid grid-cols-1 md:grid-cols-2 gap-6"
           >
             <input
@@ -492,160 +605,30 @@ export default function OwnerProducts() {
               )}
             </div>
 
-            <div className="col-span-1 md:col-span-2 border-2 border-dashed border-slate-300 dark:border-slate-600 p-6 rounded-xl flex flex-col items-center justify-center relative overflow-hidden">
-              {selectedFile ? (
-                <div className="text-center">
-                  <img
-                    src={URL.createObjectURL(selectedFile)}
-                    alt="Preview"
-                    className="h-32 object-contain mx-auto mb-4 rounded"
-                  />
-                  <p className="text-sm font-medium">{selectedFile.name}</p>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedFile(null)}
-                    className="text-red-500 text-xs mt-2 font-bold hover:underline"
-                  >
-                    Remove
-                  </button>
-                </div>
-              ) : aiGeneratedImageUrl ? (
-                <div className="text-center z-10 relative flex flex-col items-center">
-                  <img
-                    src={aiGeneratedImageUrl}
-                    alt="AI Generated"
-                    className="h-36 object-cover mx-auto mb-2 rounded-lg shadow-lg border border-primary-500/50"
-                  />
-                  <p className="text-xs font-bold text-primary-400 mb-2">
-                    ✨ AI Generated Food Photography
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        navigator.clipboard.writeText(aiGeneratedImageUrl);
-                        toast.success("Image URL copied to clipboard!");
-                      }}
-                      className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs rounded border border-slate-700 transition-all font-medium"
-                    >
-                      Copy URL
-                    </button>
-                    <a
-                      href={aiGeneratedImageUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs rounded border border-slate-700 transition-all font-medium"
-                    >
-                      View / Download
-                    </a>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAiGeneratedImageUrl(null);
-                        setAiGeneratedPublicId(null);
-                      }}
-                      className="px-2.5 py-1 bg-red-950/40 hover:bg-red-900/60 text-red-400 text-xs rounded border border-red-800/50 transition-all font-bold"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <span className="text-4xl mb-2">📸</span>
-                  <p className="text-slate-400 font-medium mb-2">
-                    Drag & Drop or Click to Upload Image
-                  </p>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) =>
-                      setSelectedFile(e.target.files?.[0] || null)
-                    }
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                  />
-                </>
-              )}
-              {uploading && (
-                <div
-                  className="absolute bottom-0 left-0 h-1 bg-primary-500 transition-all duration-300"
-                  style={{ width: `${uploadProgress}%` }}
-                />
-              )}
+            {/* Unified Image Selection Hub (5 Tab Modes) */}
+            <div className="col-span-1 md:col-span-2">
+              <UnifiedImageSelectorHub
+                initialPrompt={newItem.productName || editingItem?.productName || "Tandoori Paneer Pizza"}
+                targetType="product"
+                defaultAspectRatio="1:1"
+                currentImageUrl={aiGeneratedImageUrl || (editingItem?.imageUrl || editingItem?.image)}
+                onSelectImage={(cloudinaryUrl, publicId) => {
+                  setAiGeneratedImageUrl(cloudinaryUrl);
+                  if (publicId) setAiGeneratedPublicId(publicId);
+                  if (editingItem) {
+                    setEditingItem((prev: any) => ({ ...prev, image: cloudinaryUrl, imageUrl: cloudinaryUrl }));
+                  }
+                  toast.success("Product image set!");
+                }}
+                onClearImage={() => {
+                  setAiGeneratedImageUrl(null);
+                  setAiGeneratedPublicId(null);
+                  if (editingItem) {
+                    setEditingItem((prev: any) => ({ ...prev, image: "", imageUrl: "" }));
+                  }
+                }}
+              />
             </div>
-
-            {/* AI Image Generation Box - Right below the upload box */}
-            {!selectedFile && (
-              <div className="col-span-1 md:col-span-2 bg-[#0B0F14] border border-primary-500/30 p-4 rounded-xl flex flex-col gap-4">
-                <div className="flex justify-between items-center">
-                  <h4 className="font-bold text-sm text-slate-400 flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-primary-500" /> AI Image
-                    Generator
-                  </h4>
-                  <div className="flex gap-2">
-                    <select
-                      value={aiModel}
-                      onChange={(e) => setAiModel(e.target.value)}
-                      className="p-1.5 rounded-lg border dark:bg-slate-900 dark:border-slate-700 text-xs text-primary-400 font-bold"
-                    >
-                      <option value="qwen-image">Qwen Image (New)</option>
-                      <option value="qwen-image-edit">
-                        Qwen Edit (Live Image)
-                      </option>
-                    </select>
-                    <select
-                      value={imageType}
-                      onChange={(e) => setImageType(e.target.value)}
-                      className="p-1.5 rounded-lg border dark:bg-slate-900 dark:border-slate-700 text-xs"
-                    >
-                      <option value="product_photo">Product Photo</option>
-                      <option value="menu_card">Menu Card</option>
-                      <option value="social_media">Social Media</option>
-                    </select>
-                  </div>
-                </div>
-
-                <textarea
-                  value={customImagePrompt}
-                  onChange={(e) => setCustomImagePrompt(e.target.value)}
-                  placeholder="Optional: Enter a specific prompt or leave blank to auto-generate based on product details..."
-                  className="w-full p-3 rounded-lg border dark:bg-slate-900 dark:border-slate-700 h-20 text-sm resize-none"
-                />
-
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <button
-                    type="button"
-                    onClick={handleEnhanceImagePrompt}
-                    disabled={isEnhancingPrompt}
-                    className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-50 transition-all border border-indigo-500"
-                    title="Enhance prompt using DeepSeek R1"
-                  >
-                    {isEnhancingPrompt ? (
-                      <span className="animate-pulse">Enhancing...</span>
-                    ) : (
-                      <>
-                        <Sparkles className="w-4 h-4" /> Enhance Prompt
-                      </>
-                    )}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleGenerateAIImage}
-                    disabled={isGeneratingImage}
-                    className="w-full flex-1 bg-gradient-to-r from-primary-600 to-primary-500 hover:from-primary-500 hover:to-primary-400 text-white px-4 py-2 rounded-lg font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-50 transition-all"
-                  >
-                    {isGeneratingImage ? (
-                      <span className="animate-pulse">Generating Image...</span>
-                    ) : (
-                      <>
-                        <Sparkles className="w-4 h-4" /> Generate Image
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-            )}
 
             <select
               value={newItem.category}
@@ -730,61 +713,63 @@ export default function OwnerProducts() {
                 ))}
               </div>
 
-              <div className="bg-[#0B0F14] border border-white/5 p-4 rounded-xl border dark:border-slate-700">
-                <div className="flex justify-between items-center mb-2">
-                  <h4 className="font-bold text-sm text-slate-400">Crusts</h4>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setNewItem({
-                        ...newItem,
-                        crusts: [...newItem.crusts, { name: "", price: 0 }],
-                      })
-                    }
-                    className="text-primary-500 text-sm font-bold hover:underline"
-                  >
-                    + Add Crust
-                  </button>
-                </div>
-                {newItem.crusts?.map((c: any, idx: number) => (
-                  <div key={idx} className="flex gap-2 mb-2">
-                    <input
-                      type="text"
-                      placeholder="Crust (e.g. Cheese Burst)"
-                      value={c.name}
-                      onChange={(e) => {
-                        const nc = [...newItem.crusts];
-                        nc[idx].name = e.target.value;
-                        setNewItem({ ...newItem, crusts: nc });
-                      }}
-                      className="flex-1 p-2 rounded-lg border dark:bg-slate-800 dark:border-slate-700 text-sm"
-                    />
-                    <input
-                      type="number"
-                      placeholder="Extra Price (₹)"
-                      value={c.price}
-                      onChange={(e) => {
-                        const nc = [...newItem.crusts];
-                        nc[idx].price = Number(e.target.value);
-                        setNewItem({ ...newItem, crusts: nc });
-                      }}
-                      className="w-32 p-2 rounded-lg border dark:bg-slate-800 dark:border-slate-700 text-sm"
-                    />
+              {newItem.category === 'pizza' && (
+                <div className="bg-[#0B0F14] border border-white/5 p-4 rounded-xl border dark:border-slate-700">
+                  <div className="flex justify-between items-center mb-2">
+                    <h4 className="font-bold text-sm text-slate-400">Crusts</h4>
                     <button
                       type="button"
-                      onClick={() => {
-                        const nc = newItem.crusts.filter(
-                          (_: any, i: number) => i !== idx,
-                        );
-                        setNewItem({ ...newItem, crusts: nc });
-                      }}
-                      className="text-red-500 font-bold px-2"
+                      onClick={() =>
+                        setNewItem({
+                          ...newItem,
+                          crusts: [...newItem.crusts, { name: "", price: 0 }],
+                        })
+                      }
+                      className="text-primary-500 text-sm font-bold hover:underline"
                     >
-                      &times;
+                      + Add Crust
                     </button>
                   </div>
-                ))}
-              </div>
+                  {newItem.crusts?.map((c: any, idx: number) => (
+                    <div key={idx} className="flex gap-2 mb-2">
+                      <input
+                        type="text"
+                        placeholder="Crust (e.g. Cheese Burst)"
+                        value={c.name}
+                        onChange={(e) => {
+                          const nc = [...newItem.crusts];
+                          nc[idx].name = e.target.value;
+                          setNewItem({ ...newItem, crusts: nc });
+                        }}
+                        className="flex-1 p-2 rounded-lg border dark:bg-slate-800 dark:border-slate-700 text-sm"
+                      />
+                      <input
+                        type="number"
+                        placeholder="Extra Price (₹)"
+                        value={c.price}
+                        onChange={(e) => {
+                          const nc = [...newItem.crusts];
+                          nc[idx].price = Number(e.target.value);
+                          setNewItem({ ...newItem, crusts: nc });
+                        }}
+                        className="w-32 p-2 rounded-lg border dark:bg-slate-800 dark:border-slate-700 text-sm"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nc = newItem.crusts.filter(
+                            (_: any, i: number) => i !== idx,
+                          );
+                          setNewItem({ ...newItem, crusts: nc });
+                        }}
+                        className="text-red-500 font-bold px-2"
+                      >
+                        &times;
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               <div className="bg-[#0B0F14] border border-white/5 p-4 rounded-xl border dark:border-slate-700">
                 <div className="flex justify-between items-center mb-2">
@@ -844,65 +829,63 @@ export default function OwnerProducts() {
                 ))}
               </div>
 
-              <div className="bg-[#0B0F14] border border-white/5 p-4 rounded-xl border dark:border-slate-700">
-                <div className="flex justify-between items-center mb-4">
-                  <h4 className="font-bold text-sm text-slate-400 flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-primary-500" /> AI
-                    Description Generator
-                  </h4>
-                </div>
+              {/* Interactive DeepSeek V4 Flash Assistant Chatbox */}
+              <AIDeepSeekAssistantChatbox
+                mode="product-description"
+                contextData={{
+                  name: newItem.productName,
+                  category: newItem.category,
+                }}
+                onApplyOutput={(output) => {
+                  if (output.description) {
+                    setNewItem((prev: any) => ({ ...prev, description: output.description }));
+                  }
+                }}
+              />
 
-                <div
-                  className="flex flex-col gap-2 mb-4 max-h-48 overflow-y-auto custom-scrollbar"
-                  ref={chatScrollRef}
-                >
-                  {chatMessages.length === 0 ? (
-                    <p className="text-xs text-slate-500 italic text-center my-2">
-                      Ask the AI to write a description! E.g. "Write a
-                      description for a spicy paneer pizza"
-                    </p>
-                  ) : (
-                    chatMessages.map((msg, i) => (
-                      <div
-                        key={i}
-                        className={`p-2 rounded-lg text-sm max-w-[90%] ${msg.role === "user" ? "bg-primary-600/20 text-primary-100 self-end ml-auto" : "bg-slate-800 text-slate-300 self-start"}`}
-                      >
-                        {msg.content}
-                      </div>
-                    ))
-                  )}
-                  {isChatLoading && (
-                    <div className="text-xs text-primary-500 animate-pulse p-2">
-                      AI is typing...
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={chatInput}
-                    onChange={(e) => setChatInput(e.target.value)}
-                    onKeyDown={(e) =>
-                      e.key === "Enter" &&
-                      (e.preventDefault(), handleChatSubmit())
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-bold text-slate-400">Product Description</label>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!newItem.productName?.trim()) {
+                      toast.error("Please enter a product name first!");
+                      return;
                     }
-                    placeholder="Chat with AI..."
-                    className="flex-1 p-2 rounded-lg border border-slate-700 bg-slate-900 text-sm focus:outline-none focus:border-primary-500"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => handleChatSubmit()}
-                    disabled={isChatLoading || !chatInput.trim()}
-                    className="bg-primary-600 hover:bg-primary-500 text-white p-2 rounded-lg disabled:opacity-50"
-                  >
-                    <Send className="w-4 h-4" />
-                  </button>
-                </div>
+                    setIsGeneratingImage(true);
+                    const toastId = toast.loading("Generating description with DeepSeek V4 Flash...");
+                    try {
+                      const res = await fetch("/api/ai/product-description", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          name: newItem.productName,
+                          category: newItem.category,
+                          type: 'product',
+                        }),
+                      });
+                      const data = await res.json();
+                      if (data.success && data.description) {
+                        setNewItem((prev: any) => ({ ...prev, description: data.description }));
+                        toast.success(`✨ Description generated via ${data.model || 'DeepSeek V4 Flash'}!`, { id: toastId });
+                      } else {
+                        toast.error(data.error || "Failed to generate description", { id: toastId });
+                      }
+                    } catch (err: any) {
+                      toast.error("Generation error: " + err.message, { id: toastId });
+                    }
+                    setIsGeneratingImage(false);
+                  }}
+                  disabled={isGeneratingImage}
+                  className="px-3 py-1 bg-gradient-to-r from-primary-600 to-amber-600 hover:from-primary-500 hover:to-amber-500 text-white text-xs font-bold rounded-lg flex items-center gap-1 shadow transition-all cursor-pointer"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>✨ Generate AI Description (DeepSeek V4 Flash)</span>
+                </button>
               </div>
 
               <textarea
-                placeholder="Final Product Description (Auto-filled by AI)"
+                placeholder="Final Product Description (Auto-filled by DeepSeek V4 Flash)"
                 required
                 value={newItem.description}
                 onChange={(e) =>
@@ -1369,6 +1352,7 @@ export default function OwnerProducts() {
           </div>
         </div>
       )}
+
     </div>
   );
 }

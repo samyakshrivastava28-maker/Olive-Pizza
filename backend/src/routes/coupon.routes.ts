@@ -1,48 +1,128 @@
 import { Router, Request, Response } from 'express';
 import { adminDb } from '../config/firebase.js';
+import { DataExpiryJob } from '../jobs/DataExpiryJob.js';
 
 const router = Router();
 
+/**
+ * GET /api/coupons
+ * Returns all active, unexpired coupons for customer display
+ */
+router.get('/', async (_req: Request, res: Response) => {
+  try {
+    const snap = await adminDb.collection('coupons').where('isActive', '==', true).get();
+    const now = new Date();
+    const activeCoupons: any[] = [];
+
+    snap.forEach((doc) => {
+      const data = doc.data();
+      const expiryDate = DataExpiryJob.extractExpiryDate(data);
+      if (expiryDate && expiryDate < now) {
+        // Asynchronously archive expired coupon
+        doc.ref.update({ isActive: false, isArchived: true, autoExpiredAt: now.toISOString() }).catch(() => {});
+        return;
+      }
+
+      // Check start date
+      if (data.startDate) {
+        const start = new Date(data.startDate);
+        if (!isNaN(start.getTime()) && now < start) return;
+      }
+
+      activeCoupons.push({
+        id: doc.id,
+        code: data.code,
+        type: data.type || 'percentage',
+        discountType: data.discountType || data.type || 'percentage',
+        discountValue: data.discountValue || 0,
+        minOrderValue: data.minOrderValue || data.minOrderAmount || 0,
+        maxDiscount: data.maxDiscount || data.maxDiscountAmount || 0,
+        startDate: data.startDate || null,
+        endDate: data.endDate || data.expiryDate || null,
+        expiryDate: data.expiryDate || data.endDate || null,
+        description: data.description || '',
+        tiers: data.tiers || [],
+        isFirstOrderOnly: data.isFirstOrderOnly || false,
+      });
+    });
+
+    res.json({ success: true, coupons: activeCoupons });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/coupons/validate
+ * Validates a coupon code against minimum order, customer eligibility, and strict expiry
+ */
 router.post('/validate', async (req: Request, res: Response) => {
   try {
     const { code, cartTotal, userId } = req.body;
-    if (!code || !cartTotal) {
-      return res.status(400).json({ error: 'Missing code or cartTotal' });
+    if (!code || cartTotal === undefined) {
+      return res.status(400).json({ valid: false, error: 'Missing code or cartTotal' });
     }
 
-    const snapshot = await adminDb.collection('coupons').where('code', '==', code).where('isActive', '==', true).get();
-    
+    const cleanCode = String(code).trim().toUpperCase();
+    const snapshot = await adminDb.collection('coupons').where('code', '==', cleanCode).where('isActive', '==', true).get();
+
     if (snapshot.empty) {
-      return res.status(404).json({ valid: false, error: 'Invalid or inactive coupon code' });
+      return res.status(404).json({ valid: false, error: `Coupon "${cleanCode}" is invalid or inactive` });
     }
 
-    const coupon = snapshot.docs[0].data();
-    
-    // Check expiry
-    if (coupon.endDate && new Date(coupon.endDate) < new Date()) {
-      return res.status(400).json({ valid: false, error: 'Coupon has expired' });
+    const doc = snapshot.docs[0];
+    const coupon = doc.data();
+    const now = new Date();
+
+    // Check Start Date
+    if (coupon.startDate) {
+      const startDate = new Date(coupon.startDate);
+      if (!isNaN(startDate.getTime()) && now < startDate) {
+        return res.status(400).json({ valid: false, error: `Coupon will be active starting from ${startDate.toLocaleDateString()}` });
+      }
+    }
+
+    // Check Expiry Date (supports endDate, expiryDate, validUntil, etc.)
+    const expiryDate = DataExpiryJob.extractExpiryDate(coupon);
+    if (expiryDate && expiryDate < now) {
+      // Auto-archive the expired coupon in Firestore
+      doc.ref.update({ isActive: false, isArchived: true, autoExpiredAt: now.toISOString() }).catch(() => {});
+      return res.status(400).json({
+        valid: false,
+        error: `Coupon "${cleanCode}" expired on ${expiryDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`
+      });
+    }
+
+    // First order only validation
+    if (coupon.isFirstOrderOnly && userId) {
+      const userOrders = await adminDb.collection('orders').where('userId', '==', userId).limit(1).get();
+      if (!userOrders.empty) {
+        return res.status(400).json({ valid: false, error: 'This coupon is valid for first-time orders only' });
+      }
+    }
+
+    const minAmount = Number(coupon.minOrderValue || coupon.minOrderAmount || 0);
+    if (cartTotal < minAmount) {
+      return res.status(400).json({ valid: false, error: `Minimum order value for this coupon is ₹${minAmount}` });
     }
 
     let discount = 0;
+    const type = coupon.type || coupon.discountType || 'percentage';
 
-    switch (coupon.type) {
+    switch (type) {
       case 'fixed':
-        if (cartTotal < (coupon.minOrderValue || 0)) {
-          return res.status(400).json({ valid: false, error: `Minimum order value is ₹${coupon.minOrderValue}` });
-        }
-        discount = coupon.discountValue;
+        discount = Number(coupon.discountValue || 0);
         break;
+
       case 'percentage':
-        if (cartTotal < (coupon.minOrderValue || 0)) {
-          return res.status(400).json({ valid: false, error: `Minimum order value is ₹${coupon.minOrderValue}` });
-        }
-        discount = (cartTotal * coupon.discountValue) / 100;
-        if (coupon.maxDiscount && discount > coupon.maxDiscount) {
-          discount = coupon.maxDiscount;
+        discount = (cartTotal * Number(coupon.discountValue || 0)) / 100;
+        const maxDiscount = Number(coupon.maxDiscount || coupon.maxDiscountAmount || 0);
+        if (maxDiscount > 0 && discount > maxDiscount) {
+          discount = maxDiscount;
         }
         break;
+
       case 'tier':
-        // Find applicable tier
         const sortedTiers = (coupon.tiers || []).sort((a: any, b: any) => b.minAmount - a.minAmount);
         const applicableTier = sortedTiers.find((t: any) => cartTotal >= t.minAmount);
         if (!applicableTier) {
@@ -50,17 +130,31 @@ router.post('/validate', async (req: Request, res: Response) => {
         }
         discount = applicableTier.discount;
         break;
+
       case 'free_delivery':
-        // In a real app we'd need to know delivery fee to discount it.
-        // Returning a flag or setting discount to delivery fee if passed in.
-        discount = req.body.deliveryFee || 0;
+        discount = Number(req.body.deliveryFee || 0);
         break;
-      // Add more logic for BOGO, Combo, First Order, etc.
+
       default:
-        return res.status(400).json({ valid: false, error: 'Unsupported coupon type' });
+        discount = Number(coupon.discountValue || 0);
+        break;
     }
 
-    res.json({ valid: true, discountAmount: discount, finalTotal: cartTotal - discount });
+    // Discount cannot exceed cart total
+    if (discount > cartTotal) discount = cartTotal;
+
+    res.json({
+      valid: true,
+      code: cleanCode,
+      discountAmount: Math.round(discount),
+      finalTotal: Math.max(0, Math.round(cartTotal - discount)),
+      couponDetails: {
+        code: cleanCode,
+        type,
+        discountValue: coupon.discountValue,
+        description: coupon.description || ''
+      }
+    });
   } catch (error: any) {
     res.status(500).json({ valid: false, error: error.message });
   }

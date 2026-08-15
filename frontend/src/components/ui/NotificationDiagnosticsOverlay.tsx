@@ -108,7 +108,7 @@ export const NotificationDiagnosticsOverlay: React.FC = () => {
             </div>
             
             <div className="p-3 border-t border-white/10 bg-black/40 text-xs text-center text-gray-500 font-mono">
-              Diagnostic Mode Active • Bypassing Frontend Firestore Mutations
+              Diagnostic Telemetry Active (Development Mode)
             </div>
           </motion.div>
         </motion.div>

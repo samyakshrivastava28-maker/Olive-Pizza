@@ -18,9 +18,23 @@ export const pgPool = new Pool({
   connectionTimeoutMillis: 10000, // Fail fast if still unreachable (10s instead of default hanging)
 });
 
+pgPool.on('error', (err) => {
+  console.warn('[PostgreSQL Pool] Idle client connection warning (safe to ignore):', err.message);
+});
+
 export const initPostgres = async () => {
   try {
     const client = await pgPool.connect();
+
+    // Create order_locks table for concurrency & idempotency
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS order_locks (
+        order_id VARCHAR(255) PRIMARY KEY,
+        locked_by VARCHAR(255),
+        action VARCHAR(100),
+        locked_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
 
     // Create delivery_locations table
     await client.query(`
@@ -349,6 +363,39 @@ export const initPostgres = async () => {
       console.log('[PostgreSQL] website_analytics table and indexes initialized');
     } catch (waErr: any) {
       console.warn('[PostgreSQL] website_analytics initialization warning:', waErr.message);
+    }
+
+    try {
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS navigation_sessions (
+          id VARCHAR(255) PRIMARY KEY,
+          order_id VARCHAR(255) NOT NULL,
+          delivery_partner_id VARCHAR(255) NOT NULL,
+          status VARCHAR(50) NOT NULL DEFAULT 'ACTIVE',
+          started_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          ended_at TIMESTAMP WITH TIME ZONE,
+          expires_at TIMESTAMP WITH TIME ZONE
+        );
+
+        CREATE TABLE IF NOT EXISTS navigation_points (
+          id SERIAL PRIMARY KEY,
+          session_id VARCHAR(255) NOT NULL REFERENCES navigation_sessions(id) ON DELETE CASCADE,
+          order_id VARCHAR(255) NOT NULL,
+          latitude DOUBLE PRECISION NOT NULL,
+          longitude DOUBLE PRECISION NOT NULL,
+          speed DOUBLE PRECISION,
+          heading DOUBLE PRECISION,
+          accuracy DOUBLE PRECISION,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_nav_sessions_status_expires ON navigation_sessions(status, expires_at);
+        CREATE INDEX IF NOT EXISTS idx_nav_sessions_order ON navigation_sessions(order_id);
+        CREATE INDEX IF NOT EXISTS idx_nav_points_session ON navigation_points(session_id);
+      `);
+      console.log('[PostgreSQL] navigation_sessions and navigation_points initialized');
+    } catch (navErr: any) {
+      console.warn('[PostgreSQL] Navigation tables initialization warning:', navErr.message);
     }
 
     client.release();

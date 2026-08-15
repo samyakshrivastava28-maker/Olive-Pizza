@@ -21,40 +21,61 @@ export interface WeeklyReportResult {
 export class WeeklyReportService {
 
   /**
-   * Helper: Calculates Monday to Sunday range and ISO week number for a given date
+   * Helper: Calculates Monday 00:00:00 to Sunday 23:59:59 range in Asia/Kolkata (IST) timezone
+   * and ISO week number for a given target date.
    */
-  public getWeekInfo(targetDate: Date = new Date()) {
-    const d = new Date(targetDate);
-    const day = d.getDay();
-    // Shift to Monday of the week
-    const diffToMonday = d.getDate() - day + (day === 0 ? -6 : 1);
+  public getWeeklyReportRange(targetDate: Date = new Date(), _timeZone = 'Asia/Kolkata') {
+    const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
     
-    const monday = new Date(d.setDate(diffToMonday));
-    monday.setHours(0, 0, 0, 0);
+    // Shift targetDate instant by +5.5 hours to extract IST calendar components via UTC getters
+    const targetMs = targetDate.getTime();
+    const istTarget = new Date(targetMs + IST_OFFSET_MS);
 
-    const sunday = new Date(monday);
-    sunday.setDate(monday.getDate() + 6);
-    sunday.setHours(23, 59, 59, 999);
+    const year = istTarget.getUTCFullYear();
+    const month = istTarget.getUTCMonth(); // 0-indexed
+    const date = istTarget.getUTCDate();
+    const dayOfWeek = istTarget.getUTCDay(); // 0=Sun, 1=Mon, ..., 6=Sat
 
-    // Calculate ISO Week Number
-    const tempDate = new Date(monday.valueOf());
-    const dayNum = (monday.getDay() + 6) % 7;
-    tempDate.setDate(tempDate.getDate() - dayNum + 3);
+    // Convert to 1-indexed Monday (1=Mon, 2=Tue, ..., 7=Sun)
+    const istDayNum = dayOfWeek === 0 ? 7 : dayOfWeek;
+    const diffToMonday = 1 - istDayNum;
+
+    // Monday 00:00:00.000 IST instant in UTC
+    const mondayMs = Date.UTC(year, month, date + diffToMonday, 0, 0, 0, 0) - IST_OFFSET_MS;
+    const monday = new Date(mondayMs);
+
+    // Sunday 23:59:59.999 IST instant in UTC
+    const sundayMs = Date.UTC(year, month, date + diffToMonday + 6, 23, 59, 59, 999) - IST_OFFSET_MS;
+    const sunday = new Date(sundayMs);
+
+    // Calculate ISO Week Number for Monday in IST
+    const mondayIst = new Date(mondayMs + IST_OFFSET_MS);
+    const mYear = mondayIst.getUTCFullYear();
+    const tempDate = new Date(mondayMs + IST_OFFSET_MS);
+    const dayNum = (mondayIst.getUTCDay() + 6) % 7;
+    tempDate.setUTCDate(tempDate.getUTCDate() - dayNum + 3);
     const firstThursday = tempDate.valueOf();
-    tempDate.setMonth(0, 1);
-    if (tempDate.getDay() !== 4) {
-      tempDate.setMonth(0, 1 + ((4 - tempDate.getDay() + 7) % 7));
+    const jan1 = new Date(Date.UTC(mYear, 0, 1));
+    const jan1Day = jan1.getUTCDay();
+    if (jan1Day !== 4) {
+      jan1.setUTCDate(1 + ((4 - jan1Day + 7) % 7));
     }
-    const weekNumber = 1 + Math.round((firstThursday - tempDate.valueOf()) / 604800000);
+    const weekNumber = 1 + Math.round((firstThursday - jan1.valueOf()) / 604800000);
 
-    const year = monday.getFullYear();
     const formattedWeekNum = weekNumber.toString().padStart(2, '0');
-    const weekLabel = `Week ${formattedWeekNum}, ${year}`;
-    const dateRange = `${monday.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} - ${sunday.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`;
-    const docId = `${year}-W${formattedWeekNum}`;
+    const weekLabel = `Week ${formattedWeekNum}, ${mYear}`;
+    
+    const monStr = monday.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short' });
+    const sunStr = sunday.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric' });
+    const dateRange = `${monStr} - ${sunStr}`;
+    const docId = `${mYear}-W${formattedWeekNum}`;
     const subfolderName = `Week ${formattedWeekNum}`;
 
-    return { monday, sunday, weekNumber, formattedWeekNum, year, weekLabel, dateRange, docId, subfolderName };
+    return { monday, sunday, weekNumber, formattedWeekNum, year: mYear, weekLabel, dateRange, docId, subfolderName };
+  }
+
+  public getWeekInfo(targetDate: Date = new Date()) {
+    return this.getWeeklyReportRange(targetDate, 'Asia/Kolkata');
   }
 
   /**
@@ -215,7 +236,7 @@ export class WeeklyReportService {
           const ownerPushPayload = {
             notification: {
               title: `📊 Weekly Report Ready — ${weekInfo.weekLabel}`,
-              body: `Revenue: ₹${metrics.totalRevenue.toLocaleString('en-IN')} (${metrics.completedOrders} orders). PDF backed up in Google Drive.`
+              body: `Revenue: ₹${metrics.totalRevenue.toLocaleString('en-IN')} (${metrics.totalOrders} orders). PDF backed up in Google Drive.`
             },
             data: {
               url: '/owner/reports',
@@ -267,11 +288,48 @@ export class WeeklyReportService {
     const startIso = startDate.toISOString();
     const endIso = endDate.toISOString();
 
-    const ordersSnap = await adminDb.collection('orders')
-      .where('createdAt', '>=', startDate)
-      .where('createdAt', '<=', endDate)
-      .get()
-      .catch(() => adminDb.collection('orders').where('createdAt', '>=', startIso).where('createdAt', '<=', endIso).get());
+    let rawDocs: any[] = [];
+    try {
+      const ordersSnap = await adminDb.collection('orders')
+        .where('createdAt', '>=', startDate)
+        .where('createdAt', '<=', endDate)
+        .get();
+      rawDocs = ordersSnap.docs;
+    } catch (err: any) {
+      console.warn('[WeeklyReportService] Primary Timestamp query notice:', err.message);
+    }
+
+    if (rawDocs.length === 0) {
+      try {
+        const ordersSnapIso = await adminDb.collection('orders')
+          .where('createdAt', '>=', startIso)
+          .where('createdAt', '<=', endIso)
+          .get();
+        rawDocs = ordersSnapIso.docs;
+      } catch (err: any) {
+        console.warn('[WeeklyReportService] ISO String query notice:', err.message);
+      }
+    }
+
+    // Safety fallback: fetch orders and filter strictly by IST date range
+    if (rawDocs.length === 0) {
+      const allOrdersSnap = await adminDb.collection('orders').get();
+      rawDocs = allOrdersSnap.docs.filter(doc => {
+        const d = doc.data();
+        const rawDate = d.createdAt;
+        if (!rawDate) return false;
+        const dateObj = rawDate.toDate ? rawDate.toDate() : new Date(rawDate);
+        return dateObj >= startDate && dateObj <= endDate;
+      });
+    }
+
+    // Deduplicate by ID
+    const seenOrderIds = new Set<string>();
+    const orderDocs = rawDocs.filter(doc => {
+      if (seenOrderIds.has(doc.id)) return false;
+      seenOrderIds.add(doc.id);
+      return true;
+    });
 
     let totalOrders = 0;
     let completedOrders = 0;
@@ -303,29 +361,60 @@ export class WeeklyReportService {
 
     const hourMap: Record<string, number> = {};
 
-    ordersSnap.forEach((doc) => {
+    const activeStatuses = [
+      'pending_acceptance',
+      'pending',
+      'placed',
+      'order_placed',
+      'accepted',
+      'preparing',
+      'ready',
+      'partner_assigned',
+      'picked_up',
+      'out_for_delivery',
+      'delivered',
+      'completed'
+    ];
+
+    let ordersAfterDateFilter = 0;
+    let ordersAfterStatusFilter = 0;
+
+    orderDocs.forEach((doc) => {
       const o = doc.data();
+      const rawDate = o.createdAt;
+      const orderDate = rawDate?.toDate ? rawDate.toDate() : new Date(rawDate || Date.now());
+
+      // Secondary date check to ensure inclusion strictly within [startDate, endDate]
+      if (orderDate < startDate || orderDate > endDate) {
+        return;
+      }
+      ordersAfterDateFilter++;
       totalOrders++;
 
       const status = (o.status || '').toLowerCase();
-      const orderDate = o.createdAt?.toDate ? o.createdAt.toDate() : new Date(o.createdAt || Date.now());
       
-      let dayIndex = orderDate.getDay() - 1;
-      if (dayIndex < 0) dayIndex = 6; // Sunday = 6
+      // Map IST day of week (Monday=0 ... Sunday=6)
+      const istDate = new Date(orderDate.getTime() + (5.5 * 3600 * 1000));
+      let dayIndex = istDate.getUTCDay() - 1;
+      if (dayIndex < 0) dayIndex = 6;
       const dayName = daysOfWeek[dayIndex] || 'Monday';
 
-      const hourStr = `${orderDate.getHours().toString().padStart(2, '0')}:00`;
+      const hourStr = `${istDate.getUTCHours().toString().padStart(2, '0')}:00`;
       hourMap[hourStr] = (hourMap[hourStr] || 0) + 1;
 
-      const activeStatuses = ['pending', 'accepted', 'preparing', 'ready', 'picked_up', 'out_for_delivery', 'delivered', 'completed'];
       if (activeStatuses.includes(status)) {
+        ordersAfterStatusFilter++;
         if (status === 'delivered' || status === 'completed') {
             completedOrders++;
+        } else {
+            pendingOrders++;
         }
         const amount = Number(o.totalAmount || o.total_amount || 0);
         totalRevenue += amount;
         dailyMap[dayName].orders++;
         dailyMap[dayName].revenue += amount;
+
+        console.log(`[WEEKLY REPORT ORDER] Included Order: ID=${doc.id} | Status=${status} | Date=${orderDate.toISOString()} | Revenue=₹${amount}`);
 
         // Payment breakdown
         const pm = (o.paymentMethod || o.payment_method || 'cash').toLowerCase();
@@ -402,6 +491,23 @@ export class WeeklyReportService {
         pendingOrders++;
       }
     });
+
+    console.log(`
+WEEKLY REPORT DEBUG SUMMARY
+---------------------------
+timezone: Asia/Kolkata
+weekLabel: ${weekInfo.weekLabel}
+weekStart: ${startDate.toISOString()} (${startDate.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })})
+weekEnd: ${endDate.toISOString()} (${endDate.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })})
+ordersFetched: ${rawDocs.length}
+ordersAfterDateFilter: ${ordersAfterDateFilter}
+ordersAfterStatusFilter: ${ordersAfterStatusFilter}
+completedOrders: ${completedOrders}
+pendingOrders: ${pendingOrders}
+cancelledOrders: ${cancelledOrders}
+revenueFieldDetected: totalAmount
+calculatedRevenue: ₹${totalRevenue}
+`);
 
     // Compute Payment Percentages
     const totalPmCount = paymentBreakdown.cash.count + paymentBreakdown.upi.count + paymentBreakdown.card.count + paymentBreakdown.wallet.count || 1;
@@ -546,7 +652,7 @@ export class WeeklyReportService {
       peakOrderingHours,
       busyDays,
       lowPerformingDays,
-      revenueTrend: `Weekly revenue reached ₹${totalRevenue.toLocaleString('en-IN')} across ${completedOrders} completed orders with an Average Order Value of ₹${Math.round(completedOrders > 0 ? totalRevenue / completedOrders : 0)}.`,
+      revenueTrend: `Weekly revenue reached ₹${totalRevenue.toLocaleString('en-IN')} across ${totalOrders} orders with an Average Order Value of ₹${Math.round(totalOrders > 0 ? totalRevenue / totalOrders : 0)}.`,
       customerGrowth: `${newCustomers} new customers registered this week while ${returningCustomers} returning customers placed orders.`,
       recommendations: [
         `Launch targeted flash discounts during low-demand periods (${lowPerformingDays}) to balance daily revenue.`,
@@ -567,7 +673,7 @@ export class WeeklyReportService {
       couponSavings,
       refundsCount,
       refundsAmount,
-      averageOrderValue: completedOrders > 0 ? totalRevenue / completedOrders : 0,
+      averageOrderValue: completedOrders > 0 ? totalRevenue / completedOrders : (totalOrders > 0 ? totalRevenue / totalOrders : 0),
       totalOrders,
       completedOrders,
       cancelledOrders,

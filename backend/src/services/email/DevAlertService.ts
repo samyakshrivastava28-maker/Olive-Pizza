@@ -45,11 +45,34 @@ export class DevAlertService {
     const errorMessage = typeof options.error === 'string' ? options.error : options.error.message;
     const errorStack = typeof options.error === 'object' ? options.error.stack : '';
 
-    const subject = `🚨 [Olive Pizza Alert] ${options.service}: ${options.action} Failed`;
+    // Create developer-friendly explanation based on error type
+    let humanReadableCause = 'A system alert was raised during operation execution.';
+    let responsibleComponent = options.service;
+    let suggestedFix = 'Inspect the context metadata below and check backend logs.';
+
+    if (errorMessage.includes('ESTREAM') || errorMessage.includes('type string or an instance of Buffer')) {
+      responsibleComponent = 'Email Service (Attachment Buffer Converter)';
+      humanReadableCause = 'An email attachment in the background email queue was stored as a JSON object instead of being decoded back into a Node.js Buffer before sending.';
+      suggestedFix = 'The system auto-converts attachment JSON buffers back to Buffer instances in email.service.ts. Re-queueing the pending email will deliver it successfully.';
+    } else if (errorMessage.includes('Cloudflare R2') || errorMessage.includes('S3')) {
+      responsibleComponent = 'Cloudflare R2 Storage Service';
+      humanReadableCause = 'Failed to upload or generate pre-signed URL for an asset/report on Cloudflare R2.';
+      suggestedFix = 'Check Cloudflare R2 credentials (CLOUDFLARE_R2_ACCOUNT_ID, ACCESS_KEY, BUCKET_NAME) in environment configuration.';
+    } else if (errorMessage.includes('SMTP') || errorMessage.includes('transporter')) {
+      responsibleComponent = 'Nodemailer SMTP Transporter';
+      humanReadableCause = 'SMTP server connection or authentication failed while dispatching outgoing emails.';
+      suggestedFix = 'Verify SMTP host, port, user, and pass in backend environment variables.';
+    }
+
+    const subject = `🚨 [Olive Pizza DevOps] ${options.service}: ${options.action}`;
 
     const contextHtml = options.context ? Object.entries(options.context)
-      .map(([k, v]) => `<tr><td style="padding:6px;font-weight:bold;color:#9ca3af;">${k}:</td><td style="padding:6px;color:#f3f4f6;">${typeof v === 'object' ? JSON.stringify(v) : String(v)}</td></tr>`)
-      .join('') : '';
+      .map(([k, v]) => `
+        <tr style="border-bottom: 1px solid #1e293b;">
+          <td style="padding: 8px 12px; font-weight: bold; color: #f97316; font-size: 13px;">${k}:</td>
+          <td style="padding: 8px 12px; color: #cbd5e1; font-size: 13px;">${typeof v === 'object' ? JSON.stringify(v) : String(v)}</td>
+        </tr>
+      `).join('') : '';
 
     const htmlContent = `
       <!DOCTYPE html>
@@ -57,41 +80,68 @@ export class DevAlertService {
       <head>
         <meta charset="utf-8">
         <style>
-          body { font-family: monospace; background-color: #0B0F14; color: #f3f4f6; padding: 24px; }
-          .card { max-width: 600px; margin: 0 auto; background: #111827; border: 1px solid #ef4444; border-radius: 12px; padding: 24px; }
-          .header { border-bottom: 1px solid #1f2937; padding-bottom: 16px; margin-bottom: 16px; }
-          .title { color: #ef4444; font-size: 20px; font-weight: bold; margin: 0; }
-          .badge { background: #ef444422; color: #ef4444; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
-          .error-box { background: #18181b; border: 1px solid #3f3f46; border-radius: 8px; padding: 16px; margin: 16px 0; overflow-x: auto; color: #f87171; }
-          table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 13px; }
-          .footer { margin-top: 24px; border-top: 1px solid #1f2937; pt-16; font-size: 11px; color: #6b7280; text-align: center; }
+          body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #06070a; color: #f8fafc; padding: 20px; margin: 0; }
+          .container { max-width: 620px; margin: 0 auto; background: #0b0d13; border: 1px solid #ef4444; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 30px rgba(239, 68, 68, 0.15); }
+          .header { background: linear-gradient(135deg, #1e1b4b 0%, #0f172a 100%); padding: 24px; border-bottom: 1px solid #ef444433; }
+          .badge { display: inline-block; background: #ef444422; border: 1px solid #ef444466; color: #fca5a5; font-size: 11px; font-weight: bold; padding: 4px 10px; border-radius: 6px; text-transform: uppercase; letter-spacing: 1px; }
+          .title { color: #ffffff; font-size: 20px; font-weight: 800; margin: 10px 0 4px 0; }
+          .content { padding: 24px; }
+          .box { background: #0f172a; border: 1px solid #1e293b; border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+          .box-title { font-size: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; color: #f97316; margin-bottom: 6px; }
+          .box-text { font-size: 14px; color: #cbd5e1; line-height: 1.5; margin: 0; }
+          .fix-box { background: #064e3b22; border: 1px solid #10b98144; border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+          .fix-title { font-size: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; color: #34d399; margin-bottom: 6px; }
+          .table-container { background: #0f172a; border: 1px solid #1e293b; border-radius: 12px; overflow: hidden; margin-top: 16px; }
+          table { width: 100%; border-collapse: collapse; }
+          .log-toggle { background: #18181b; border: 1px solid #27272a; border-radius: 8px; padding: 12px; margin-top: 16px; font-family: monospace; font-size: 11px; color: #fca5a5; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }
+          .footer { padding: 16px; border-top: 1px solid #1e293b; text-align: center; font-size: 11px; color: #64748b; background: #07090e; }
         </style>
       </head>
       <body>
-        <div class="card">
+        <div class="container">
           <div class="header">
-            <span class="badge">DEVELOPER ALERT</span>
-            <h1 class="title" style="margin-top:8px;">${options.service} — ${options.action}</h1>
-            <div style="color:#9ca3af;font-size:12px;margin-top:4px;">Timestamp: ${new Date().toISOString()}</div>
+            <span class="badge">🚨 Developer Diagnostic Alert</span>
+            <h1 class="title">${options.service} — ${options.action}</h1>
+            <div style="color: #94a3b8; font-size: 12px; margin-top: 4px;">Triggered: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} (IST)</div>
           </div>
           
-          <div style="font-size:14px;color:#e5e7eb;">
-            A system failure occurred in production requiring developer attention.
-          </div>
+          <div class="content">
+            <!-- Responsible Component -->
+            <div class="box">
+              <div class="box-title">🔧 Responsible System Component</div>
+              <div class="box-text"><strong>${responsibleComponent}</strong></div>
+            </div>
 
-          <div class="error-box">
-            <strong>Error Message:</strong><br/>
-            ${errorMessage}
-            ${errorStack ? `<br/><br/><strong>Stack Trace:</strong><br/>${errorStack}` : ''}
-          </div>
+            <!-- Human Readable Cause -->
+            <div class="box">
+              <div class="box-title">💡 Issue Summary & Root Cause</div>
+              <div class="box-text">${humanReadableCause}</div>
+            </div>
 
-          ${contextHtml ? `
-            <div style="font-weight:bold;color:#f3f4f6;margin-top:16px;">Context Metadata:</div>
-            <table>${contextHtml}</table>
-          ` : ''}
+            <!-- Recommended Fix -->
+            <div class="fix-box">
+              <div class="fix-title">🛠️ Recommended Action / Solution</div>
+              <div class="box-text" style="color: #a7f3d0;">${suggestedFix}</div>
+            </div>
+
+            <!-- Context Metadata -->
+            ${contextHtml ? `
+              <div style="font-size: 13px; font-weight: bold; color: #f8fafc; margin-top: 20px; margin-bottom: 8px;">📋 Event Context Metadata</div>
+              <div class="table-container">
+                <table>${contextHtml}</table>
+              </div>
+            ` : ''}
+
+            <!-- Raw Technical Details -->
+            <div style="font-size: 12px; font-weight: bold; color: #64748b; margin-top: 20px; margin-bottom: 6px;">🔍 Technical Diagnostic Log (Raw Message)</div>
+            <div class="log-toggle">
+${errorMessage}
+${errorStack ? `\n--- STACK TRACE ---\n${errorStack.slice(0, 500)}...` : ''}
+            </div>
+          </div>
 
           <div class="footer">
-            Olive Pizza Production DevOps Monitor • Targeted strictly to lead developer (${DEVELOPER_EMAIL})
+            Olive Pizza Lead DevOps Monitor • Strictly targeted to Lead Developer (<code>${DEVELOPER_EMAIL}</code>)
           </div>
         </div>
       </body>

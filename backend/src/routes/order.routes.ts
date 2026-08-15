@@ -191,23 +191,24 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
     }
 
     // 2.5 Duplicate Order Prevention (Idempotency / Distributed Lock)
-    const deviceId = req.headers['x-device-id'] || req.ip || 'unknown';
+    const deviceId = (req.headers['x-device-id'] as string) || req.ip || 'unknown';
     
     try {
       const lockResult = await query(`
         INSERT INTO checkout_locks (user_id, device_id, expires_at)
-        VALUES ($1, $2, NOW() + INTERVAL '3 minutes')
+        VALUES ($1, $2, NOW() + INTERVAL '15 seconds')
         ON CONFLICT (user_id) DO UPDATE 
         SET device_id = EXCLUDED.device_id,
             locked_at = NOW(),
-            expires_at = NOW() + INTERVAL '3 minutes'
-        WHERE checkout_locks.expires_at < NOW()
+            expires_at = NOW() + INTERVAL '15 seconds'
+        WHERE checkout_locks.expires_at < NOW() 
+           OR checkout_locks.device_id = EXCLUDED.device_id
         RETURNING user_id;
       `, [userId, deviceId]);
 
       if (lockResult.rows.length === 0) {
         if (isDebug) trace.steps.push({ step: 'Idempotency Lock', status: 'failed', reason: 'Order currently placing' });
-        res.status(409).json({ error: 'This account is currently placing an order from another device.', trace: isDebug ? trace : undefined });
+        res.status(409).json({ error: 'This account is currently placing an order. Please wait a moment.', trace: isDebug ? trace : undefined });
         return;
       }
     } catch (lockErr) {
@@ -279,6 +280,9 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
       orderDateLocal, 
       trace: isDebug ? trace : undefined 
     });
+
+    // Release checkout lock immediately so customer can place next order without waiting
+    query('DELETE FROM checkout_locks WHERE user_id = $1', [userId]).catch(() => {});
 
     // 5. Asynchronous Background Dispatch (Non-blocking: Customer receives instant response)
     setImmediate(async () => {

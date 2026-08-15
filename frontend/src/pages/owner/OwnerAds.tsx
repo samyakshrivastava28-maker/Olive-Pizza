@@ -11,12 +11,10 @@ import {
   orderBy,
 } from "firebase/firestore";
 import { useAuthStore } from "../../lib/store";
-import {
-  uploadMediaToCloudinary,
-  deleteMediaFromCloudinary,
-} from "../../lib/cloudinary";
+import { uploadMediaToCloudinary, deleteMediaFromCloudinary } from "../../lib/cloudinary";
 import { getCurrentAuthToken } from "../../lib/firebase";
 import { logActivity } from "../../lib/logger";
+import { getScheduleStatus, getItemExpiryDate, getItemStartDate } from "../../lib/scheduling";
 
 export default function OwnerAds() {
   const { user } = useAuthStore();
@@ -152,14 +150,6 @@ export default function OwnerAds() {
     } catch (error) {
       console.error("Error deleting ad", error);
     }
-  };
-
-  const isCurrentlyActive = (ad: any) => {
-    if (!ad.isActive) return false;
-    const now = new Date().toISOString();
-    if (ad.startDate && now < ad.startDate) return false;
-    if (ad.endDate && now > ad.endDate) return false;
-    return true;
   };
 
   if (loading)
@@ -315,20 +305,32 @@ export default function OwnerAds() {
                   className="w-full h-full object-cover"
                 />
               )}
-              <div
-                className={`absolute top-2 right-2 px-3 py-1 rounded-full text-xs font-bold text-white shadow-md ${isCurrentlyActive(ad) ? "bg-green-500" : "bg-slate-500"}`}
-              >
-                {isCurrentlyActive(ad) ? "Live" : "Scheduled / Ended"}
-              </div>
+              {(() => {
+                const status = getScheduleStatus(ad);
+                const badgeColor =
+                  status.color === 'green' ? 'bg-emerald-500 text-white' :
+                  status.color === 'red' ? 'bg-red-500 text-white' :
+                  status.color === 'orange' ? 'bg-orange-500 text-white' :
+                  'bg-slate-600 text-slate-200';
+                return (
+                  <div className={`absolute top-2 right-2 px-3 py-1 rounded-full text-xs font-bold shadow-md uppercase tracking-wider ${badgeColor}`}>
+                    {status.label}
+                  </div>
+                );
+              })()}
             </div>
 
             <div className="flex justify-between items-start">
               <div>
                 <h3 className="font-bold text-xl text-white">{ad.title}</h3>
                 <p className="text-sm text-slate-400">{ad.description}</p>
-                <div className="text-xs font-medium text-slate-400 mt-2">
-                  <p>Start: {new Date(ad.startDate).toLocaleString()}</p>
-                  <p>End: {new Date(ad.endDate).toLocaleString()}</p>
+                <div className="text-xs font-medium text-slate-400 mt-2 space-y-0.5">
+                  {ad.startDate && <p>Start: {new Date(ad.startDate).toLocaleString()}</p>}
+                  {ad.endDate && (
+                    <p className={getItemExpiryDate(ad)! < new Date() ? 'text-red-400 font-bold' : ''}>
+                      End: {new Date(ad.endDate).toLocaleString()} {getItemExpiryDate(ad)! < new Date() ? '(Expired)' : ''}
+                    </p>
+                  )}
                 </div>
               </div>
             </div>

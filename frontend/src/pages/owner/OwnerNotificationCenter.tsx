@@ -5,6 +5,7 @@ import { collection, query, orderBy, onSnapshot, where, limit } from 'firebase/f
 import { db } from '../../lib/firebase';
 import { formatDistanceToNow } from 'date-fns';
 import toast from 'react-hot-toast';
+import AIDeepSeekAssistantChatbox from '../../components/owner/AIDeepSeekAssistantChatbox';
 
 interface NotificationLog {
   id: string;
@@ -157,6 +158,42 @@ export default function OwnerNotificationCenter() {
     }
   };
 
+  const [titleInput, setTitleInput] = useState('');
+  const [bodyInput, setBodyInput] = useState('');
+  const [aiTopicInput, setAiTopicInput] = useState('');
+  const [isGeneratingAiNotif, setIsGeneratingAiNotif] = useState(false);
+
+  const handleGenerateAINotification = async () => {
+    if (!aiTopicInput.trim()) {
+      toast.error('Please enter a notification topic or offer first!');
+      return;
+    }
+    setIsGeneratingAiNotif(true);
+    const toastId = toast.loading('Generating notification with DeepSeek V4 Flash...');
+    try {
+      const res = await fetch('/api/ai/generate-notification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          topic: aiTopicInput.trim(),
+          offerDetails: aiTopicInput.trim(),
+          targetAudience: selectedAudience,
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.title && data.body) {
+        setTitleInput(data.title);
+        setBodyInput(data.body);
+        toast.success(`✨ Title & Body generated via ${data.model || 'DeepSeek V4 Flash'}!`, { id: toastId });
+      } else {
+        toast.error(data.error || 'Failed to generate notification', { id: toastId });
+      }
+    } catch (err: any) {
+      toast.error('Generation error: ' + err.message, { id: toastId });
+    }
+    setIsGeneratingAiNotif(false);
+  };
+
   return (
     <div className="max-w-6xl mx-auto space-y-8 pb-20">
       <div className="flex justify-between items-end">
@@ -200,13 +237,42 @@ export default function OwnerNotificationCenter() {
       </div>
 
       {/* Compose Push Notification */}
-      <GlassCard className="p-6">
-        <h2 className="text-xl font-bold text-white mb-4">Send Custom Notification</h2>
+      <GlassCard className="p-6 space-y-5">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-bold text-white">Send Custom Notification</h2>
+          <span className="text-xs px-2.5 py-1 rounded-full bg-purple-500/20 text-purple-300 font-bold border border-purple-500/30">
+            Powered by DeepSeek V4 Flash
+          </span>
+        </div>
+
+        {/* Interactive DeepSeek V4 Flash Notification Assistant Chatbox */}
+        <AIDeepSeekAssistantChatbox
+          mode="notification"
+          contextData={{
+            audience: selectedAudience,
+          }}
+          onApplyOutput={(output) => {
+            if (output.title) {
+              setTitleInput(output.title);
+            }
+            if (output.body) {
+              setBodyInput(output.body);
+            }
+          }}
+        />
+
         <form onSubmit={handleSendBroadcast} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-bold text-slate-400 mb-1">Notification Title</label>
-              <input name="title" required placeholder="e.g. 50% Off Pizza Today!" className="w-full bg-dark-900 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary-500" />
+              <input
+                name="title"
+                required
+                value={titleInput}
+                onChange={(e) => setTitleInput(e.target.value)}
+                placeholder="e.g. 🍕 50% Off Pizza Today!"
+                className="w-full bg-dark-900 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary-500"
+              />
             </div>
             <div>
               <label className="block text-sm font-bold text-slate-400 mb-1">Target Audience</label>
@@ -234,7 +300,14 @@ export default function OwnerNotificationCenter() {
 
           <div>
             <label className="block text-sm font-bold text-slate-400 mb-1">Message Body</label>
-            <textarea name="body" required placeholder="Enter the push notification text here..." className="w-full bg-dark-900 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary-500 min-h-[100px]"></textarea>
+            <textarea
+              name="body"
+              required
+              value={bodyInput}
+              onChange={(e) => setBodyInput(e.target.value)}
+              placeholder="Enter the push notification text here..."
+              className="w-full bg-dark-900 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary-500 min-h-[100px]"
+            ></textarea>
           </div>
           <div className="flex justify-end gap-3">
             <button type="submit" disabled={isSending} className="px-6 py-3 bg-primary-600 hover:bg-primary-500 text-white font-bold rounded-xl transition-colors disabled:opacity-50">

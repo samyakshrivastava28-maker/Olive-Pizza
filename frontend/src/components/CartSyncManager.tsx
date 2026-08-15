@@ -76,5 +76,61 @@ export default function CartSyncManager() {
     return () => clearTimeout(timeoutId);
   }, [items, total]);
 
+  // Handle incoming AI actions from Olive Pizza AI Assistant
+  useEffect(() => {
+    const handleActionPayload = (action: any) => {
+      if (!action) return;
+      const normType = String(action.type || '').toUpperCase();
+      const payload = action.payload || {};
+
+      if (normType === 'ADD_TO_CART') {
+        const productId = payload.productId || payload.id || 'olive-pizza-item';
+        const name = payload.name || payload.productName || 'Handcrafted Pizza';
+        const variant = payload.variant || payload.size || 'Regular';
+        const crust = payload.crust || 'Classic Hand Tossed';
+        const addons = Array.isArray(payload.addons) ? payload.addons : [];
+        const quantity = Number(payload.quantity) || 1;
+        const price = Number(payload.unitPrice || payload.price) || 299;
+        const image = payload.image || payload.photoUrl || '/logo-transparent.png';
+
+        const configHash = `${variant}-${crust}-${addons.slice().sort().join(',')}`;
+        const cartItemId = `${productId}-${configHash}`;
+
+        useCartStore.getState().addItem({
+          id: cartItemId,
+          menuItemId: productId,
+          name,
+          price,
+          quantity,
+          image,
+          variant,
+          crust,
+          addons,
+        });
+
+        // Trigger floating cart pulse and flying animations
+        window.dispatchEvent(new CustomEvent('cart-item-added'));
+      }
+    };
+
+    const handleWindowMessage = (e: MessageEvent) => {
+      if (e.data?.type === 'OLIVE_AI_ACTION') {
+        handleActionPayload(e.data.payload);
+      }
+    };
+
+    const handleCustomEvent = (e: CustomEvent) => {
+      handleActionPayload(e.detail);
+    };
+
+    window.addEventListener('message', handleWindowMessage);
+    window.addEventListener('olive-ai-action', handleCustomEvent as EventListener);
+
+    return () => {
+      window.removeEventListener('message', handleWindowMessage);
+      window.removeEventListener('olive-ai-action', handleCustomEvent as EventListener);
+    };
+  }, []);
+
   return null;
 }

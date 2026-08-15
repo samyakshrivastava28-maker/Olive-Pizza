@@ -67,7 +67,20 @@ router.get('/tasks', requireRole(['delivery', 'delivery_partner']), async (req: 
 });
 
 // Update order status (used by delivery dashboard)
-router.patch('/orders/:id/status', requireRole(['owner', 'delivery', 'delivery_partner']), async (req: AuthRequest, res: Response): Promise<void> => {
+function calculateDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371000; // Earth radius in meters
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+// Update order status (used by delivery dashboard)
+router.patch('/orders/:id/status', requireRole(['owner', 'delivery', 'delivery_partner', 'admin']), async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
     const parsedBody = deliveryStatusSchema.safeParse(req.body);
@@ -84,6 +97,43 @@ router.patch('/orders/:id/status', requireRole(['owner', 'delivery', 'delivery_p
       return;
     }
     const orderData = orderDoc.data()!;
+
+    // ── STRICT 100M DELIVERY COMPLETION VALIDATION ────────────────────────────
+    if (status === 'delivered' && (req.user?.role === 'delivery' || req.user?.role === 'delivery_partner')) {
+      const customerLat = orderData.deliveryAddress?.lat ?? orderData.deliveryAddressCoordinates?.lat ?? orderData.lat ?? orderData.customerLocation?.lat;
+      const customerLng = orderData.deliveryAddress?.lng ?? orderData.deliveryAddressCoordinates?.lng ?? orderData.lng ?? orderData.customerLocation?.lng;
+
+      if (customerLat != null && customerLng != null) {
+        let riderLat = req.body.lat ?? req.body.latitude;
+        let riderLng = req.body.lng ?? req.body.longitude;
+
+        if (riderLat == null || riderLng == null) {
+          try {
+            const client = await pgPool.connect();
+            const locRes = await client.query('SELECT latitude, longitude, accuracy, last_updated FROM delivery_locations WHERE delivery_partner_id = $1', [req.user.uid]);
+            client.release();
+            if (locRes.rows.length > 0) {
+              riderLat = locRes.rows[0].latitude;
+              riderLng = locRes.rows[0].longitude;
+            }
+          } catch (e: any) {
+            console.warn('[Delivery Validation] Could not query latest Postgres location:', e.message);
+          }
+        }
+
+        if (riderLat != null && riderLng != null) {
+          const distMeters = calculateDistanceMeters(Number(riderLat), Number(riderLng), Number(customerLat), Number(customerLng));
+          if (distMeters > 100) {
+            res.status(400).json({
+              error: 'Delivery cannot be completed yet. You must be within 100 meters of the customer location.',
+              distanceMeters: Math.round(distMeters),
+              requiredDistanceMeters: 100,
+            });
+            return;
+          }
+        }
+      }
+    }
 
     await adminDb.collection('orders').doc(id).update({
       status: status,
@@ -113,9 +163,24 @@ router.patch('/orders/:id/status', requireRole(['owner', 'delivery', 'delivery_p
     // Emit event so emails are triggered
     orderEventService.emitStatusChange(id, status as any, req.user?.uid || 'system');
     
-    // Auto-update rider status if delivered
+    // Auto-update rider status and navigation session expiry if delivered
     if (status === 'delivered' && req.user?.uid) {
       await DeliveryCapacityService.setPartnerStatus(req.user.uid, 'online'); // becomes available again
+      
+      // Update PostgreSQL navigation session to DELIVERED with 5-minute expiry
+      try {
+        const client = await pgPool.connect();
+        await client.query(`
+          UPDATE navigation_sessions
+          SET status = 'DELIVERED',
+              ended_at = CURRENT_TIMESTAMP,
+              expires_at = CURRENT_TIMESTAMP + INTERVAL '5 minutes'
+          WHERE order_id = $1 AND delivery_partner_id = $2
+        `, [id, req.user.uid]);
+        client.release();
+      } catch (e: any) {
+        console.warn('[Delivery Routes] Navigation session cleanup trigger warning:', e.message);
+      }
     }
 
     res.json({ message: `Order status updated to ${status}` });

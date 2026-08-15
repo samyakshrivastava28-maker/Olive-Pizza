@@ -1,10 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { db, auth } from '../../lib/firebase';
 import { collection, onSnapshot, query, addDoc, updateDoc, doc, deleteDoc, orderBy } from 'firebase/firestore';
-import { Sparkles, Image as ImageIcon, CheckCircle, Trash2, Edit2, Play, Calendar, Eye, Send, PackagePlus } from 'lucide-react';
+import { Sparkles, Image as ImageIcon, CheckCircle, Trash2, Edit2, Play, Calendar, Eye, Send, PackagePlus, Clipboard } from 'lucide-react';
 import { uploadMediaToCloudinary } from '../../lib/cloudinary';
 import { useAuthStore } from '../../lib/store';
 import toast from 'react-hot-toast';
+import InlineAIImageGenerator from './InlineAIImageGenerator';
+import UnifiedImageSelectorHub from './UnifiedImageSelectorHub';
+import AIDeepSeekAssistantChatbox from './AIDeepSeekAssistantChatbox';
 
 interface ComboBuilderProps {
   onAddComboProduct?: () => void;
@@ -71,29 +74,6 @@ export default function ComboBuilder({ onAddComboProduct }: ComboBuilderProps) {
 
   const selectedProductsData = products.filter(p => selectedProductIds.includes(p.id));
 
-  const handleEnhanceImagePrompt = async () => {
-    const productNames = selectedProductsData.map(p => p.productName).join(' and ');
-    const basePrompt = customImagePrompt || `Delicious combo meal containing ${productNames}. ${description || ""}`;
-    setIsEnhancingPrompt(true);
-    try {
-      const res = await fetch("/api/ai/enhance-prompt", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: basePrompt, type: "product" }),
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setCustomImagePrompt(data.text);
-      } else {
-        toast.error("Failed to enhance prompt: " + data.error);
-      }
-    } catch (e: any) {
-      toast.error("Error enhancing prompt: " + e.message);
-    } finally {
-      setIsEnhancingPrompt(false);
-    }
-  };
-
   const handleChatSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!chatInput.trim() || isChatLoading) return;
@@ -131,41 +111,6 @@ export default function ComboBuilder({ onAddComboProduct }: ComboBuilderProps) {
     }
   };
 
-  const handleGenerateImage = async () => {
-    if (selectedProductIds.length === 0 && !comboName) {
-      toast.error("Select products or enter combo name first!");
-      return;
-    }
-    setIsGenerating(true);
-    try {
-      const productNames = selectedProductsData.map(p => p.productName).join(' and ');
-      const fallbackPrompt = `A highly professional, realistic 4k advertisement food photography of a combo meal containing ${productNames}. Natural lighting, premium restaurant look.`;
-      
-      const res = await fetch("/api/ai/generate-product-image", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          productName: `${comboName || 'Combo Meal'}`,
-          customPrompt: customImagePrompt || fallbackPrompt,
-          modelName: "qwen-image"
-        })
-      });
-      
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setGeneratedImageUrl(data.imageUrl);
-        setCloudinaryPublicId(data.publicId);
-        toast.success("Image Generated & Saved to Cloudinary!");
-      } else {
-        toast.error("Generation failed: " + data.error);
-      }
-    } catch (e: any) {
-      toast.error("Error: " + e.message);
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
   const discountPercent = offerPrice > 0 && basePrice > offerPrice 
     ? Math.round(((basePrice - offerPrice) / basePrice) * 100) 
     : 0;
@@ -176,6 +121,37 @@ export default function ComboBuilder({ onAddComboProduct }: ComboBuilderProps) {
       return;
     }
 
+    let finalImageUrl = generatedImageUrl;
+    let finalPublicId = cloudinaryPublicId;
+
+    if (generatedImageUrl && (generatedImageUrl.startsWith('data:') || generatedImageUrl.startsWith('blob:'))) {
+      try {
+        const token = await auth.currentUser?.getIdToken();
+        const res = await fetch('/api/ai/image/approve', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            imageUrl: generatedImageUrl,
+            folder: 'olive-pizza/ai-product-images',
+          }),
+        });
+        const data = await res.json();
+        if (data.success && data.cloudinaryUrl) {
+          finalImageUrl = data.cloudinaryUrl;
+          finalPublicId = data.publicId || '';
+        } else {
+          toast.error(data.error || 'Failed to save combo image to Cloudinary');
+          return;
+        }
+      } catch (err: any) {
+        toast.error('Image approval upload failed: ' + err.message);
+        return;
+      }
+    }
+
     const payload = {
       name: comboName,
       description,
@@ -184,8 +160,8 @@ export default function ComboBuilder({ onAddComboProduct }: ComboBuilderProps) {
       basePrice,
       offerPrice: pricingMode === 'offer' ? offerPrice : 0,
       discountPercentage: pricingMode === 'offer' ? discountPercent : 0,
-      imageUrl: generatedImageUrl,
-      cloudinaryPublicId,
+      imageUrl: finalImageUrl,
+      cloudinaryPublicId: finalPublicId,
       isActive: true,
       updatedAt: new Date().toISOString()
     };
@@ -281,47 +257,64 @@ export default function ComboBuilder({ onAddComboProduct }: ComboBuilderProps) {
                   onChange={(e) => setComboName(e.target.value)}
                   className="w-full p-3 rounded-lg bg-slate-900 border border-slate-700 text-white focus:outline-none focus:border-primary-500"
                 />
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-400">Combo Description</label>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!comboName.trim()) {
+                        toast.error("Please enter a combo name first!");
+                        return;
+                      }
+                      const toastId = toast.loading("Generating combo description with DeepSeek V4 Flash...");
+                      try {
+                        const selectedNames = selectedProductsData.map((p) => p.productName);
+                        const res = await fetch("/api/ai/product-description", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            name: comboName,
+                            type: 'combo',
+                            items: selectedNames,
+                          }),
+                        });
+                        const data = await res.json();
+                        if (data.success && data.description) {
+                          setDescription(data.description);
+                          toast.success(`✨ Description generated via ${data.model || 'DeepSeek V4 Flash'}!`, { id: toastId });
+                        } else {
+                          toast.error(data.error || "Failed to generate combo description", { id: toastId });
+                        }
+                      } catch (err: any) {
+                        toast.error("Generation error: " + err.message, { id: toastId });
+                      }
+                    }}
+                    className="px-3 py-1 bg-gradient-to-r from-primary-600 to-amber-600 hover:from-primary-500 hover:to-amber-500 text-white text-xs font-bold rounded-lg flex items-center gap-1 shadow transition-all cursor-pointer"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>✨ Generate AI Description (DeepSeek V4 Flash)</span>
+                  </button>
+                </div>
                 <textarea 
-                  placeholder="Description..." 
+                  placeholder="Combo Description (Auto-filled by DeepSeek V4 Flash)..." 
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   className="w-full p-3 rounded-lg bg-slate-900 border border-slate-700 h-24 text-white focus:outline-none focus:border-primary-500"
                 />
                 
-                {/* AI Description Generator */}
-                <div className="bg-[#0B0F14] rounded-xl border border-white/5 overflow-hidden flex flex-col h-64 mt-4">
-                  <div className="bg-primary-500/10 p-3 border-b border-primary-500/20 flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-primary-400">
-                      <Sparkles className="w-4 h-4" />
-                      <span className="text-sm font-bold">AI Description Assistant</span>
-                    </div>
-                  </div>
-                  <div ref={chatScrollRef} className="flex-1 p-4 overflow-y-auto space-y-4 custom-scrollbar">
-                    {chatMessages.length === 0 && (
-                      <div className="text-center text-slate-500 text-sm mt-8">
-                        Describe your combo, and I'll generate a catchy description for you!
-                      </div>
-                    )}
-                    {chatMessages.map((msg, idx) => (
-                      <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`max-w-[80%] p-3 rounded-2xl text-sm ${msg.role === 'user' ? 'bg-primary-500 text-white rounded-tr-none' : 'bg-slate-800 text-slate-300 rounded-tl-none border border-white/5'}`}>
-                          {msg.content}
-                        </div>
-                      </div>
-                    ))}
-                    {isChatLoading && (
-                      <div className="flex justify-start">
-                        <div className="bg-slate-800 border border-white/5 p-3 rounded-2xl rounded-tl-none text-slate-400 text-sm flex gap-1">
-                          <span className="animate-bounce">●</span><span className="animate-bounce delay-100">●</span><span className="animate-bounce delay-200">●</span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                  <form onSubmit={handleChatSubmit} className="p-3 bg-slate-900 border-t border-white/5 flex gap-2">
-                    <input type="text" value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder="E.g. A romantic combo for two..." className="flex-1 bg-slate-800 text-white text-sm rounded-lg px-3 py-2 border border-slate-700 focus:outline-none focus:border-primary-500" />
-                    <button type="submit" disabled={isChatLoading || !chatInput.trim()} className="bg-primary-500 hover:bg-primary-600 disabled:opacity-50 text-white p-2 rounded-lg transition-colors"><Send className="w-4 h-4" /></button>
-                  </form>
-                </div>
+                {/* Interactive DeepSeek V4 Flash Assistant Chatbox */}
+                <AIDeepSeekAssistantChatbox
+                  mode="combo-description"
+                  contextData={{
+                    name: comboName,
+                    items: selectedProductsData.map((p) => p.productName),
+                  }}
+                  onApplyOutput={(output) => {
+                    if (output.description) {
+                      setDescription(output.description);
+                    }
+                  }}
+                />
               </div>
             </div>
 
@@ -409,32 +402,28 @@ export default function ComboBuilder({ onAddComboProduct }: ComboBuilderProps) {
               )}
             </div>
 
-            {/* Step 4 */}
-            <div className="bg-slate-800 p-6 rounded-xl border border-white/10">
-              <h3 className="text-lg font-bold text-primary-400 mb-4">Step 4: AI Image Generation</h3>
-              <div className="space-y-4">
-                <textarea
-                  value={customImagePrompt}
-                  onChange={(e) => setCustomImagePrompt(e.target.value)}
-                  placeholder="Describe the combo image (e.g., A delicious pizza and coke on a wooden table)"
-                  className="w-full p-3 rounded-lg bg-slate-900 border border-slate-700 h-24 text-white focus:outline-none focus:border-primary-500 text-sm"
-                />
-                <button
-                  type="button"
-                  onClick={handleEnhanceImagePrompt}
-                  disabled={isEnhancingPrompt}
-                  className="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 rounded-lg flex items-center justify-center gap-2 transition-colors disabled:opacity-50 text-sm"
-                >
-                  {isEnhancingPrompt ? "Enhancing with DeepSeek R1..." : <><Sparkles className="w-4 h-4" /> Enhance Prompt with DeepSeek</>}
-                </button>
-                <button 
-                  onClick={handleGenerateImage}
-                  disabled={isGenerating || (selectedProductIds.length === 0 && !comboName)}
-                  className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
-                >
-                  {isGenerating ? <span className="animate-pulse">Generating...</span> : <><ImageIcon className="w-5 h-5"/> Generate Promotional Image</>}
-                </button>
-              </div>
+            {/* Step 4: Combo Image Studio */}
+            <div className="bg-slate-800 p-6 rounded-xl border border-white/10 space-y-4">
+              <h3 className="text-lg font-bold text-primary-400 mb-2">Step 4: Combo Image Studio</h3>
+              <UnifiedImageSelectorHub
+                initialPrompt={
+                  comboName
+                    ? `${comboName} combo meal containing ${selectedProductsData.map((p) => p.productName).join(' and ')}`
+                    : 'Indian Pizza Combo Meal with drinks and sides'
+                }
+                targetType="product"
+                defaultAspectRatio="4:3"
+                currentImageUrl={generatedImageUrl}
+                onSelectImage={(cloudinaryUrl, publicId) => {
+                  setGeneratedImageUrl(cloudinaryUrl);
+                  if (publicId) setCloudinaryPublicId(publicId);
+                  toast.success('Combo image set!');
+                }}
+                onClearImage={() => {
+                  setGeneratedImageUrl(null);
+                  setCloudinaryPublicId(null);
+                }}
+              />
             </div>
             
             <div className="flex gap-4">

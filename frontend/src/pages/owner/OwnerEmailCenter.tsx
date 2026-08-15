@@ -15,11 +15,15 @@ import {
   Zap,
   Layers,
   AlertCircle,
+  Clipboard,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
 import { db } from "../../lib/firebase";
 import { collection, getDocs } from "firebase/firestore";
+import InlineAIImageGenerator from "../../components/owner/InlineAIImageGenerator";
+import UnifiedImageSelectorHub from "../../components/owner/UnifiedImageSelectorHub";
+import AIDeepSeekAssistantChatbox from "../../components/owner/AIDeepSeekAssistantChatbox";
 
 interface Campaign {
   id: number;
@@ -107,6 +111,7 @@ export default function OwnerEmailCenter() {
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [isEnhancingPrompt, setIsEnhancingPrompt] = useState(false);
   const [aiModel, setAiModel] = useState("qwen-image");
+  const [isAIStudioOpen, setIsAIStudioOpen] = useState(false);
   const [imageError, setImageError] = useState<string | null>(null);
 
   // Image Library (session-based)
@@ -698,140 +703,50 @@ export default function OwnerEmailCenter() {
               </div>
             </div>
 
-            <div className="bg-[#1E293B] border border-white/10 rounded-3xl p-6 shadow-xl relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-24 h-24 bg-primary-500/10 blur-3xl rounded-full" />
-              <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2 relative z-10">
-                <Sparkles className="w-5 h-5 text-primary-400" /> AI Email Agent
-              </h2>
-              <div className="space-y-4 relative z-10">
-                <textarea
-                  value={aiPrompt}
-                  onChange={(e) => setAiPrompt(e.target.value)}
-                  className="w-full bg-dark-900 border border-dark-800 rounded-xl p-3 text-white text-sm focus:outline-none focus:border-primary-500 min-h-[80px]"
-                  placeholder="e.g. Write a weekend offer email for our large pizzas with 15% off..."
-                />
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
-                    Include Products
-                  </label>
-                  <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto p-2 bg-dark-900 rounded-xl border border-dark-800">
-                    {products.map((p) => (
-                      <button
-                        key={p.id}
-                        onClick={() =>
-                          setSelectedProducts((prev) =>
-                            prev.includes(p.id)
-                              ? prev.filter((id) => id !== p.id)
-                              : [...prev, p.id],
-                          )
-                        }
-                        className={`text-xs px-2 py-1 rounded-md font-medium transition-colors ${selectedProducts.includes(p.id) ? "bg-primary-500 text-white" : "bg-dark-800 text-slate-400 hover:bg-dark-700"}`}
-                      >
-                        {p.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <button
-                  onClick={handleGenerateAI}
-                  disabled={isGeneratingAI}
-                  className="w-full bg-gradient-to-r from-primary-600 to-primary-500 text-white py-2.5 rounded-xl font-bold text-sm flex justify-center items-center gap-2 disabled:opacity-50"
-                >
-                  {isGeneratingAI ? (
-                    <RefreshCcw className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Sparkles className="w-4 h-4" />
-                  )}
-                  Generate Email HTML
-                </button>
-              </div>
-            </div>
+            {/* Interactive DeepSeek V4 Flash Email Assistant Chatbox */}
+            <AIDeepSeekAssistantChatbox
+              mode="email-template"
+              contextData={{
+                audience: targetAudience,
+                selectedProducts: selectedProducts,
+              }}
+              onApplyOutput={(output) => {
+                if (output.html) {
+                  setHtmlContent(output.html);
+                }
+                if (output.subject) {
+                  setSubject(output.subject);
+                }
+              }}
+            />
           </div>
 
           {/* CENTER/RIGHT */}
           <div className="xl:col-span-2 space-y-5">
-            {/* AI Banner Generator */}
-            <div className="bg-[#1E293B] border border-white/10 rounded-3xl p-6 shadow-xl">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-xl font-bold mb-1 flex items-center gap-2 text-white">
-                  <ImageIcon className="text-primary-500 w-5 h-5" /> Generative
-                  AI Images
-                </h3>
-                <div className="flex gap-2">
-                  <select
-                    value={aiModel}
-                    onChange={(e) => setAiModel(e.target.value)}
-                    className="bg-dark-900 border border-dark-800 rounded-lg px-2 py-1 text-primary-400 font-bold text-xs"
-                  >
-                    <option value="qwen-image">Qwen Image</option>
-                    <option value="qwen-image-edit">
-                      Qwen Edit (Latest Image)
-                    </option>
-                  </select>
-                  <button
-                    onClick={() => setShowImageLibrary(true)}
-                    className="text-xs font-bold text-slate-400 hover:text-white px-3 py-1 bg-white/5 rounded-full transition-colors flex items-center gap-1"
-                  >
-                    <Layers className="w-3 h-3" /> Library (
-                    {imageLibrary.length})
-                  </button>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-4">
-                {BANNER_PRESETS.map((preset) => (
-                  <button
-                    key={preset.label}
-                    onClick={() => handleGenerateImage(preset.prompt)}
-                    disabled={isGeneratingImage}
-                    className="bg-dark-900 hover:bg-dark-800 border border-dark-800 hover:border-primary-700 text-left px-3 py-2 rounded-xl text-xs font-bold text-slate-300 transition-all disabled:opacity-40"
-                  >
-                    {preset.label}
-                  </button>
-                ))}
-              </div>
-
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={imagePrompt}
-                  onChange={(e) => setImagePrompt(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleGenerateImage()}
-                  placeholder="Custom banner prompt..."
-                  className="flex-1 bg-dark-900 border border-dark-800 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-primary-500"
-                />
-
-                <button
-                  onClick={handleEnhancePrompt}
-                  disabled={isEnhancingPrompt || !imagePrompt}
-                  className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-3 rounded-xl font-bold text-sm flex items-center gap-2 disabled:opacity-50 whitespace-nowrap border border-indigo-500"
-                  title="Enhance prompt using DeepSeek R1"
-                >
-                  {isEnhancingPrompt ? (
-                    <RefreshCcw className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Sparkles className="w-4 h-4" />
-                  )}
-                  <span className="hidden sm:inline">Enhance</span>
-                </button>
-
-                <button
-                  onClick={() => handleGenerateImage()}
-                  disabled={isGeneratingImage}
-                  className="bg-primary-600 hover:bg-primary-500 text-white px-5 py-3 rounded-xl font-bold text-sm flex items-center gap-2 disabled:opacity-50 whitespace-nowrap border border-primary-500"
-                >
-                  {isGeneratingImage ? (
-                    <>
-                      <RefreshCcw className="w-4 h-4 animate-spin" />{" "}
-                      Generating...
-                    </>
-                  ) : (
-                    <>
-                      <ImageIcon className="w-4 h-4" /> Generate
-                    </>
-                  )}
-                </button>
-              </div>
+            {/* Unified Image Selection Hub (5 Tab Modes) */}
+            <UnifiedImageSelectorHub
+              initialPrompt={imagePrompt || subject || "Olive Pizza Festival Banner"}
+              targetType="email"
+              defaultAspectRatio="16:9"
+              onSelectImage={(cloudinaryUrl, publicId) => {
+                setImageLibrary((prev) => [
+                  {
+                    url: cloudinaryUrl,
+                    publicId,
+                    prompt: imagePrompt || "AI Email Banner",
+                    createdAt: new Date(),
+                  },
+                  ...prev,
+                ]);
+                setHtmlContent((prev) => {
+                  if (prev.includes("<img")) {
+                    return prev.replace(/src="[^"]*"/, `src="${cloudinaryUrl}"`);
+                  }
+                  return `<div style="text-align:center; margin-bottom:20px;"><img src="${cloudinaryUrl}" alt="Campaign Banner" style="max-width:100%; border-radius:12px;" /></div>\n${prev}`;
+                });
+                toast.success("Banner inserted into Email!");
+              }}
+            />
 
               <AnimatePresence>
                 {imageError && (
@@ -932,7 +847,6 @@ export default function OwnerEmailCenter() {
                   </motion.div>
                 )}
               </AnimatePresence>
-            </div>
 
             {/* HTML Composer */}
             <div className="bg-[#1E293B] border border-white/10 rounded-3xl p-6 shadow-xl flex flex-col min-h-[500px]">
@@ -1034,6 +948,7 @@ export default function OwnerEmailCenter() {
           </div>
         </div>
       )}
+
     </div>
   );
 }
