@@ -13,14 +13,14 @@ export default function StartupGate({ children }: StartupGateProps) {
   const [showVideo, setShowVideo] = useState(() => {
     if (typeof window === 'undefined') return false;
 
-    // Check if running on native mobile app (Android/iOS)
+    // Check if running on native mobile app (Android/iOS Capacitor)
     if (Capacitor.isNativePlatform()) {
       if (nativeIntroShownInProcess) return false;
       nativeIntroShownInProcess = true;
       return true;
     }
 
-    // Web / PWA: sessionStorage survives browser refresh (F5) and route changes,
+    // Web / PWA: sessionStorage survives browser refresh (F5) and SPA route changes,
     // but resets when the user closes the browser/tab completely and opens again.
     const hasSeenIntro = sessionStorage.getItem('hasSeenIntro');
     if (hasSeenIntro === 'true') {
@@ -31,12 +31,9 @@ export default function StartupGate({ children }: StartupGateProps) {
   });
 
   const [videoFading, setVideoFading] = useState(false);
-  const [deviceType] = useState<'mobile' | 'tablet' | 'desktop'>(() => {
+  const [deviceType] = useState<'mobile' | 'desktop'>(() => {
     if (typeof window !== 'undefined') {
-      const w = window.innerWidth;
-      if (w < 768) return 'mobile';
-      if (w < 1024) return 'tablet';
-      return 'desktop';
+      return window.innerWidth < 768 ? 'mobile' : 'desktop';
     }
     return 'desktop';
   });
@@ -49,16 +46,21 @@ export default function StartupGate({ children }: StartupGateProps) {
   const initialFailsafeTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const logDiagnostic = useCallback((reason: string, details?: any) => {
-    const auth = getAuth();
-    const userId = auth.currentUser?.uid || 'anonymous';
-    const timestamp = new Date().toISOString();
-    console.log('[StartupGate] [' + timestamp + '] User: ' + userId + ' | Reason: ' + reason, details || '');
+    try {
+      const auth = getAuth();
+      const userId = auth.currentUser?.uid || 'anonymous';
+      const timestamp = new Date().toISOString();
+      console.log('[StartupGate] [' + timestamp + '] User: ' + userId + ' | Reason: ' + reason, details || '');
+    } catch {
+      // Diagnostic logging failure should never impact app startup
+    }
   }, []);
 
   const handleVideoEnd = useCallback(() => {
     if (endedRef.current) return;
     endedRef.current = true;
 
+    // Clear all pending timers immediately
     if (maxDurationTimerRef.current) {
       clearTimeout(maxDurationTimerRef.current);
       maxDurationTimerRef.current = null;
@@ -68,31 +70,46 @@ export default function StartupGate({ children }: StartupGateProps) {
       initialFailsafeTimerRef.current = null;
     }
 
-    logDiagnostic('Ending intro video smoothly');
+    logDiagnostic('Ending intro video with smooth transition');
     setVideoFading(true);
-    document.body.style.overflow = '';
 
+    // Clean up video decoder and memory after transition
     setTimeout(() => {
+      if (videoRef.current) {
+        try {
+          videoRef.current.pause();
+          videoRef.current.removeAttribute('src');
+          videoRef.current.load(); // Releases GPU video decoder buffers on Android/mobile
+        } catch {
+          // Ignore cleanup errors on unmount
+        }
+      }
       setShowVideo(false);
-    }, 300);
+    }, 250);
   }, [logDiagnostic]);
 
   useEffect(() => {
     if (!showVideo) return;
 
-    logDiagnostic('Initializing intro video sequence');
+    logDiagnostic('Initializing intro video sequence (first 5s optimized)');
 
-    // Failsafe: if video fails to load or buffer within 3.5s, skip directly to app
+    // Fast Failsafe: if video fails to load or buffer within 2.5s, skip directly to app
     initialFailsafeTimerRef.current = setTimeout(() => {
       if (!endedRef.current) {
-        logDiagnostic('Startup video buffering timed out, skipping to app', { timeout: 3500 });
+        logDiagnostic('Startup video buffering threshold reached (2.5s), transitioning directly to app');
         handleVideoEnd();
       }
-    }, 3500);
+    }, 2500);
 
     return () => {
-      if (initialFailsafeTimerRef.current) clearTimeout(initialFailsafeTimerRef.current);
-      if (maxDurationTimerRef.current) clearTimeout(maxDurationTimerRef.current);
+      if (initialFailsafeTimerRef.current) {
+        clearTimeout(initialFailsafeTimerRef.current);
+        initialFailsafeTimerRef.current = null;
+      }
+      if (maxDurationTimerRef.current) {
+        clearTimeout(maxDurationTimerRef.current);
+        maxDurationTimerRef.current = null;
+      }
     };
   }, [showVideo, handleVideoEnd, logDiagnostic]);
 
@@ -109,7 +126,7 @@ export default function StartupGate({ children }: StartupGateProps) {
             logDiagnostic('Video autoplay started successfully');
           })
           .catch((error) => {
-            logDiagnostic('Video autoplay rejected or failed, skipping immediately', error);
+            logDiagnostic('Video autoplay rejected or failed, skipping immediately to app', error);
             handleVideoEnd();
           });
       }
@@ -126,7 +143,7 @@ export default function StartupGate({ children }: StartupGateProps) {
     // STRICT 5-SECOND DURATION: Cap display to exactly 5 seconds
     if (!maxDurationTimerRef.current) {
       maxDurationTimerRef.current = setTimeout(() => {
-        logDiagnostic('5.0-second playback limit reached, transitioning to app');
+        logDiagnostic('5.0-second playback limit reached, transitioning smoothly to app');
         handleVideoEnd();
       }, 5000);
     }
@@ -138,17 +155,20 @@ export default function StartupGate({ children }: StartupGateProps) {
     }
   };
 
+  // Dedicated 5-Second Optimized Assets:
+  // - so_0,eo_5: Physical trimming to first 5 seconds on Cloudinary CDN (no excess payload downloaded)
+  // - w_720/w_1080 + q_auto:good + vc_h264: H.264 profile optimized for smooth mobile Android decoding
   const getOptimizedIntroUrls = () => {
-    let videoUrl = '';
     if (deviceType === 'mobile') {
-      videoUrl = 'https://res.cloudinary.com/dxmlvkff1/video/upload/v1782199117/Olive_Pizza_logo_reveal_202606231246_xeyk9t.mp4';
-    } else {
-      videoUrl = 'https://res.cloudinary.com/dxmlvkff1/video/upload/v1782199127/Olive_Pizza_logo_reveal_202606231247_rrtc3u.mp4';
+      return {
+        videoUrl: 'https://res.cloudinary.com/dxmlvkff1/video/upload/so_0,eo_5,w_720,c_limit,q_auto:good,vc_h264/v1782199117/Olive_Pizza_logo_reveal_202606231246_xeyk9t.mp4',
+        posterUrl: 'https://res.cloudinary.com/dxmlvkff1/video/upload/so_0,w_720,c_limit,q_auto:eco,f_jpg/v1782199117/Olive_Pizza_logo_reveal_202606231246_xeyk9t.jpg'
+      };
     }
 
     return {
-      videoUrl,
-      posterUrl: videoUrl.replace('.mp4', '.jpg')
+      videoUrl: 'https://res.cloudinary.com/dxmlvkff1/video/upload/so_0,eo_5,w_1080,c_limit,q_auto:good,vc_h264/v1782199127/Olive_Pizza_logo_reveal_202606231247_rrtc3u.mp4',
+      posterUrl: 'https://res.cloudinary.com/dxmlvkff1/video/upload/so_0,w_1080,c_limit,q_auto:eco,f_jpg/v1782199127/Olive_Pizza_logo_reveal_202606231247_rrtc3u.jpg'
     };
   };
 
@@ -156,20 +176,26 @@ export default function StartupGate({ children }: StartupGateProps) {
 
   return (
     <>
+      {/* App Shell & Children render immediately underneath so app is fully ready */}
       {children}
 
       {showVideo && (
         <div 
-          className={'fixed inset-0 z-[99999] flex items-center justify-center transition-opacity duration-300 ' + (videoFading ? 'opacity-0 pointer-events-none' : 'opacity-100')}
+          className={'fixed inset-0 z-[99999] flex items-center justify-center transition-opacity duration-250 ease-out will-change-[opacity] ' + (videoFading ? 'opacity-0 pointer-events-none' : 'opacity-100')}
+          style={{ transform: 'translateZ(0)' }}
+          aria-hidden={videoFading}
         >
-          {/* Subtle dark backdrop */}
-          <div className="absolute inset-0 bg-black/80 backdrop-blur-md" />
+          {/* Dark backdrop */}
+          <div className="absolute inset-0 bg-black" />
 
+          {/* Ultra-lightweight first-frame poster (5KB) for zero black flash */}
           <img 
             src={posterUrl} 
-            alt="Loading Olive Pizza"
-            className={'absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ' + (videoReady ? 'opacity-0' : 'opacity-100') + ' z-10'}
+            alt="Olive Pizza"
+            className={'absolute inset-0 w-full h-full object-cover transition-opacity duration-200 ' + (videoReady ? 'opacity-0' : 'opacity-100') + ' z-10'}
             onError={handleVideoEnd}
+            loading="eager"
+            decoding="async"
           />
 
           <video
@@ -178,25 +204,27 @@ export default function StartupGate({ children }: StartupGateProps) {
             autoPlay
             playsInline
             muted
-            preload="auto"
+            preload="metadata"
             poster={posterUrl}
             onEnded={handleVideoEnd}
             onCanPlay={() => setVideoReady(true)}
             onPlaying={handlePlaying}
             onTimeUpdate={handleTimeUpdate}
             onError={(e) => {
-              logDiagnostic('Video onError fired', e);
+              logDiagnostic('Video playback error encountered, skipping to app', e);
               handleVideoEnd();
             }}
-            className={'absolute inset-0 w-full h-full object-cover z-20 transition-opacity duration-300 ' + (videoReady ? 'opacity-100' : 'opacity-0')}
+            className={'absolute inset-0 w-full h-full object-cover z-20 transition-opacity duration-200 will-change-[opacity] ' + (videoReady ? 'opacity-100' : 'opacity-0')}
           />
 
           {/* Top-Right Quick Skip Button */}
           <button
             onClick={handleVideoEnd}
-            className="absolute top-6 right-6 z-30 px-3.5 py-1.5 rounded-full bg-black/50 hover:bg-black/80 text-white/80 hover:text-white border border-white/20 text-xs font-bold backdrop-blur-md transition-all active:scale-95 flex items-center gap-1 shadow-lg"
+            aria-label="Skip Intro"
+            className="absolute top-6 right-6 z-30 px-4 py-2 rounded-full bg-black/60 hover:bg-black/90 text-white/90 hover:text-white border border-white/20 text-xs font-semibold backdrop-blur-md transition-all active:scale-95 flex items-center gap-1.5 shadow-xl cursor-pointer"
           >
-            Skip ✕
+            <span>Skip</span>
+            <span aria-hidden="true">✕</span>
           </button>
         </div>
       )}
