@@ -144,7 +144,7 @@ export default function Checkout() {
       navigate('/login?redirect=/checkout');
       return;
     }
-    if (user && !user.phoneSetupCompleted && !user.phone) {
+    if (user && !user.phoneVerified) {
       navigate('/onboarding/phone?redirect=/checkout');
       return;
     }

@@ -223,7 +223,7 @@ function AppContent() {
       return;
     }
 
-    if (!user.phoneSetupCompleted && !user.phone) {
+    if (!user.phoneVerified) {
       navigate('/onboarding/phone', { replace: true });
     } else if (!user.locationSetupCompleted && !user.lat) {
       navigate('/onboarding/location', { replace: true });

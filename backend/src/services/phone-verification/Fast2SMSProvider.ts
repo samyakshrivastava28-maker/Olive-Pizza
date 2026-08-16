@@ -109,12 +109,13 @@ export class Fast2SMSProvider implements PhoneVerificationProvider {
 
       if (this.apiKey && this.apiKey.trim().length > 5) {
         try {
-          console.log(`[Fast2SMS] Dispatching real SMS to +91 ${rawPhone}...`);
+          console.log(`[Fast2SMS] Dispatching Quick SMS OTP to +91 ${rawPhone}...`);
           const response = await axios.post('https://www.fast2sms.com/dev/bulkV2', {
-            route: 'otp',
-            variables_values: otpCode,
-            numbers: rawPhone,
-            flash: '0'
+            route: 'q',
+            message: `Your Olive Pizza verification code is ${otpCode}. Valid for 4 minutes. Do not share with anyone.`,
+            language: 'english',
+            flash: 0,
+            numbers: rawPhone
           }, {
             headers: {
               'authorization': this.apiKey.trim(),
@@ -139,14 +140,26 @@ export class Fast2SMSProvider implements PhoneVerificationProvider {
               success: true
             });
           } else {
-            gatewayErrorMsg = Array.isArray(response.data?.message) ? response.data.message.join(', ') : response.data?.message || 'Gateway rejected SMS request';
+            const rawMsg2 = response.data?.message;
+            gatewayErrorMsg = Array.isArray(rawMsg2) ? rawMsg2.join(', ') : (rawMsg2 || 'Gateway rejected SMS request');
+            const gatewayStatusCode = response.data?.status_code;
             console.error('[Fast2SMS] ❌ Fast2SMS gateway returned error:', response.data);
-            
+
+            let userFacingGatewayError: string;
+            if (gatewayStatusCode === 996) {
+              userFacingGatewayError = 'SMS service requires website verification on Fast2SMS dashboard. Please use Truecaller verification instead.';
+              console.error('[Fast2SMS] ❌ STATUS 996: Complete website verification at https://www.fast2sms.com/dashboard/otp');
+            } else if (gatewayStatusCode === 999) {
+              userFacingGatewayError = 'SMS service account needs a minimum recharge. Please use Truecaller verification instead.';
+            } else {
+              userFacingGatewayError = `SMS service error: ${gatewayErrorMsg}`;
+            }
+
             aiOperationsStore.pushSmsLog({
               timestamp: new Date().toISOString(),
               phone: formattedPhone,
               provider: 'Fast2SMS (Production)',
-              status: 'GATEWAY_ERROR',
+              status: gatewayStatusCode === 996 ? 'WEBSITE_VERIFICATION_REQUIRED' : 'GATEWAY_ERROR',
               error: gatewayErrorMsg,
               latencyMs: Date.now() - startTime,
               success: false
@@ -154,18 +167,34 @@ export class Fast2SMSProvider implements PhoneVerificationProvider {
 
             return {
               success: false,
-              error: `Fast2SMS Gateway Error: ${gatewayErrorMsg}`
+              error: userFacingGatewayError
             };
           }
         } catch (apiErr: any) {
-          const errMsg = apiErr.response?.data?.message || apiErr.message;
-          console.error('[Fast2SMS] ❌ Gateway API connection failure:', errMsg);
-          
+          const rawErrData = apiErr.response?.data;
+          const statusCode = rawErrData?.status_code;
+          const rawMsg = rawErrData?.message;
+          const errMsg = Array.isArray(rawMsg) ? rawMsg.join(', ') : (rawMsg || apiErr.message);
+
+          console.error('[Fast2SMS] ❌ Gateway API connection failure:', rawErrData || apiErr.message);
+
+          // Detect Fast2SMS-specific blocking errors and surface a clean message
+          let userFacingError: string;
+          if (statusCode === 996) {
+            userFacingError = 'SMS service requires website verification on Fast2SMS dashboard. Please use Truecaller verification instead, or contact the administrator.';
+            console.error('[Fast2SMS] ❌ STATUS 996: Website verification required. Go to https://www.fast2sms.com/dashboard/otp to verify your domain.');
+          } else if (statusCode === 999) {
+            userFacingError = 'SMS service account needs a minimum recharge. Please use Truecaller verification instead.';
+            console.error('[Fast2SMS] ❌ STATUS 999: Account requires minimum ₹100 recharge for Quick SMS route.');
+          } else {
+            userFacingError = `SMS gateway error: ${errMsg}`;
+          }
+
           aiOperationsStore.pushSmsLog({
             timestamp: new Date().toISOString(),
             phone: formattedPhone,
             provider: 'Fast2SMS (Production)',
-            status: 'NETWORK_ERROR',
+            status: statusCode === 996 ? 'WEBSITE_VERIFICATION_REQUIRED' : 'NETWORK_ERROR',
             error: errMsg,
             latencyMs: Date.now() - startTime,
             success: false
@@ -173,7 +202,7 @@ export class Fast2SMSProvider implements PhoneVerificationProvider {
 
           return {
             success: false,
-            error: `Failed to connect to Fast2SMS server: ${errMsg}`
+            error: userFacingError
           };
         }
       } else {

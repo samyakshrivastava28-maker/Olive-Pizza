@@ -79,7 +79,7 @@ export default function Register() {
             navigate("/delivery/dashboard");
           } else {
             toast.success("Welcome to Olive Pizza!");
-            if (userDoc.exists() && userDoc.data()?.phoneSetupCompleted) {
+            if (userDoc.exists() && userDoc.data()?.phoneVerified) {
                navigate("/");
             } else {
                navigate("/onboarding/phone");
@@ -219,7 +219,8 @@ export default function Register() {
             name: name || "",
             role: initialRole,
             phone: formattedPhone,
-            phoneSetupCompleted: true,
+            phoneVerified: false,
+            phoneSetupCompleted: false,
             locationSetupCompleted: false,
             createdAt: new Date().toISOString(),
           },
@@ -232,7 +233,8 @@ export default function Register() {
           name: name || "",
           phone: formattedPhone,
           photoURL: userCredential.user.photoURL,
-          phoneSetupCompleted: true,
+          phoneVerified: false,
+          phoneSetupCompleted: false,
           locationSetupCompleted: false,
           emailVerified: userCredential.user.emailVerified,
         }, initialRole as "customer" | "owner" | "delivery_partner" | "admin");
@@ -248,15 +250,15 @@ export default function Register() {
           }),
         }).catch((e) => console.error("Email trigger failed:", e));
 
-        toast.success("Welcome to Olive Pizza!");
+        toast.success("Account created! Please verify your phone number.");
 
         if (initialRole === "owner") navigate("/owner/dashboard");
-        else navigate("/onboarding/location");
+        else navigate("/onboarding/phone");
       } catch (syncErr) {
         logDetailedError(syncErr, { context: "Register Firestore Sync" });
         console.warn("Firestore write failed. User created in Auth only.", syncErr);
         toast.success("Welcome to Olive Pizza!");
-        navigate("/onboarding/location");
+        navigate("/onboarding/phone");
       }
     } catch (err: any) {
       setError(translateError(err));
