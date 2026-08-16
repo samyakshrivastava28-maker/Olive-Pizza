@@ -117,7 +117,15 @@ export default function OwnerLayout() {
               Olive Pizza
             </span>
           </Link>
-          <button className="md:hidden text-slate-300 p-1 hover:text-white" onClick={() => setIsMobileMenuOpen(false)}>âœ•</button>
+          <button 
+            className="md:hidden text-slate-400 p-2 hover:text-white hover:bg-white/10 rounded-lg transition-colors" 
+            onClick={() => setIsMobileMenuOpen(false)}
+            aria-label="Close Menu"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
         
         <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
@@ -144,8 +152,17 @@ export default function OwnerLayout() {
         {/* Top Navigation Bar */}
         <header className="h-20 bg-white/5 backdrop-blur-xl border-b border-white/10 flex items-center justify-between px-6 z-30 sticky top-0 shadow-[0_8px_40px_rgba(0,0,0,0.15)]">
           <div className="flex items-center gap-4">
-            <button className="md:hidden p-2 text-white" onClick={() => setIsMobileMenuOpen(true)}>
-              â˜°
+            {/* 3-Lines Navigation Menu Button for Mobile */}
+            <button 
+              className="md:hidden p-2.5 rounded-xl bg-white/10 hover:bg-white/15 active:scale-95 text-white transition-all flex items-center justify-center border border-white/10 shadow-sm cursor-pointer" 
+              onClick={() => setIsMobileMenuOpen(true)}
+              aria-label="Open Navigation Menu"
+            >
+              <div className="flex flex-col gap-[3.5px] w-5 justify-center items-center">
+                <span className="w-full h-[2.5px] bg-white rounded-full transition-all" />
+                <span className="w-full h-[2.5px] bg-white rounded-full transition-all" />
+                <span className="w-full h-[2.5px] bg-white rounded-full transition-all" />
+              </div>
             </button>
             <div className="hidden sm:block">
               <h2 className="text-xl font-black text-white">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</h2>
