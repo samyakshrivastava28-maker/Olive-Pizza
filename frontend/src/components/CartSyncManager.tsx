@@ -96,20 +96,32 @@ export default function CartSyncManager() {
         const configHash = `${variant}-${crust}-${addons.slice().sort().join(',')}`;
         const cartItemId = `${productId}-${configHash}`;
 
-        useCartStore.getState().addItem({
-          id: cartItemId,
-          menuItemId: productId,
-          name,
-          price,
-          quantity,
-          image,
-          variant,
-          crust,
-          addons,
-        });
+        const clientX = payload.clientX ?? (payload.rect?.x ?? window.innerWidth / 2);
+        const clientY = payload.clientY ?? (payload.rect?.y ?? Math.max(160, window.innerHeight / 3));
 
-        // Trigger floating cart pulse and flying animations
-        window.dispatchEvent(new CustomEvent('cart-item-added'));
+        // Trigger the full 5-step 3D pizza box sequence + audio drop chime + cart addition on landing
+        window.dispatchEvent(
+          new CustomEvent('trigger-cart-animation', {
+            detail: {
+              clientX,
+              clientY,
+              image,
+              onComplete: () => {
+                useCartStore.getState().addItem({
+                  id: cartItemId,
+                  menuItemId: productId,
+                  name,
+                  price,
+                  quantity,
+                  image,
+                  variant,
+                  crust,
+                  addons,
+                });
+              },
+            },
+          })
+        );
       }
     };
 

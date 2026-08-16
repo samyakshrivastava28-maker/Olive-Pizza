@@ -149,6 +149,20 @@ export function CartAnimationProvider({ children }: { children: React.ReactNode 
     }
   }, [activeAnim, queue]);
 
+  useEffect(() => {
+    const handleGlobalTrigger = (e: CustomEvent) => {
+      const { clientX, clientY, image, onComplete: cb } = e.detail || {};
+      const startX = typeof clientX === 'number' ? clientX : window.innerWidth / 2;
+      const startY = typeof clientY === 'number' ? clientY : Math.max(160, window.innerHeight / 3);
+      triggerAnimation({ clientX: startX, clientY: startY }, image || '/logo-transparent.png', cb);
+    };
+
+    window.addEventListener('trigger-cart-animation', handleGlobalTrigger as EventListener);
+    return () => {
+      window.removeEventListener('trigger-cart-animation', handleGlobalTrigger as EventListener);
+    };
+  }, [triggerAnimation]);
+
   const onComplete = useCallback(() => {
     setActiveAnim(null);
   }, []);
