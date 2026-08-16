@@ -202,18 +202,23 @@ router.get('/debug', async (req, res) => {
     
     if (isReady) {
       try {
-        await transporter.verify();
+        await Promise.race([
+          transporter.verify(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('SMTP verify timeout')), 5000))
+        ]);
         smtpConnected = true;
       } catch (err: any) {
         lastError = err.message;
       }
     }
 
-    const { getFirestore } = await import('firebase-admin/firestore');
     let templatesCount = 0;
     try {
-      const templateResult = await pgPool.query('SELECT count(*) FROM email_templates');
-      templatesCount = parseInt(templateResult.rows[0].count, 10) || 0;
+      const templateResult = await Promise.race([
+        pgPool.query('SELECT count(*) FROM email_templates'),
+        new Promise<any>((_, reject) => setTimeout(() => reject(new Error('DB Query timeout')), 3000))
+      ]);
+      templatesCount = parseInt(templateResult?.rows?.[0]?.count, 10) || 0;
     } catch(e) {}
 
     res.json({

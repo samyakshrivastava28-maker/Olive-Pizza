@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router';
 import { auth, db } from '../lib/firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import { useCartStore } from '../lib/store';
-import toast from 'react-hot-toast';
+import { fetchApi } from '../lib/config';
 import ProcessingOverlay, { CheckoutStep } from '../components/checkout/ProcessingOverlay';
 
 export default function ProcessingOrder() {
@@ -32,7 +32,7 @@ export default function ProcessingOrder() {
         const currentUser = auth.currentUser;
         const customerPhone = currentUser?.phoneNumber || (currentUser as any)?.phone || '9999999999';
         
-        // 1. Sync User Address
+        // 1. Sync User Address to Profile
         if (currentUser && address && deliveryType === 'delivery') {
            const userRef = doc(db, 'users', currentUser.uid);
            await setDoc(userRef, { 
@@ -50,7 +50,7 @@ export default function ProcessingOrder() {
         let verifiedPaymentId = 'pay_cod_' + Date.now();
 
         try {
-          const intentRes = await fetch('/api/payment/create-intent', {
+          const intentRes = await fetchApi('/api/payment/create-intent', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
             body: JSON.stringify({
@@ -80,7 +80,7 @@ export default function ProcessingOrder() {
             // 3. Online Payment Verification (if not COD)
             if (paymentMethod && paymentMethod !== 'cod' && intentData.providerPaymentId) {
               setStep('applying_discount');
-              const verifyRes = await fetch('/api/payment/verify', {
+              const verifyRes = await fetchApi('/api/payment/verify', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
                 body: JSON.stringify({
@@ -102,7 +102,7 @@ export default function ProcessingOrder() {
 
         // 4. Atomically submit order to backend
         setStep('submitting');
-        const res = await fetch('/api/orders', {
+        const res = await fetchApi('/api/orders', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
           body: JSON.stringify({
@@ -128,9 +128,11 @@ export default function ProcessingOrder() {
         });
 
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to place order');
+        if (!res.ok || !data.orderId) {
+          throw new Error(data.error || 'Failed to place order on server');
+        }
 
-        // 5. Backend confirmed
+        // 5. Backend confirmed successfully
         setStep('confirmed');
         clearCart();
         

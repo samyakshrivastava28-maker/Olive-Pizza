@@ -9,21 +9,48 @@ if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) 
   console.error("CRITICAL ERROR: SMTP credentials missing in environment variables. Emails will fail.");
 }
 
-// Reusable transporter object using standard SMTP transport
+// Clean and sanitize SMTP credentials
+const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
+const smtpPort = parseInt(process.env.SMTP_PORT || '587', 10);
+const smtpUser = process.env.SMTP_USER?.trim() || '';
+const smtpPass = process.env.SMTP_PASS ? process.env.SMTP_PASS.trim().replace(/\s+/g, '') : '';
+
+// Reusable transporter object using standard SMTP transport with strict timeouts
 export const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'smtp.gmail.com',
-  port: parseInt(process.env.SMTP_PORT || '587'),
-  secure: process.env.SMTP_PORT === '465',
+  host: smtpHost,
+  port: smtpPort,
+  secure: smtpPort === 465,
   auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
+    user: smtpUser,
+    pass: smtpPass,
   },
+  connectionTimeout: 10000,
+  greetingTimeout: 10000,
+  socketTimeout: 15000,
   tls: {
     rejectUnauthorized: false
   }
 });
 
-// Verify SMTP Connection on Startup
+/**
+ * Direct Send Immediate Helper — bypasses DB queue for urgent transactional delivery
+ */
+export const sendEmailDirect = async (
+  recipient: string,
+  subject: string,
+  htmlContent: string,
+  attachments?: any[]
+) => {
+  return await transporter.sendMail({
+    from: process.env.SMTP_FROM || '"Olive Pizza" <noreply@olivepizza.app>',
+    to: recipient,
+    subject: subject,
+    html: htmlContent,
+    attachments: attachments,
+  });
+};
+
+// Verify SMTP Connection on Startup (non-blocking)
 transporter.verify((error, success) => {
   if (error) {
     console.error("==========================================");
@@ -31,9 +58,9 @@ transporter.verify((error, success) => {
     console.error("==========================================");
     console.error("SMTP Response:", error.message);
     console.error("Configuration Used:");
-    console.error(`Host: ${process.env.SMTP_HOST}`);
-    console.error(`Port: ${process.env.SMTP_PORT}`);
-    console.error(`User: ${process.env.SMTP_USER}`);
+    console.error(`Host: ${smtpHost}`);
+    console.error(`Port: ${smtpPort}`);
+    console.error(`User: ${smtpUser}`);
     console.error("==========================================");
 
     // Notify developer via DevAlertService
@@ -41,7 +68,7 @@ transporter.verify((error, success) => {
       service: 'SMTP Transporter',
       action: 'Startup Verification',
       error: error,
-      context: { host: process.env.SMTP_HOST, user: process.env.SMTP_USER }
+      context: { host: smtpHost, user: smtpUser }
     }).catch(() => {});
   } else {
     console.log("📧 SMTP Server is ready to take our messages.");

@@ -163,7 +163,7 @@ export default function FlagshipFooter() {
         <div className="pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs font-medium text-slate-400 text-center sm:text-left">
           <p>© {new Date().getFullYear()} Olive Pizza. All rights reserved. Premium Wood-Fired Dining Experience.</p>
           
-          {/* Developed & Maintained by 28Web Hub Credit */}
+          {/* Developed & Maintained by S-Web Hub Credit */}
           <div className="flex items-center gap-2">
             <span>Developed & Maintained by</span>
             <a
@@ -173,7 +173,7 @@ export default function FlagshipFooter() {
               className="group relative inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-orange-500/10 via-amber-500/10 to-primary-500/10 border border-orange-500/30 text-amber-300 font-extrabold transition-all duration-300 hover:border-amber-400 hover:text-white shadow-lg hover:shadow-orange-500/30"
             >
               <span className="bg-gradient-to-r from-orange-400 via-amber-300 to-yellow-300 bg-clip-text text-transparent group-hover:text-white transition-colors">
-                28Web Hub
+                S-Web Hub
               </span>
               <ExternalLink className="w-3.5 h-3.5 text-amber-400 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
             </a>

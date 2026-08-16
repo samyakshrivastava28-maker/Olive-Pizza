@@ -119,23 +119,33 @@ export class DataLifecycleService {
   }
 
   /**
-   * Cleans up temporary state & old tracking points
+   * Cleans up temporary state & old tracking points (strictly 1-day expiration)
    */
   public async runHourlyCleanup() {
     let client: any = null;
     try {
       client = await pgPool.connect();
-      // 1. Clear old heartbeats (older than 12 hours)
+      // 1. Clear old heartbeats (older than 24 hours / 1 day)
       await client.query(`
-        DELETE FROM device_heartbeats WHERE last_seen < NOW() - INTERVAL '12 hours'
+        DELETE FROM device_heartbeats WHERE last_seen < NOW() - INTERVAL '24 hours'
       `).catch(() => {});
       
-      // 2. Clear failed queue items older than 24 hours
+      // 2. Clear expired checkout locks
       await client.query(`
-        DELETE FROM notification_queue WHERE status IN ('sent', 'failed') AND created_at < NOW() - INTERVAL '24 hours'
+        DELETE FROM checkout_locks WHERE expires_at < NOW()
       `).catch(() => {});
 
-      // 3. Delete old location history points older than 24 hours
+      // 3. Clear sent / failed notification queue items older than 24 hours (1 day)
+      await client.query(`
+        DELETE FROM notification_queue WHERE created_at < NOW() - INTERVAL '24 hours'
+      `).catch(() => {});
+
+      // 4. Clear sent / failed email queue items older than 24 hours (1 day)
+      await client.query(`
+        DELETE FROM email_queue WHERE created_at < NOW() - INTERVAL '24 hours'
+      `).catch(() => {});
+
+      // 5. Delete old location history points older than 24 hours (1 day)
       await client.query(`
         DELETE FROM location_history WHERE timestamp < NOW() - INTERVAL '24 hours'
       `).catch(() => {});
@@ -148,23 +158,23 @@ export class DataLifecycleService {
   }
 
   /**
-   * Aggressively prunes history & executes pg_cron cleanup to keep storage compact
+   * Aggressively prunes history & executes pg_cron cleanup to keep storage compact (Strict 1-Day Data Lifecycle)
    */
   public async runNightlyCleanup() {
     let client: any = null;
     try {
       client = await pgPool.connect();
-      // 1. Keep only 7 days worth of notification history
+      // 1. Enforce 1-day expiration for notification history
       await client.query(`
-        DELETE FROM notification_history WHERE created_at < CURRENT_DATE - INTERVAL '7 days'
+        DELETE FROM notification_history WHERE created_at < NOW() - INTERVAL '24 hours'
       `).catch(() => {});
 
-      // 2. Delete sent email queue logs older than 3 days
+      // 2. Enforce 1-day expiration for sent/failed emails
       await client.query(`
-        DELETE FROM email_queue WHERE status = 'sent' AND created_at < CURRENT_DATE - INTERVAL '3 days'
+        DELETE FROM email_queue WHERE created_at < NOW() - INTERVAL '24 hours'
       `).catch(() => {});
 
-      // 3. Aggressively purge pg_cron job_run_details older than 6 hours
+      // 3. Purge pg_cron job_run_details older than 6 hours
       await client.query(`
         DELETE FROM cron.job_run_details WHERE start_time < NOW() - INTERVAL '6 hours'
       `).catch(() => {});
@@ -178,7 +188,7 @@ export class DataLifecycleService {
         DELETE FROM website_analytics WHERE timestamp < CURRENT_DATE - INTERVAL '30 days'
       `).catch(() => {});
       
-      console.log('[DataLifecycle] Nightly history pruning completed.');
+      console.log('[DataLifecycle] Nightly 1-day lifecycle pruning completed.');
     } catch (error: any) {
       console.warn('[DataLifecycle] Warning during nightly cleanup:', error.message);
     } finally {

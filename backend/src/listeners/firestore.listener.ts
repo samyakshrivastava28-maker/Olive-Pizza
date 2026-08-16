@@ -110,8 +110,47 @@ export class FirestoreListener {
 
             if (orderData.orderTiming === 'scheduled') continue; // Skip push alarms for scheduled until ready
 
-            // FCM Push Notifications for New Order removed here per Spec §2.2 —
-            // Handled directly & synchronously by NotificationEngine in POST /api/orders.
+            // 1. FCM PUSH NOTIFICATION FOR NEW ORDER (OWNER ALARM & CUSTOMER PLACED)
+            (async () => {
+              try {
+                // Dispatch Owner Alarm to all registered owners
+                const ownerRecipients = await this.getOwnerRecipients();
+                if (ownerRecipients.length > 0) {
+                  const ownerPayload = OwnerTemplates.newOrder(orderData.id, {
+                    customerName: orderData.customerName || orderData.customer_name || 'Customer',
+                    orderNumber,
+                    totalAmount,
+                    items: Array.isArray(orderData.items) ? orderData.items.map((i: any) => typeof i === 'string' ? i : `${i.quantity || 1}x ${i.name || 'Item'}`) : [],
+                    paymentMethod: orderData.paymentMethod || 'COD',
+                    deliveryAddress: orderData.deliveryAddress?.addressLine || orderData.deliveryAddress || 'Pickup',
+                    phone: orderData.contactPhone || orderData.phone,
+                    orderTime: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
+                  });
+                  await notificationEngine.sendBulk(ownerRecipients, ownerPayload, {
+                    orderId: orderData.id,
+                    category: 'alarm_actionable',
+                    tag: `order_owner_${orderData.id}`,
+                  });
+                }
+
+                // Dispatch Customer Confirmation
+                const customerUid = orderData.customerUid || orderData.firebaseUid || orderData.customerId || orderData.userId || orderData.user_id;
+                if (customerUid) {
+                  const customerPayload = CustomerTemplates.orderUpdate(orderData.id, {
+                    orderNumber,
+                    status: 'pending',
+                    totalAmount,
+                  });
+                  await notificationEngine.send(customerUid, customerPayload, {
+                    orderId: orderData.id,
+                    category: 'pinned_live',
+                    tag: `order_${orderData.id}`,
+                  });
+                }
+              } catch (notifErr: any) {
+                console.warn('[FirestoreListener] Push notification error on new order:', notifErr.message);
+              }
+            })();
 
             // 2. EMAIL TO CUSTOMER & OWNER
             this.sendOrderEmail(orderData, 'pending');
@@ -167,8 +206,48 @@ export class FirestoreListener {
             const cfg = statusConfig[currentStatus];
             if (!cfg) continue;
 
-            // FCM Push Notifications for Order Status Updates removed here per Spec §2.2 —
-            // Handled directly & synchronously by NotificationEngine in POST /api/notifications/action.
+            // 1. FCM PUSH NOTIFICATIONS FOR ORDER STATUS UPDATES
+            (async () => {
+              try {
+                const customerUid = orderData.customerUid || orderData.firebaseUid || orderData.customerId || orderData.userId || orderData.user_id;
+                if (customerUid) {
+                  const customerPayload = CustomerTemplates.orderUpdate(orderData.id, {
+                    orderNumber,
+                    status: currentStatus as any,
+                    totalAmount,
+                    deliveryPartnerName: orderData.deliveryPartnerName,
+                    cancellationReason: orderData.cancellationReason,
+                  });
+                  await notificationEngine.send(customerUid, customerPayload, {
+                    orderId: orderData.id,
+                    category: ['delivered', 'cancelled'].includes(currentStatus) ? 'simple_informational' : 'pinned_live',
+                    tag: `order_${orderData.id}`,
+                  });
+                }
+
+                // If partner assigned / ready, notify assigned delivery partner
+                if (['partner_assigned', 'ready'].includes(currentStatus) && (orderData.deliveryPartnerId || orderData.delivery_partner_id)) {
+                  const partnerId = orderData.deliveryPartnerId || orderData.delivery_partner_id;
+                  const partnerPayload = DeliveryTemplates.newAssignment(orderData.id, {
+                    orderNumber,
+                    customerName: orderData.customerName || 'Customer',
+                    customerPhone: orderData.contactPhone || 'N/A',
+                    deliveryAddress: orderData.deliveryAddress?.addressLine || orderData.deliveryAddress || 'Delivery Address',
+                    distance: orderData.deliveryDistance || 'Nearby',
+                    eta: orderData.estimatedDeliveryTime || '30 mins',
+                    totalAmount,
+                    paymentMethod: orderData.paymentMethod || 'COD',
+                  });
+                  await notificationEngine.send(partnerId, partnerPayload, {
+                    orderId: orderData.id,
+                    category: 'alarm_actionable',
+                    tag: `order_delivery_${orderData.id}`,
+                  });
+                }
+              } catch (notifErr: any) {
+                console.warn(`[FirestoreListener] Status change push notification error:`, notifErr.message);
+              }
+            })();
 
             // 2. EMAIL FALLBACK / TRANSACTIONAL EMAILS
             this.sendOrderEmail(orderData, currentStatus);

@@ -6,27 +6,45 @@ interface StartupGateProps {
   children: React.ReactNode;
 }
 
-// In-memory process flag for Native Capacitor apps (resets on full app close/relaunch)
+// Global lifecycle flag attached to global window object
+declare global {
+  interface Window {
+    __OP_APP_STARTUP_INTRO_PLAYED__?: boolean;
+  }
+}
+
+// In-memory process flag for Native Capacitor apps (resets only on full app process restart)
 let nativeIntroShownInProcess = false;
 
 export default function StartupGate({ children }: StartupGateProps) {
   const [showVideo, setShowVideo] = useState(() => {
     if (typeof window === 'undefined') return false;
 
-    // Check if running on native mobile app (Android/iOS Capacitor)
+    // 1. Process-level global singleton guard (prevents replay on any route change or remount)
+    if (window.__OP_APP_STARTUP_INTRO_PLAYED__) {
+      return false;
+    }
+
+    // 2. Check if running on native mobile app (Android/iOS Capacitor)
     if (Capacitor.isNativePlatform()) {
-      if (nativeIntroShownInProcess) return false;
+      if (nativeIntroShownInProcess) {
+        window.__OP_APP_STARTUP_INTRO_PLAYED__ = true;
+        return false;
+      }
       nativeIntroShownInProcess = true;
+      window.__OP_APP_STARTUP_INTRO_PLAYED__ = true;
       return true;
     }
 
-    // Web / PWA: sessionStorage survives browser refresh (F5) and SPA route changes,
+    // 3. Web / PWA: sessionStorage survives browser refresh (F5) and SPA route changes,
     // but resets when the user closes the browser/tab completely and opens again.
     const hasSeenIntro = sessionStorage.getItem('hasSeenIntro');
     if (hasSeenIntro === 'true') {
+      window.__OP_APP_STARTUP_INTRO_PLAYED__ = true;
       return false;
     }
     sessionStorage.setItem('hasSeenIntro', 'true');
+    window.__OP_APP_STARTUP_INTRO_PLAYED__ = true;
     return true;
   });
 
@@ -88,6 +106,11 @@ export default function StartupGate({ children }: StartupGateProps) {
     }, 250);
   }, [logDiagnostic]);
 
+  const handlePlaying = useCallback(() => {
+    playStarted.current = true;
+    logDiagnostic('Intro video playback active');
+  }, [logDiagnostic]);
+
   useEffect(() => {
     if (!showVideo) return;
 
@@ -101,133 +124,118 @@ export default function StartupGate({ children }: StartupGateProps) {
       }
     }, 2500);
 
-    return () => {
-      if (initialFailsafeTimerRef.current) {
-        clearTimeout(initialFailsafeTimerRef.current);
-        initialFailsafeTimerRef.current = null;
+    // Hard ceiling: Guarantee video NEVER exceeds 5 seconds under any network or platform conditions
+    maxDurationTimerRef.current = setTimeout(() => {
+      if (!endedRef.current) {
+        logDiagnostic('Reached strict 5-second maximum duration ceiling');
+        handleVideoEnd();
       }
-      if (maxDurationTimerRef.current) {
-        clearTimeout(maxDurationTimerRef.current);
-        maxDurationTimerRef.current = null;
-      }
-    };
-  }, [showVideo, handleVideoEnd, logDiagnostic]);
+    }, 5000);
 
-  useEffect(() => {
-    if (showVideo && videoRef.current && !playStarted.current) {
-      playStarted.current = true;
-      const video = videoRef.current;
-
-      logDiagnostic('Attempting video play()');
-      const playPromise = video.play();
+    const videoEl = videoRef.current;
+    if (videoEl) {
+      const playPromise = videoEl.play();
       if (playPromise !== undefined) {
         playPromise
           .then(() => {
-            logDiagnostic('Video autoplay started successfully');
+            playStarted.current = true;
+            logDiagnostic('Intro video playback started successfully');
           })
-          .catch((error) => {
-            logDiagnostic('Video autoplay rejected or failed, skipping immediately to app', error);
+          .catch((err) => {
+            logDiagnostic('Video autoplay rejected by browser/OS, skipping intro', err.message);
             handleVideoEnd();
           });
       }
     }
+
+    return () => {
+      if (maxDurationTimerRef.current) clearTimeout(maxDurationTimerRef.current);
+      if (initialFailsafeTimerRef.current) clearTimeout(initialFailsafeTimerRef.current);
+    };
   }, [showVideo, handleVideoEnd, logDiagnostic]);
 
-  const handlePlaying = () => {
-    setVideoReady(true);
-    if (initialFailsafeTimerRef.current) {
-      clearTimeout(initialFailsafeTimerRef.current);
-      initialFailsafeTimerRef.current = null;
-    }
+  // Video assets: Dedicated 5-second trimmed & encoded assets
+  const mobileVideoUrl =
+    'https://res.cloudinary.com/dxmlvkff1/video/upload/so_0,eo_5,w_540,c_limit,q_auto:eco,vc_h264:baseline:3.0,br_600k,fps_30/v1782199117/Olive_Pizza_logo_reveal_202606231246_xeyk9t.mp4';
+  const desktopVideoUrl =
+    'https://res.cloudinary.com/dxmlvkff1/video/upload/so_0,eo_5,w_1080,c_limit,q_auto:good,vc_h264/v1782199127/Olive_Pizza_logo_reveal_202606231247_rrtc3u.mp4';
+  const posterFrameUrl =
+    'https://res.cloudinary.com/dxmlvkff1/video/upload/so_0,w_540,c_limit,q_auto:eco,f_jpg/v1782199117/Olive_Pizza_logo_reveal_202606231246_xeyk9t.jpg';
 
-    // STRICT 5-SECOND DURATION: Cap display to exactly 5 seconds
-    if (!maxDurationTimerRef.current) {
-      maxDurationTimerRef.current = setTimeout(() => {
-        logDiagnostic('5.0-second playback limit reached, transitioning smoothly to app');
-        handleVideoEnd();
-      }, 5000);
-    }
-  };
-
-  const handleTimeUpdate = () => {
-    if (videoRef.current && videoRef.current.currentTime >= 5.0) {
-      handleVideoEnd();
-    }
-  };
-
-  // Dedicated 5-Second Optimized Assets:
-  // - so_0,eo_5: Physical trimming to first 5 seconds on Cloudinary CDN
-  // - Mobile: H.264 Baseline Profile 3.0, 30fps, 540p, 600k bitrate (~400KB total) for zero lag on all Android devices
-  // - Desktop: H.264 1080p profile (~730KB)
-  const getOptimizedIntroUrls = () => {
-    if (deviceType === 'mobile') {
-      return {
-        videoUrl: 'https://res.cloudinary.com/dxmlvkff1/video/upload/so_0,eo_5,w_540,c_limit,q_auto:eco,vc_h264:baseline:3.0,br_600k,fps_30/v1782199117/Olive_Pizza_logo_reveal_202606231246_xeyk9t.mp4',
-        posterUrl: 'https://res.cloudinary.com/dxmlvkff1/video/upload/so_0,w_540,c_limit,q_auto:eco,f_jpg/v1782199117/Olive_Pizza_logo_reveal_202606231246_xeyk9t.jpg'
-      };
-    }
-
-    return {
-      videoUrl: 'https://res.cloudinary.com/dxmlvkff1/video/upload/so_0,eo_5,w_1080,c_limit,q_auto:good,vc_h264/v1782199127/Olive_Pizza_logo_reveal_202606231247_rrtc3u.mp4',
-      posterUrl: 'https://res.cloudinary.com/dxmlvkff1/video/upload/so_0,w_1080,c_limit,q_auto:eco,f_jpg/v1782199127/Olive_Pizza_logo_reveal_202606231247_rrtc3u.jpg'
-    };
-  };
-
-  const { videoUrl, posterUrl } = getOptimizedIntroUrls();
+  const currentVideoSrc = deviceType === 'mobile' ? mobileVideoUrl : desktopVideoUrl;
 
   return (
     <>
-      {/* App Shell & Children render immediately underneath so app is fully ready */}
+      {/* App shell & routes render immediately underneath overlay without blocking */}
       {children}
 
+      {/* Intro Video Overlay — Renders ONLY on cold application start for max 5 seconds */}
       {showVideo && (
-        <div 
-          className={'fixed inset-0 z-[99999] flex items-center justify-center transition-opacity duration-250 ease-out will-change-[opacity] ' + (videoFading ? 'opacity-0 pointer-events-none' : 'opacity-100')}
-          style={{ transform: 'translateZ(0)', WebkitTransform: 'translateZ(0)' }}
-          aria-hidden={videoFading}
+        <div
+          id="op-startup-gate-overlay"
+          className={`fixed inset-0 z-[999999] bg-[#0B0F14] flex items-center justify-center overflow-hidden transition-opacity duration-300 pointer-events-auto ${
+            videoFading ? 'opacity-0 pointer-events-none' : 'opacity-100'
+          }`}
+          style={{ willChange: 'opacity', transform: 'translateZ(0)' }}
         >
-          {/* Solid black backdrop */}
-          <div className="absolute inset-0 bg-black" />
-
-          {/* Ultra-lightweight first-frame poster (4.8KB) for zero black flash */}
-          <img 
-            src={posterUrl} 
-            alt="Olive Pizza"
-            className={'absolute inset-0 w-full h-full object-cover transition-opacity duration-200 ' + (videoReady ? 'opacity-0' : 'opacity-100') + ' z-10'}
-            onError={handleVideoEnd}
-            loading="eager"
-            decoding="async"
-            style={{ transform: 'translateZ(0)', WebkitTransform: 'translateZ(0)' }}
+          {/* Instant poster placeholder while first frame buffers */}
+          <div
+            className={`absolute inset-0 bg-cover bg-center transition-opacity duration-200 ${
+              videoReady ? 'opacity-0 pointer-events-none' : 'opacity-100'
+            }`}
+            style={{
+              backgroundImage: `url(${posterFrameUrl})`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+            }}
           />
 
           <video
             ref={videoRef}
-            src={videoUrl}
-            autoPlay
+            src={currentVideoSrc}
             playsInline
             muted
+            autoPlay
             preload="auto"
-            poster={posterUrl}
-            onEnded={handleVideoEnd}
-            onCanPlay={() => setVideoReady(true)}
+            poster={posterFrameUrl}
+            style={{
+              transform: 'translateZ(0)',
+              willChange: 'transform',
+            }}
+            className={`w-full h-full object-cover transition-opacity duration-150 ${
+              videoReady ? 'opacity-100' : 'opacity-0'
+            }`}
             onPlaying={handlePlaying}
-            onTimeUpdate={handleTimeUpdate}
-            onError={(e) => {
-              logDiagnostic('Video playback error encountered, skipping to app', e);
+            onCanPlay={() => {
+              setVideoReady(true);
+              if (initialFailsafeTimerRef.current) {
+                clearTimeout(initialFailsafeTimerRef.current);
+                initialFailsafeTimerRef.current = null;
+              }
+            }}
+            onTimeUpdate={(e) => {
+              if (e.currentTarget.currentTime >= 5.0) {
+                logDiagnostic('Reached 5.0s playback timestamp mark');
+                handleVideoEnd();
+              }
+            }}
+            onEnded={() => {
+              logDiagnostic('Intro video reached onEnded event');
               handleVideoEnd();
             }}
-            className={'absolute inset-0 w-full h-full object-cover z-20 transition-opacity duration-200 will-change-[opacity] ' + (videoReady ? 'opacity-100' : 'opacity-0')}
-            style={{ transform: 'translateZ(0)', WebkitTransform: 'translateZ(0)' }}
+            onError={(e) => {
+              logDiagnostic('Intro video stream error encountered, skipping directly to app', e);
+              handleVideoEnd();
+            }}
           />
 
-          {/* Top-Right Quick Skip Button */}
+          {/* Quick Skip button in top-right for instant entry */}
           <button
             onClick={handleVideoEnd}
-            aria-label="Skip Intro"
-            className="absolute top-6 right-6 z-30 px-4 py-2 rounded-full bg-black/60 hover:bg-black/90 text-white/90 hover:text-white border border-white/20 text-xs font-semibold backdrop-blur-md transition-all active:scale-95 flex items-center gap-1.5 shadow-xl cursor-pointer"
+            className="absolute top-6 right-6 z-50 px-4 py-2 bg-black/50 hover:bg-black/80 text-white/80 hover:text-white rounded-full text-xs font-bold tracking-wider uppercase border border-white/20 backdrop-blur-md transition-all active:scale-95 min-touch-target"
+            aria-label="Skip Intro Video"
           >
-            <span>Skip</span>
-            <span aria-hidden="true">✕</span>
+            Skip &gt;
           </button>
         </div>
       )}
