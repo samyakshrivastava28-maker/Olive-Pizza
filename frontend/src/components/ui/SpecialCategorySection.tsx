@@ -202,10 +202,11 @@ export default function SpecialCategorySection({
                 </div>
                 <button
                   onClick={(e) => {
-                    triggerAnimation(e, fp.imageUrl || '');
-                    addItem({ id: fp.id, productId: fp.id, productName: fp.productName, price: fp.promoPrice ?? fp.basePrice, quantity: 1, imageUrl: fp.imageUrl || '' } as any);
-                    trackEvent({ type: 'category_product_click', categoryId: category.id, productId: fp.id });
-                    toast.success(`${fp.productName} added!`);
+                    triggerAnimation(e, fp.imageUrl || '', () => {
+                      addItem({ id: fp.id, productId: fp.id, productName: fp.productName, price: fp.promoPrice ?? fp.basePrice, quantity: 1, imageUrl: fp.imageUrl || '' } as any);
+                      trackEvent({ type: 'category_product_click', categoryId: category.id, productId: fp.id });
+                      toast.success(`${fp.productName} added!`);
+                    });
                   }}
                   className="mt-3 px-6 py-2.5 rounded-xl font-bold text-sm text-white transition-all active:scale-95"
                   style={{ backgroundColor: themeColor }}
@@ -264,10 +265,11 @@ export default function SpecialCategorySection({
                     </div>
                     <button
                       onClick={(e) => {
-                        triggerAnimation(e, p.imageUrl || '');
-                        addItem({ id: p.id, productId: p.id, productName: p.productName, price: p.promoPrice ?? p.basePrice, quantity: 1, imageUrl: p.imageUrl || '' } as any);
-                        trackEvent({ type: 'category_product_click', categoryId: category.id, productId: p.id });
-                        toast.success(`${p.productName} added!`);
+                        triggerAnimation(e, p.imageUrl || '', () => {
+                          addItem({ id: p.id, productId: p.id, productName: p.productName, price: p.promoPrice ?? p.basePrice, quantity: 1, imageUrl: p.imageUrl || '' } as any);
+                          trackEvent({ type: 'category_product_click', categoryId: category.id, productId: p.id });
+                          toast.success(`${p.productName} added!`);
+                        });
                       }}
                       className="mt-2 w-full py-1.5 rounded-lg text-white text-xs font-bold transition-all active:scale-95"
                       style={{ backgroundColor: themeColor }}

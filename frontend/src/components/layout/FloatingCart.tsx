@@ -26,69 +26,62 @@ export default function FloatingCart() {
   ].some(prefix => p === prefix || p.startsWith(prefix));
 
   if (isHiddenPage) return null;
-  const playSuccessSound = () => {
-    try {
-      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioContext) return;
-      const ctx = new AudioContext();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(800, ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(1200, ctx.currentTime + 0.1);
-      
-      gain.gain.setValueAtTime(0, ctx.currentTime);
-      gain.gain.linearRampToValueAtTime(0.2, ctx.currentTime + 0.05);
-      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
-      
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      
-      osc.start();
-      osc.stop(ctx.currentTime + 0.3);
-    } catch (e) {
-      // Ignore
-    }
-  };
 
   const { items, total } = useCartStore();
   const navigate = useNavigate();
   const count = items.reduce((acc, item) => acc + item.quantity, 0);
-  const controls = useAnimation();
+  const cartControls = useAnimation();
+  const bagControls = useAnimation();
+  const shockwaveControls = useAnimation();
   const [particles, setParticles] = useState<{ id: number; x: number; y: number }[]>([]);
 
   useEffect(() => {
-    const handleItemAdded = () => {
-      playSuccessSound();
-      // Trigger the bounce and glow animation
-      controls.start({
-        scale: [1, 1.1, 0.9, 1.05, 1],
-        boxShadow: [
-          '0 10px 40px rgba(85,119,90,0.4)',
-          '0 20px 60px rgba(249,115,22,0.8)',
-          '0 10px 40px rgba(85,119,90,0.4)'
-        ],
-        transition: { duration: 0.6, ease: "easeInOut" }
+    const handleImpact = () => {
+      // 1. Bag elastic squeeze & bounce
+      bagControls.start({
+        scale: [1, 1.42, 0.85, 1.15, 1],
+        rotate: [-6, 10, -5, 2, 0],
+        transition: { duration: 0.5, ease: 'easeOut' }
       });
 
-      // Spawn particles
-      const newParticles = Array.from({ length: 6 }).map((_, i) => ({
+      // 2. Shockwave halo expansion from the bag
+      shockwaveControls.start({
+        scale: [0.8, 2.2],
+        opacity: [0.9, 0],
+        transition: { duration: 0.55, ease: 'easeOut' }
+      });
+
+      // 3. Floating cart bar bounce and glow
+      cartControls.start({
+        scale: [1, 1.05, 0.97, 1.02, 1],
+        boxShadow: [
+          '0 10px 40px rgba(85,119,90,0.4)',
+          '0 20px 60px rgba(249,115,22,0.85)',
+          '0 10px 40px rgba(85,119,90,0.4)'
+        ],
+        transition: { duration: 0.5, ease: 'easeInOut' }
+      });
+
+      // 4. Golden spark particles explosion from the shopping bag
+      const newParticles = Array.from({ length: 8 }).map((_, i) => ({
         id: Date.now() + i,
-        x: (Math.random() - 0.5) * 100,
-        y: (Math.random() - 0.5) * 100
+        x: (Math.random() - 0.5) * 110,
+        y: -15 - Math.random() * 70
       }));
       setParticles(prev => [...prev, ...newParticles]);
       
-      // Cleanup particles
       setTimeout(() => {
         setParticles(prev => prev.filter(p => !newParticles.find(n => n.id === p.id)));
-      }, 1000);
+      }, 900);
     };
 
-    window.addEventListener('cart-item-added', handleItemAdded);
-    return () => window.removeEventListener('cart-item-added', handleItemAdded);
-  }, [controls]);
+    window.addEventListener('cart-item-added', handleImpact);
+    window.addEventListener('cart-bag-impact', handleImpact);
+    return () => {
+      window.removeEventListener('cart-item-added', handleImpact);
+      window.removeEventListener('cart-bag-impact', handleImpact);
+    };
+  }, [cartControls, bagControls, shockwaveControls]);
 
   return (
     <AnimatePresence>
@@ -107,67 +100,89 @@ export default function FloatingCart() {
         >
           {/* Continuous Idle Animation Wrapper */}
           <motion.div
-             animate={{ y: [0, -6, 0] }}
-             transition={{ repeat: Infinity, duration: 3, ease: 'easeInOut' }}
+             animate={{ y: [0, -5, 0] }}
+             transition={{ repeat: Infinity, duration: 3.2, ease: 'easeInOut' }}
              className="w-full relative"
           >
             <motion.button
-              animate={controls}
+              animate={cartControls}
               onClick={() => navigate('/cart')}
               id="cart-icon-target"
-              className="w-full bg-gradient-to-r from-primary-600 to-primary-500 rounded-3xl p-4 shadow-[0_10px_40px_rgba(85,119,90,0.4)] border border-primary-400/30 flex items-center justify-between text-white pointer-events-auto active:scale-95 transition-transform group relative overflow-hidden"
+              className="w-full bg-gradient-to-r from-primary-600 via-primary-500 to-amber-600 rounded-3xl p-3.5 sm:p-4 shadow-[0_12px_45px_rgba(249,115,22,0.45)] border border-primary-400/30 flex items-center justify-between text-white pointer-events-auto active:scale-95 transition-transform group relative overflow-hidden"
             >
               {/* Soft breathing background glow */}
               <motion.div 
-                 className="absolute inset-0 bg-gradient-to-r from-orange-400/20 to-primary-400/20 mix-blend-overlay"
-                 animate={{ opacity: [0, 0.5, 0] }}
-                 transition={{ repeat: Infinity, duration: 2, ease: 'easeInOut' }}
+                 className="absolute inset-0 bg-gradient-to-r from-orange-400/20 via-amber-400/20 to-primary-400/20 mix-blend-overlay"
+                 animate={{ opacity: [0, 0.6, 0] }}
+                 transition={{ repeat: Infinity, duration: 2.2, ease: 'easeInOut' }}
               />
 
-              <div className="flex items-center gap-4 relative z-10">
-                <div className="bg-white/20 p-3 rounded-2xl relative shadow-inner">
-                  <ShoppingBag className="w-6 h-6 text-white" />
-                  
-                  {/* Live Badge Update */}
+              {/* ── Left Corner: 3D Shopping Bag Container & Impact Target ── */}
+              <div className="flex items-center gap-3.5 sm:gap-4 relative z-10">
+                <div className="relative">
+                  {/* Shockwave Halo ring on drop */}
                   <motion.div
-                    key={count}
-                    initial={{ scale: 0, rotate: -45 }}
-                    animate={{ scale: 1, rotate: 0 }}
-                    transition={{ type: 'spring', damping: 12, stiffness: 250 }}
-                    className="absolute -top-2 -right-2 bg-gradient-to-br from-orange-400 to-red-500 text-white text-[11px] font-black min-w-[20px] h-[20px] px-1 flex items-center justify-center rounded-full border-2 border-primary-500 shadow-md"
+                    animate={shockwaveControls}
+                    initial={{ scale: 0.8, opacity: 0 }}
+                    className="absolute -inset-2.5 rounded-2xl bg-gradient-to-r from-orange-400 to-amber-300 blur-sm pointer-events-none z-0"
+                  />
+
+                  {/* 3D Shopping Bag element */}
+                  <motion.div
+                    animate={bagControls}
+                    id="floating-cart-bag-icon"
+                    className="relative z-10 bg-dark-900/90 border-2 border-amber-400/80 p-2.5 sm:p-3 rounded-2xl shadow-[0_4px_16px_rgba(0,0,0,0.5),inset_0_2px_4px_rgba(255,255,255,0.2)] flex items-center justify-center group-hover:scale-105 transition-transform"
+                    style={{
+                      background: 'linear-gradient(135deg, rgba(30,30,30,0.95) 0%, rgba(15,15,15,0.98) 100%)',
+                      boxShadow: 'inset 0 1px 3px rgba(255,255,255,0.3), 0 8px 24px rgba(249,115,22,0.35)'
+                    }}
                   >
-                    {count}
+                    <ShoppingBag className="w-6 h-6 text-amber-400 drop-shadow-[0_2px_8px_rgba(251,191,36,0.6)]" />
+
+                    {/* Live Bouncing Badge on Corner */}
+                    <motion.div
+                      key={count}
+                      initial={{ scale: 0, rotate: -45 }}
+                      animate={{ scale: [0.6, 1.3, 1], rotate: [0, 15, 0] }}
+                      transition={{ type: 'spring', damping: 10, stiffness: 300 }}
+                      className="absolute -top-2 -right-2 bg-gradient-to-br from-amber-400 via-orange-500 to-red-500 text-white text-[11px] font-black min-w-[22px] h-[22px] px-1 flex items-center justify-center rounded-full border-2 border-dark-900 shadow-lg"
+                    >
+                      {count}
+                    </motion.div>
                   </motion.div>
                 </div>
                 
                 <div className="text-left flex-1 min-w-0">
-                  <p className="text-sm font-bold opacity-90 truncate">{count} Item{count > 1 ? 's' : ''}</p>
+                  <p className="text-xs sm:text-sm font-bold text-white/90 truncate">
+                    {count} {count === 1 ? 'Handcrafted Item' : 'Items in Cart'}
+                  </p>
                   <motion.p 
                      key={total}
-                     initial={{ y: 10, opacity: 0 }}
+                     initial={{ y: 8, opacity: 0 }}
                      animate={{ y: 0, opacity: 1 }}
-                     className="text-xl font-black tracking-tight leading-none drop-shadow-md"
+                     transition={{ duration: 0.2 }}
+                     className="text-lg sm:text-xl font-black text-white tracking-tight leading-none drop-shadow-md"
                   >
                      ₹{total}
                   </motion.p>
                 </div>
               </div>
               
-              <div className="flex items-center gap-1 font-bold text-sm bg-white/15 px-4 py-2 rounded-xl group-hover:bg-white/25 transition-colors relative z-10 shadow-inner backdrop-blur-sm">
+              <div className="flex items-center gap-1 font-black text-xs sm:text-sm bg-white/20 hover:bg-white/30 text-white px-3.5 sm:px-4 py-2 rounded-xl group-hover:bg-white/25 transition-colors relative z-10 shadow-inner backdrop-blur-sm">
                 View Cart <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
               </div>
             </motion.button>
 
-            {/* Particles */}
+            {/* Sparkle Particles from Shopping Bag Mouth */}
             <AnimatePresence>
                {particles.map(p => (
                  <motion.div
                    key={p.id}
-                   initial={{ opacity: 1, x: 0, y: 0, scale: 0 }}
-                   animate={{ opacity: 0, x: p.x, y: p.y, scale: 1.5, rotate: p.x * 2 }}
+                   initial={{ opacity: 1, x: 20, y: 15, scale: 0 }}
+                   animate={{ opacity: 0, x: 20 + p.x, y: 15 + p.y, scale: 1.6, rotate: p.x * 3 }}
                    exit={{ opacity: 0 }}
-                   transition={{ duration: 0.8, ease: "easeOut" }}
-                   className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none text-orange-400"
+                   transition={{ duration: 0.85, ease: "easeOut" }}
+                   className="absolute left-4 top-1/2 pointer-events-none text-amber-300 drop-shadow-[0_0_8px_rgba(251,191,36,0.8)] z-30"
                  >
                    <Sparkles className="w-5 h-5" />
                  </motion.div>
@@ -179,3 +194,4 @@ export default function FloatingCart() {
     </AnimatePresence>
   );
 }
+

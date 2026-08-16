@@ -37,7 +37,7 @@ export default function ProductCustomizationModal({ item, onClose }: Props) {
   };
 
   const handleAddToCart = (e: React.MouseEvent) => {
-    addItem({
+    const itemData = {
       id: `${item.id}-${isPizza ? selectedCrust : 'Standard'}-${isPizza ? cheeseLevel : 0}-${isPizza ? selectedToppings.join('-') : 'None'}`,
       menuItemId: item.id || '',
       name: isPizza ? `${item.name} (${selectedCrust} Crust)` : item.name,
@@ -48,12 +48,14 @@ export default function ProductCustomizationModal({ item, onClose }: Props) {
       crust: isPizza ? `${selectedCrust} Crust` : undefined,
       size: 'Medium',
       addons: isPizza ? selectedToppings : []
-    });
+    };
 
-    triggerAnimation(e, item.image);
-    window.dispatchEvent(new CustomEvent('cart-item-added'));
-    toast.success(`Added ${item.name} to order! 🍕`);
     onClose();
+
+    triggerAnimation(e, item.image, () => {
+      addItem(itemData);
+      toast.success(`Added ${item.name} to order! 🍕`);
+    });
   };
 
   return (

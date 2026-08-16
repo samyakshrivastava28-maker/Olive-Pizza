@@ -220,18 +220,6 @@ export default function ProductDetail() {
     const configHash = `${selectedSize}-${selectedCrust}-${selectedAddOns.sort().join(",")}`;
     const cartItemId = `${item.id}-${configHash}`;
 
-    addItem({
-      id: cartItemId,
-      menuItemId: item.id!,
-      name: item.name,
-      price: finalPrice,
-      quantity: 1,
-      image: item.image,
-      variant: selectedSize,
-      crust: selectedCrust,
-      addons: selectedAddOns,
-    });
-
     // Prefer to start animation from the pizza image center for a cinematic arc
     let startPos: { clientX: number; clientY: number } = e;
     if (pizzaImageRef.current) {
@@ -241,9 +229,22 @@ export default function ProductDetail() {
         clientY: rect.top + rect.height / 2,
       };
     }
-    triggerAnimation(startPos, item.image || '');
 
-    toast.success("Added to Cart!", { icon: "✨" });
+    triggerAnimation(startPos, item.image || '', () => {
+      addItem({
+        id: cartItemId,
+        menuItemId: item.id!,
+        name: item.name,
+        price: finalPrice,
+        quantity: 1,
+        image: item.image,
+        variant: selectedSize,
+        crust: selectedCrust,
+        addons: selectedAddOns,
+      });
+
+      toast.success("Added to Cart!", { icon: "✨" });
+    });
 
     setTimeout(() => {
       navigate("/menu");

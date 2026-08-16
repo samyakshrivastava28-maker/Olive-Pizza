@@ -38,23 +38,22 @@ export default memo(function ProductCard({ item, discount = 0, wishlistIds = [],
     e.stopPropagation();
     if (!item.isAvailable) return;
 
-    addItem({
-      id: item.id || '',
-      menuItemId: item.id || '',
-      name: item.name,
-      price: finalPrice,
-      quantity: 1,
-      image: item.image,
-      isVegetarian: item.isVegetarian,
-      crust: 'Classic Crust',
-      size: 'Medium'
-    });
+    triggerAnimation(e, item.image, () => {
+      addItem({
+        id: item.id || '',
+        menuItemId: item.id || '',
+        name: item.name,
+        price: finalPrice,
+        quantity: 1,
+        image: item.image,
+        isVegetarian: item.isVegetarian,
+        crust: 'Classic Crust',
+        size: 'Medium'
+      });
 
-    triggerAnimation(e, item.image);
-    window.dispatchEvent(new CustomEvent('cart-item-added'));
-
-    toast.success(`Added ${item.name} to cart! 🍕`, {
-      style: { background: '#1e1e1e', color: '#fff', border: '1px solid rgba(255,255,255,0.1)' }
+      toast.success(`Added ${item.name} to cart! 🍕`, {
+        style: { background: '#1e1e1e', color: '#fff', border: '1px solid rgba(255,255,255,0.1)' }
+      });
     });
   };
 

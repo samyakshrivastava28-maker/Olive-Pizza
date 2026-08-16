@@ -1,7 +1,7 @@
-﻿import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
+import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
 import { motion, AnimatePresence, useAnimation } from 'framer-motion';
 
-// â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Types ──────────────────────────────────────────────────────────────────
 interface AnimationData {
   id: number;
   startX: number;
@@ -22,20 +22,94 @@ interface CartAnimationContextType {
 
 const CartAnimationContext = createContext<CartAnimationContextType | undefined>(undefined);
 
-const getCartTarget = (): { x: number; y: number } => {
-  let el = document.getElementById('cart-icon-target');
-  if (typeof window !== 'undefined' && window.innerWidth < 768) {
-     const mobileNav = document.getElementById('mobile-cart-nav-target');
-     if (mobileNav) el = mobileNav;
+// ─── Zero-Latency Audio Synthesizer ─────────────────────────────────────────
+export const playCartDropSound = () => {
+  try {
+    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContextClass) return;
+    const ctx = new AudioContextClass();
+    if (ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
+    }
+
+    const now = ctx.currentTime;
+
+    // 1. Impact Bass Thud (Satisfying physical landing)
+    const oscBass = ctx.createOscillator();
+    const gainBass = ctx.createGain();
+    oscBass.type = 'triangle';
+    oscBass.frequency.setValueAtTime(220, now);
+    oscBass.frequency.exponentialRampToValueAtTime(45, now + 0.16);
+    gainBass.gain.setValueAtTime(0.35, now);
+    gainBass.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+    oscBass.connect(gainBass);
+    gainBass.connect(ctx.destination);
+    oscBass.start(now);
+    oscBass.stop(now + 0.2);
+
+    // 2. Bright Golden Ding (Sweet chime on drop)
+    const oscChime = ctx.createOscillator();
+    const gainChime = ctx.createGain();
+    oscChime.type = 'sine';
+    oscChime.frequency.setValueAtTime(880, now + 0.02); // A5
+    oscChime.frequency.exponentialRampToValueAtTime(1320, now + 0.12); // E6
+    gainChime.gain.setValueAtTime(0.28, now + 0.02);
+    gainChime.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
+    oscChime.connect(gainChime);
+    gainChime.connect(ctx.destination);
+    oscChime.start(now + 0.02);
+    oscChime.stop(now + 0.38);
+
+    // 3. Crisp High Sparkle (Celebratory ping)
+    const oscSparkle = ctx.createOscillator();
+    const gainSparkle = ctx.createGain();
+    oscSparkle.type = 'sine';
+    oscSparkle.frequency.setValueAtTime(1760, now + 0.06); // A6
+    gainSparkle.gain.setValueAtTime(0.18, now + 0.06);
+    gainSparkle.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+    oscSparkle.connect(gainSparkle);
+    gainSparkle.connect(ctx.destination);
+    oscSparkle.start(now + 0.06);
+    oscSparkle.stop(now + 0.28);
+  } catch (e) {
+    // Non-fatal
   }
-  if (el) {
-    const rect = el.getBoundingClientRect();
-    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
-  }
-  return { x: typeof window !== 'undefined' ? window.innerWidth / 2 : 200, y: typeof window !== 'undefined' ? window.innerHeight - 40 : 600 };
 };
 
-// â”€â”€â”€ Provider â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+const getCartTarget = (): { x: number; y: number } => {
+  if (typeof window === 'undefined') return { x: 200, y: 600 };
+
+  // Prioritize the dedicated shopping bag in the left corner of the floating cart
+  const bagTarget = document.getElementById('floating-cart-bag-icon') || 
+                    document.getElementById('cart-bag-target') || 
+                    document.getElementById('cart-icon-target');
+
+  if (bagTarget) {
+    const rect = bagTarget.getBoundingClientRect();
+    if (rect.width > 0 && rect.height > 0) {
+      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+    }
+  }
+
+  // Mobile navigation bottom cart icon
+  if (window.innerWidth < 768) {
+    const mobileNav = document.getElementById('mobile-cart-nav-target');
+    if (mobileNav) {
+      const rect = mobileNav.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+      }
+    }
+    // Fallback on mobile: bottom-left offset where floating cart bag sits
+    return { x: 60, y: window.innerHeight - 90 };
+  }
+
+  // Fallback on tablet/desktop: centered floating cart's left side bag
+  const centerX = window.innerWidth / 2;
+  return { x: Math.max(80, centerX - 160), y: window.innerHeight - 80 };
+};
+
+// ─── Provider ─────────────────────────────────────────────────────────────────
 export function CartAnimationProvider({ children }: { children: React.ReactNode }) {
   const [queue, setQueue] = useState<AnimationData[]>([]);
   const [activeAnim, setActiveAnim] = useState<AnimationData | null>(null);
@@ -93,19 +167,19 @@ export function CartAnimationProvider({ children }: { children: React.ReactNode 
   );
 }
 
-// â”€â”€â”€ Realistic 3D Pizza Box Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Realistic 3D Pizza Box Component ─────────────────────────────────────────
 function PremiumFlyingBox({ anim, onComplete }: { anim: AnimationData; onComplete: () => void }) {
   const boxControls = useAnimation();
   const lidControls = useAnimation();
   const flyingPizzaControls = useAnimation();
   const glowControls = useAnimation();
 
-  const centerX = window.innerWidth / 2;
-  const centerY = window.innerHeight / 3;
+  const centerX = typeof window !== 'undefined' ? window.innerWidth / 2 : 200;
+  const centerY = typeof window !== 'undefined' ? Math.max(160, window.innerHeight / 3) : 200;
 
-  const BOX_SIZE = 150;
+  const BOX_SIZE = typeof window !== 'undefined' && window.innerWidth < 640 ? 120 : 150;
   const HALF = BOX_SIZE / 2;
-  const PIZZA_SIZE = 95;
+  const PIZZA_SIZE = typeof window !== 'undefined' && window.innerWidth < 640 ? 76 : 95;
 
   useEffect(() => {
     let isMounted = true;
@@ -174,7 +248,7 @@ function PremiumFlyingBox({ anim, onComplete }: { anim: AnimationData; onComplet
         transition: { duration: 0.35 }
       });
 
-      // 5. Box falls down into the floating cart bag
+      // 5. Box flies smoothly in a curved ballistic arc into the Shopping Bag at the left of the floating cart
       const cartTarget = getCartTarget();
       const cartX = cartTarget.x - HALF;
       const cartY = cartTarget.y - HALF;
@@ -182,38 +256,36 @@ function PremiumFlyingBox({ anim, onComplete }: { anim: AnimationData; onComplet
       await boxControls.start({
         x: cartX, 
         y: cartY, 
-        scale: 0.12, 
+        scale: 0.1, 
         opacity: 0, 
-        rotateZ: 60,
-        transition: { duration: 0.55, ease: [0.25, 0.1, 0.25, 1] }
+        rotateZ: 75,
+        transition: { duration: 0.52, ease: [0.25, 0.1, 0.25, 1] }
       });
       
       if (!isMounted) return;
 
-      // 6. Floating Cart Bounce & Update
-      const cartEl = document.getElementById('cart-icon-target');
-      if (cartEl) {
-        cartEl.animate(
-          [
-            { transform: 'scale(1) rotate(0deg)', offset: 0 },
-            { transform: 'scale(1.4) translateY(-10px) rotate(-15deg)', offset: 0.5 },
-            { transform: 'scale(1) translateY(0) rotate(0deg)', offset: 1 }
-          ],
-          { duration: 450, easing: 'cubic-bezier(0.175, 0.885, 0.32, 1.275)' }
-        );
+      // 6. EXACT MOMENT OF IMPACT: Sound + Cart Store Update + Shopping Bag Animation
+      playCartDropSound();
+
+      if (typeof window !== 'undefined' && 'vibrate' in navigator) {
+        try { navigator.vibrate([20, 25, 30]); } catch (e) {}
       }
-      
-      window.dispatchEvent(new CustomEvent('cart-item-added'));
+
+      // Execute zustand addItem so cart item count and price update precisely now
       if (anim.onComplete) {
         try { anim.onComplete(); } catch (e) {}
       }
+
+      // Dispatch global events for FloatingCart and bag reaction
+      window.dispatchEvent(new CustomEvent('cart-item-added'));
+      window.dispatchEvent(new CustomEvent('cart-bag-impact', { detail: { x: cartTarget.x, y: cartTarget.y } }));
       
       onComplete();
     };
 
     sequence();
     return () => { isMounted = false; };
-  }, [anim, centerX, centerY, boxControls, lidControls, flyingPizzaControls, glowControls, onComplete]);
+  }, [anim, centerX, centerY, boxControls, lidControls, flyingPizzaControls, glowControls, onComplete, HALF, PIZZA_SIZE]);
 
   const isoStyle = {
     position: 'absolute' as const,
