@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { fetchApi } from '../lib/config';
 
 export type SystemStatus = 'healthy' | 'warning' | 'critical' | 'initializing' | 'unavailable' | 'connecting' | 'retrying';
 
@@ -45,7 +46,7 @@ export const useSystemHealth = () => {
   // Direct HTTP polling — no auth required
   const pollDiagnostics = useCallback(async () => {
     try {
-      const res = await fetch(DIAGNOSTICS_ENDPOINT, { signal: AbortSignal.timeout(10000) });
+      const res = await fetchApi(DIAGNOSTICS_ENDPOINT, { signal: AbortSignal.timeout(15000) });
       if (res.ok) {
         const json = await res.json();
         if (json.success && isMounted.current) {
@@ -126,36 +127,37 @@ export const useSystemHealth = () => {
     isMounted.current = true;
     setStatus('connecting');
 
-    // Check if backend is reachable first
+    // Check if backend is reachable (with cold-start tolerance for cloud hosting like Render)
     const init = async () => {
       try {
-        const res = await fetch(STATUS_ENDPOINT, { signal: AbortSignal.timeout(5000) });
+        const res = await fetchApi(STATUS_ENDPOINT, { signal: AbortSignal.timeout(25000) });
         if (res.ok && isMounted.current) {
-          // Backend is up — try SSE then fall back to polling
+          // Backend is up — start diagnostics polling and SSE
           startSSE();
-          // Also start polling as a safety net that runs immediately
           pollDiagnostics();
-          // Start periodic polling alongside SSE
           pollerRef.current = setInterval(pollDiagnostics, 8000);
         } else {
-          if (isMounted.current) setStatus('unavailable');
+          if (isMounted.current) setStatus('retrying');
         }
       } catch {
         if (isMounted.current) {
-          setStatus('unavailable');
-          // Keep retrying every 10s
+          setStatus('retrying');
+          // Auto-retry aggressively every 4s to catch server wake up
           retryTimerRef.current = setInterval(async () => {
             try {
-              const r = await fetch(STATUS_ENDPOINT, { signal: AbortSignal.timeout(5000) });
+              const r = await fetchApi(STATUS_ENDPOINT, { signal: AbortSignal.timeout(15000) });
               if (r.ok && isMounted.current) {
-                if (retryTimerRef.current) clearInterval(retryTimerRef.current);
+                if (retryTimerRef.current) {
+                  clearInterval(retryTimerRef.current);
+                  retryTimerRef.current = null;
+                }
                 setStatus('connecting');
                 startSSE();
                 pollDiagnostics();
                 pollerRef.current = setInterval(pollDiagnostics, 8000);
               }
             } catch {}
-          }, 10000);
+          }, 4000);
         }
       }
     };

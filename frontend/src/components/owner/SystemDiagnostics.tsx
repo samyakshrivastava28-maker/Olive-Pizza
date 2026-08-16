@@ -42,6 +42,8 @@ const StatusBadge = ({ status }: { status: ServiceStatus }) => {
   return <span className={`text-[11px] font-bold uppercase tracking-wide px-2.5 py-0.5 rounded-full border ${cls}`}>{label}</span>;
 };
 
+import { fetchApi } from '../../lib/config';
+
 const DIAGNOSTICS_URL = '/api/health/diagnostics';
 const STATUS_URL = '/api/health/status';
 
@@ -57,12 +59,12 @@ export default function SystemDiagnostics() {
   const fetchDiagnostics = async (showRefreshing = false) => {
     if (showRefreshing) setRefreshing(true);
     try {
-      // First check backend is up
-      const ping = await fetch(STATUS_URL, { signal: AbortSignal.timeout(5000) });
+      // First check backend is up (with cold-start tolerance and direct Render fallback)
+      const ping = await fetchApi(STATUS_URL, { signal: AbortSignal.timeout(20000) });
       if (!ping.ok) { if (isMounted.current) { setBackendOnline(false); setLoading(false); setRefreshing(false); } return; }
       setBackendOnline(true);
 
-      const res = await fetch(DIAGNOSTICS_URL, { signal: AbortSignal.timeout(15000) });
+      const res = await fetchApi(DIAGNOSTICS_URL, { signal: AbortSignal.timeout(15000) });
       if (res.ok) {
         const json = await res.json();
         if (json.success && isMounted.current) {
