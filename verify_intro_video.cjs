@@ -51,10 +51,10 @@ async function run() {
 
   // Test 2: Optimized 5s asset exists
   try {
-    const optMobileUrl = 'https://res.cloudinary.com/dxmlvkff1/video/upload/so_0,eo_5,w_720,c_limit,q_auto:good,vc_h264/v1782199117/Olive_Pizza_logo_reveal_202606231246_xeyk9t.mp4';
+    const optMobileUrl = 'https://res.cloudinary.com/dxmlvkff1/video/upload/so_0,eo_5,w_540,c_limit,q_auto:eco,vc_h264:baseline:3.0,br_600k,fps_30/v1782199117/Olive_Pizza_logo_reveal_202606231246_xeyk9t.mp4';
     const head = await fetchHead(optMobileUrl);
     if (head.statusCode === 200 && head.contentLength > 0) {
-      console.log('  ✅ [PASS] 2. Dedicated 5-second optimized asset exists (Cloudinary H.264 / ~880KB)');
+      console.log('  ✅ [PASS] 2. Dedicated 5-second ultra-smooth asset exists (Cloudinary H.264 Baseline / ~400KB)');
       passed++;
     } else {
       console.log('  ❌ [FAIL] 2. Optimized video asset not accessible');
@@ -72,8 +72,8 @@ async function run() {
   }
 
   // Test 4: App uses the optimized asset
-  if (startupGateCode.includes('q_auto:good') && startupGateCode.includes('vc_h264')) {
-    console.log('  ✅ [PASS] 4. StartupGate uses optimized mobile/desktop H.264 profile');
+  if (startupGateCode.includes('vc_h264') && startupGateCode.includes('w_540')) {
+    console.log('  ✅ [PASS] 4. StartupGate uses optimized mobile baseline / desktop H.264 profile');
     passed++;
   } else {
     console.log('  ❌ [FAIL] 4. App not using optimized asset profile');

@@ -86,12 +86,12 @@ const getCartTarget = (): { x: number; y: number } => {
 
   if (bagTarget) {
     const rect = bagTarget.getBoundingClientRect();
-    if (rect.width > 0 && rect.height > 0) {
+    if (rect.width > 0 && rect.height > 0 && rect.top > 0) {
       return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
     }
   }
 
-  // Mobile navigation bottom cart icon
+  // Mobile navigation bottom cart icon / Floating cart fallback
   if (window.innerWidth < 768) {
     const mobileNav = document.getElementById('mobile-cart-nav-target');
     if (mobileNav) {
@@ -100,13 +100,13 @@ const getCartTarget = (): { x: number; y: number } => {
         return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
       }
     }
-    // Fallback on mobile: bottom-left offset where floating cart bag sits
-    return { x: 60, y: window.innerHeight - 90 };
+    // Fallback on mobile: shopping bag location of floating cart
+    return { x: 56, y: window.innerHeight - 116 };
   }
 
   // Fallback on tablet/desktop: centered floating cart's left side bag
   const centerX = window.innerWidth / 2;
-  return { x: Math.max(80, centerX - 160), y: window.innerHeight - 80 };
+  return { x: Math.max(80, centerX - 180), y: window.innerHeight - 116 };
 };
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
@@ -126,13 +126,17 @@ export function CartAnimationProvider({ children }: { children: React.ReactNode 
       let clientX = window.innerWidth / 2;
       let clientY = window.innerHeight / 2;
 
-      if (e && 'touches' in e && (e as React.TouchEvent).touches.length > 0) {
+      if (e && 'touches' in e && (e as React.TouchEvent).touches && (e as React.TouchEvent).touches.length > 0) {
         clientX = (e as React.TouchEvent).touches[0].clientX;
         clientY = (e as React.TouchEvent).touches[0].clientY;
-      } else if (e && 'clientX' in e && typeof (e as any).clientX === 'number') {
+      } else if (e && 'clientX' in e && typeof (e as any).clientX === 'number' && (e as any).clientX > 0) {
         clientX = (e as any).clientX;
         clientY = (e as any).clientY;
       }
+
+      // Safe bounds validation
+      if (!clientX || clientX <= 0 || clientX > window.innerWidth) clientX = window.innerWidth / 2;
+      if (!clientY || clientY <= 0 || clientY > window.innerHeight) clientY = window.innerHeight / 2;
 
       setQueue((prev) => [
         ...prev,
@@ -301,19 +305,26 @@ function PremiumFlyingBox({ anim, onComplete }: { anim: AnimationData; onComplet
     return () => { isMounted = false; };
   }, [anim, centerX, centerY, boxControls, lidControls, flyingPizzaControls, glowControls, onComplete, HALF, PIZZA_SIZE]);
 
-  const isoStyle = {
+  const isoStyle: React.CSSProperties = {
     position: 'absolute' as const,
     inset: 0,
-    transform: 'rotate(45deg) scaleY(0.577)',
+    transform: 'rotate(45deg) scaleY(0.577) translateZ(0)',
+    WebkitTransform: 'rotate(45deg) scaleY(0.577) translateZ(0)',
     borderRadius: 10,
+    willChange: 'transform',
   };
 
   return (
     <>
-      {/* â”€â”€ 3D Realistic Pizza Box Assembly â”€â”€ */}
+      {/* ── 3D Realistic Pizza Box Assembly ── */}
       <motion.div
-        className="absolute z-[10000] pointer-events-none"
-        style={{ width: BOX_SIZE, height: BOX_SIZE }}
+        className="absolute z-[10000] pointer-events-none will-change-transform"
+        style={{ 
+          width: BOX_SIZE, 
+          height: BOX_SIZE,
+          transform: 'translateZ(0)',
+          WebkitTransform: 'translateZ(0)'
+        }}
         animate={boxControls}
       >
         {/* Ambient Warm Glow */}

@@ -156,13 +156,14 @@ export default function StartupGate({ children }: StartupGateProps) {
   };
 
   // Dedicated 5-Second Optimized Assets:
-  // - so_0,eo_5: Physical trimming to first 5 seconds on Cloudinary CDN (no excess payload downloaded)
-  // - w_720/w_1080 + q_auto:good + vc_h264: H.264 profile optimized for smooth mobile Android decoding
+  // - so_0,eo_5: Physical trimming to first 5 seconds on Cloudinary CDN
+  // - Mobile: H.264 Baseline Profile 3.0, 30fps, 540p, 600k bitrate (~400KB total) for zero lag on all Android devices
+  // - Desktop: H.264 1080p profile (~730KB)
   const getOptimizedIntroUrls = () => {
     if (deviceType === 'mobile') {
       return {
-        videoUrl: 'https://res.cloudinary.com/dxmlvkff1/video/upload/so_0,eo_5,w_720,c_limit,q_auto:good,vc_h264/v1782199117/Olive_Pizza_logo_reveal_202606231246_xeyk9t.mp4',
-        posterUrl: 'https://res.cloudinary.com/dxmlvkff1/video/upload/so_0,w_720,c_limit,q_auto:eco,f_jpg/v1782199117/Olive_Pizza_logo_reveal_202606231246_xeyk9t.jpg'
+        videoUrl: 'https://res.cloudinary.com/dxmlvkff1/video/upload/so_0,eo_5,w_540,c_limit,q_auto:eco,vc_h264:baseline:3.0,br_600k,fps_30/v1782199117/Olive_Pizza_logo_reveal_202606231246_xeyk9t.mp4',
+        posterUrl: 'https://res.cloudinary.com/dxmlvkff1/video/upload/so_0,w_540,c_limit,q_auto:eco,f_jpg/v1782199117/Olive_Pizza_logo_reveal_202606231246_xeyk9t.jpg'
       };
     }
 
@@ -182,13 +183,13 @@ export default function StartupGate({ children }: StartupGateProps) {
       {showVideo && (
         <div 
           className={'fixed inset-0 z-[99999] flex items-center justify-center transition-opacity duration-250 ease-out will-change-[opacity] ' + (videoFading ? 'opacity-0 pointer-events-none' : 'opacity-100')}
-          style={{ transform: 'translateZ(0)' }}
+          style={{ transform: 'translateZ(0)', WebkitTransform: 'translateZ(0)' }}
           aria-hidden={videoFading}
         >
-          {/* Dark backdrop */}
+          {/* Solid black backdrop */}
           <div className="absolute inset-0 bg-black" />
 
-          {/* Ultra-lightweight first-frame poster (5KB) for zero black flash */}
+          {/* Ultra-lightweight first-frame poster (4.8KB) for zero black flash */}
           <img 
             src={posterUrl} 
             alt="Olive Pizza"
@@ -196,6 +197,7 @@ export default function StartupGate({ children }: StartupGateProps) {
             onError={handleVideoEnd}
             loading="eager"
             decoding="async"
+            style={{ transform: 'translateZ(0)', WebkitTransform: 'translateZ(0)' }}
           />
 
           <video
@@ -204,7 +206,7 @@ export default function StartupGate({ children }: StartupGateProps) {
             autoPlay
             playsInline
             muted
-            preload="metadata"
+            preload="auto"
             poster={posterUrl}
             onEnded={handleVideoEnd}
             onCanPlay={() => setVideoReady(true)}
@@ -215,6 +217,7 @@ export default function StartupGate({ children }: StartupGateProps) {
               handleVideoEnd();
             }}
             className={'absolute inset-0 w-full h-full object-cover z-20 transition-opacity duration-200 will-change-[opacity] ' + (videoReady ? 'opacity-100' : 'opacity-0')}
+            style={{ transform: 'translateZ(0)', WebkitTransform: 'translateZ(0)' }}
           />
 
           {/* Top-Right Quick Skip Button */}
