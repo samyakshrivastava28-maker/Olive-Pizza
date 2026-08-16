@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MapPin, Clock, CreditCard, ChevronLeft, Ticket, Navigation, Star, TrendingUp, CheckCircle, ShieldCheck, Receipt } from 'lucide-react';
+import { MapPin, Clock, CreditCard, ChevronLeft, Ticket, Navigation, Star, TrendingUp, CheckCircle, ShieldCheck, Receipt, AlertTriangle, AlertCircle, ShoppingBag, Bike } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { useAuthStore, useCartStore } from '../lib/store';
 import { auth, db } from '../lib/firebase';
@@ -31,7 +31,7 @@ export default function Checkout() {
   const [landmark, setLandmark] = useState('');
   const [instructions, setInstructions] = useState('');
   
-  const [deliveryType, setDeliveryType] = useState('delivery');
+  const [deliveryType, setDeliveryType] = useState<'delivery' | 'pickup'>('delivery');
   const [promoInput, setPromoInput] = useState('');
   const [appliedPromo, setAppliedPromo] = useState<any>(null);
   const [activeEvents, setActiveEvents] = useState<any[]>([]);
@@ -43,6 +43,20 @@ export default function Checkout() {
   const [showProcessing, setShowProcessing] = useState(false);
   const [processingStatus, setProcessingStatus] = useState('idle'); // idle, processing, success
   const [orderId, setOrderId] = useState('');
+  const [activeOrder, setActiveOrder] = useState<any>(null);
+  const [checkingActiveOrder, setCheckingActiveOrder] = useState(true);
+  const [deliveryAvailability, setDeliveryAvailability] = useState<{
+    canAcceptDeliveries: boolean;
+    availabilityStatus: 'AVAILABLE' | 'HIGH_DEMAND' | 'NO_RIDERS' | 'CLOSED';
+    availabilityMessage: string;
+    isRestaurantOpen: boolean;
+  }>({
+    canAcceptDeliveries: true,
+    availabilityStatus: 'AVAILABLE',
+    availabilityMessage: 'Delivery available',
+    isRestaurantOpen: true,
+  });
+
   const [mapCenter, setMapCenter] = useState<{lat: number, lng: number}>({
     lat: (user as any)?.lat || RESTAURANT_LOCATION.lat,
     lng: (user as any)?.lng || RESTAURANT_LOCATION.lng
@@ -71,6 +85,60 @@ export default function Checkout() {
     }
   }, [user]);
 
+  // Check for active orders for this customer (Limit 1 active order at once)
+  useEffect(() => {
+    if (!user?.uid) {
+      setCheckingActiveOrder(false);
+      return;
+    }
+    const checkCustomerActiveOrder = async () => {
+      try {
+        setCheckingActiveOrder(true);
+        const q = query(collection(db, 'orders'), where('userId', '==', user.uid));
+        const snap = await getDocs(q);
+        const active = snap.docs.find(doc => {
+          const s = (doc.data().status || '').toLowerCase();
+          return !['delivered', 'cancelled', 'rejected', 'failed'].includes(s);
+        });
+        if (active) {
+          setActiveOrder({ id: active.id, ...active.data() });
+        } else {
+          setActiveOrder(null);
+        }
+      } catch (err) {
+        console.warn('[Checkout] Active order check notice:', err);
+      } finally {
+        setCheckingActiveOrder(false);
+      }
+    };
+    checkCustomerActiveOrder();
+  }, [user?.uid]);
+
+  // Fetch Delivery Capacity & High Demand status
+  useEffect(() => {
+    const checkDeliveryCapacity = async () => {
+      try {
+        const res = await fetch('/api/delivery/availability');
+        if (res.ok) {
+          const data = await res.json();
+          const availStatus = data.availabilityStatus || (data.canAcceptDeliveries ? 'AVAILABLE' : 'NO_RIDERS');
+          setDeliveryAvailability({
+            canAcceptDeliveries: data.canAcceptDeliveries ?? true,
+            availabilityStatus: availStatus,
+            availabilityMessage: data.availabilityMessage || (data.canAcceptDeliveries ? 'Delivery available' : 'Delivery unavailable'),
+            isRestaurantOpen: data.isRestaurantOpen ?? true,
+          });
+          if (!data.canAcceptDeliveries && data.isRestaurantOpen) {
+            setDeliveryType('pickup');
+          }
+        }
+      } catch (err) {
+        console.warn('[Checkout] Availability check notice:', err);
+      }
+    };
+    checkDeliveryCapacity();
+  }, []);
+
   useEffect(() => {
     if (!isAuthenticated) {
       navigate('/login?redirect=/checkout');
@@ -85,7 +153,6 @@ export default function Checkout() {
       return;
     }
 
-    
     // Fetch Promos (prefer cached dataStore coupons)
     const fetchPromos = async () => {
       try {
@@ -154,6 +221,21 @@ export default function Checkout() {
   };
 
   const handlePlaceOrder = async () => {
+    if (activeOrder) {
+      toast.error('You already have an active order in progress. Please wait until it is delivered before placing another.');
+      return;
+    }
+
+    if (!storeStatus.isRestaurantOpen && !deliveryAvailability.isRestaurantOpen) {
+      toast.error('Restaurant is currently closed. We accept orders during business hours (12:00 PM - 12:00 AM).');
+      return;
+    }
+
+    if (deliveryType === 'delivery' && !deliveryAvailability.canAcceptDeliveries) {
+      toast.error(deliveryAvailability.availabilityMessage || 'Delivery is currently unavailable.');
+      return;
+    }
+
     if (!address.trim() && deliveryType === 'delivery') {
       toast.error('Please enter a delivery address');
       return;
@@ -242,100 +324,235 @@ export default function Checkout() {
       </div>
 
       <div className="max-w-xl mx-auto px-4 py-6 space-y-6">
-        {/* Customer Information & Address Card */}
-        <motion.div initial={{opacity:0, y:20}} animate={{opacity:1, y:0}} className="bg-white/[0.02] border border-white/5 rounded-3xl p-5 relative overflow-hidden group">
-          <div className="absolute inset-0 bg-gradient-to-br from-primary-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-          <h2 className="text-lg font-bold flex items-center gap-2 mb-4">
-            <MapPin className="w-5 h-5 text-primary-400" /> Delivery Location
-          </h2>
-          <div className="bg-dark-900/50 rounded-2xl p-4 border border-white/5 mb-4 relative overflow-hidden h-64 flex flex-col">
-            <div className="absolute inset-0 z-0 opacity-80">
-               <LocationPicker3D
-                  initialCenter={mapCenter}
-                  onChange={({lat, lng, address: reverseAddr}) => {
-                    setMapCenter({lat, lng});
-                    if (reverseAddr) setAddress(reverseAddr);
-                  }}
-                  className="w-full h-full"
-               />
+        {/* ── Active Order Warning Banner (1 order at a time policy) ── */}
+        {activeOrder && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-amber-500/10 border border-amber-500/30 rounded-3xl p-4 flex items-center justify-between gap-3 shadow-lg shadow-amber-950/20"
+          >
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-amber-500/20 rounded-2xl text-amber-400 font-bold text-lg shrink-0">
+                ⚠️
+              </div>
+              <div>
+                <h4 className="font-bold text-sm text-amber-300">
+                  Active Order in Progress {activeOrder.dailyOrderNumber ? `(#${activeOrder.dailyOrderNumber})` : ''}
+                </h4>
+                <p className="text-xs text-amber-200/80 mt-0.5 capitalize">
+                  Status: <span className="font-semibold text-white">{activeOrder.status?.replace(/_/g, ' ') || 'Preparing'}</span>. Please wait until delivered to place a new order.
+                </p>
+              </div>
             </div>
-            <div className="relative z-10 flex flex-col gap-3">
-              <div className="flex items-start gap-3">
-                <div className="p-2 bg-primary-500/20 rounded-full shrink-0">
-                  <Navigation className="w-4 h-4 text-primary-400" />
-                </div>
-                <div className="flex-1 bg-dark-950/80 backdrop-blur-md p-3 rounded-xl border border-white/10 shadow-lg">
-                  <p className="font-semibold text-white/90 text-sm mb-1 flex items-center gap-2">
-                    <MapPin className="w-4 h-4 text-primary-400" /> Current Location
-                  </p>
-                  <textarea
-                    value={address}
-                    onChange={(e) => setAddress(e.target.value)}
-                    placeholder="Drag map or enter complete address..."
-                    className="w-full bg-transparent text-white/80 text-sm resize-none focus:outline-none"
-                    rows={2}
-                  />
+            <button
+              type="button"
+              onClick={() => navigate(`/order-tracking/${activeOrder.id}`)}
+              className="px-3.5 py-2 bg-amber-500 text-dark-950 text-xs font-black rounded-xl hover:bg-amber-400 transition-transform active:scale-95 shrink-0 flex items-center gap-1.5 shadow-md"
+            >
+              <Navigation className="w-3.5 h-3.5" />
+              <span>Track</span>
+            </button>
+          </motion.div>
+        )}
+
+        {/* ── Delivery Availability Alert Banners ── */}
+        {!deliveryAvailability.isRestaurantOpen ? (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-red-500/10 border border-red-500/30 rounded-3xl p-4 flex items-start gap-3 text-red-200"
+          >
+            <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+            <div>
+              <h4 className="font-bold text-sm text-red-300">Restaurant Closed</h4>
+              <p className="text-xs text-red-200/80 mt-0.5">
+                Olive Pizza is currently closed. We accept orders during business hours (12:00 PM - 12:00 AM).
+              </p>
+            </div>
+          </motion.div>
+        ) : deliveryAvailability.availabilityStatus === 'HIGH_DEMAND' ? (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-amber-500/10 border border-amber-500/30 rounded-3xl p-4 flex items-start gap-3 text-amber-200"
+          >
+            <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+            <div>
+              <h4 className="font-bold text-sm text-amber-300">Delivery Temporarily Unavailable</h4>
+              <p className="text-xs text-amber-200/80 mt-0.5">
+                Delivery temporarily unavailable due to high demand. All delivery partners are currently assigned. You can switch to Store Pickup or check back shortly.
+              </p>
+            </div>
+          </motion.div>
+        ) : deliveryAvailability.availabilityStatus === 'NO_RIDERS' ? (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-red-500/10 border border-red-500/30 rounded-3xl p-4 flex items-start gap-3 text-red-200"
+          >
+            <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+            <div>
+              <h4 className="font-bold text-sm text-red-300">Delivery Unavailable</h4>
+              <p className="text-xs text-red-200/80 mt-0.5">
+                Delivery unavailable. No delivery partners are currently available. You can opt for Store Pickup.
+              </p>
+            </div>
+          </motion.div>
+        ) : null}
+
+        {/* ── Order Mode Selector (Delivery vs Store Pickup) ── */}
+        <div className="bg-white/[0.02] border border-white/5 rounded-3xl p-4 flex gap-3">
+          <button
+            type="button"
+            onClick={() => {
+              if (!deliveryAvailability.canAcceptDeliveries) {
+                toast.error(deliveryAvailability.availabilityMessage || 'Delivery is currently unavailable');
+                return;
+              }
+              setDeliveryType('delivery');
+            }}
+            className={`flex-1 p-3.5 rounded-2xl border transition-all flex flex-col items-center gap-1.5 ${
+              !deliveryAvailability.canAcceptDeliveries
+                ? 'opacity-50 bg-dark-950 border-white/5 cursor-not-allowed text-slate-500'
+                : deliveryType === 'delivery'
+                ? 'bg-primary-500/20 border-primary-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.2)]'
+                : 'bg-dark-900/50 border-white/5 text-white/60 hover:bg-white/5'
+            }`}
+          >
+            <Bike className="w-5 h-5" />
+            <span className="text-xs font-bold">🛵 Home Delivery</span>
+            {!deliveryAvailability.canAcceptDeliveries && (
+              <span className="text-[10px] text-amber-400 font-bold">
+                {deliveryAvailability.availabilityStatus === 'HIGH_DEMAND' ? 'High Demand' : 'Unavailable'}
+              </span>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setDeliveryType('pickup')}
+            className={`flex-1 p-3.5 rounded-2xl border transition-all flex flex-col items-center gap-1.5 ${
+              deliveryType === 'pickup'
+                ? 'bg-primary-500/20 border-primary-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.2)]'
+                : 'bg-dark-900/50 border-white/5 text-white/60 hover:bg-white/5'
+            }`}
+          >
+            <ShoppingBag className="w-5 h-5" />
+            <span className="text-xs font-bold">🛍️ Store Pickup</span>
+            <span className="text-[10px] text-primary-400 font-bold">Ready in 15m • Free</span>
+          </button>
+        </div>
+
+        {/* ── Customer Information & Address Card (for Delivery) ── */}
+        {deliveryType === 'delivery' ? (
+          <motion.div initial={{opacity:0, y:20}} animate={{opacity:1, y:0}} className="bg-white/[0.02] border border-white/5 rounded-3xl p-5 relative overflow-hidden group">
+            <div className="absolute inset-0 bg-gradient-to-br from-primary-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+            <h2 className="text-lg font-bold flex items-center gap-2 mb-4">
+              <MapPin className="w-5 h-5 text-primary-400" /> Delivery Location
+            </h2>
+            <div className="bg-dark-900/50 rounded-2xl p-4 border border-white/5 mb-4 relative overflow-hidden h-64 flex flex-col">
+              <div className="absolute inset-0 z-0 opacity-80">
+                 <LocationPicker3D
+                    initialCenter={mapCenter}
+                    onChange={({lat, lng, address: reverseAddr}) => {
+                      setMapCenter({lat, lng});
+                      if (reverseAddr) setAddress(reverseAddr);
+                    }}
+                    className="w-full h-full"
+                 />
+              </div>
+              <div className="relative z-10 flex flex-col gap-3">
+                <div className="flex items-start gap-3">
+                  <div className="p-2 bg-primary-500/20 rounded-full shrink-0">
+                    <Navigation className="w-4 h-4 text-primary-400" />
+                  </div>
+                  <div className="flex-1 bg-dark-950/80 backdrop-blur-md p-3 rounded-xl border border-white/10 shadow-lg">
+                    <p className="font-semibold text-white/90 text-sm mb-1 flex items-center gap-2">
+                      <MapPin className="w-4 h-4 text-primary-400" /> Current Location
+                    </p>
+                    <textarea
+                      value={address}
+                      onChange={(e) => setAddress(e.target.value)}
+                      placeholder="Drag map or enter complete address..."
+                      className="w-full bg-transparent text-white/80 text-sm resize-none focus:outline-none"
+                      rows={2}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-          <div className="flex gap-2 relative z-10 mb-6">
-             <button onClick={() => {
-                toast('Drag the map to set your exact location', { icon: '🗺️' });
-             }} className="flex-1 py-2.5 rounded-xl bg-white/5 text-sm font-medium hover:bg-white/10 transition-colors">Edit on Map</button>
-             <button onClick={() => {
-                 if (navigator.geolocation) {
-                   const t = toast.loading('Locating...');
-                   navigator.geolocation.getCurrentPosition(
-                     async (pos) => {
-                       const { latitude, longitude } = pos.coords;
-                       setMapCenter({lat: latitude, lng: longitude});
-                       toast.success('Location found!', { id: t });
-                     },
-                     () => toast.error('Location access denied', { id: t })
-                   );
-                } else {
-                  toast.error('Geolocation not supported');
-                }
-             }} className="flex-1 py-2.5 rounded-xl bg-primary-600/20 text-primary-400 text-sm font-medium hover:bg-primary-600/30 transition-colors flex items-center justify-center gap-2">
-               <Navigation className="w-4 h-4" /> Use My GPS
-             </button>
-          </div>
+            <div className="flex gap-2 relative z-10 mb-6">
+               <button onClick={() => {
+                  toast('Drag the map to set your exact location', { icon: '🗺️' });
+               }} className="flex-1 py-2.5 rounded-xl bg-white/5 text-sm font-medium hover:bg-white/10 transition-colors">Edit on Map</button>
+               <button onClick={() => {
+                   if (navigator.geolocation) {
+                     const t = toast.loading('Locating...');
+                     navigator.geolocation.getCurrentPosition(
+                       async (pos) => {
+                         const { latitude, longitude } = pos.coords;
+                         setMapCenter({lat: latitude, lng: longitude});
+                         toast.success('Location found!', { id: t });
+                       },
+                       () => toast.error('Location access denied', { id: t })
+                     );
+                  } else {
+                    toast.error('Geolocation not supported');
+                  }
+               }} className="flex-1 py-2.5 rounded-xl bg-primary-600/20 text-primary-400 text-sm font-medium hover:bg-primary-600/30 transition-colors flex items-center justify-center gap-2">
+                 <Navigation className="w-4 h-4" /> Use My GPS
+               </button>
+            </div>
 
-          <div className="space-y-4 relative z-10 border-t border-white/5 pt-6 mt-2">
-            <h3 className="text-sm font-semibold text-white/80">Additional Delivery Details</h3>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-4 relative z-10 border-t border-white/5 pt-6 mt-2">
+              <h3 className="text-sm font-semibold text-white/80">Additional Delivery Details</h3>
+              <div className="grid grid-cols-2 gap-3">
+                <input 
+                  type="text" 
+                  placeholder="House No." 
+                  value={houseNumber}
+                  onChange={e => setHouseNumber(e.target.value)}
+                  className="bg-dark-900/50 border border-white/5 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary-500 transition-colors"
+                />
+                <input 
+                  type="text" 
+                  placeholder="Apartment / Floor" 
+                  value={apartment}
+                  onChange={e => setApartment(e.target.value)}
+                  className="bg-dark-900/50 border border-white/5 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary-500 transition-colors"
+                />
+              </div>
               <input 
                 type="text" 
-                placeholder="House No." 
-                value={houseNumber}
-                onChange={e => setHouseNumber(e.target.value)}
-                className="bg-dark-900/50 border border-white/5 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary-500 transition-colors"
+                placeholder="Landmark / Neighbourhood" 
+                value={landmark}
+                onChange={e => setLandmark(e.target.value)}
+                className="w-full bg-dark-900/50 border border-white/5 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary-500 transition-colors"
               />
-              <input 
-                type="text" 
-                placeholder="Apartment / Floor" 
-                value={apartment}
-                onChange={e => setApartment(e.target.value)}
-                className="bg-dark-900/50 border border-white/5 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary-500 transition-colors"
+              <textarea 
+                placeholder="Delivery Instructions (e.g., Leave at door)" 
+                value={instructions}
+                onChange={e => setInstructions(e.target.value)}
+                rows={2}
+                className="w-full bg-dark-900/50 border border-white/5 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary-500 transition-colors resize-none"
               />
             </div>
-            <input 
-              type="text" 
-              placeholder="Landmark / Neighbourhood" 
-              value={landmark}
-              onChange={e => setLandmark(e.target.value)}
-              className="w-full bg-dark-900/50 border border-white/5 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary-500 transition-colors"
-            />
-            <textarea 
-              placeholder="Delivery Instructions (e.g., Leave at door)" 
-              value={instructions}
-              onChange={e => setInstructions(e.target.value)}
-              rows={2}
-              className="w-full bg-dark-900/50 border border-white/5 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary-500 transition-colors resize-none"
-            />
-          </div>
-        </motion.div>
+          </motion.div>
+        ) : (
+          <motion.div initial={{opacity:0, y:20}} animate={{opacity:1, y:0}} className="bg-white/[0.02] border border-white/5 rounded-3xl p-5 relative overflow-hidden">
+            <h2 className="text-lg font-bold flex items-center gap-2 mb-3">
+              <ShoppingBag className="w-5 h-5 text-primary-400" /> Store Pickup Location
+            </h2>
+            <div className="bg-dark-900/50 rounded-2xl p-4 border border-white/5 space-y-2">
+              <p className="font-bold text-white text-sm">Olive Pizza Gourmet Kitchen</p>
+              <p className="text-xs text-white/70">Main Road, Rajnandgaon, Chhattisgarh 491441</p>
+              <div className="flex items-center gap-2 text-xs text-primary-400 pt-2 border-t border-white/5">
+                <Clock className="w-4 h-4" />
+                <span>Estimated preparation time: 15-20 minutes</span>
+              </div>
+            </div>
+          </motion.div>
+        )}
 
         {/* Coupons Section */}
         <motion.div initial={{opacity:0, y:20}} animate={{opacity:1, y:0}} transition={{delay: 0.1}} className="bg-white/[0.02] border border-white/5 rounded-3xl p-5">
@@ -465,12 +682,35 @@ export default function Checkout() {
            >
              Cancel
            </button>
-           <button 
-             onClick={handlePlaceOrder}
-             className="flex-[2] bg-gradient-to-r from-primary-600 to-primary-500 text-white font-bold rounded-2xl shadow-[0_0_20px_rgba(85,119,90,0.3)] hover:shadow-[0_0_30px_rgba(85,119,90,0.5)] transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 disabled:grayscale py-4"
-           >
-             Place Order • ₹{finalTotal} <ChevronLeft className="w-5 h-5 rotate-180" />
-           </button>
+           {activeOrder ? (
+             <button 
+               onClick={() => navigate(`/order-tracking/${activeOrder.id}`)}
+               className="flex-[2] bg-gradient-to-r from-amber-600 to-amber-500 text-white font-bold rounded-2xl shadow-[0_0_20px_rgba(245,158,11,0.3)] hover:shadow-[0_0_30px_rgba(245,158,11,0.5)] transition-all active:scale-95 flex items-center justify-center gap-2 py-4 text-sm"
+             >
+               <Navigation className="w-4 h-4" /> Track Active Order
+             </button>
+           ) : !deliveryAvailability.isRestaurantOpen && !storeStatus.isRestaurantOpen ? (
+             <button 
+               disabled
+               className="flex-[2] bg-red-950/60 border border-red-500/30 text-red-400 font-bold rounded-2xl cursor-not-allowed opacity-60 flex items-center justify-center gap-2 py-4 text-sm"
+             >
+               <AlertCircle className="w-4 h-4" /> Restaurant Closed
+             </button>
+           ) : deliveryType === 'delivery' && !deliveryAvailability.canAcceptDeliveries ? (
+             <button 
+               onClick={() => setDeliveryType('pickup')}
+               className="flex-[2] bg-gradient-to-r from-amber-600 to-amber-500 text-white font-bold rounded-2xl shadow-[0_0_20px_rgba(245,158,11,0.3)] hover:shadow-[0_0_30px_rgba(245,158,11,0.5)] transition-all active:scale-95 flex items-center justify-center gap-2 py-4 text-sm"
+             >
+               <ShoppingBag className="w-4 h-4" /> Switch to Store Pickup
+             </button>
+           ) : (
+             <button 
+               onClick={handlePlaceOrder}
+               className="flex-[2] bg-gradient-to-r from-primary-600 to-primary-500 text-white font-bold rounded-2xl shadow-[0_0_20px_rgba(85,119,90,0.3)] hover:shadow-[0_0_30px_rgba(85,119,90,0.5)] transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 disabled:grayscale py-4"
+             >
+               Place Order • ₹{finalTotal} <ChevronLeft className="w-5 h-5 rotate-180" />
+             </button>
+           )}
         </div>
       </div>
 

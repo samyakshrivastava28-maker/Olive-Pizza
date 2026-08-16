@@ -14,6 +14,9 @@ interface DataState {
   storeStatus: {
     isRestaurantOpen: boolean;
     isDeliveryAvailable: boolean;
+    canAcceptDeliveries: boolean;
+    availabilityStatus: 'AVAILABLE' | 'HIGH_DEMAND' | 'NO_RIDERS' | 'CLOSED';
+    availabilityMessage: string;
     isLoading: boolean;
     isWithinBusinessHours: boolean;
     deliveryRadiusKm: number;
@@ -54,6 +57,9 @@ export const useDataStore = create<DataState>()(
       storeStatus: {
         isRestaurantOpen: true,
         isDeliveryAvailable: true,
+        canAcceptDeliveries: true,
+        availabilityStatus: 'AVAILABLE',
+        availabilityMessage: 'Delivery available',
         isLoading: true,
         isWithinBusinessHours: true,
         deliveryRadiusKm: 5,
@@ -112,9 +118,25 @@ export const useDataStore = create<DataState>()(
               const currentHour = new Date().getHours();
               const isWithinHours = currentHour >= openH && currentHour < closeH;
 
+              const isDeliveryAvail = data.isDeliveryAvailable ?? true;
+              const isRestOpen = (data.isRestaurantOpen ?? true) && isWithinHours;
+              let availStatus: 'AVAILABLE' | 'HIGH_DEMAND' | 'NO_RIDERS' | 'CLOSED' = 'AVAILABLE';
+              let availMsg = 'Delivery available';
+
+              if (!isRestOpen) {
+                availStatus = 'CLOSED';
+                availMsg = 'Restaurant is currently closed';
+              } else if (!isDeliveryAvail) {
+                availStatus = 'NO_RIDERS';
+                availMsg = 'Delivery unavailable';
+              }
+
               set({ storeStatus: {
-                isRestaurantOpen: data.isRestaurantOpen ?? true,
-                isDeliveryAvailable: data.isDeliveryAvailable ?? true,
+                isRestaurantOpen: isRestOpen,
+                isDeliveryAvailable: isDeliveryAvail,
+                canAcceptDeliveries: isRestOpen && isDeliveryAvail,
+                availabilityStatus: availStatus,
+                availabilityMessage: availMsg,
                 isLoading: false,
                 isWithinBusinessHours: isWithinHours,
                 deliveryRadiusKm: data.deliveryRadiusKm ?? 5,

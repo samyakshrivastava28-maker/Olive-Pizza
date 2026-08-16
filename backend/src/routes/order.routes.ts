@@ -8,6 +8,7 @@ import { notificationEngine } from '../services/notification/NotificationEngine.
 import { orderEventService } from '../services/order/OrderEventService.js';
 import { queueEmail } from '../services/email.service.js';
 import { buildOrderStatusEmail } from '../services/emailTemplates.service.js';
+import { DeliveryCapacityService } from '../services/delivery/DeliveryCapacityService.js';
 import crypto from 'crypto';
 
 // Restaurant local timezone for daily order counter reset
@@ -100,6 +101,43 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
     if (!userId) {
       res.status(401).json({ error: 'Unauthorized' });
       return;
+    }
+
+    // 0. Enforce 1 active order per customer policy
+    const existingOrdersSnap = await adminDb.collection('orders')
+      .where('userId', '==', userId)
+      .get();
+
+    const activeOrderDoc = existingOrdersSnap.docs.find(doc => {
+      const d = doc.data();
+      const status = (d.status || '').toLowerCase();
+      return !['delivered', 'cancelled', 'rejected', 'failed'].includes(status);
+    });
+
+    if (activeOrderDoc) {
+      const activeData = activeOrderDoc.data();
+      const orderNum = activeData.dailyOrderNumber ? `#${activeData.dailyOrderNumber}` : `#${activeOrderDoc.id.slice(0, 6)}`;
+      res.status(400).json({ 
+        error: `You already have an active order in progress (${orderNum}). Please wait until your current order is delivered before placing another order.`,
+        code: 'ACTIVE_ORDER_EXISTS',
+        activeOrderId: activeOrderDoc.id,
+        activeOrderStatus: activeData.status
+      });
+      return;
+    }
+
+    // 0.5. Check Delivery Availability if delivery requested
+    const deliveryType = req.body.deliveryType || 'delivery';
+    if (deliveryType === 'delivery') {
+      const avail = await DeliveryCapacityService.getRestaurantAvailability();
+      if (!avail.canAcceptDeliveries) {
+        res.status(400).json({
+          error: avail.availabilityMessage,
+          code: avail.availabilityStatus,
+          canAcceptDeliveries: false
+        });
+        return;
+      }
     }
 
     // 1. Fetch user data from Firestore
@@ -195,7 +233,6 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response): Promise<v
       });
     }
 
-    const deliveryType = req.body.deliveryType || 'delivery';
     const deliveryFee = deliveryType === 'delivery' ? Number(req.body.deliveryFee ?? 40) : 0;
     const taxes = Math.round(serverCalculatedTotal * 0.05);
     const discountAmount = Number(req.body.discountAmount || 0);

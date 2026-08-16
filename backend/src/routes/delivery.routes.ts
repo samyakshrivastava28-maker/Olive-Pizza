@@ -21,6 +21,16 @@ const partnerStatusSchema = z.object({
   status: z.enum(['online', 'offline', 'busy', 'on_delivery', 'break'])
 });
 
+// Fetch restaurant availability & delivery capacity (Public endpoint used by checkout & store status)
+router.get('/availability', async (req: Request, res: Response) => {
+  try {
+    const data = await DeliveryCapacityService.getRestaurantAvailability();
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch availability' });
+  }
+});
+
 router.use(verifyToken);
 
 // Customer gets live location via polling
@@ -206,15 +216,7 @@ router.patch('/partner-status', requireRole(['delivery', 'delivery_partner', 'ow
   }
 });
 
-// Fetch restaurant availability & queue data (Public-ish, used by Checkout)
-router.get('/availability', async (req: Request, res: Response) => {
-  try {
-    const data = await DeliveryCapacityService.getRestaurantAvailability();
-    res.json(data);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch availability' });
-  }
-});
+
 
 // Join the notify queue
 router.post('/notify-queue', verifyToken, async (req: AuthRequest, res: Response) => {

@@ -11,7 +11,7 @@ import { auth, getCurrentAuthToken } from '../../../lib/firebase';
 import toast from 'react-hot-toast';
 import ProviderRequirementsWizard from './ProviderRequirementsWizard';
 
-const BACKEND = import.meta.env.VITE_BACKEND_URL || (import.meta.env.DEV ? 'http://localhost:3000' : 'https://olive-pizza-backend.onrender.com');
+const BACKEND = import.meta.env.VITE_BACKEND_URL || (import.meta.env.DEV ? 'http://localhost:3000' : 'https://olive-pizza-backend.onrender.app');
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function formatBytes(bytes: number | string | undefined): string {

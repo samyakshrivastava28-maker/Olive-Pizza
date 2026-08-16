@@ -56,12 +56,16 @@ export class DeliveryCapacityService {
    */
   static async getRestaurantAvailability() {
     try {
-      const settingsDoc = await adminDb.collection('settings').doc('store').get();
-      const settings = settingsDoc.data() || {};
+      const settingsDoc = await adminDb.collection('settings').doc('global').get();
+      const settings = settingsDoc.exists ? settingsDoc.data() || {} : {};
       
-      const isRestaurantOpen = settings.isOpen !== false;
-      const isDeliveryEnabled = settings.deliveryEnabled !== false;
-      const isKitchenAccepting = settings.kitchenAccepting !== false;
+      const openH = settings.openingHour !== undefined ? Number(settings.openingHour) : 12;
+      const closeH = settings.closingHour !== undefined ? Number(settings.closingHour) : 24;
+      const currentHour = new Date().getHours();
+      const isWithinBusinessHours = currentHour >= openH && currentHour < closeH;
+
+      const isRestaurantOpen = (settings.isRestaurantOpen !== false) && isWithinBusinessHours;
+      const isDeliveryEnabled = settings.isDeliveryAvailable !== false;
 
       // Fetch all riders
       const snapshot = await adminDb.collection('users')
@@ -74,21 +78,37 @@ export class DeliveryCapacityService {
 
       snapshot.docs.forEach(doc => {
         const data = doc.data();
-        const status = data.deliveryStatus || 'offline';
-        if (status === 'online') {
+        const status = (data.deliveryStatus || 'offline').toLowerCase();
+        if (status === 'online' || status === 'available') {
           onlineCount++;
           availableCount++;
-        }
-        if (status === 'on_delivery') {
+        } else if (status === 'on_delivery' || status === 'busy' || status === 'assigned') {
           onlineCount++;
           onDeliveryCount++;
         }
       });
 
-      const canAcceptDeliveries = isRestaurantOpen && isDeliveryEnabled && isKitchenAccepting && (availableCount > 0);
+      let availabilityStatus: 'AVAILABLE' | 'HIGH_DEMAND' | 'NO_RIDERS' | 'CLOSED' = 'AVAILABLE';
+      let availabilityMessage = 'Delivery available';
+      let canAcceptDeliveries = true;
 
-      // Estimate Wait Time (mock logic for now - approx 15 mins base + 5 mins per active delivery)
-      let estimatedWaitMins = 0;
+      if (!isRestaurantOpen) {
+        availabilityStatus = 'CLOSED';
+        availabilityMessage = 'Restaurant is currently closed';
+        canAcceptDeliveries = false;
+      } else if (!isDeliveryEnabled || onlineCount === 0) {
+        availabilityStatus = 'NO_RIDERS';
+        availabilityMessage = 'Delivery unavailable';
+        canAcceptDeliveries = false;
+      } else if (onlineCount > 0 && availableCount === 0) {
+        // All active delivery partners are currently assigned/busy
+        availabilityStatus = 'HIGH_DEMAND';
+        availabilityMessage = 'Delivery temporarily unavailable due to high demand';
+        canAcceptDeliveries = false;
+      }
+
+      // Estimate Wait Time (approx 15 mins base + 5 mins per active delivery)
+      let estimatedWaitMins = 20;
       if (!canAcceptDeliveries && onDeliveryCount > 0) {
         estimatedWaitMins = 15 + (Math.round(onDeliveryCount / Math.max(1, onlineCount)) * 10);
       }
@@ -96,17 +116,27 @@ export class DeliveryCapacityService {
       return {
         isRestaurantOpen,
         isDeliveryEnabled,
-        isKitchenAccepting,
+        isWithinBusinessHours,
+        totalRiders: snapshot.size,
         onlineCount,
         availableCount,
         onDeliveryCount,
+        availabilityStatus,
+        availabilityMessage,
         canAcceptDeliveries,
         estimatedWaitMins
       };
 
     } catch (e) {
       console.error('[DeliveryCapacity] Error evaluating availability', e);
-      return { canAcceptDeliveries: false, estimatedWaitMins: 30 };
+      return { 
+        isRestaurantOpen: true,
+        isDeliveryEnabled: true,
+        canAcceptDeliveries: true, 
+        availabilityStatus: 'AVAILABLE' as const,
+        availabilityMessage: 'Delivery available',
+        estimatedWaitMins: 30 
+      };
     }
   }
 

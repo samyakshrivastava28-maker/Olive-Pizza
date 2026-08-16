@@ -24,7 +24,7 @@ const originalFetch = window.fetch;
 window.fetch = async (...args) => {
   let [resource, config] = args;
   if (typeof resource === 'string' && resource.startsWith('/api/')) {
-    const backendUrl = import.meta.env.VITE_BACKEND_URL || (import.meta.env.DEV ? 'http://localhost:3000' : 'https://olive-pizza-backend.onrender.com');
+    const backendUrl = import.meta.env.VITE_BACKEND_URL || (import.meta.env.DEV ? 'http://localhost:3000' : 'https://olive-pizza-backend.onrender.app');
     resource = `${backendUrl}${resource}`;
   }
   return originalFetch(resource, config);

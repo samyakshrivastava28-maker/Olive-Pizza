@@ -86,6 +86,11 @@ const allowedOrigins = [
   'http://localhost',
   'http://127.0.0.1',
   'capacitor://localhost',
+  'https://olive-pizza.vercel.app',
+  'https://olive-pizza-backend.onrender.app',
+  'https://olive-pizza-backend.onrender.com',
+  'https://olive-pizza-ai-frontend.vercel.app',
+  'https://olive-pizza-ai.onrender.com',
   process.env.CLIENT_URL || 'https://olive-pizza.vercel.app'
 ];
 

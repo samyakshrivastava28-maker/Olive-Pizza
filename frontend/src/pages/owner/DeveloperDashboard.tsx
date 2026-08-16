@@ -24,7 +24,7 @@ import { auth, getCurrentAuthToken } from '../../lib/firebase';
 import toast from 'react-hot-toast';
 import AIDiagnosticsConsole from '../../components/developer/AIDiagnosticsConsole';
 
-const BACKEND = import.meta.env.VITE_BACKEND_URL || (import.meta.env.DEV ? 'http://localhost:3000' : 'https://olive-pizza-backend.onrender.com');
+const BACKEND = import.meta.env.VITE_BACKEND_URL || (import.meta.env.DEV ? 'http://localhost:3000' : 'https://olive-pizza-backend.onrender.app');
 import DataManagerHub from './DataManager/DataManagerHub';
 
 class TabErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean; error?: Error }> {
