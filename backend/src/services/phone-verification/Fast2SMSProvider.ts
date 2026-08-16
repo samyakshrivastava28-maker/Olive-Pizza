@@ -159,7 +159,7 @@ export class Fast2SMSProvider implements PhoneVerificationProvider {
               timestamp: new Date().toISOString(),
               phone: formattedPhone,
               provider: 'Fast2SMS (Production)',
-              status: gatewayStatusCode === 996 ? 'WEBSITE_VERIFICATION_REQUIRED' : 'GATEWAY_ERROR',
+              status: 'GATEWAY_ERROR',
               error: gatewayErrorMsg,
               latencyMs: Date.now() - startTime,
               success: false
@@ -194,7 +194,7 @@ export class Fast2SMSProvider implements PhoneVerificationProvider {
             timestamp: new Date().toISOString(),
             phone: formattedPhone,
             provider: 'Fast2SMS (Production)',
-            status: statusCode === 996 ? 'WEBSITE_VERIFICATION_REQUIRED' : 'NETWORK_ERROR',
+            status: 'NETWORK_ERROR',
             error: errMsg,
             latencyMs: Date.now() - startTime,
             success: false
