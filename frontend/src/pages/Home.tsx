@@ -131,6 +131,9 @@ function PremiumSectionWrapper({
   );
 }
 
+import PizzaLoader from "../components/ui/PizzaLoader";
+import { PREDEFINED_TEMPLATES } from "../utils/HomePageTemplates";
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function Home() {
   const storeStatus = useStoreStatus();
@@ -138,8 +141,7 @@ export default function Home() {
   const addItem = useCartStore((s) => s.addItem);
   const navigate = useNavigate();
 
-
-  const [pageSchema, setPageSchema] = useState<PageSchema | null>(null);
+  const [pageSchema, setPageSchema] = useState<PageSchema>(PREDEFINED_TEMPLATES[0]);
 
   useEffect(() => {
     fetch('/api/homepage/live')
@@ -149,15 +151,12 @@ export default function Home() {
           setPageSchema(data.config);
         }
       })
-      .catch(console.error);
-  }, []);  // ─── Data State ───────────────────────────────────────────────────────────
+      .catch(() => {});
+  }, []);
+
   const {
-    ads,
-    coupons,
-    specialCategories,
     products,
     combos,
-    isInitialized,
     initialize,
   } = useDataStore();
 
@@ -170,71 +169,8 @@ export default function Home() {
     [products, combos]
   );
 
-  const topSelling = useMemo(() => {
-    return [...allProducts]
-      .sort((a, b) => computeRankingScore(b as any) - computeRankingScore(a as any))
-      .slice(0, 8);
-  }, [allProducts]);
-
-  const [wishlistIds, setWishlistIds] = useState<string[]>([]);
-  const [previousOrders, setPreviousOrders] = useState<any[]>([]);
-  const [savedProducts, setSavedProducts] = useState<any[]>([]);
-
-  // ─── Wishlist ─────────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!isAuthenticated || !user) return;
-    const unsub = subscribeToWishlist(user.uid, (ids) => {
-      setWishlistIds(ids);
-      const saved = allProducts.filter((p) => ids.includes(p.id));
-      setSavedProducts(saved);
-    });
-    return unsub;
-  }, [isAuthenticated, user, allProducts]);
-
-  // ─── Previous Orders ──────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!isAuthenticated || !user) return;
-    const fetchOrders = async () => {
-      try {
-        const snap = await getDocs(
-          query(
-            collection(db, "orders"),
-            where("userId", "==", user.uid),
-            orderBy("createdAt", "desc"),
-            limit(10)
-          )
-        );
-        setPreviousOrders(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-      } catch (e) {
-        // silently ignore — orders may be in Postgres
-      }
-    };
-    fetchOrders();
-  }, [isAuthenticated, user]);
-
-  const handleReorderAll = useCallback(
-    (order: any) => {
-      if (!order.items) return;
-      order.items.forEach((item: any) => {
-        addItem({
-          id: item.productId || item.id,
-          productId: item.productId || item.id,
-          productName: item.productName || item.name,
-          price: item.price,
-          quantity: item.quantity || 1,
-          imageUrl: item.imageUrl || "",
-        } as any);
-      });
-      toast.success(`${order.items.length} items added to cart!`);
-      navigate("/cart");
-    },
-    [addItem, navigate]
-  );
-
   const isStoreOpen =
     storeStatus.isRestaurantOpen && storeStatus.isWithinBusinessHours;
-
-
 
   return (
     <>
@@ -249,10 +185,7 @@ export default function Home() {
           </div>
         )}
 
-        {/* ─── LUXURY HERO (STRICTLY UNTOUCHED) ─────────────────────────────────── */}
-        <LuxuryHero isStoreOpen={isStoreOpen} showIntro={false} />
-
-        {/* ─── Flagship Below-Hero Content ─────────────────────────────────── */}
+        {/* ─── Flagship Canonical Content ─────────────────────────────────── */}
         <main
           className="w-full pb-16 relative overflow-hidden"
           style={{ background: "#06070a" }}
@@ -266,12 +199,11 @@ export default function Home() {
             }}
           />
 
-          {/* New Home Page Manager Dynamic Layout */}
           {pageSchema ? (
             <PageRenderer schema={pageSchema} />
           ) : (
-            <div className="w-full flex flex-col gap-8 py-8 relative z-10 min-h-[600px] items-center justify-center">
-              <div className="w-12 h-12 border-4 border-primary-500 border-t-transparent rounded-full animate-spin" />
+            <div className="w-full flex flex-col gap-8 py-16 relative z-10 min-h-[600px] items-center justify-center">
+              <PizzaLoader text="Handcrafting your menu..." size="medium" />
             </div>
           )}
         </main>

@@ -100,7 +100,7 @@ export default function DeliveryNotificationCenter() {
                   return;
                 }
                 const { AlarmPermission } = await import('../../plugins/AlarmPermission');
-                await AlarmPermission.setupPermissions().catch(err => alert(`Error: ${err.message}`));
+                await AlarmPermission.setupPermissions({ role: 'delivery_partner', force: true }).catch(err => alert(`Error: ${err.message}`));
                 alert('Permission prompt triggered natively');
               }}
               className="flex-1 bg-primary-600 hover:bg-primary-500 text-white text-xs font-bold py-2 rounded-xl transition-colors"

@@ -235,7 +235,7 @@ export default function OwnerDashboard() {
                         return;
                       }
                       const { AlarmPermission } = await import('../../plugins/AlarmPermission');
-                      await AlarmPermission.setupPermissions().catch(err => alert(`Error: ${err.message}`));
+                      await AlarmPermission.setupPermissions({ role: 'owner', force: true }).catch(err => alert(`Error: ${err.message}`));
                       alert('Permission prompt triggered natively');
                     }}
                     className="bg-primary-500/20 text-primary-300 border border-primary-500/40 hover:bg-primary-500/30 px-3.5 py-2 rounded-2xl font-bold text-xs transition-all backdrop-blur-md flex items-center gap-1.5 min-touch-target"

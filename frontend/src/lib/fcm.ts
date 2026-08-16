@@ -99,9 +99,11 @@ export async function verifyAndRefreshTokens(userId?: string): Promise<string | 
           import('./versionManager').then(({ useVersionStore }) => {
             useVersionStore.getState().setUpdateAvailable(
               true,
-              payload.data!.mode || 'optional',
-              payload.data!.version || 'latest',
-              payload.data!.releaseNotes
+              (payload.data!.mode as any) || 'optional',
+              {
+                latestVersion: payload.data!.version || 'latest',
+                releaseNotes: payload.data!.releaseNotes
+              }
             );
           });
         }

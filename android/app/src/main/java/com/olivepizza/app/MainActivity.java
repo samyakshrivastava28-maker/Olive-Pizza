@@ -65,21 +65,14 @@ public class MainActivity extends BridgeActivity {
     private static final String BACKEND_URL = "https://olive-pizza-backend.onrender.com";
 
     private static final ExecutorService NETWORK_EXECUTOR = Executors.newSingleThreadExecutor();
-    private static volatile boolean batteryPromptShown = false;
+    private static final String PREFS_NAME = "olive_role_permissions";
+    private static final String KEY_BATTERY_PROMPT_PREFIX = "battery_prompted_";
+    private static final String KEY_FULLSCREEN_PROMPT_PREFIX = "fullscreen_prompted_";
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
         // 1. Create STANDARD notification channels (customer-safe) at startup
         createStandardNotificationChannels();
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-            setShowWhenLocked(true);
-            setTurnScreenOn(true);
-        } else {
-            getWindow().addFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED |
-                                 WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON);
-        }
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
         registerPlugin(TruecallerPlugin.class);
         registerPlugin(DeliveryPlugin.class);
@@ -90,29 +83,63 @@ public class MainActivity extends BridgeActivity {
         registerFcmTokenNatively();
     }
 
+    public static boolean isStaffRole(String role) {
+        return "owner".equalsIgnoreCase(role) || "delivery_partner".equalsIgnoreCase(role) || "admin".equalsIgnoreCase(role);
+    }
+
+    public static boolean canUseFullScreenIntent(Context context) {
+        if (Build.VERSION.SDK_INT >= 34) {
+            NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+            return nm != null && nm.canUseFullScreenIntent();
+        }
+        return true;
+    }
+
+    public static boolean isIgnoringBatteryOptimizations(Context context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            PowerManager pm = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
+            return pm != null && pm.isIgnoringBatteryOptimizations(context.getPackageName());
+        }
+        return true;
+    }
+
     /**
      * Role-Gated Alarm Permission Initialization
-     * ONLY invoked when the logged-in user's role is owner or delivery_partner.
-     * Customers will NEVER receive full-screen alarm prompts or channels.
+     * ONLY invoked when the logged-in user's verified role is owner or delivery_partner.
+     * Customers will NEVER receive full-screen alarm prompts or staff channels.
+     * Tracks prompt status to avoid repeated intrusive popups.
      */
-    public static void setupAlarmPermissionsForStaffRole(Activity activity) {
+    public static void setupAlarmPermissionsForStaffRole(Activity activity, String role, boolean forcePrompt) {
         if (activity == null) return;
-        
+        if (!isStaffRole(role)) {
+            Log.d(TAG, "setupAlarmPermissionsForStaffRole skipped for non-staff role: " + role);
+            return;
+        }
+
         // 1. Create Alarm-grade channels (MAX importance, USAGE_ALARM, bypassDnd)
         createStaffAlarmChannels(activity);
 
-        // 2. Prompt for battery-optimization exemption
-        promptBatteryOptimizationExemption(activity);
+        android.content.SharedPreferences prefs = activity.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
 
-        // 3. Android 14+ Full-Screen Intent Permission Prompt
-        checkFullScreenIntentPermission(activity);
+        // 2. Prompt for battery-optimization exemption (once per staff role, unless forced)
+        String batteryKey = KEY_BATTERY_PROMPT_PREFIX + (role != null ? role.toLowerCase() : "staff");
+        if ((forcePrompt || !prefs.getBoolean(batteryKey, false)) && !isIgnoringBatteryOptimizations(activity)) {
+            promptBatteryOptimizationExemption(activity);
+            prefs.edit().putBoolean(batteryKey, true).apply();
+        }
+
+        // 3. Android 14+ Full-Screen Intent Permission Prompt (once per staff role, unless forced)
+        String fsKey = KEY_FULLSCREEN_PROMPT_PREFIX + (role != null ? role.toLowerCase() : "staff");
+        if ((forcePrompt || !prefs.getBoolean(fsKey, false)) && !canUseFullScreenIntent(activity)) {
+            requestFullScreenIntentPermission(activity);
+            prefs.edit().putBoolean(fsKey, true).apply();
+        }
     }
 
-    private static void checkFullScreenIntentPermission(Activity activity) {
-        if (Build.VERSION.SDK_INT >= 34) { // Android 14+ (API 34)
-            NotificationManager nm = (NotificationManager) activity.getSystemService(Context.NOTIFICATION_SERVICE);
-            if (nm != null && !nm.canUseFullScreenIntent()) {
-                Log.w(TAG, "Full-screen intent permission not granted on Android 14+ for staff role");
+    public static void requestFullScreenIntentPermission(Activity activity) {
+        if (Build.VERSION.SDK_INT >= 34 && activity != null) { // Android 14+ (API 34)
+            if (!canUseFullScreenIntent(activity)) {
+                Log.w(TAG, "Launching ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT for staff role");
                 try {
                     Intent intent = new Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT);
                     intent.setData(Uri.parse("package:" + activity.getPackageName()));

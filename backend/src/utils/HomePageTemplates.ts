@@ -19,18 +19,18 @@ export const PREDEFINED_TEMPLATES: BuiltInPageSchema[] = [
         isHidden: false,
         config: {
           headline: 'Olive Pizza',
-          subtitle: 'Premium quality pizza delivered fast.',
+          subtitle: 'Artisan hand-stretched dough, rich San Marzano sauce, and 100% pure Fior di Latte mozzarella.',
           animationType: 'Fade Up',
-          buttonText: 'ORDER NOW',
+          buttonText: 'EXPLORE MENU',
           buttonAction: { type: 'OPEN_MENU' }
         }
       },
-      { id: 'cravings', type: 'CRAVINGS', isHidden: false, config: { headline: "WHAT'S YOUR CRAVING FOR?", subtitle: "Find something delicious." } },
+      { id: 'cravings', type: 'CRAVINGS', isHidden: false, config: { headline: "WHAT'S YOUR CRAVING FOR?", subtitle: "Explore our freshly handcrafted artisan creations." } },
       { id: 'ads', type: 'ADS', isHidden: false, config: {} },
-      { id: 'categories', type: 'CATEGORIES', isHidden: false, config: {} },
       { id: 'coupons', type: 'COUPONS', isHidden: false, config: {} },
       { id: 'featured', type: 'FEATURED', isHidden: false, config: {} },
-      { id: 'app', type: 'DOWNLOAD_APP', isHidden: false, config: {} }
+      { id: 'app', type: 'DOWNLOAD_APP', isHidden: false, config: {} },
+      { id: 'testimonials', type: 'TESTIMONIALS', isHidden: false, config: {} }
     ]
   },
   {

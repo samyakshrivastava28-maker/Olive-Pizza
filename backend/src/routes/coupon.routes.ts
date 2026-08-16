@@ -4,14 +4,21 @@ import { DataExpiryJob } from '../jobs/DataExpiryJob.js';
 
 const router = Router();
 
+let cachedCoupons: any[] | null = null;
+let cacheExpiryTime = 0;
+
 /**
  * GET /api/coupons
  * Returns all active, unexpired coupons for customer display
  */
 router.get('/', async (_req: Request, res: Response) => {
   try {
-    const snap = await adminDb.collection('coupons').where('isActive', '==', true).get();
     const now = new Date();
+    if (cachedCoupons && Date.now() < cacheExpiryTime) {
+      return res.json({ success: true, coupons: cachedCoupons, cached: true });
+    }
+
+    const snap = await adminDb.collection('coupons').where('isActive', '==', true).get();
     const activeCoupons: any[] = [];
 
     snap.forEach((doc) => {
@@ -46,8 +53,14 @@ router.get('/', async (_req: Request, res: Response) => {
       });
     });
 
+    cachedCoupons = activeCoupons;
+    cacheExpiryTime = Date.now() + 5000; // 5 seconds TTL
+
     res.json({ success: true, coupons: activeCoupons });
   } catch (error: any) {
+    if (cachedCoupons) {
+      return res.json({ success: true, coupons: cachedCoupons, fallback: true });
+    }
     res.status(500).json({ success: false, error: error.message });
   }
 });

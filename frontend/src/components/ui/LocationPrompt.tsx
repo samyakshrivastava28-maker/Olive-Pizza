@@ -8,22 +8,23 @@ import { MapPin, Loader2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function LocationPrompt() {
-  const { user, isAuthenticated, setUser } = useAuthStore();
+  const { user, role, isAuthenticated, setUser } = useAuthStore();
   const [showPrompt, setShowPrompt] = useState(false);
   const [loading, setLoading] = useState(false);
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
-    if (isAuthenticated && user && !user.lat && !user.fullAddress && !dismissed) {
+    // Only prompt customer users who haven't saved an address yet
+    if (isAuthenticated && user && (role === 'customer' || !role) && !user.lat && !user.fullAddress && !dismissed) {
       let timer: NodeJS.Timeout;
       LocationManager.shouldPrompt().then(should => {
         if (should && !dismissed) {
-          timer = setTimeout(() => setShowPrompt(true), 1500);
+          timer = setTimeout(() => setShowPrompt(true), 2500);
         }
       });
       return () => { if (timer) clearTimeout(timer); };
     }
-  }, [isAuthenticated, user, dismissed]);
+  }, [isAuthenticated, user, role, dismissed]);
 
   const requestLocation = async () => {
     setLoading(true);
@@ -35,7 +36,8 @@ export default function LocationPrompt() {
         await updateDoc(doc(db, 'users', user.uid), {
           lat: location.lat,
           lng: location.lng,
-          fullAddress: location.fullAddress
+          fullAddress: location.fullAddress,
+          locationSetupCompleted: true
         });
 
         // Update Zustand Store
@@ -43,8 +45,9 @@ export default function LocationPrompt() {
           ...user,
           lat: location.lat,
           lng: location.lng,
-          fullAddress: location.fullAddress
-        }, user.role);
+          fullAddress: location.fullAddress,
+          locationSetupCompleted: true
+        }, role || 'customer');
 
         toast.success('Location updated successfully!');
         setShowPrompt(false);

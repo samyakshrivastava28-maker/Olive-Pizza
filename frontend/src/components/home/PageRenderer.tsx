@@ -6,6 +6,7 @@ import CravingCategoriesSection from './CravingCategoriesSection';
 import LiveCoupons from './LiveCoupons';
 import FeaturedShowcase from './FeaturedShowcase';
 import AppDownloadSection from './AppDownloadSection';
+import LuxuryHero from '../ui/LuxuryHero';
 
 // Premium sections
 import HeroVideo from './sections/HeroVideo';
@@ -49,30 +50,30 @@ const renderSection = (
   let Component = null;
   switch (section.type) {
     case 'HERO':
-      Component = (
+      Component = !activeMediaUrl ? (
+        <div className={opacity}>
+          <LuxuryHero isStoreOpen={true} showIntro={false} />
+        </div>
+      ) : (
         <div 
           className={`relative min-h-[360px] sm:min-h-[450px] md:min-h-[550px] flex items-center justify-center p-6 text-center rounded-3xl overflow-hidden shadow-2xl ${opacity}`}
           style={{ backgroundColor: section.config.styleOverrides?.backgroundColor || '#0f172a' }}
         >
-          {activeMediaUrl ? (
-            isVideo ? (
-              <video 
-                src={activeMediaUrl} 
-                autoPlay 
-                muted 
-                loop 
-                playsInline 
-                className="absolute inset-0 w-full h-full object-cover opacity-55 z-0" 
-              />
-            ) : (
-              <img 
-                src={activeMediaUrl} 
-                alt="Hero Media" 
-                className="absolute inset-0 w-full h-full object-cover opacity-55 z-0" 
-              />
-            )
+          {isVideo ? (
+            <video 
+              src={activeMediaUrl} 
+              autoPlay 
+              muted 
+              loop 
+              playsInline 
+              className="absolute inset-0 w-full h-full object-cover opacity-55 z-0" 
+            />
           ) : (
-            <div className="absolute inset-0 bg-gradient-to-br from-primary-950/90 via-slate-950 to-black opacity-90 z-0" />
+            <img 
+              src={activeMediaUrl} 
+              alt="Hero Media" 
+              className="absolute inset-0 w-full h-full object-cover opacity-55 z-0" 
+            />
           )}
 
           <div className="relative z-10 max-w-3xl">

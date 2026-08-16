@@ -28,30 +28,40 @@ export const uploadMediaToCloudinary = async (
       formData.append('folder', folder);
 
       const xhr = new XMLHttpRequest();
+      xhr.timeout = 60000; // 60s timeout
       xhr.open('POST', `https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`);
 
       xhr.upload.onprogress = (e) => {
-        if (e.lengthComputable && onProgress) {
-          const progress = Math.round((e.loaded / e.total) * 100);
-          onProgress(progress);
+        if (onProgress) {
+          if (e.lengthComputable && e.total > 0) {
+            const progress = Math.min(100, Math.max(0, Math.round((e.loaded / e.total) * 100)));
+            onProgress(progress);
+          } else {
+            onProgress(-1); // -1 indicates honest indeterminate progress
+          }
         }
       };
 
       xhr.onload = () => {
         if (xhr.status === 200) {
-          const response = JSON.parse(xhr.responseText);
-          resolve({
-            secureUrl: response.secure_url,
-            publicId: response.public_id,
-            format: response.format,
-            bytes: response.bytes,
-            type: response.resource_type
-          });
+          try {
+            const response = JSON.parse(xhr.responseText);
+            resolve({
+              secureUrl: response.secure_url,
+              publicId: response.public_id,
+              format: response.format,
+              bytes: response.bytes,
+              type: response.resource_type
+            });
+          } catch {
+            reject(new Error('Invalid response from Cloudinary'));
+          }
         } else {
-          reject(new Error(`Upload failed: ${xhr.responseText}`));
+          reject(new Error(`Upload failed with HTTP ${xhr.status}`));
         }
       };
 
+      xhr.ontimeout = () => reject(new Error('Upload timed out after 60 seconds'));
       xhr.onerror = () => reject(new Error('Upload failed due to network error'));
       xhr.send(formData);
 

@@ -33,7 +33,7 @@ export function UpdateBanner() {
               <button 
                 onClick={() => {
                   sessionStorage.setItem('update_later_timestamp', Date.now().toString());
-                  useVersionStore.getState().setUpdateAvailable(false, '', '');
+                  useVersionStore.getState().dismissUpdate();
                 }}
                 className="px-4 py-2 text-sm font-medium text-white hover:bg-white/10 rounded-lg transition-colors flex-1 sm:flex-none"
               >

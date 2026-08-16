@@ -33,16 +33,18 @@ export default function LuxuryProductCard({ product, wishlistIds, index }: Luxur
   const glowY = useTransform(springRotateX, [15, -15], ["0%", "100%"]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    // Only apply 3D tilt on devices with hover/pointer capability
+    if (window.matchMedia && !window.matchMedia('(hover: hover)').matches) return;
     const card = cardRef.current;
     if (!card) return;
     const rect = card.getBoundingClientRect();
     const centerX = rect.left + rect.width / 2;
     const centerY = rect.top + rect.height / 2;
-    const rx = ((e.clientY - centerY) / (rect.height / 2)) * -12;
-    const ry = ((e.clientX - centerX) / (rect.width / 2)) * 12;
+    const rx = ((e.clientY - centerY) / (rect.height / 2)) * -10;
+    const ry = ((e.clientX - centerX) / (rect.width / 2)) * 10;
     rotateX.set(rx);
     rotateY.set(ry);
-    scale.set(1.03);
+    scale.set(1.02);
   }, [rotateX, rotateY, scale]);
 
   const handleMouseLeave = useCallback(() => {
@@ -201,23 +203,23 @@ export default function LuxuryProductCard({ product, wishlistIds, index }: Luxur
 
           {/* Card info */}
           <div className="p-3 md:p-4 relative z-10">
-            <p
-              className="font-bold text-white text-sm md:text-base line-clamp-1 mb-1"
+            <h3
+              className="font-bold text-white text-xs sm:text-sm md:text-base line-clamp-2 min-h-[2rem] sm:min-h-[2.5rem] mb-1"
               style={{ letterSpacing: "-0.01em" }}
             >
               {product.productName}
-            </p>
+            </h3>
 
             <div className="flex items-center justify-between mt-2">
               {/* Pricing */}
               <div className="flex flex-col leading-none">
                 {product.discountPercentage > 0 && (
-                  <span className="text-[11px] text-slate-500 line-through">
+                  <span className="text-[10px] sm:text-[11px] text-slate-500 line-through">
                     ₹{product.basePrice}
                   </span>
                 )}
                 <span
-                  className="text-base md:text-lg font-black"
+                  className="text-sm sm:text-base md:text-lg font-black"
                   style={{ color: "#fb923c" }}
                 >
                   ₹{product.discountPercentage > 0
@@ -230,7 +232,7 @@ export default function LuxuryProductCard({ product, wishlistIds, index }: Luxur
               <motion.button
                 onClick={handleAddToCart}
                 whileTap={{ scale: 0.88 }}
-                className="relative overflow-hidden flex items-center justify-center w-9 h-9 md:w-10 md:h-10 rounded-xl transition-all duration-200"
+                className="relative overflow-hidden flex items-center justify-center min-w-[38px] min-h-[38px] sm:w-10 sm:h-10 rounded-xl transition-all duration-200"
                 style={{
                   background: "linear-gradient(135deg, #ea580c 0%, #f97316 100%)",
                   boxShadow: "0 4px 16px rgba(249,115,22,0.4)",

@@ -49,8 +49,8 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
                   data.role || (['olivepizzarjn@gmail.com', 'webhub2811@gmail.com'].includes(firebaseUser.email?.toLowerCase() || '') ? 'owner' : 'customer')
                 );
 
-                  // Request / refresh Web Push notification permissions for all users
-                  requestNotificationPermission(firebaseUser.uid);
+                  // Silently verify / sync push tokens for already-granted sessions
+                  verifyAndRefreshTokens(firebaseUser.uid).catch(() => {});
               } else {
                 const fallbackRole = ['olivepizzarjn@gmail.com', 'webhub2811@gmail.com'].includes(firebaseUser.email?.toLowerCase() || '') ? 'owner' : 'customer';
                 setUser({ uid: firebaseUser.uid, email: firebaseUser.email, onboardingComplete: false, emailVerified: firebaseUser.emailVerified }, fallbackRole);

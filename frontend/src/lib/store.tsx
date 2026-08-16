@@ -33,15 +33,39 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       isLoading: true,
       setUser: (user, role) => {
+        const prevRole = useAuthStore.getState().role;
         set({ user, role, isAuthenticated: !!user, isLoading: false });
+
+        // Role-Aware Permission Policy
         if (user && (role === 'owner' || role === 'delivery_partner')) {
           import('../lib/platform').then(({ isCapacitorNative }) => {
             if (isCapacitorNative()) {
-              import('../plugins/AlarmPermission').then(({ AlarmPermission }) => {
-                AlarmPermission.setupPermissions().catch(err => console.warn('[AlarmPermission]', err));
-              }).catch(console.error);
+              const storageKey = `olive_staff_permissions_${role}`;
+              const alreadyPrompted = localStorage.getItem(storageKey);
+              const isRoleTransition = prevRole && prevRole !== role;
+
+              // Only prompt if not yet prompted for this role, or if user transitioned into this role
+              if (!alreadyPrompted || isRoleTransition) {
+                localStorage.setItem(storageKey, 'true');
+                import('../plugins/AlarmPermission').then(({ AlarmPermission }) => {
+                  AlarmPermission.setupPermissions({ role }).catch(err =>
+                    console.warn('[AlarmPermission] Non-fatal setup error:', err)
+                  );
+                }).catch(console.error);
+              }
             }
           });
+        } else if (role === 'customer') {
+          // If transitioned from delivery_partner to customer, stop delivery background tracking
+          if (prevRole === 'delivery_partner') {
+            import('../lib/platform').then(({ isCapacitorNative }) => {
+              if (isCapacitorNative()) {
+                import('./DeliveryPlugin').then(({ DeliveryPlugin }) => {
+                  DeliveryPlugin.stopTracking().catch(() => {});
+                }).catch(() => {});
+              }
+            });
+          }
         }
       },
       logout: () => {
