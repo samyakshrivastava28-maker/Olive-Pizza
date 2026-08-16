@@ -144,7 +144,7 @@ export default function Checkout() {
       navigate('/login?redirect=/checkout');
       return;
     }
-    if (user && !user.phoneVerified) {
+    if (user && !user.phoneSetupCompleted && !user.phone) {
       navigate('/onboarding/phone?redirect=/checkout');
       return;
     }
@@ -300,6 +300,13 @@ export default function Checkout() {
       }
     });
   };
+
+  // Mock recommended items for cross-selling
+  const recommendedItems = [
+    { id: 'rec1', name: 'Garlic Breadsticks', price: 149, image: 'https://images.unsplash.com/photo-1573140247632-f8fd74997d5c?w=500&q=80' },
+    { id: 'rec2', name: 'Choco Lava Cake', price: 129, image: 'https://images.unsplash.com/photo-1624353365286-3f8d62daad51?w=500&q=80' },
+    { id: 'rec3', name: 'Pepsi 500ml', price: 60, image: 'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?w=500&q=80' }
+  ];
 
   return (
     <PageTransition className="min-h-screen bg-dark-950 text-white font-sans pb-32">
@@ -608,6 +615,38 @@ export default function Checkout() {
              <span className="font-bold text-lg text-white">Grand Total</span>
              <motion.span key={finalTotal} initial={{scale:1.2, color:'#4ade80'}} animate={{scale:1, color:'#ffffff'}} className="font-black text-xl text-white">₹{finalTotal}</motion.span>
           </div>
+        </motion.div>
+
+        {/* Recommended Items (Cross-sell) */}
+        <motion.div initial={{opacity:0, y:20}} animate={{opacity:1, y:0}} transition={{delay: 0.25}} className="bg-white/[0.02] border border-white/5 rounded-3xl p-5 overflow-hidden relative">
+           <div className="absolute inset-0 bg-gradient-to-r from-primary-500/5 to-transparent opacity-50" />
+           <h2 className="text-lg font-bold flex items-center gap-2 mb-4 relative z-10">
+             <Star className="w-5 h-5 text-yellow-400" /> Customers also ordered
+           </h2>
+           <div className="flex gap-4 overflow-x-auto pb-4 snap-x snap-mandatory hide-scrollbar relative z-10 -mx-5 px-5">
+             {recommendedItems.map((rec) => (
+               <div key={rec.id} className="min-w-[140px] bg-dark-900/80 rounded-2xl border border-white/5 overflow-hidden snap-start shrink-0 flex flex-col">
+                 <div className="h-24 w-full relative">
+                   <img src={rec.image} alt={rec.name} className="w-full h-full object-cover" />
+                 </div>
+                 <div className="p-3 flex flex-col justify-between flex-1">
+                   <p className="text-xs font-bold text-white/90 mb-2 line-clamp-2">{rec.name}</p>
+                   <div className="flex items-center justify-between mt-auto">
+                     <span className="text-sm font-black text-white">₹{rec.price}</span>
+                     <button 
+                       onClick={() => {
+                         useCartStore.getState().addItem({ id: rec.id, menuItemId: rec.id, name: rec.name, price: rec.price, image: rec.image, quantity: 1 });
+                         toast.success(`Added ${rec.name}`);
+                       }}
+                       className="bg-primary-500/20 text-primary-400 w-6 h-6 rounded-md flex items-center justify-center font-bold pb-0.5 hover:bg-primary-500 hover:text-white transition-colors"
+                     >
+                       +
+                     </button>
+                   </div>
+                 </div>
+               </div>
+             ))}
+           </div>
         </motion.div>
 
         {/* Payment Method Section */}

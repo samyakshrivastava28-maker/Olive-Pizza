@@ -20,7 +20,7 @@ export default function OnboardingGuard() {
   const onboardingComplete = user?.onboardingComplete ?? false;
   
   if (!onboardingComplete) {
-    if (!user?.phoneVerified) {
+    if (!user?.phoneSetupCompleted && !user?.phone) {
       return <Navigate to="/onboarding/phone" replace />;
     } else if (!user?.locationSetupCompleted && !user?.lat) {
       return <Navigate to="/onboarding/location" replace />;

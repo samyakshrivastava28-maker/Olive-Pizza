@@ -70,30 +70,6 @@ app.get('/keep-alive', (req, res) => {
   });
 });
 
-// ─── Fast2SMS Website Verification ──────────────────────────────────────────
-// Fast2SMS requires verifying domain ownership before using the OTP route.
-// Set FAST2SMS_VERIFY_TOKEN and FAST2SMS_VERIFY_FILENAME in .env after getting
-// the token from https://www.fast2sms.com/dashboard/otp → OTP Settings.
-const fast2smsVerifyToken = process.env.FAST2SMS_VERIFY_TOKEN || '';
-const fast2smsVerifyFilename = process.env.FAST2SMS_VERIFY_FILENAME || 'fast2sms-verify.txt';
-
-if (fast2smsVerifyToken) {
-  // Serve at root filename (e.g. /fast2sms-abc123.txt)
-  app.get(`/${fast2smsVerifyFilename}`, (req, res) => {
-    res.setHeader('Content-Type', 'text/plain');
-    res.send(fast2smsVerifyToken);
-  });
-  // Also serve at .well-known path as fallback
-  app.get(`/.well-known/${fast2smsVerifyFilename}`, (req, res) => {
-    res.setHeader('Content-Type', 'text/plain');
-    res.send(fast2smsVerifyToken);
-  });
-  console.log(`✅ [Fast2SMS] Verification file served at /${fast2smsVerifyFilename}`);
-} else {
-  console.warn('⚠️  [Fast2SMS] FAST2SMS_VERIFY_TOKEN not set — website verification pending.');
-  console.warn('   → Go to https://www.fast2sms.com/dashboard/otp → OTP Settings → enter your Render URL → copy the token into .env');
-}
-
 app.use('/api', apiApp);
 
 import { initScheduler } from './src/scripts/scheduler.js';

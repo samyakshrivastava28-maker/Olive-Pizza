@@ -71,10 +71,11 @@ export default function Register() {
             finalRole = userDoc.data()?.role || "customer";
           }
 
-          if (finalRole === "owner" || finalRole === "admin") {
+          const normalizedFinalRole = finalRole === "delivery" ? "delivery_partner" : finalRole;
+          if (normalizedFinalRole === "owner" || normalizedFinalRole === "admin") {
             toast.success("Welcome to Olive Pizza!");
             navigate("/owner/dashboard");
-          } else if (finalRole === "delivery_partner") {
+          } else if (normalizedFinalRole === "delivery_partner") {
             toast.success("Welcome to Olive Pizza!");
             navigate("/delivery/dashboard");
           } else {
@@ -331,8 +332,9 @@ export default function Register() {
         // Let AuthProvider handle populating the store to avoid race conditions
         toast.success("Welcome!");
         
-        if (finalRole === "owner" || finalRole === "admin") navigate("/owner/dashboard");
-        else if (finalRole === "delivery_partner") navigate("/delivery/dashboard");
+        const normalizedFinalRole = finalRole === "delivery" ? "delivery_partner" : finalRole;
+        if (normalizedFinalRole === "owner" || normalizedFinalRole === "admin") navigate("/owner/dashboard");
+        else if (normalizedFinalRole === "delivery_partner") navigate("/delivery/dashboard");
         else {
           // If customer, we will let App.tsx Onboarding Enforcer check location/phone
           navigate("/");

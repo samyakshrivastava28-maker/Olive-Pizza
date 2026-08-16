@@ -70,8 +70,9 @@ export default function Login() {
               }, finalRole as "customer" | "owner" | "delivery_partner" | "admin");
             }
 
-            if (finalRole === "owner" || finalRole === "admin") navigate("/owner/dashboard");
-            else if (finalRole === "delivery_partner") navigate("/delivery/dashboard");
+            const normalizedFinalRole = finalRole === "delivery" ? "delivery_partner" : finalRole;
+            if (normalizedFinalRole === "owner" || normalizedFinalRole === "admin") navigate("/owner/dashboard");
+            else if (normalizedFinalRole === "delivery_partner") navigate("/delivery/dashboard");
             else navigate("/");
           } catch (err) {
             logDetailedError(err, { context: "Redirect Result Sync" });
@@ -153,10 +154,14 @@ export default function Login() {
 
       toast.success("Welcome back!");
 
-      if (userRole === "owner" || userRole === "admin" || userRole === "developer" || ["olivepizzarjn@gmail.com", "webhub2811@gmail.com"].includes(email.toLowerCase()))
+      const normalizedRole = userRole === "delivery" ? "delivery_partner" : userRole;
+
+      if (normalizedRole === "owner" || normalizedRole === "admin" || normalizedRole === "developer" || ["olivepizzarjn@gmail.com", "webhub2811@gmail.com"].includes(email.toLowerCase()))
         navigate("/owner/dashboard");
-      else if (userRole === "delivery_partner") navigate("/delivery/dashboard");
-      else navigate("/");
+      else if (normalizedRole === "delivery_partner") 
+        navigate("/delivery/dashboard");
+      else 
+        navigate("/");
     } catch (err: any) {
       setError(err.message || translateError(err));
     } finally {

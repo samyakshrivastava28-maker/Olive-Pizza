@@ -47,7 +47,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
                     earnings: data.earnings,
                     metrics: data.metrics,
                   },
-                  data.role || (['olivepizzarjn@gmail.com', 'webhub2811@gmail.com'].includes(firebaseUser.email?.toLowerCase() || '') ? 'owner' : 'customer')
+                  (data.role === 'delivery' ? 'delivery_partner' : (data.role || (['olivepizzarjn@gmail.com', 'webhub2811@gmail.com'].includes(firebaseUser.email?.toLowerCase() || '') ? 'owner' : 'customer')))
                 );
 
                   // Silently verify / sync push tokens for already-granted sessions

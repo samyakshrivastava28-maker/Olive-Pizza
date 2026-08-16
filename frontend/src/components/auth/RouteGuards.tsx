@@ -59,7 +59,7 @@ export function CustomerGuard() {
   }
 
   // Prevent delivery partners and owners from accessing the customer dashboard directly
-  if (role === 'delivery_partner') {
+  if (role === 'delivery_partner' || role === 'delivery') {
     return <Navigate to="/delivery/dashboard" replace />;
   }
   
@@ -70,17 +70,17 @@ export function CustomerGuard() {
   return <Outlet />;
 }
 
-// 3. Delivery Guard (Must be delivery_partner)
+// 3. Delivery Guard (Must be delivery_partner or delivery)
 export function DeliveryGuard() {
   const { isAuthenticated, user, role, isLoading } = useAuthStore();
   const location = useLocation();
 
-  const isUnauthorized = !isAuthenticated || role !== 'delivery_partner';
+  const isUnauthorized = !isAuthenticated || (role !== 'delivery_partner' && role !== 'delivery');
 
   React.useEffect(() => {
     if (!isLoading && isUnauthorized) {
       showNotFoundToast();
-      if (role && role !== 'delivery_partner') {
+      if (role && role !== 'delivery_partner' && role !== 'delivery') {
         logSecurityEvent({
           action: 'unauthorized_delivery_access_attempt',
           route: location.pathname,

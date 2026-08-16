@@ -78,7 +78,7 @@ export class DeliveryCapacityService {
 
       snapshot.docs.forEach(doc => {
         const data = doc.data();
-        const status = (data.deliveryStatus || 'offline').toLowerCase();
+        const status = (data.deliveryStatus || data.status || 'offline').toLowerCase();
         if (status === 'online' || status === 'available') {
           onlineCount++;
           availableCount++;

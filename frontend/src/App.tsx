@@ -203,8 +203,8 @@ function AppContent() {
         location.pathname === '/register' ||
         location.pathname === '/forgot-password')
     ) {
-      if (role === 'owner' || role === 'admin') navigate('/owner/dashboard', { replace: true });
-      else if (role === 'delivery_partner') navigate('/delivery/dashboard', { replace: true });
+      if (role === 'owner' || role === 'admin' || (role as string) === 'developer') navigate('/owner/dashboard', { replace: true });
+      else if (role === 'delivery_partner' || role === 'delivery') navigate('/delivery/dashboard', { replace: true });
       else navigate('/', { replace: true });
     }
   }, [isAuthenticated, role, location.pathname, navigate]);
@@ -234,9 +234,12 @@ function AppContent() {
   useEffect(() => {
     if (!isAuthenticated || !role || location.pathname !== '/') return;
     
-    if ((role === 'owner' || role === 'admin') && !hasRedirectedToDashboard.current) {
+    if ((role === 'owner' || role === 'admin' || (role as string) === 'developer') && !hasRedirectedToDashboard.current) {
       hasRedirectedToDashboard.current = true;
       navigate('/owner/dashboard', { replace: true });
+    } else if ((role === 'delivery_partner' || role === 'delivery') && !hasRedirectedToDashboard.current) {
+      hasRedirectedToDashboard.current = true;
+      navigate('/delivery/dashboard', { replace: true });
     }
   }, [isAuthenticated, role, location.pathname, navigate]);
 

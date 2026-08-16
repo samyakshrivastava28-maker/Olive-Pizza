@@ -129,11 +129,17 @@ export default function DeliveryDashboard() {
 
   const toggleStatus = async (forcedStatus?: string) => {
     if (!user?.uid) return;
-    const newStatus = forcedStatus || (user.status === "online" ? "offline" : "online");
+    const newStatus = forcedStatus || ((user.deliveryStatus || user.status) === "online" ? "offline" : "online");
     try {
-      await updateDoc(doc(db, "users", user.uid), { status: newStatus });
+      await updateDoc(doc(db, "users", user.uid), { 
+        status: newStatus,
+        deliveryStatus: newStatus,
+        lastStatusUpdate: new Date().toISOString()
+      });
       if (newStatus === "offline" || newStatus === "break") {
         await supabase.from("delivery_locations").update({ online_status: false }).eq("delivery_partner_id", user.uid);
+      } else {
+        await supabase.from("delivery_locations").update({ online_status: true }).eq("delivery_partner_id", user.uid);
       }
       toast.success(`Status changed to ${newStatus.toUpperCase()}`);
     } catch (e) {
