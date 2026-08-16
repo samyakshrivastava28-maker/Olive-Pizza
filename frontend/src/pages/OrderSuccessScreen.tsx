@@ -79,11 +79,11 @@ export default function OrderSuccessScreen() {
     // Auto navigate after 5 seconds
     const timeout = setTimeout(() => {
       // Fade out transition handled by framer-motion exit in App.tsx
-      navigate("/dashboard", { replace: true });
+      navigate(orderId ? `/order-tracking/${orderId}` : '/dashboard', { replace: true });
     }, 5000);
 
     return () => clearTimeout(timeout);
-  }, [navigate]);
+  }, [navigate, orderId]);
 
   return (
     <motion.div

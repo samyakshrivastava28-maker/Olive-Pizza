@@ -1,7 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { MenuItem } from "../types/models";
-import { db } from "../lib/firebase";
-import { collection, getDocs, query } from "firebase/firestore";
 import { useDataStore } from "../lib/dataStore";
 import { useShallow } from "zustand/react/shallow";
 import { useDebounce } from "../hooks/useDebounce";
@@ -13,7 +11,6 @@ import ProductCard from "../components/ProductCard";
 import ProductCustomizationModal from "../components/menu/ProductCustomizationModal";
 import { isStoreOpen } from "../lib/utils";
 import { Search, MapPin, Bell, User, Sparkles, SlidersHorizontal, Flame, Star, Award, Heart } from "lucide-react";
-import Galaxy from "../components/ui/Galaxy";
 import { useLocation, useNavigate } from "react-router";
 import SEO from "../components/SEO";
 
@@ -158,19 +155,8 @@ export default function Menu() {
       />
 
       <PageTransition className="w-full relative min-h-screen">
-        {/* Dark Galaxy Background (Preserved) */}
-        <div className="fixed inset-0 z-0 pointer-events-none opacity-60">
-          <Galaxy
-            mouseInteraction={false}
-            mouseRepulsion={false}
-            density={0.2}
-            speed={0.2}
-            starSpeed={0.05}
-            glowIntensity={0.15}
-            twinkleIntensity={0.2}
-            transparent={false}
-          />
-        </div>
+        {/* Dark Ambient Background Glow */}
+        <div className="fixed inset-0 z-0 pointer-events-none bg-[radial-gradient(ellipse_at_top,rgba(245,158,11,0.08)_0%,transparent_60%)]" />
 
         <div className="relative z-10 bg-dark-950/80 min-h-screen text-white pt-[calc(0.75rem+env(safe-area-inset-top,0px))] pb-[calc(8rem+env(safe-area-inset-bottom,0px))] w-full backdrop-blur-sm">
           <div className="responsive-container max-w-7xl mx-auto px-3 sm:px-4 md:px-6 space-y-4 md:space-y-6">

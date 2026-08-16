@@ -7,6 +7,7 @@ import { trackEvent } from "../../lib/analytics";
 import WishlistButton from "./WishlistButton";
 import toast from "react-hot-toast";
 import { useCartAnimation } from "./CartAnimationProvider";
+import { getOptimizedImageUrl } from "../../lib/imageOptimizer";
 
 interface LuxuryProductCardProps {
   product: any;
@@ -126,7 +127,7 @@ export default function LuxuryProductCard({ product, wishlistIds, index }: Luxur
           <div className="relative aspect-square overflow-hidden">
             {imageUrl ? (
               <img
-                src={imageUrl}
+                src={getOptimizedImageUrl(imageUrl, { width: 500 })}
                 alt={product.productName}
                 loading="lazy"
                 decoding="async"

@@ -14,6 +14,8 @@ import PageTransition from '../components/PageTransition';
 import LocationPicker3D from '../components/map/LocationPicker3D';
 import { fetchRoute } from '../services/navigationRouting.service';
 import { RESTAURANT_LOCATION, MAX_DELIVERY_RADIUS_KM } from '../lib/config';
+import { calculateDistance } from '../lib/utils';
+import { useDataStore } from '../lib/dataStore';
 
 // Premium Checkout redesign
 export default function Checkout() {
@@ -84,16 +86,22 @@ export default function Checkout() {
     }
 
     
-    // Fetch Promos
+    // Fetch Promos (prefer cached dataStore coupons)
     const fetchPromos = async () => {
       try {
+        const { coupons: storeCoupons } = useDataStore.getState();
+        if (storeCoupons && storeCoupons.length > 0) {
+          setStandaloneCoupons(storeCoupons);
+        } else {
+          const couponsSnap = await getDocs(query(collection(db, 'coupons'), where('isActive', '==', true)));
+          setStandaloneCoupons(couponsSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
+        }
+
         const eventsSnap = await getDocs(query(collection(db, 'events'), where('isActive', '==', true)));
         const now = Date.now();
         setActiveEvents(
           eventsSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() })).filter((e: any) => e.startDate <= now && e.endDate >= now)
         );
-        const couponsSnap = await getDocs(query(collection(db, 'coupons'), where('isActive', '==', true)));
-        setStandaloneCoupons(couponsSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
       } catch (err) {}
     };
     fetchPromos();
@@ -157,26 +165,41 @@ export default function Checkout() {
           { lat: RESTAURANT_LOCATION.lat, lng: RESTAURANT_LOCATION.lng },
           { lat: mapCenter.lat, lng: mapCenter.lng }
         );
-        if (!route) {
-           toast.error('Could not find a valid road route to your location.');
-           return;
-        }
-        const maxDistMetres = MAX_DELIVERY_RADIUS_KM * 1000;
-        if (route.distanceMetres > maxDistMetres) {
-          toast.error(`Delivery unavailable! Distance is ${(route.distanceMetres/1000).toFixed(1)} km (Max ${MAX_DELIVERY_RADIUS_KM} km)`);
-          return;
+        if (route && route.distanceMetres > 0) {
+          const maxDistMetres = MAX_DELIVERY_RADIUS_KM * 1000;
+          if (route.distanceMetres > maxDistMetres) {
+            toast.error(`Delivery unavailable! Distance is ${(route.distanceMetres/1000).toFixed(1)} km (Max ${MAX_DELIVERY_RADIUS_KM} km)`);
+            return;
+          }
+        } else {
+          // Haversine geometric fallback if road routing API is temporarily unavailable
+          const haversineDistKm = calculateDistance(
+            RESTAURANT_LOCATION.lat,
+            RESTAURANT_LOCATION.lng,
+            mapCenter.lat,
+            mapCenter.lng
+          );
+          if (haversineDistKm > MAX_DELIVERY_RADIUS_KM) {
+            toast.error(`Delivery unavailable! Distance is ${haversineDistKm.toFixed(1)} km (Max ${MAX_DELIVERY_RADIUS_KM} km)`);
+            return;
+          }
         }
       } catch (err) {
-        toast.error('Failed to validate delivery distance. Please try again.');
-        return;
+        // Haversine geometric fallback
+        const haversineDistKm = calculateDistance(
+          RESTAURANT_LOCATION.lat,
+          RESTAURANT_LOCATION.lng,
+          mapCenter.lat,
+          mapCenter.lng
+        );
+        if (haversineDistKm > MAX_DELIVERY_RADIUS_KM) {
+          toast.error(`Delivery unavailable! Distance is ${haversineDistKm.toFixed(1)} km (Max ${MAX_DELIVERY_RADIUS_KM} km)`);
+          return;
+        }
       }
     }
 
-    if (!selectedPayment) {
-      toast.error('Please select a payment method');
-      setShowPayment(true);
-      return;
-    }
+    const effectivePayment = selectedPayment || 'cod';
     
     navigate('/recheck-order', {
       state: {
@@ -185,7 +208,7 @@ export default function Checkout() {
         location: mapCenter,
         addressDetails: { houseNumber, apartment, landmark, instructions },
         deliveryType,
-        paymentMethod: selectedPayment,
+        paymentMethod: effectivePayment,
         finalTotal,
         discountAmount,
         deliveryFee,

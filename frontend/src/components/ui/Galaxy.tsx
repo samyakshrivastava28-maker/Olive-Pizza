@@ -1,5 +1,6 @@
 import { Renderer, Program, Mesh, Color, Triangle } from 'ogl';
 import { useEffect, useRef } from 'react';
+
 import './Galaxy.css';
 
 const vertexShader = `
@@ -39,9 +40,9 @@ uniform bool uTransparent;
 varying vec2 vUv;
 
 #define NUM_LAYER 4.0
-#define STAR_COLOR_CUTOFF 0.2
 #define MAT45 mat2(0.7071, -0.7071, 0.7071, 0.7071)
 #define PERIOD 3.0
+#define STAR_COLOR_CUTOFF 0.2
 
 float Hash21(vec2 p) {
   p = fract(p * vec2(123.34, 456.21));
@@ -50,17 +51,16 @@ float Hash21(vec2 p) {
 }
 
 float tri(float x) {
-  return abs(fract(x) * 2.0 - 1.0);
+  return abs(fract(x) - 0.5) * 2.0;
 }
 
 float tris(float x) {
-  float t = fract(x);
-  return 1.0 - smoothstep(0.0, 1.0, abs(2.0 * t - 1.0));
+  float f = fract(x);
+  return 1.0 - abs(f - 0.5) * 2.0;
 }
 
 float trisn(float x) {
-  float t = fract(x);
-  return 2.0 * (1.0 - smoothstep(0.0, 1.0, abs(2.0 * t - 1.0))) - 1.0;
+  return sin(x * 6.28318530718);
 }
 
 vec3 hsv2rgb(vec3 c) {
@@ -71,8 +71,8 @@ vec3 hsv2rgb(vec3 c) {
 
 float Star(vec2 uv, float flare) {
   float d = length(uv);
-  float m = (0.05 * uGlowIntensity) / d;
-  float rays = smoothstep(0.0, 1.0, 1.0 - abs(uv.x * uv.y * 1000.0));
+  float m = 0.05 / (d + 0.001);
+  float rays = max(0.0, 1.0 - abs(uv.x * uv.y * 1000.0));
   m += rays * flare * uGlowIntensity;
   uv *= MAT45;
   rays = smoothstep(0.0, 1.0, 1.0 - abs(uv.x * uv.y * 1000.0));
@@ -182,9 +182,9 @@ export default function Galaxy({
   glowIntensity = 0.3,
   saturation = 0.0,
   mouseRepulsion = true,
-  repulsionStrength = 2,
   twinkleIntensity = 0.3,
   rotationSpeed = 0.1,
+  repulsionStrength = 2,
   autoCenterRepulsion = 0,
   transparent = true,
   ...rest
@@ -200,7 +200,8 @@ export default function Galaxy({
     const ctn = ctnDom.current;
     const renderer = new Renderer({
       alpha: transparent,
-      premultipliedAlpha: false
+      premultipliedAlpha: false,
+      dpr: Math.min(typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1, 1.5)
     });
     const gl = renderer.gl;
 
@@ -215,6 +216,7 @@ export default function Galaxy({
     let program: any;
 
     function resize() {
+      if (!ctn) return;
       const scale = 1;
       renderer.setSize(ctn.offsetWidth * scale, ctn.offsetHeight * scale);
       if (program) {
@@ -260,9 +262,17 @@ export default function Galaxy({
 
     const mesh = new Mesh(gl, { geometry, program });
     let animateId: number;
+    let isVisible = !document.hidden;
+
+    const onVisibilityChange = () => {
+      isVisible = !document.hidden;
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
 
     function update(t: number) {
       animateId = requestAnimationFrame(update);
+      if (!isVisible) return;
+
       if (!disableAnimation) {
         program.uniforms.uTime.value = t * 0.001;
         program.uniforms.uStarSpeed.value = (t * 0.001 * starSpeed) / 10.0;
@@ -284,6 +294,7 @@ export default function Galaxy({
     ctn.appendChild(gl.canvas);
 
     function handleMouseMove(e: any) {
+      if (!ctn) return;
       const rect = ctn.getBoundingClientRect();
       const x = (e.clientX - rect.left) / rect.width;
       const y = 1.0 - (e.clientY - rect.top) / rect.height;
@@ -303,11 +314,14 @@ export default function Galaxy({
     return () => {
       cancelAnimationFrame(animateId);
       window.removeEventListener('resize', resize);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
       if (mouseInteraction) {
         ctn.removeEventListener('mousemove', handleMouseMove);
         ctn.removeEventListener('mouseleave', handleMouseLeave);
       }
-      ctn.removeChild(gl.canvas);
+      if (ctn && gl.canvas.parentNode === ctn) {
+        ctn.removeChild(gl.canvas);
+      }
       gl.getExtension('WEBGL_lose_context')?.loseContext();
     };
   }, [

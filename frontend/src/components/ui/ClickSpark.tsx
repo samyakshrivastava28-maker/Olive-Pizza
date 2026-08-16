@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useCallback } from 'react';
+﻿import React, { useRef, useEffect, useCallback } from 'react';
 
 interface ClickSparkProps {
   sparkColor?: string;
@@ -19,7 +19,7 @@ interface Spark {
 }
 
 const ClickSpark: React.FC<ClickSparkProps> = ({
-  sparkColor = '#d4af37', // Updated default to Olive Pizza gold
+  sparkColor = '#d4af37', // Olive Pizza gold
   sparkSize = 10,
   sparkRadius = 15,
   sparkCount = 8,
@@ -30,7 +30,7 @@ const ClickSpark: React.FC<ClickSparkProps> = ({
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const sparksRef = useRef<Spark[]>([]);
-  const startTimeRef = useRef<number | null>(null);
+  const animationIdRef = useRef<number | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -62,6 +62,10 @@ const ClickSpark: React.FC<ClickSparkProps> = ({
     return () => {
       ro.disconnect();
       clearTimeout(resizeTimeout);
+      if (animationIdRef.current) {
+        cancelAnimationFrame(animationIdRef.current);
+        animationIdRef.current = null;
+      }
     };
   }, []);
 
@@ -81,18 +85,21 @@ const ClickSpark: React.FC<ClickSparkProps> = ({
     [easing]
   );
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    let animationId: number;
+  const startAnimationLoop = useCallback(() => {
+    if (animationIdRef.current !== null) return; // Already running
 
     const draw = (timestamp: number) => {
-      if (!startTimeRef.current) {
-        startTimeRef.current = timestamp;
+      const canvas = canvasRef.current;
+      if (!canvas) {
+        animationIdRef.current = null;
+        return;
       }
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        animationIdRef.current = null;
+        return;
+      }
+
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       sparksRef.current = sparksRef.current.filter(spark => {
@@ -122,15 +129,16 @@ const ClickSpark: React.FC<ClickSparkProps> = ({
         return true;
       });
 
-      animationId = requestAnimationFrame(draw);
+      if (sparksRef.current.length > 0) {
+        animationIdRef.current = requestAnimationFrame(draw);
+      } else {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        animationIdRef.current = null; // Idle stop: zero CPU drain
+      }
     };
 
-    animationId = requestAnimationFrame(draw);
-
-    return () => {
-      cancelAnimationFrame(animationId);
-    };
-  }, [sparkColor, sparkSize, sparkRadius, sparkCount, duration, easeFunc, extraScale]);
+    animationIdRef.current = requestAnimationFrame(draw);
+  }, [sparkColor, sparkSize, sparkRadius, duration, easeFunc, extraScale]);
 
   const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const canvas = canvasRef.current;
@@ -148,6 +156,7 @@ const ClickSpark: React.FC<ClickSparkProps> = ({
     }));
 
     sparksRef.current.push(...newSparks);
+    startAnimationLoop();
   };
 
   return (

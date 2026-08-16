@@ -120,10 +120,13 @@ export default function Aurora(props: any) {
     const ctn = ctnDom.current;
     if (!ctn) return;
 
+    const prefersReducedMotion = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
     const renderer = new Renderer({
       alpha: true,
       premultipliedAlpha: true,
-      antialias: true
+      antialias: false,
+      dpr: Math.min(typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1, 1.5)
     });
     const gl = renderer.gl;
     gl.clearColor(0, 0, 0, 0);
@@ -170,9 +173,18 @@ export default function Aurora(props: any) {
     ctn.appendChild(gl.canvas);
 
     let animateId = 0;
+    let isTabVisible = !document.hidden;
+
+    const onVisibilityChange = () => {
+      isTabVisible = !document.hidden;
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
     const update = (t: number) => {
       animateId = requestAnimationFrame(update);
-      const { time = t * 0.01, speed = 1.0 } = propsRef.current;
+      if (!isTabVisible) return;
+
+      const { time = t * 0.01, speed = prefersReducedMotion ? 0.2 : 1.0 } = propsRef.current;
       program.uniforms.uTime.value = time * speed * 0.1;
       program.uniforms.uAmplitude.value = propsRef.current.amplitude ?? 1.0;
       program.uniforms.uBlend.value = propsRef.current.blend ?? blend;
@@ -190,6 +202,7 @@ export default function Aurora(props: any) {
     return () => {
       cancelAnimationFrame(animateId);
       window.removeEventListener('resize', resize);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
       if (ctn && gl.canvas.parentNode === ctn) {
         ctn.removeChild(gl.canvas);
       }

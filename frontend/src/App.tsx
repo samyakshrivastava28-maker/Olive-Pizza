@@ -270,6 +270,7 @@ function AppContent() {
                 <Route path="/recheck-order" element={<RecheckOrder />} />
                 <Route path="/processing-order" element={<ProcessingOrder />} />
                 <Route path="/order-success/:orderId" element={<OrderSuccessScreen />} />
+                <Route path="/order-tracking/:orderId" element={<OrderTracking />} />
                 <Route path="/tracking/:orderId" element={<OrderTracking />} />
                 <Route path="/contact" element={<Contact />} />
                 <Route path="/assistant" element={<Suspense fallback={<PizzaLoader />}><UniversalAssistant /></Suspense>} />
@@ -291,10 +292,8 @@ function AppContent() {
                 
                 {/* Protected Customer Routes */}
                 <Route element={<CustomerGuard />}>
-                  <Route path="/checkout" element={<Suspense fallback={<PizzaLoader />}><Checkout /></Suspense>} />
                   <Route element={<Suspense fallback={<PizzaLoader />}><OnboardingGuard /></Suspense>}>
                     <Route path="/dashboard" element={<CustomerDashboard />} />
-                    <Route path="/order-tracking/:orderId" element={<OrderTracking />} />
                   </Route>
                 </Route>
               </Route>

@@ -15,7 +15,6 @@ import { useDataStore } from "../lib/dataStore";
 import { useStoreStatus } from "../lib/useStoreStatus";
 import { ChevronRight, RefreshCw, Zap, Bot } from "lucide-react";
 import { lazy, Suspense } from "react";
-const Ferrofluid = lazy(() => import("../components/ui/Ferrofluid"));
 const LocationMap = lazy(() => import("../components/ui/LocationMap"));
 import { OpenInMapsButton } from "../components/ui/OpenInMapsButton";
 import BannerCarousel from "../components/ui/BannerCarousel";
@@ -134,6 +133,10 @@ function PremiumSectionWrapper({
 import PizzaLoader from "../components/ui/PizzaLoader";
 import { PREDEFINED_TEMPLATES } from "../utils/HomePageTemplates";
 
+// Module-level cache for live homepage schema (prevents redundant fetches on rapid navigation)
+let cachedPageSchema: PageSchema | null = null;
+let lastPageSchemaFetch = 0;
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function Home() {
   const storeStatus = useStoreStatus();
@@ -141,17 +144,29 @@ export default function Home() {
   const addItem = useCartStore((s) => s.addItem);
   const navigate = useNavigate();
 
-  const [pageSchema, setPageSchema] = useState<PageSchema>(PREDEFINED_TEMPLATES[0]);
+  const [pageSchema, setPageSchema] = useState<PageSchema>(() => cachedPageSchema || PREDEFINED_TEMPLATES[0]);
 
   useEffect(() => {
+    const now = Date.now();
+    if (cachedPageSchema && now - lastPageSchemaFetch < 60000) {
+      return; // Use cached schema within 60s window
+    }
+
+    let isMounted = true;
     fetch('/api/homepage/live')
       .then(res => res.json())
       .then(data => {
-        if (data.success && data.config) {
+        if (isMounted && data.success && data.config) {
+          cachedPageSchema = data.config;
+          lastPageSchemaFetch = Date.now();
           setPageSchema(data.config);
         }
       })
       .catch(() => {});
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const {

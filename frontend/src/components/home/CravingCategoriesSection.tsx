@@ -55,9 +55,7 @@ function CravingCategoryCard({
   // 4-Second Rotation Timer Strategy
   useEffect(() => {
     if (productList.length <= 1) return;
-    const timer = setInterval(() => {
-      setCurrentImgIndex((prev) => (prev + 1) % productList.length);
-    }, 4000); // Strictly 4 seconds
+    const timer = setInterval(() => { if (!document.hidden) { setCurrentImgIndex((prev) => (prev + 1) % productList.length); } }, 4000); // Strictly 4 seconds
 
     return () => clearInterval(timer);
   }, [productList.length]);

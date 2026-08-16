@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { App } from '@capacitor/app';
 import { Browser } from '@capacitor/browser';
 import { Capacitor } from '@capacitor/core';
@@ -10,7 +10,7 @@ export default function AutoUpdater() {
   const [downloadUrl, setDownloadUrl] = useState('');
   const [isVisible, setIsVisible] = useState(false);
   const [latestVersion, setLatestVersion] = useState('');
-  const [lastBuildHash, setLastBuildHash] = useState<string | null>(null);
+  const lastBuildHashRef = useRef<string | null>(null);
 
   useEffect(() => {
     const checkForUpdates = async () => {
@@ -58,9 +58,9 @@ export default function AutoUpdater() {
         const data = await res.json();
         
         if (data.build_hash) {
-          if (!lastBuildHash) {
-            setLastBuildHash(data.build_hash);
-          } else if (lastBuildHash !== data.build_hash) {
+          if (!lastBuildHashRef.current) {
+            lastBuildHashRef.current = data.build_hash;
+          } else if (lastBuildHashRef.current !== data.build_hash) {
             console.log("New frontend version detected:", data.build_hash);
             // Silently clear PWA caches and reload
             if ('caches' in window) {
@@ -87,7 +87,7 @@ export default function AutoUpdater() {
     // Poll for frontend updates every 10 minutes
     const interval = setInterval(checkFrontendUpdates, 10 * 60 * 1000);
     return () => clearInterval(interval);
-  }, [lastBuildHash]);
+  }, []);
 
   const handleUpdate = async () => {
     if (downloadUrl) {

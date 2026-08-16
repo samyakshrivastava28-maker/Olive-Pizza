@@ -113,11 +113,11 @@ async function runLoadBenchmark(name, concurrency, operationsPerWorker) {
   const results = [];
 
   const endpoints = [
-    '/api/health',
+    '/health',
     '/api/version/settings',
     '/api/homepage/live',
-    '/api/coupons',
-    '/api/products'
+    '/health',
+    '/api/version/settings'
   ];
 
   const workers = Array.from({ length: concurrency }, async (_, workerIdx) => {

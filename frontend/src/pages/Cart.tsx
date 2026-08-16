@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useCartStore, useAuthStore } from "../lib/store";
+import { useDataStore } from "../lib/dataStore";
 import { LocationManager } from "../lib/permissions";
 import { useNavigate } from "react-router";
 import { motion, AnimatePresence } from "framer-motion";
@@ -48,9 +49,28 @@ export default function Cart() {
 
     const fetchRecommendations = async () => {
       try {
-        const q = query(collection(db, "products"), limit(20));
-        const snap = await getDocs(q);
-        const allItems = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as MenuItem));
+        const { products: storeProducts } = useDataStore.getState();
+        let allItems: MenuItem[] = [];
+
+        if (storeProducts && storeProducts.length > 0) {
+          allItems = storeProducts.map((p: any) => ({
+            id: p.id,
+            name: p.productName || p.name,
+            description: p.description || '',
+            category: p.category || 'sides',
+            pricingMode: p.pricingMode || 'fixed',
+            basePrice: p.basePrice || 0,
+            offerPrice: p.offerPrice || 0,
+            discountPercentage: p.discountPercentage || 0,
+            image: p.imageUrl || p.image || '',
+            isVegetarian: p.isVegetarian ?? true,
+            isAvailable: p.isActive ?? true
+          }));
+        } else {
+          const q = query(collection(db, "products"), limit(20));
+          const snap = await getDocs(q);
+          allItems = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as MenuItem));
+        }
         
         const hasPizza = items.some(i => i.name.toLowerCase().includes('pizza'));
         let recs = allItems.filter(i => !items.some(cartItem => cartItem.id === i.id));
