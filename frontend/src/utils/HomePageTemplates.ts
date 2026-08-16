@@ -67,8 +67,7 @@ export const PREDEFINED_TEMPLATES: BuiltInPageSchema[] = [
           headline: 'Festive Combos',
           animationType: 'Slide'
         }
-      },
-      { id: 'categories', type: 'CATEGORIES', isHidden: false, config: {} }
+      }
     ]
   },
   {
@@ -166,8 +165,7 @@ export const PREDEFINED_TEMPLATES: BuiltInPageSchema[] = [
         config: {
           headline: 'Trending This Weekend'
         }
-      },
-      { id: 'categories', type: 'CATEGORIES', isHidden: false, config: {} }
+      }
     ]
   }
 ];

@@ -32,7 +32,6 @@ export const FALLBACK_STANDARD_SCHEMA: BuiltInPageSchema = {
       config: { headline: "WHAT'S YOUR CRAVING FOR?", subtitle: "Find something delicious." } 
     },
     { id: 'ads', type: 'ADS', isHidden: false, config: {} },
-    { id: 'categories', type: 'CATEGORIES', isHidden: false, config: {} },
     { id: 'coupons', type: 'COUPONS', isHidden: false, config: {} },
     { id: 'featured', type: 'FEATURED', isHidden: false, config: {} },
     { id: 'app', type: 'DOWNLOAD_APP', isHidden: false, config: {} }

@@ -65,6 +65,7 @@ public class MainActivity extends BridgeActivity {
     private static final String BACKEND_URL = "https://olive-pizza-backend.onrender.com";
 
     private static final ExecutorService NETWORK_EXECUTOR = Executors.newSingleThreadExecutor();
+    private static volatile boolean batteryPromptShown = false;
     private static final String PREFS_NAME = "olive_role_permissions";
     private static final String KEY_BATTERY_PROMPT_PREFIX = "battery_prompted_";
     private static final String KEY_FULLSCREEN_PROMPT_PREFIX = "fullscreen_prompted_";

@@ -119,7 +119,7 @@ const renderSection = (
       Component = <div className={opacity}><LiveAdvertisements /></div>;
       break;
     case 'CATEGORIES':
-      Component = <div className={opacity}><LiveMenuCategories /></div>;
+      Component = null; // Removed section per user request
       break;
     case 'CRAVINGS':
     case 'CRAVING_CATEGORIES':
