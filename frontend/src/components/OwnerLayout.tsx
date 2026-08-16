@@ -84,16 +84,17 @@ export default function OwnerLayout() {
   return (
     <div className="dark min-h-[100dvh] flex font-sans relative w-full text-slate-200">
       <PremiumBackground />
-      <div className="fixed inset-0 z-0 pointer-events-none opacity-50">
+      {/* Three.js PixelSnow is enabled on desktop only to avoid GPU bottlenecking on mobile devices */}
+      <div className="fixed inset-0 z-0 pointer-events-none opacity-40 hidden md:block">
         <PixelSnow 
           color="#ffffff"
           flakeSize={0.01}
           minFlakeSize={1.25}
-          pixelResolution={200}
-          speed={1.25}
-          density={0.3}
+          pixelResolution={160}
+          speed={1.0}
+          density={0.2}
           direction={125}
-          brightness={1}
+          brightness={0.8}
         />
       </div>
       <OwnerAlertManager />
@@ -202,7 +203,10 @@ export default function OwnerLayout() {
         </header>
 
         {/* Scrollable Page Content */}
-        <div className="flex-1 overflow-y-auto flex flex-col">
+        <div 
+          className="flex-1 overflow-y-auto flex flex-col will-change-scroll"
+          style={{ WebkitOverflowScrolling: 'touch', transform: 'translateZ(0)' }}
+        >
           <div className={`flex-1 ${
             location.pathname === '/owner/dashboard'
               ? 'p-4 md:p-8'
