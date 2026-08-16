@@ -122,9 +122,14 @@ Olive Pizza intentionally decouples business operations from ephemeral operation
 > [!NOTE]
 > Designed with a **Mobile-First Policy**: every interaction feels like a premium native mobile application with fluid micro-interactions and dynamic 3D elements.
 
-1. **Authentication & Onboarding**:
+1. **Authentication & Phone Verification**:
    - Authenticates via Firebase Auth (Email/Password or Google OAuth).
-   - Mandatory phone & address validation guarded by `OnboardingGuard.tsx`.
+   - Enforces a single canonical `phoneVerified: boolean` in Firestore user profiles.
+   - Initial registration sets `phoneVerified: false` and routes unverified users to `/onboarding/phone`.
+   - **Truecaller 1-Tap & QR Verification**: Provides instantaneous 1-tap phone verification on Android native (`TruecallerPlugin.java`), desktop QR scanning modal (`TruecallerQRModal.tsx`), and mobile web deep links.
+   - **Backend Cryptographic Validation**: Validates Truecaller verification via server-side RSA signature verification against official Truecaller public keys, base64 payload decoding, E.164 phone matching, and 5-minute replay window protections.
+   - **Fast2SMS Fallback**: Fallback OTP route with automated detection for provider status codes.
+   - Mandatory phone & delivery address validation strictly guarded by `OnboardingGuard.tsx`, `App.tsx`, and `Checkout.tsx`.
 2. **Menu & Cart Management**:
    - Explores menu items categorized by pizza, sides, beverages, and desserts.
    - Configures crusts, sizes, and toppings; cart items are managed via Zustand `useCartStore`.
@@ -275,7 +280,50 @@ Olive Pizza enforces a strict, unified notification pipeline for maximum reliabi
 
 ---
 
-## 9. Environment & Configuration Guide
+## 9. Phone Verification & Truecaller Architecture
+
+Olive Pizza implements an enterprise-grade phone verification subsystem with official Truecaller SDK integration and SMS fallback:
+
+### 9.1 Canonical `phoneVerified` State Model
+- **Single Source of Truth**: User documents in Firestore maintain a canonical `phoneVerified: boolean` attribute.
+- **Strict Onboarding Guarding**: Initial account creation sets `phoneVerified: false`. Until phone verification completes:
+  - `OnboardingGuard.tsx` forces redirection to `/onboarding/phone`.
+  - `App.tsx` global enforcer traps unverified users.
+  - `Checkout.tsx` rejects checkout requests for unverified accounts.
+
+### 9.2 Truecaller Multi-Platform Verification
+- **Android Native (Capacitor)**: Integrates official Truecaller Android SDK (`com.truecaller.android.sdk:truecaller-sdk:2.7.0`) through `TruecallerPlugin.java`. Renders the official native 1-tap consent bottom sheet (`CONSENT_MODE_BOTTOMSHEET`).
+- **Web & Desktop QR**: `TruecallerQRModal.tsx` renders a scannable QR code polling `/api/phone/truecaller/session/:id` every 2 seconds.
+- **Mobile Web**: Dispatches `truecallersdk://truesdk/web_verify` deep links for direct app-switching verification.
+
+### 9.3 Cryptographic Backend Validation (`TruecallerProvider.ts`)
+- **Public Key Retrieval**: Fetches official Truecaller public RSA keys (`https://api4.truecaller.com/v1/key`).
+- **Signature Verification**: Validates RSA-SHA512/SHA256 signatures of `payload` using Truecaller's public key.
+- **Replay Attack Protection**: Rejects payloads with verification timestamps older than 5 minutes (`300,000 ms`).
+- **E.164 Strict Number Matching**: Normalizes phone numbers to standard E.164 (`+91XXXXXXXXXX`) format and ensures the verified number matches the user profile.
+
+---
+
+## 10. High-Performance 5-Second Startup Video Subsystem
+
+The intro video provides a premium splash experience without impacting app startup performance:
+
+### 10.1 Dedicated 5-Second Truncated CDN Assets
+- **Cloudinary On-The-Fly Trimming**: Video URLs use `so_0,eo_5,w_720,c_limit,q_auto:good,vc_h264` (mobile: ~880KB) and `w_1080` (desktop: ~738KB), dropping bandwidth consumption by **64%** compared to the unoptimized 2.45 MB asset.
+- **Instant Poster Frame**: A dedicated 5.7 KB first-frame JPEG (`so_0,w_720,q_auto:eco,f_jpg`) renders instantly to prevent black flashes.
+
+### 10.2 Non-Blocking Architecture & Failure Fallback
+- **Parallel App Mounting**: The full React application tree (`children`) renders immediately in the background underneath the fixed overlay.
+- **2.5s Buffering Failsafe**: If network or device lag delays video playback beyond 2.5 seconds, the intro immediately fades out and presents the app shell.
+- **Strict 5-Second Cap**: Both timeupdate listener (`currentTime >= 5.0`) and maximum duration timer (5000ms) guarantee immediate transition.
+
+### 10.3 GPU Decoder & Memory Cleanup
+- On exit, `StartupGate.tsx` pauses playback, clears `src`, and calls `video.load()` to instantly free native GPU decoder buffers in Android WebViews.
+- Prevents replay on SPA route navigation (`sessionStorage.hasSeenIntro`) and native Capacitor WebView remounts (`nativeIntroShownInProcess`).
+
+---
+
+## 11. Environment & Configuration Guide
 
 ### Mandatory `.env` Variables
 

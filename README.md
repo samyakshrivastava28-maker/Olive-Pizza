@@ -14,6 +14,8 @@
 ## 🌟 Key Features
 
 ### 🛒 Customer App & Mobile Web (PWA)
+- **Truecaller 1-Tap & Web QR Phone Verification**: Seamless 1-tap phone verification on Android native (`TruecallerPlugin.java` SDK 2.7.0) with desktop QR code modal (`TruecallerQRModal.tsx`) and mobile web deep links. Validated via backend RSA signature verification against official Truecaller public keys.
+- **Ultra-Fast 5-Second Intro Video Experience**: Dedicated CDN-trimmed 5s H.264 video asset (~880KB) with instant 5KB poster frame, non-blocking parallel app shell rendering, 2.5s buffering failsafe, and GPU decoder cleanup on exit.
 - **3D Interactive Menu & Cart**: Smooth micro-animations powered by Framer Motion, HSL color tokens, and a 5-step sequenced add-to-cart animation (3D box drop → item flight → lid closure → cart bounce).
 - **Live Order Tracking**: Dynamic `/order-tracking/:orderId` page featuring real-time Firestore status updates (`pending` → `accepted` → `preparing` → `ready` → `out_for_delivery` → `delivered`) and live rider GPS location on a 3D map.
 - **Location-Aware Checkout**: Auto-detects customer onboarding location, supports interactive map pin dragging, reverse-geocodes street addresses via OpenStreetMap Nominatim, and passes exact coordinates to delivery partners.
