@@ -1,118 +1,263 @@
-import LegalPageLayout from '../../components/layout/LegalPageLayout';
+import LegalPageLayout, { TocItem, HighlightCard } from '../../components/layout/LegalPageLayout';
+import { FileText, CheckCircle2, AlertCircle, Scale, ShieldAlert, Sparkles, Gift, Clock, ShoppingCart, Truck, CreditCard } from 'lucide-react';
+import { Link } from 'react-router';
 
 export default function Terms() {
   const lastUpdated = "June 30, 2026";
   
-  const toc = [
-    { id: "acceptance", label: "Acceptance of Terms" },
-    { id: "user-responsibilities", label: "User Responsibilities" },
-    { id: "ordering-rules", label: "Ordering Rules" },
-    { id: "pricing-payments", label: "Pricing & Payments" },
-    { id: "delivery-rules", label: "Delivery Rules" },
-    { id: "scheduled-orders", label: "Scheduled Orders" },
-    { id: "cancellations", label: "Cancellation & Refunds" },
-    { id: "loyalty", label: "Loyalty & Coupons" },
-    { id: "ai-recommendations", label: "AI Recommendations" },
-    { id: "intellectual-property", label: "Intellectual Property" },
-    { id: "liability", label: "Limitation of Liability" },
-    { id: "force-majeure", label: "Force Majeure" },
-    { id: "governing-law", label: "Governing Law" },
-    { id: "contact", label: "Contact Us" }
+  const toc: TocItem[] = [
+    { id: "acceptance", label: "1. Acceptance of Terms" },
+    { id: "user-responsibilities", label: "2. User Conduct & Accounts" },
+    { id: "ordering-rules", label: "3. Ordering Rules" },
+    { id: "pricing-payments", label: "4. Pricing & Payments" },
+    { id: "delivery-rules", label: "5. Delivery Rules & Delays" },
+    { id: "scheduled-orders", label: "6. Scheduled Orders" },
+    { id: "cancellations", label: "7. Cancellation & Refunds" },
+    { id: "loyalty", label: "8. Coupons & Loyalty Rewards" },
+    { id: "ai-recommendations", label: "9. AI Recommendations" },
+    { id: "intellectual-property", label: "10. Intellectual Property" },
+    { id: "liability", label: "11. Limitation of Liability" },
+    { id: "force-majeure", label: "12. Force Majeure" },
+    { id: "governing-law", label: "13. Governing Law" },
+    { id: "contact", label: "14. Contact Information" }
+  ];
+
+  const highlights: HighlightCard[] = [
+    {
+      icon: <CheckCircle2 className="w-5 h-5" />,
+      title: "Fresh Preparation Standard",
+      description: "All pizzas are handcrafted fresh upon kitchen order confirmation."
+    },
+    {
+      icon: <Clock className="w-5 h-5" />,
+      title: "Grace Period Cancellations",
+      description: "Full refunds are available before the kitchen begins active cooking."
+    },
+    {
+      icon: <Scale className="w-5 h-5" />,
+      title: "Transparent Pricing",
+      description: "All taxes, fees, and discounts are explicitly shown prior to payment."
+    }
   ];
 
   return (
     <LegalPageLayout
       title="Terms & Conditions"
-      description="The rules, guidelines, and terms that govern your use of the Olive Pizza platform."
+      badge="Terms of Service & Usage"
+      description="The clear rules, policies, and mutual agreements that govern your orders and use of Olive Pizza."
       lastUpdated={lastUpdated}
       toc={toc}
+      highlights={highlights}
+      icon={<Scale className="w-3.5 h-3.5" />}
       canonicalUrl="/terms"
       breadcrumbs={[
         { name: "Home", url: "/" },
         { name: "Terms & Conditions", url: "/terms" }
       ]}
     >
-      <h2 id="acceptance">1. Acceptance of Terms</h2>
-      <p>
-        By downloading, accessing, or using the Olive Pizza application and website, you agree to be bound by these Terms & Conditions. 
-        If you do not agree to all the terms and conditions, you must not use our services.
-      </p>
+      {/* ── Section 1: Acceptance ── */}
+      <section id="acceptance" className="scroll-mt-28 space-y-4">
+        <div className="flex items-center gap-3 pb-2 border-b border-white/10">
+          <span className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center font-black text-sm">1</span>
+          <h2 className="text-xl md:text-2xl font-black text-white m-0">Acceptance of Terms</h2>
+        </div>
+        <p className="text-slate-300 leading-relaxed text-sm md:text-base">
+          By downloading, accessing, browsing, or placing an order through the Olive Pizza application and website, 
+          you agree to be bound by these Terms & Conditions. If you do not agree to all stated terms, please discontinue use of our platform.
+        </p>
+      </section>
 
-      <h2 id="user-responsibilities">2. User Responsibilities & Customer Conduct</h2>
-      <p>As a user of our platform, you agree to:</p>
-      <ul>
-        <li>Provide accurate, current, and complete information during registration and checkout.</li>
-        <li>Maintain the security and confidentiality of your account credentials.</li>
-        <li>Treat our delivery partners and restaurant staff with respect. Abusive behavior will result in immediate account termination.</li>
-        <li>Ensure someone is available to receive the delivery at the specified location and time.</li>
-      </ul>
+      {/* ── Section 2: User Responsibilities ── */}
+      <section id="user-responsibilities" className="scroll-mt-28 space-y-4 pt-6 border-t border-white/10">
+        <div className="flex items-center gap-3 pb-2 border-b border-white/10">
+          <span className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center font-black text-sm">2</span>
+          <h2 className="text-xl md:text-2xl font-black text-white m-0">User Responsibilities & Customer Conduct</h2>
+        </div>
+        <p className="text-slate-300 leading-relaxed text-sm md:text-base">
+          As a registered user and customer on our platform, you agree to:
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+          <div className="bg-white/[0.03] border border-white/10 p-4 rounded-2xl">
+            <span className="text-xs font-bold text-emerald-400 block mb-1">Accurate Details</span>
+            <p className="text-xs text-slate-300">Provide accurate and up-to-date delivery addresses and phone numbers during checkout.</p>
+          </div>
+          <div className="bg-white/[0.03] border border-white/10 p-4 rounded-2xl">
+            <span className="text-xs font-bold text-amber-400 block mb-1">Account Security</span>
+            <p className="text-xs text-slate-300">Maintain the confidentiality of your login credentials and OTP verifications.</p>
+          </div>
+          <div className="bg-white/[0.03] border border-white/10 p-4 rounded-2xl">
+            <span className="text-xs font-bold text-emerald-400 block mb-1">Respectful Conduct</span>
+            <p className="text-xs text-slate-300">Treat restaurant personnel and delivery partners with dignity. Abusive behavior results in termination.</p>
+          </div>
+          <div className="bg-white/[0.03] border border-white/10 p-4 rounded-2xl">
+            <span className="text-xs font-bold text-amber-400 block mb-1">Availability for Handover</span>
+            <p className="text-xs text-slate-300">Ensure an authorized individual is present to receive the delivery at the designated address.</p>
+          </div>
+        </div>
+      </section>
 
-      <h2 id="ordering-rules">3. Ordering Rules</h2>
-      <p>
-        All orders are subject to acceptance and availability. Once an order is placed and accepted by our kitchen, it immediately enters the preparation phase. 
-        We reserve the right to refuse service, terminate accounts, or cancel orders at our sole discretion.
-      </p>
+      {/* ── Section 3: Ordering Rules ── */}
+      <section id="ordering-rules" className="scroll-mt-28 space-y-4 pt-6 border-t border-white/10">
+        <div className="flex items-center gap-3 pb-2 border-b border-white/10">
+          <span className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center font-black text-sm">3</span>
+          <h2 className="text-xl md:text-2xl font-black text-white m-0">Ordering Rules</h2>
+        </div>
+        <p className="text-slate-300 leading-relaxed text-sm md:text-base">
+          All orders are subject to acceptance and kitchen ingredient availability. Once an order is accepted by our kitchen, 
+          it immediately enters the artisan preparation queue. We reserve the right to refuse service or cancel orders under valid operational constraints.
+        </p>
+      </section>
 
-      <h2 id="pricing-payments">4. Pricing & Payments</h2>
-      <p>
-        Prices for our products are subject to change without notice. We accept various forms of payment through our secure payment gateway. 
-        By providing payment information, you represent and warrant that you have the legal right to use the payment method.
-      </p>
+      {/* ── Section 4: Pricing & Payments ── */}
+      <section id="pricing-payments" className="scroll-mt-28 space-y-4 pt-6 border-t border-white/10">
+        <div className="flex items-center gap-3 pb-2 border-b border-white/10">
+          <span className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center font-black text-sm">4</span>
+          <h2 className="text-xl md:text-2xl font-black text-white m-0">Pricing & Payments</h2>
+        </div>
+        <p className="text-slate-300 leading-relaxed text-sm md:text-base">
+          Menu prices are subject to periodic updates without prior notice. We support online digital payments, UPI, debit/credit cards, 
+          and Cash on Delivery (COD). By submitting payment credentials, you confirm that you are legally authorized to utilize the chosen method.
+        </p>
+      </section>
 
-      <h2 id="delivery-rules">5. Delivery Rules & Delays</h2>
-      <p>
-        We aim to provide fast and accurate delivery using our real-time GPS tracking. However, delivery times are estimates and may vary due to weather, traffic, or kitchen capacity. 
-        Our delivery partners may request photo proof of delivery or use our no-contact delivery protocols.
-      </p>
+      {/* ── Section 5: Delivery Rules & Delays ── */}
+      <section id="delivery-rules" className="scroll-mt-28 space-y-4 pt-6 border-t border-white/10">
+        <div className="flex items-center gap-3 pb-2 border-b border-white/10">
+          <span className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center font-black text-sm">5</span>
+          <h2 className="text-xl md:text-2xl font-black text-white m-0">Delivery Rules & Delays</h2>
+        </div>
+        <p className="text-slate-300 leading-relaxed text-sm md:text-base">
+          We strive for rapid delivery backed by real-time GPS tracking. While our estimated arrival times are dynamically calculated, 
+          adverse weather, heavy traffic, or peak kitchen hours may occasionally cause delays. Our drivers may capture a digital photo proof upon delivery completion.
+        </p>
+      </section>
 
-      <h2 id="scheduled-orders">6. Scheduled Orders</h2>
-      <p>
-        You may schedule orders for a future date or time. Scheduled orders can be modified or canceled up to 2 hours before the scheduled preparation time.
-      </p>
+      {/* ── Section 6: Scheduled Orders ── */}
+      <section id="scheduled-orders" className="scroll-mt-28 space-y-4 pt-6 border-t border-white/10">
+        <div className="flex items-center gap-3 pb-2 border-b border-white/10">
+          <span className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center font-black text-sm">6</span>
+          <h2 className="text-xl md:text-2xl font-black text-white m-0">Scheduled Orders</h2>
+        </div>
+        <p className="text-slate-300 leading-relaxed text-sm md:text-base">
+          You may schedule orders for future delivery slots. Scheduled orders may be modified or cancelled free of charge 
+          up to <strong>2 hours</strong> prior to the scheduled kitchen preparation window.
+        </p>
+      </section>
 
-      <h2 id="cancellations">7. Cancellation & Refund Policy</h2>
-      <p>
-        Because our products are made fresh to order, cancellations must be made before the order enters the cooking phase. 
-        Please refer to our detailed <a href="/cancellation-policy">Cancellation Policy</a> and <a href="/refund-policy">Refund Policy</a> for more information.
-      </p>
+      {/* ── Section 7: Cancellation & Refunds ── */}
+      <section id="cancellations" className="scroll-mt-28 space-y-4 pt-6 border-t border-white/10">
+        <div className="flex items-center gap-3 pb-2 border-b border-white/10">
+          <span className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center font-black text-sm">7</span>
+          <h2 className="text-xl md:text-2xl font-black text-white m-0">Cancellation & Refund Policy</h2>
+        </div>
+        <p className="text-slate-300 leading-relaxed text-sm md:text-base">
+          Because our pizzas are prepared fresh to order, cancellations must be made prior to the cooking phase. 
+          For granular refund eligibility timelines and missing-item compensation, consult our specific policy documents:
+        </p>
+        <div className="flex flex-wrap gap-3 pt-1">
+          <Link
+            to="/cancellation-policy"
+            className="px-4 py-2 rounded-xl bg-white/[0.04] hover:bg-emerald-500/10 border border-white/10 hover:border-emerald-500/30 text-xs font-bold text-white transition-all"
+          >
+            Cancellation Policy →
+          </Link>
+          <Link
+            to="/refund-policy"
+            className="px-4 py-2 rounded-xl bg-white/[0.04] hover:bg-emerald-500/10 border border-white/10 hover:border-emerald-500/30 text-xs font-bold text-white transition-all"
+          >
+            Refund Policy →
+          </Link>
+        </div>
+      </section>
 
-      <h2 id="loyalty">8. Coupons & Loyalty Rewards</h2>
-      <p>
-        We offer promotional coupons and a loyalty rewards program. Points and coupons hold no cash value and cannot be exchanged for currency. 
-        We reserve the right to modify or terminate the rewards program or invalidate coupons at any time without notice if fraudulent activity is suspected.
-      </p>
+      {/* ── Section 8: Coupons & Loyalty ── */}
+      <section id="loyalty" className="scroll-mt-28 space-y-4 pt-6 border-t border-white/10">
+        <div className="flex items-center gap-3 pb-2 border-b border-white/10">
+          <span className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center font-black text-sm">8</span>
+          <h2 className="text-xl md:text-2xl font-black text-white m-0">Coupons & Loyalty Rewards</h2>
+        </div>
+        <p className="text-slate-300 leading-relaxed text-sm md:text-base">
+          Promotional coupons and loyalty points possess no cash surrender value and cannot be redeemed for fiat currency. 
+          We reserve the right to void coupons or adjust loyalty balances if abuse, multi-account creation, or fraudulent activities are detected.
+        </p>
+      </section>
 
-      <h2 id="ai-recommendations">9. AI Recommendations</h2>
-      <p>
-        Our platform utilizes Artificial Intelligence to suggest products and tailor the menu to your preferences. 
-        While we strive for accuracy, these are algorithmic suggestions and we do not guarantee they will always perfectly match your dietary needs or preferences.
-      </p>
+      {/* ── Section 9: AI Recommendations ── */}
+      <section id="ai-recommendations" className="scroll-mt-28 space-y-4 pt-6 border-t border-white/10">
+        <div className="flex items-center gap-3 pb-2 border-b border-white/10">
+          <span className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center font-black text-sm">9</span>
+          <h2 className="text-xl md:text-2xl font-black text-white m-0">AI Recommendations</h2>
+        </div>
+        <p className="text-slate-300 leading-relaxed text-sm md:text-base">
+          Our platform integrates AI assistance to recommend combos, pairings, and flavor profiles. While engineered for precision, 
+          these suggestions are algorithmic and users are encouraged to verify dietary tags (vegetarian, allergen details) before ordering.
+        </p>
+      </section>
 
-      <h2 id="intellectual-property">10. Intellectual Property</h2>
-      <p>
-        All content included on the platform, such as text, graphics, logos, images, and software, is the property of Olive Pizza and protected by intellectual property laws. 
-        You may not use, reproduce, or distribute our content without our explicit permission.
-      </p>
+      {/* ── Section 10: Intellectual Property ── */}
+      <section id="intellectual-property" className="scroll-mt-28 space-y-4 pt-6 border-t border-white/10">
+        <div className="flex items-center gap-3 pb-2 border-b border-white/10">
+          <span className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center font-black text-sm">10</span>
+          <h2 className="text-xl md:text-2xl font-black text-white m-0">Intellectual Property</h2>
+        </div>
+        <p className="text-slate-300 leading-relaxed text-sm md:text-base">
+          All proprietary trademarks, graphics, UI design, recipe descriptions, branding assets, and software code are the intellectual property 
+          of Olive Pizza and are legally protected under applicable copyright and intellectual property legislation.
+        </p>
+      </section>
 
-      <h2 id="liability">11. Limitation of Liability</h2>
-      <p>
-        To the maximum extent permitted by law, Olive Pizza shall not be liable for any indirect, incidental, special, consequential or punitive damages, or any loss of profits or revenues, whether incurred directly or indirectly.
-      </p>
+      {/* ── Section 11: Liability ── */}
+      <section id="liability" className="scroll-mt-28 space-y-4 pt-6 border-t border-white/10">
+        <div className="flex items-center gap-3 pb-2 border-b border-white/10">
+          <span className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center font-black text-sm">11</span>
+          <h2 className="text-xl md:text-2xl font-black text-white m-0">Limitation of Liability</h2>
+        </div>
+        <p className="text-slate-300 leading-relaxed text-sm md:text-base">
+          To the maximum extent permitted by law, Olive Pizza and its officers shall not be held liable for indirect, incidental, 
+          or consequential damages arising from the use or inability to use our services, beyond the order transaction value.
+        </p>
+      </section>
 
-      <h2 id="force-majeure">12. Force Majeure</h2>
-      <p>
-        We will not be liable for any failure or delay in performance of our obligations under these Terms caused by events outside our reasonable control, including but not limited to natural disasters, strikes, pandemic restrictions, or severe weather.
-      </p>
+      {/* ── Section 12: Force Majeure ── */}
+      <section id="force-majeure" className="scroll-mt-28 space-y-4 pt-6 border-t border-white/10">
+        <div className="flex items-center gap-3 pb-2 border-b border-white/10">
+          <span className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center font-black text-sm">12</span>
+          <h2 className="text-xl md:text-2xl font-black text-white m-0">Force Majeure</h2>
+        </div>
+        <p className="text-slate-300 leading-relaxed text-sm md:text-base">
+          We shall not be liable for delayed fulfillment or temporary service outages caused by events outside our reasonable control, 
+          such as extreme storms, governmental orders, power grid failures, or telecommunications disruptions.
+        </p>
+      </section>
 
-      <h2 id="governing-law">13. Governing Law</h2>
-      <p>
-        These Terms shall be governed by and construed in accordance with the laws of the jurisdiction in which Olive Pizza primarily operates, without regard to its conflict of law provisions.
-      </p>
+      {/* ── Section 13: Governing Law ── */}
+      <section id="governing-law" className="scroll-mt-28 space-y-4 pt-6 border-t border-white/10">
+        <div className="flex items-center gap-3 pb-2 border-b border-white/10">
+          <span className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center font-black text-sm">13</span>
+          <h2 className="text-xl md:text-2xl font-black text-white m-0">Governing Law</h2>
+        </div>
+        <p className="text-slate-300 leading-relaxed text-sm md:text-base">
+          These Terms and all associated transactions shall be governed by and construed in accordance with the laws of the jurisdiction 
+          in which Olive Pizza primarily operates, without regard to conflict of law principles.
+        </p>
+      </section>
 
-      <h2 id="contact">14. Contact Us</h2>
-      <p>
-        If you have any questions about these Terms, please contact us at legal@olivepizza.com.
-      </p>
+      {/* ── Section 14: Contact ── */}
+      <section id="contact" className="scroll-mt-28 space-y-4 pt-6 border-t border-white/10">
+        <div className="flex items-center gap-3 pb-2 border-b border-white/10">
+          <span className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center font-black text-sm">14</span>
+          <h2 className="text-xl md:text-2xl font-black text-white m-0">Contact Information</h2>
+        </div>
+        <p className="text-slate-300 leading-relaxed text-sm md:text-base">
+          For legal inquiries, dispute resolutions, or contract notices, please write to our legal desk at:
+        </p>
+        <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/10 inline-block">
+          <span className="text-xs text-slate-400 block mb-1">Legal Department</span>
+          <a href="mailto:legal@olivepizza.com" className="text-sm font-bold text-emerald-400 hover:underline">
+            legal@olivepizza.com
+          </a>
+        </div>
+      </section>
     </LegalPageLayout>
   );
 }
