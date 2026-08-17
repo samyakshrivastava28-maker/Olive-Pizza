@@ -1,8 +1,28 @@
 import express from 'express';
 import { supabase } from '../lib/supabase.js';
 import { query } from '../lib/db.js';
+import { execSync } from 'child_process';
 
 const router = express.Router();
+
+// Check version update (public)
+router.get('/check', async (req, res) => {
+  try {
+    const clientVersion = (req.query.version as string) || '1.0.0';
+    const currentVersion = process.env.npm_package_version || '1.0.0';
+    const isUpdateAvailable = clientVersion !== currentVersion;
+    res.json({
+      latestVersion: currentVersion,
+      clientVersion,
+      updateAvailable: isUpdateAvailable,
+      mandatory: false,
+      releaseNotes: 'Enjoy a faster experience, improved ordering and new features.',
+      downloadUrl: 'https://github.com/samyakshrivastava28-maker/Olive-Pizza/releases/latest',
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // Get version settings (public)
 router.get('/settings', async (req, res) => {
@@ -55,7 +75,6 @@ router.get('/settings', async (req, res) => {
 router.get('/status', async (req, res) => {
   let gitCommit = 'unknown';
   try {
-    const { execSync } = require('child_process');
     gitCommit = execSync('git rev-parse --short HEAD').toString().trim();
   } catch (e) {}
 

@@ -195,9 +195,9 @@ function PremiumFlyingBox({ anim, onComplete }: { anim: AnimationData; onComplet
   const centerX = typeof window !== 'undefined' ? window.innerWidth / 2 : 200;
   const centerY = typeof window !== 'undefined' ? Math.max(160, window.innerHeight / 3) : 200;
 
-  const BOX_SIZE = typeof window !== 'undefined' && window.innerWidth < 640 ? 120 : 150;
-  const HALF = BOX_SIZE / 2;
-  const PIZZA_SIZE = typeof window !== 'undefined' && window.innerWidth < 640 ? 76 : 95;
+  const BOX_SIZE = 150;
+  const HALF = 75;
+  const PIZZA_SIZE = 95;
 
   useEffect(() => {
     let isMounted = true;

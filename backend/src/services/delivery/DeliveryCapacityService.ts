@@ -59,10 +59,23 @@ export class DeliveryCapacityService {
       const settingsDoc = await adminDb.collection('settings').doc('global').get();
       const settings = settingsDoc.exists ? settingsDoc.data() || {} : {};
       
-      const openH = settings.openingHour !== undefined ? Number(settings.openingHour) : 12;
+      const openH = settings.openingHour !== undefined ? Number(settings.openingHour) : 0;
       const closeH = settings.closingHour !== undefined ? Number(settings.closingHour) : 24;
       const currentHour = new Date().getHours();
-      const isWithinBusinessHours = currentHour >= openH && currentHour < closeH;
+
+      // Check if configured for 24x7 or full-day operation
+      const is24Hours = settings.is24x7 === true ||
+        (openH === 0 && (closeH >= 23 || closeH === 24 || settings.closingTime === '23:59' || String(settings.businessHours).includes('23:59') || String(settings.businessHours).toLowerCase().includes('24')));
+
+      let isWithinBusinessHours = true;
+      if (!is24Hours) {
+        if (openH <= closeH) {
+          isWithinBusinessHours = currentHour >= openH && currentHour < closeH;
+        } else {
+          // Overnight span (e.g. 18:00 to 03:00)
+          isWithinBusinessHours = currentHour >= openH || currentHour < closeH;
+        }
+      }
 
       const isRestaurantOpen = (settings.isRestaurantOpen !== false) && isWithinBusinessHours;
       const isDeliveryEnabled = settings.isDeliveryAvailable !== false;
@@ -76,7 +89,7 @@ export class DeliveryCapacityService {
       let availableCount = 0;
       let onDeliveryCount = 0;
 
-      snapshot.docs.forEach(doc => {
+      for (const doc of snapshot.docs) {
         const data = doc.data();
         const status = (data.deliveryStatus || data.status || 'offline').toLowerCase();
         if (status === 'online' || status === 'available') {
@@ -84,9 +97,38 @@ export class DeliveryCapacityService {
           availableCount++;
         } else if (status === 'on_delivery' || status === 'busy' || status === 'assigned') {
           onlineCount++;
-          onDeliveryCount++;
+          
+          // Verify if the assigned order is genuinely active in Firestore
+          const assignedId = data.assignedOrderId || data.activeOrderId;
+          let isGenuinelyOnDelivery = false;
+          if (assignedId) {
+            try {
+              const orderDoc = await adminDb.collection('orders').doc(assignedId).get();
+              if (orderDoc.exists) {
+                const orderStatus = (orderDoc.data()?.status || '').toLowerCase();
+                if (!['delivered', 'cancelled', 'rejected', 'failed', 'completed'].includes(orderStatus)) {
+                  isGenuinelyOnDelivery = true;
+                }
+              }
+            } catch (err) {
+              console.warn(`[DeliveryCapacity] Error checking order ${assignedId}:`, err);
+            }
+          }
+
+          if (isGenuinelyOnDelivery) {
+            onDeliveryCount++;
+          } else {
+            // Stale order assignment recovered: rider is online & free for new orders
+            availableCount++;
+            adminDb.collection('users').doc(doc.id).update({
+              deliveryStatus: 'online',
+              status: 'online',
+              assignedOrderId: null,
+              activeOrderId: null,
+            }).catch(() => {});
+          }
         }
-      });
+      }
 
       let availabilityStatus: 'AVAILABLE' | 'HIGH_DEMAND' | 'NO_RIDERS' | 'CLOSED' = 'AVAILABLE';
       let availabilityMessage = 'Delivery available';
@@ -158,29 +200,41 @@ export class DeliveryCapacityService {
    * Processes the notify queue and triggers push notifications
    */
   static async processNotifyQueue() {
-    const queueSnap = await adminDb.collection('delivery_notify_queue')
-      .where('notified', '==', false)
-      .orderBy('createdAt', 'asc')
-      .get();
+    try {
+      const queueSnap = await adminDb.collection('delivery_notify_queue')
+        .where('notified', '==', false)
+        .get();
 
-    if (queueSnap.empty) return;
+      if (queueSnap.empty) return;
 
-    // A rider is available. Let's notify everyone in the queue (scalable platforms batch this, we'll do it sequentially here for simplicity)
-    const batch = adminDb.batch();
-    
-    for (const doc of queueSnap.docs) {
-      const data = doc.data();
-      const customerId = data.customerId;
+      // Sort in-memory by createdAt ascending to avoid composite index requirement
+      const sortedDocs = [...queueSnap.docs].sort((a, b) => {
+        const aTime = a.data().createdAt?.toMillis?.() || 0;
+        const bTime = b.data().createdAt?.toMillis?.() || 0;
+        return aTime - bTime;
+      });
 
-      // Send push notification
-      const payload = CustomerTemplates.informational('Delivery Available!', 'Great news! Delivery is available again. You can now place your order.', 'https://olivepizza.app/checkout');
-      await notificationEngine.send(customerId, payload, { category: 'simple_informational', priority: 'high' });
+      // A rider is available. Let's notify everyone in the queue
+      const batch = adminDb.batch();
+      
+      for (const doc of sortedDocs) {
+        const data = doc.data();
+        const customerId = data.customerId;
 
-      // Mark as notified so we don't spam them
-      batch.update(doc.ref, { notified: true, notifiedAt: FieldValue.serverTimestamp() });
+        // Send push notification
+        if (customerId) {
+          const payload = CustomerTemplates.informational('Delivery Available!', 'Great news! Delivery is available again. You can now place your order.', 'https://olivepizza.app/checkout');
+          await notificationEngine.send(customerId, payload, { category: 'simple_informational', priority: 'high' });
+        }
+
+        // Mark as notified so we don't spam them
+        batch.update(doc.ref, { notified: true, notifiedAt: FieldValue.serverTimestamp() });
+      }
+
+      await batch.commit();
+    } catch (e: any) {
+      console.warn('[DeliveryCapacity] processNotifyQueue warning:', e.message);
     }
-
-    await batch.commit();
   }
 
   /**

@@ -1,33 +1,72 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, ChevronLeft, ChevronRight, Play, Volume2, VolumeX, ExternalLink, Tag } from "lucide-react";
+import { Sparkles, ChevronLeft, ChevronRight, Volume2, VolumeX, ExternalLink, Tag } from "lucide-react";
 import { useDataStore } from "../../lib/dataStore";
 import { isItemActiveAndValid } from "../../lib/scheduling";
+import { db } from "../../lib/firebase";
+import { collection, onSnapshot, query, orderBy } from "firebase/firestore";
 import { Link } from "react-router";
 
 interface AdItem {
   id: string;
   title: string;
   description: string;
-  mediaUrl: string;
+  mediaUrl?: string;
+  imageUrl?: string;
+  image?: string;
+  bannerUrl?: string;
+  bannerImage?: string;
+  url?: string;
   mediaType?: "image" | "video";
   ctaText?: string;
   ctaLink?: string;
   ctaType?: "internal" | "external";
-  tag?: string; // New Product, Festival Offer, Running Offer, Upcoming Offer, Announcement
+  tag?: string;
   isActive?: boolean;
   startDate?: string;
   endDate?: string;
   expiryDate?: string;
+  createdAt?: string;
 }
 
 export default function LiveAdvertisements() {
-  const { ads } = useDataStore();
+  const { ads: storeAds } = useDataStore();
+  const [liveAds, setLiveAds] = useState<AdItem[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isMuted, setIsMuted] = useState(true);
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  const activeAds: AdItem[] = (ads || []).filter((ad: any) => isItemActiveAndValid(ad));
+  // Real-time Firestore subscription to guarantee 0ms latency when owner publishes/toggles an ad
+  useEffect(() => {
+    try {
+      const q = query(collection(db, "ads"), orderBy("createdAt", "desc"));
+      const unsubscribe = onSnapshot(
+        q,
+        (snapshot) => {
+          const fetchedAds = snapshot.docs.map((d) => ({
+            id: d.id,
+            ...(d.data() as any),
+          }));
+          setLiveAds(fetchedAds);
+        },
+        (error) => {
+          console.warn("[LiveAdvertisements] Firestore direct onSnapshot notice:", error);
+        }
+      );
+      return () => unsubscribe();
+    } catch (e) {
+      console.warn("[LiveAdvertisements] Subscription error fallback:", e);
+    }
+  }, []);
+
+  const activeAds: AdItem[] = useMemo(() => {
+    const source = liveAds.length > 0 ? liveAds : (storeAds || []);
+    return source.filter((ad: any) => {
+      if (!ad) return false;
+      if (ad.isActive === false) return false;
+      return isItemActiveAndValid(ad);
+    });
+  }, [liveAds, storeAds]);
 
   // Auto rotate banner every 7 seconds
   useEffect(() => {
@@ -41,6 +80,19 @@ export default function LiveAdvertisements() {
   if (activeAds.length === 0) return null;
 
   const currentAd = activeAds[currentIndex % activeAds.length];
+  const mediaSrc =
+    currentAd.mediaUrl ||
+    currentAd.imageUrl ||
+    currentAd.image ||
+    currentAd.bannerUrl ||
+    currentAd.bannerImage ||
+    currentAd.url ||
+    "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=1600&q=80";
+
+  const isVideo =
+    currentAd.mediaType === "video" ||
+    /\.(mp4|mov|webm)(\?.*)?$/i.test(mediaSrc) ||
+    mediaSrc.includes("/video/upload/");
 
   const handlePrev = () => {
     setCurrentIndex((prev) => (prev - 1 + activeAds.length) % activeAds.length);
@@ -51,10 +103,10 @@ export default function LiveAdvertisements() {
   };
 
   return (
-    <section className="relative py-12 sm:py-16 overflow-hidden z-10">
+    <section className="relative py-8 sm:py-12 overflow-hidden z-10">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         {/* Section Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between mb-6">
           <div>
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-purple-500/10 border border-purple-500/20 backdrop-blur-md mb-2">
               <Sparkles className="w-3.5 h-3.5 text-purple-400 animate-pulse" />
@@ -100,11 +152,11 @@ export default function LiveAdvertisements() {
               className="absolute inset-0 w-full h-full flex flex-col justify-end p-6 sm:p-12"
             >
               {/* Media Element: Image vs Video */}
-              {currentAd.mediaType === "video" ? (
+              {isVideo ? (
                 <div className="absolute inset-0 w-full h-full z-0 overflow-hidden">
                   <video
                     ref={videoRef}
-                    src={currentAd.mediaUrl}
+                    src={mediaSrc}
                     autoPlay
                     loop
                     muted={isMuted}
@@ -120,8 +172,8 @@ export default function LiveAdvertisements() {
                 </div>
               ) : (
                 <img
-                  src={currentAd.mediaUrl || "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=1600&q=80"}
-                  alt={currentAd.title}
+                  src={mediaSrc}
+                  alt={currentAd.title || "Olive Pizza Promotion"}
                   className="absolute inset-0 w-full h-full object-cover z-0"
                 />
               )}

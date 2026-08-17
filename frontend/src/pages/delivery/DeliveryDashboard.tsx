@@ -524,15 +524,21 @@ export default function DeliveryDashboard() {
       await handleStopNavigation();
       
       const partnerId = user?.uid || "";
-      await supabase.from("delivery_locations").update({ active_order_id: null, online_status: false, last_updated: new Date().toISOString() }).eq("delivery_partner_id", partnerId);
+      try {
+        await supabase.from("delivery_locations").update({ active_order_id: null, online_status: false, last_updated: new Date().toISOString() }).eq("delivery_partner_id", partnerId);
+      } catch (e) {
+        console.warn('Supabase delivery location update warning:', e);
+      }
 
       const payoutPerOrder = activeTask?.deliveryFee || 40;
-      await updateDoc(doc(db, "users", user!.uid), {
-        "earnings.today": (user?.earnings?.today || 0) + payoutPerOrder,
-        "earnings.total": (user?.earnings?.total || 0) + payoutPerOrder,
-        "metrics.totalDeliveries": (user?.metrics?.totalDeliveries || 0) + 1,
-        "metrics.successfulDeliveries": (user?.metrics?.successfulDeliveries || 0) + 1,
-      });
+      if (user?.uid) {
+        await updateDoc(doc(db, "users", user.uid), {
+          "earnings.today": (user?.earnings?.today || 0) + payoutPerOrder,
+          "earnings.total": (user?.earnings?.total || 0) + payoutPerOrder,
+          "metrics.totalDeliveries": (user?.metrics?.totalDeliveries || 0) + 1,
+          "metrics.successfulDeliveries": (user?.metrics?.successfulDeliveries || 0) + 1,
+        }).catch(err => console.warn('User metrics update warning:', err));
+      }
 
       toast.success("Delivery Completed! 🎉");
       setShowProofModal(false); setProofImage(null); setProofNote(""); setCompletingOrderId(null);

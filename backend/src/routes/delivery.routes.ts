@@ -145,10 +145,18 @@ router.patch('/orders/:id/status', requireRole(['owner', 'delivery', 'delivery_p
       }
     }
 
-    await adminDb.collection('orders').doc(id).update({
+    const updateData: Record<string, any> = {
       status: status,
       updatedAt: FieldValue.serverTimestamp()
-    });
+    };
+    if (status === 'delivered') {
+      updateData.deliveredAt = FieldValue.serverTimestamp();
+      if (req.body.deliveryProof) {
+        updateData.deliveryProof = req.body.deliveryProof;
+      }
+    }
+
+    await adminDb.collection('orders').doc(id).update(updateData);
     
     // Synchronous Dispatch
     setImmediate(async () => {
@@ -171,11 +179,19 @@ router.patch('/orders/:id/status', requireRole(['owner', 'delivery', 'delivery_p
     });
 
     // Emit event so emails are triggered
-    orderEventService.emitStatusChange(id, status as any, req.user?.uid || 'system');
+    try {
+      orderEventService.emitStatusChange(id, status as any, req.user?.uid || 'system');
+    } catch (e: any) {
+      console.warn('[Delivery Routes] Event emit warning:', e.message);
+    }
     
     // Auto-update rider status and navigation session expiry if delivered
     if (status === 'delivered' && req.user?.uid) {
-      await DeliveryCapacityService.setPartnerStatus(req.user.uid, 'online'); // becomes available again
+      try {
+        await DeliveryCapacityService.setPartnerStatus(req.user.uid, 'online', null); // becomes available again
+      } catch (e: any) {
+        console.warn('[Delivery Routes] setPartnerStatus warning:', e.message);
+      }
       
       // Update PostgreSQL navigation session to DELIVERED with 5-minute expiry
       try {

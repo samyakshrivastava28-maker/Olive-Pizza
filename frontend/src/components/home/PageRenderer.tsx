@@ -47,8 +47,10 @@ const renderSection = (
 
   const isVideo = activeMediaUrl.match(/\.(mp4|mov|webm)(\?.*)?$/i) || activeMediaUrl.includes('/video/upload/');
 
+  const normalizedType = (section.type || '').toUpperCase();
+
   let Component = null;
-  switch (section.type) {
+  switch (normalizedType) {
     case 'HERO':
       Component = !activeMediaUrl ? (
         <div className={opacity}>
@@ -116,22 +118,26 @@ const renderSection = (
       Component = <div className={opacity}><GallerySection config={section.config} /></div>;
       break;
     case 'ADS':
+    case 'ADVERTISEMENTS':
+    case 'PROMOTIONS':
       Component = <div className={opacity}><LiveAdvertisements /></div>;
-      break;
-    case 'CATEGORIES':
-      Component = null; // Removed section per user request
       break;
     case 'CRAVINGS':
     case 'CRAVING_CATEGORIES':
       Component = <div className={opacity}><CravingCategoriesSection config={section.config} /></div>;
       break;
+    case 'CATEGORIES':
+      Component = null; // Suppressed obsolete duplicate categories section
+      break;
     case 'COUPONS':
       Component = <div className={opacity}><LiveCoupons /></div>;
       break;
     case 'FEATURED':
+    case 'RECOMMENDATIONS':
       Component = <div className={opacity}><FeaturedShowcase /></div>;
       break;
     case 'DOWNLOAD_APP':
+    case 'APP':
       Component = <div className={opacity}><AppDownloadSection /></div>;
       break;
     default:
@@ -181,9 +187,40 @@ export default function PageRenderer({ schema, isEditorMode = false, onElementSe
     );
   }
 
+  // Filter out any obsolete duplicate categories sections from schema and deduplicate cravings
+  const cleanSections = (schema.sections || []).filter((s, idx, arr) => {
+    const type = (s.type || '').toUpperCase();
+    if (type === 'CATEGORIES') return false; // Remove obsolete duplicate categories
+    if (type === 'CRAVINGS' || type === 'CRAVING_CATEGORIES') {
+      const firstIdx = arr.findIndex((item) =>
+        ['CRAVINGS', 'CRAVING_CATEGORIES'].includes((item.type || '').toUpperCase())
+      );
+      if (idx !== firstIdx) return false;
+    }
+    return true;
+  });
+
+  // Check if sections array explicitly includes an ads section
+  const hasAdsSection = cleanSections.some(
+    (s) => ['ADS', 'ADVERTISEMENTS', 'PROMOTIONS'].includes((s.type || '').toUpperCase()) && !s.isHidden
+  );
+
   return (
     <div className="w-full flex flex-col gap-6 py-6 relative z-10">
-      {schema.sections?.map((section) => renderSection(section, isEditorMode, onElementSelect, selectedSectionId, viewMode))}
+      {cleanSections.map((section) => {
+        const isCravings = ['CRAVINGS', 'CRAVING_CATEGORIES'].includes((section.type || '').toUpperCase());
+        return (
+          <React.Fragment key={section.id}>
+            {renderSection(section, isEditorMode, onElementSelect, selectedSectionId, viewMode)}
+            {/* If schema didn't contain an explicit ADS section, guarantee published Ads appear directly below Cravings section */}
+            {!hasAdsSection && isCravings && (
+              <div key={`auto-ads-${section.id}`}>
+                <LiveAdvertisements />
+              </div>
+            )}
+          </React.Fragment>
+        );
+      })}
     </div>
   );
 }

@@ -221,7 +221,7 @@ export default function DeliveryNavigationPage() {
           "earnings.total": ((user as any).earnings?.total || 0) + payout,
           "metrics.totalDeliveries": ((user as any).metrics?.totalDeliveries || 0) + 1,
           "metrics.successfulDeliveries": ((user as any).metrics?.successfulDeliveries || 0) + 1,
-        });
+        }).catch(err => console.warn('User metrics update warning:', err));
       }
 
       TTS.stopAll();

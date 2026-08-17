@@ -113,10 +113,21 @@ export const useDataStore = create<DataState>()(
           const unsubSettings = onSnapshot(doc(db, 'settings', 'global'), (snap) => {
             if (snap.exists()) {
               const data = snap.data();
-              const openH = data.openingHour !== undefined ? Number(data.openingHour) : (data.openingTime ? parseInt(data.openingTime.split(':')[0]) : 12);
+              const openH = data.openingHour !== undefined ? Number(data.openingHour) : (data.openingTime ? parseInt(data.openingTime.split(':')[0]) : 0);
               const closeH = data.closingHour !== undefined ? Number(data.closingHour) : (data.closingTime ? parseInt(data.closingTime.split(':')[0]) : 24);
               const currentHour = new Date().getHours();
-              const isWithinHours = currentHour >= openH && currentHour < closeH;
+              
+              const is24Hours = data.is24x7 === true ||
+                (openH === 0 && (closeH >= 23 || closeH === 24 || data.closingTime === '23:59' || String(data.businessHours).includes('23:59') || String(data.businessHours).toLowerCase().includes('24')));
+
+              let isWithinHours = true;
+              if (!is24Hours) {
+                if (openH <= closeH) {
+                  isWithinHours = currentHour >= openH && currentHour < closeH;
+                } else {
+                  isWithinHours = currentHour >= openH || currentHour < closeH;
+                }
+              }
 
               const isDeliveryAvail = data.isDeliveryAvailable ?? true;
               const isRestOpen = (data.isRestaurantOpen ?? true) && isWithinHours;
@@ -142,8 +153,8 @@ export const useDataStore = create<DataState>()(
                 deliveryRadiusKm: data.deliveryRadiusKm ?? 5,
                 openingHour: openH,
                 closingHour: closeH,
-                openingTime: data.openingTime || "12:00",
-                closingTime: data.closingTime || "24:00"
+                openingTime: data.openingTime || "00:00",
+                closingTime: data.closingTime || "23:59"
               }});
             } else {
               set((state) => ({ storeStatus: { ...state.storeStatus, isLoading: false }}));
@@ -187,10 +198,10 @@ export const useDataStore = create<DataState>()(
 
         const setupAds = () => {
           const unsubAds = onSnapshot(
-            query(collection(db, 'ads'), where('isActive', '==', true)),
+            collection(db, 'ads'),
             (snap) => {
               const rawAds = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-              const ads = rawAds.filter(isItemActiveAndValid);
+              const ads = rawAds.filter((ad: any) => ad.isActive !== false && isItemActiveAndValid(ad));
               ads.sort((a: any, b: any) => (b.createdAt || 0) - (a.createdAt || 0));
               set({ ads });
               backoffMap['ads'] = 1000;

@@ -55,7 +55,11 @@ function CravingCategoryCard({
   // 4-Second Rotation Timer Strategy
   useEffect(() => {
     if (productList.length <= 1) return;
-    const timer = setInterval(() => { if (!document.hidden) { setCurrentImgIndex((prev) => (prev + 1) % productList.length); } }, 4000); // Strictly 4 seconds
+    const timer = setInterval(() => {
+      if (!document.hidden) {
+        setCurrentImgIndex((prev) => (prev + 1) % productList.length);
+      }
+    }, 4000);
 
     return () => clearInterval(timer);
   }, [productList.length]);
@@ -89,11 +93,11 @@ function CravingCategoryCard({
       viewport={{ once: true, margin: '-30px' }}
       transition={{
         duration: 0.5,
-        delay: index * 0.08,
+        delay: index * 0.06,
         ease: [0.16, 1, 0.3, 1],
       }}
       onClick={handleClick}
-      className="flex flex-col items-center group cursor-pointer select-none text-center shrink-0 w-[110px] sm:w-[130px] md:w-[145px] lg:w-[160px]"
+      className="flex flex-col items-center group cursor-pointer select-none text-center shrink-0 w-[115px] sm:w-[135px] md:w-[150px] lg:w-[165px]"
       role="button"
       tabIndex={0}
       aria-label={`Category ${category.name}, ${category.itemCount} items available`}
@@ -104,19 +108,19 @@ function CravingCategoryCard({
           prefersReducedMotion
             ? {}
             : {
-                y: [0, -8, 0],
-                rotate: index % 2 === 0 ? [-1, 1, -1] : [1, -1, 1],
+                y: [0, -6, 0],
+                rotate: index % 2 === 0 ? [-0.8, 0.8, -0.8] : [0.8, -0.8, 0.8],
               }
         }
         transition={{
-          duration: 4.5 + (index % 3) * 0.5,
+          duration: 4.2 + (index % 3) * 0.4,
           repeat: Infinity,
           ease: 'easeInOut',
-          delay: (index * 0.2) % 2,
+          delay: (index * 0.15) % 2,
         }}
         whileHover={{
           scale: 1.08,
-          y: -12,
+          y: -10,
           transition: { duration: 0.25, ease: 'easeOut' },
         }}
         whileTap={{ scale: 0.94 }}
@@ -124,18 +128,18 @@ function CravingCategoryCard({
       >
         {/* Radial Ambient Glow */}
         <div
-          className="absolute -inset-3 rounded-full opacity-40 group-hover:opacity-100 transition-opacity duration-500 blur-xl pointer-events-none transform-gpu"
+          className="absolute -inset-4 rounded-full opacity-35 group-hover:opacity-100 transition-opacity duration-500 blur-2xl pointer-events-none transform-gpu"
           style={{
-            background: `radial-gradient(circle at center, ${category.glowColor} 0%, transparent 75%)`,
+            background: `radial-gradient(circle at center, ${category.glowColor} 0%, transparent 70%)`,
           }}
         />
 
         {/* ── 3D Circular Glassmorphic Card Frame ── */}
         <div
-          className="relative w-22 h-22 sm:w-26 sm:h-26 md:w-30 md:h-30 rounded-full p-1 border-2 border-white/15 group-hover:border-primary-400/90 transition-all duration-300 shadow-[0_12px_35px_rgba(0,0,0,0.7)] overflow-hidden flex items-center justify-center bg-dark-900/90 transform-gpu group-hover:shadow-[0_16px_40px_rgba(249,115,22,0.45)]"
+          className="relative w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32 rounded-full p-1.5 border-2 border-white/20 group-hover:border-primary-400 transition-all duration-300 shadow-[0_12px_35px_rgba(0,0,0,0.8)] overflow-hidden flex items-center justify-center bg-dark-900/90 transform-gpu group-hover:shadow-[0_16px_40px_rgba(249,115,22,0.45)]"
           style={{
             backdropFilter: 'blur(16px)',
-            boxShadow: 'inset 0 2px 6px rgba(255,255,255,0.2), 0 12px 30px rgba(0,0,0,0.8)',
+            boxShadow: 'inset 0 2px 8px rgba(255,255,255,0.2), 0 12px 30px rgba(0,0,0,0.85)',
           }}
         >
           {/* Dynamic 4-Second Morphing Image Transition */}
@@ -146,9 +150,9 @@ function CravingCategoryCard({
               alt={activeProduct.name}
               initial={{
                 opacity: 0,
-                scale: 0.92,
-                translateY: 10,
-                filter: 'blur(3px)',
+                scale: 0.88,
+                translateY: 8,
+                filter: 'blur(4px)',
               }}
               animate={{
                 opacity: 1,
@@ -158,12 +162,12 @@ function CravingCategoryCard({
               }}
               exit={{
                 opacity: 0,
-                scale: 0.92,
-                translateY: -10,
-                filter: 'blur(3px)',
+                scale: 0.88,
+                translateY: -8,
+                filter: 'blur(4px)',
               }}
               transition={{
-                duration: 0.6,
+                duration: 0.55,
                 ease: [0.16, 1, 0.3, 1],
               }}
               loading="lazy"
@@ -172,12 +176,12 @@ function CravingCategoryCard({
           </AnimatePresence>
 
           {/* Premium Glass Lens Highlight */}
-          <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-transparent via-white/5 to-white/25 pointer-events-none z-10" />
+          <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-transparent via-white/5 to-white/30 pointer-events-none z-10" />
 
           {/* Optional Badge */}
           {category.badge && (
-            <div className="absolute bottom-1 inset-x-0 z-20 flex justify-center">
-              <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider text-white bg-gradient-to-r from-orange-500 to-amber-500 shadow-md backdrop-blur-md">
+            <div className="absolute bottom-1.5 inset-x-0 z-20 flex justify-center">
+              <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider text-white bg-gradient-to-r from-orange-500 to-amber-500 shadow-md backdrop-blur-md border border-white/20">
                 {category.badge}
               </span>
             </div>
@@ -193,10 +197,10 @@ function CravingCategoryCard({
         <AnimatePresence mode="wait">
           <motion.span
             key={activeProduct.name}
-            initial={{ opacity: 0, y: 4 }}
+            initial={{ opacity: 0, y: 3 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -4 }}
-            transition={{ duration: 0.3 }}
+            exit={{ opacity: 0, y: -3 }}
+            transition={{ duration: 0.25 }}
             className="text-[10px] sm:text-[11px] font-semibold text-slate-400 group-hover:text-amber-300 transition-colors duration-200 mt-0.5 line-clamp-1 w-full text-center"
           >
             {activeProduct.name}
@@ -437,10 +441,10 @@ export default function CravingCategoriesSection({ config }: { config?: any }) {
   }
 
   const headline = config?.headline || "WHAT'S YOUR CRAVING FOR?";
-  const subtitle = config?.subtitle || 'Find something delicious.';
+  const subtitle = config?.subtitle || 'Explore our freshly handcrafted artisan creations & chef specials.';
 
   return (
-    <section className="relative py-10 sm:py-14 overflow-hidden z-10">
+    <section className="relative py-8 sm:py-12 overflow-hidden z-10">
       {/* Ambient background lighting */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-6xl h-48 bg-gradient-to-r from-orange-500/10 via-amber-500/5 to-purple-500/10 blur-3xl pointer-events-none rounded-full" />
 
@@ -448,25 +452,23 @@ export default function CravingCategoriesSection({ config }: { config?: any }) {
         {/* Section Header */}
         <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-8 sm:mb-10 gap-3">
           <div>
-            <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-orange-500/10 border border-orange-500/20 backdrop-blur-md mb-2">
-              <Sparkles className="w-3.5 h-3.5 text-primary-400 animate-pulse" />
-              <span className="text-[11px] font-black uppercase tracking-wider text-primary-300">
-                EXPLORE MENU
+            <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-gradient-to-r from-orange-500/15 via-amber-500/10 to-transparent border border-orange-500/30 backdrop-blur-md mb-2.5 shadow-[0_0_15px_rgba(249,115,22,0.15)]">
+              <Flame className="w-3.5 h-3.5 text-orange-400 animate-pulse" />
+              <span className="text-[11px] font-black uppercase tracking-wider bg-gradient-to-r from-orange-300 via-amber-200 to-white bg-clip-text text-transparent">
+                ARTISAN SELECTIONS
               </span>
             </div>
-            <h2 className="text-2xl sm:text-4xl md:text-5xl font-black text-white tracking-tight">
-              {headline}
+            <h2 className="text-2xl sm:text-4xl md:text-5xl font-black text-white tracking-tight leading-tight">
+              WHAT'S YOUR <span className="bg-gradient-to-r from-orange-400 via-amber-400 to-yellow-300 bg-clip-text text-transparent">CRAVING</span> FOR?
             </h2>
-            {subtitle && (
-              <p className="text-slate-400 text-xs sm:text-sm font-medium mt-1">
-                {subtitle}
-              </p>
-            )}
+            <p className="text-slate-400 text-xs sm:text-sm font-medium mt-1.5">
+              {subtitle}
+            </p>
           </div>
 
-          <div className="hidden sm:flex items-center gap-2 text-xs font-bold text-slate-400 bg-white/5 px-3.5 py-1.5 rounded-full border border-white/10 shrink-0">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-            <span>4s Auto Product Rotation</span>
+          <div className="hidden sm:flex items-center gap-2.5 text-xs font-bold text-slate-300 bg-white/5 px-4 py-2 rounded-full border border-white/10 shrink-0 shadow-lg backdrop-blur-md">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_#34d399]" />
+            <span>Live Chef Rotations</span>
           </div>
         </div>
 

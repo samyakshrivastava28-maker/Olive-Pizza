@@ -4,6 +4,11 @@ import {
   collection,
   query,
   where,
+  orderBy,
+  limit,
+  onSnapshot,
+  QuerySnapshot,
+  DocumentData,
   getDocs,
   getAggregateFromServer,
   sum,
@@ -67,117 +72,99 @@ export default function OwnerDashboard() {
       setIsNative(Capacitor.isNativePlatform());
     }).catch(() => {});
     
-    const fetchDashboardData = async () => {
-      try {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+    // 1. Real-time Orders Listener (Charts & Month Aggregates)
+    const ordersRef = collection(db, "orders");
+    const qOrders = query(ordersRef, orderBy("createdAt", "desc"), limit(300));
+    
+    const unsubOrders = onSnapshot(qOrders, (snapshot: QuerySnapshot<DocumentData>) => {
+      const docs = snapshot.docs.map((d: any) => ({ id: d.id, ...d.data() }));
+      setChartOrders(docs);
 
-        const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+      const now = new Date();
+      const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0).getTime();
+      const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0).getTime();
+      const prevMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999).getTime();
 
-        const prevMonthStart = new Date(
-          today.getFullYear(),
-          today.getMonth() - 1,
-          1,
-        );
-        const prevMonthEnd = new Date(
-          today.getFullYear(),
-          today.getMonth(),
-          0,
-          23,
-          59,
-          59,
-          999,
-        );
+      const parseTime = (val: any) => {
+        if (!val) return 0;
+        if (typeof val?.toMillis === 'function') return val.toMillis();
+        if (typeof val?.toDate === 'function') return val.toDate().getTime();
+        if (typeof val?.seconds === 'number') return val.seconds * 1000;
+        const p = new Date(val).getTime();
+        return isNaN(p) ? 0 : p;
+      };
 
-        // Aggregation Queries for extreme performance (no doc reads)
-        const ordersRef = collection(db, "orders");
+      let cRev = 0, cOrd = 0;
+      let pRev = 0, pOrd = 0;
 
-        // Month's Aggregations
-        const qMonth = query(
-          ordersRef,
-          where("createdAt", ">=", firstOfMonth.toISOString()),
-        );
-        const aggMonth = await getAggregateFromServer(qMonth, {
-          count: count(),
-          revenue: sum("totalAmount"),
-        });
+      docs.forEach((data: any) => {
+        const t = parseTime(data.createdAt);
+        const amt = Number(data.totalAmount || data.total_amount || 0);
+        const status = (data.status || '').toLowerCase();
+        const isFailed = ['cancelled', 'payment_failed', 'failed', 'rejected'].includes(status);
 
-        // Previous Month's Aggregations
-        const qPrevMonth = query(
-          ordersRef,
-          where("createdAt", ">=", prevMonthStart.toISOString()),
-          where("createdAt", "<=", prevMonthEnd.toISOString()),
-        );
-        const aggPrevMonth = await getAggregateFromServer(qPrevMonth, {
-          count: count(),
-          revenue: sum("totalAmount"),
-        });
+        if (!isFailed) {
+          if (t >= firstOfMonth) {
+            cRev += amt;
+            cOrd++;
+          } else if (t >= prevMonthStart && t <= prevMonthEnd) {
+            pRev += amt;
+            pOrd++;
+          }
+        }
+      });
 
-        // Other Stats
-        const aggProducts = await getAggregateFromServer(
-          collection(db, "products"),
-          { count: count() },
-        );
-        const aggCoupons = await getAggregateFromServer(
-          query(collection(db, "coupons"), where("isActive", "==", true)),
-          { count: count() },
-        );
-        const aggAds = await getAggregateFromServer(
-          query(collection(db, "ads"), where("isActive", "==", true)),
-          { count: count() },
-        );
-        const aggCustomers = await getAggregateFromServer(
-          query(collection(db, "users"), where("role", "==", "customer")),
-          { count: count() },
-        );
+      const revDiff = pRev > 0 ? ((cRev - pRev) / pRev) * 100 : cRev > 0 ? 100 : 0;
+      const ordDiff = pOrd > 0 ? ((cOrd - pOrd) / pOrd) * 100 : cOrd > 0 ? 100 : 0;
 
-        // Calculate differences
-        const cRev = aggMonth.data().revenue || 0;
-        const pRev = aggPrevMonth.data().revenue || 0;
-        const revDiff =
-          pRev > 0 ? ((cRev - pRev) / pRev) * 100 : cRev > 0 ? 100 : 0;
+      setMetrics((prev: any) => ({
+        ...prev,
+        monthRevenue: cRev,
+        monthOrders: cOrd,
+        prevMonthRevenue: pRev,
+        revDiff,
+        ordDiff,
+      }));
+      setLoading(false);
+    }, (err: any) => {
+      console.warn('[OwnerDashboard] Realtime orders sync notice:', err.message);
+      setLoading(false);
+    });
 
-        const cOrd = aggMonth.data().count || 0;
-        const pOrd = aggPrevMonth.data().count || 0;
-        const ordDiff =
-          pOrd > 0 ? ((cOrd - pOrd) / pOrd) * 100 : cOrd > 0 ? 100 : 0;
+    // 2. Real-time Delivery Partners Listener
+    const qPartners = query(
+      collection(db, "users"),
+      where("role", "in", ["delivery_partner", "delivery"])
+    );
+    const unsubPartners = onSnapshot(qPartners, (snap: QuerySnapshot<DocumentData>) => {
+      setDeliveryPartners(snap.docs.map((d: any) => ({ id: d.id, ...d.data() })));
+    }, (err: any) => console.warn('[OwnerDashboard] Partners sync notice:', err.message));
 
-        setMetrics({
-          monthRevenue: cRev,
-          monthOrders: cOrd,
-          prevMonthRevenue: pRev,
-          revDiff,
-          ordDiff,
-          totalProducts: aggProducts.data().count || 0,
-          activeCoupons: aggCoupons.data().count || 0,
-          activeCustomers: aggCustomers.data().count || 0,
-          activeAds: aggAds.data().count || 0,
-          customerGrowth: 5.2, // Stub for customer growth % as per spec
-        });
+    // 3. Real-time Products, Coupons, and Ads counts
+    const unsubProducts = onSnapshot(collection(db, "products"), (snap: QuerySnapshot<DocumentData>) => {
+      setMetrics((prev: any) => ({ ...prev, totalProducts: snap.size }));
+    }, () => {});
 
-        // Fetch recent orders for charts
-        const qChart = query(
-          ordersRef,
-          where("createdAt", ">=", firstOfMonth.toISOString()),
-        );
-        const chartSnap = await getDocs(qChart);
-        setChartOrders(chartSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    const unsubCoupons = onSnapshot(query(collection(db, "coupons"), where("isActive", "==", true)), (snap: QuerySnapshot<DocumentData>) => {
+      setMetrics((prev: any) => ({ ...prev, activeCoupons: snap.size }));
+    }, () => {});
 
-        // Fetch delivery partners
-        const qPartners = query(
-          collection(db, "users"),
-          where("role", "==", "delivery_partner")
-        );
-        const partnersSnap = await getDocs(qPartners);
-        setDeliveryPartners(partnersSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
-      } catch (error) {
-        console.error("Dashboard Aggregation Error:", error);
-      } finally {
-        setLoading(false);
-      }
+    const unsubAds = onSnapshot(query(collection(db, "ads"), where("isActive", "==", true)), (snap: QuerySnapshot<DocumentData>) => {
+      setMetrics((prev: any) => ({ ...prev, activeAds: snap.size }));
+    }, () => {});
+
+    const unsubCustomers = onSnapshot(query(collection(db, "users"), where("role", "==", "customer")), (snap: QuerySnapshot<DocumentData>) => {
+      setMetrics((prev: any) => ({ ...prev, activeCustomers: snap.size }));
+    }, () => {});
+
+    return () => {
+      unsubOrders();
+      unsubPartners();
+      unsubProducts();
+      unsubCoupons();
+      unsubAds();
+      unsubCustomers();
     };
-
-    fetchDashboardData();
   }, []);
 
   if (loading) {

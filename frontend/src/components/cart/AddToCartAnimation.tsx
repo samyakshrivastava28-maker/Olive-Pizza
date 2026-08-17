@@ -78,7 +78,15 @@ export const AddToCartAnimation: React.FC<AddToCartAnimationProps> = ({
             className="absolute w-24 h-24 flex items-center justify-center -translate-x-1/2 -translate-y-1/2"
           >
             {/* 3D Pizza Box Visual */}
-            <div className="relative w-20 h-20 bg-amber-700/90 border-2 border-amber-400 rounded-2xl shadow-[0_15px_30px_rgba(0,0,0,0.6)] flex items-center justify-center overflow-hidden">
+            <div 
+              style={{
+                perspective: 800,
+                WebkitPerspective: 800,
+                transformStyle: 'preserve-3d',
+                WebkitTransformStyle: 'preserve-3d',
+              }}
+              className="relative w-20 h-20 bg-amber-700/90 border-2 border-amber-400 rounded-2xl shadow-[0_15px_30px_rgba(0,0,0,0.6)] flex items-center justify-center"
+            >
               {/* Flying Item Image (Step 2 Arc Entry) */}
               <motion.img
                 src={
@@ -94,16 +102,20 @@ export const AddToCartAnimation: React.FC<AddToCartAnimationProps> = ({
                   rotate: step >= 2 ? 0 : -30,
                 }}
                 transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-                className="w-14 h-14 rounded-full object-cover border border-amber-300 shadow-md"
+                className="w-14 h-14 rounded-full object-cover border border-amber-300 shadow-md z-10"
               />
 
               {/* 3D Box Lid (Closes at Step 3) */}
               <motion.div
-                initial={{ rotateX: -90 }}
-                animate={{ rotateX: step === 3 ? 0 : -90 }}
+                initial={{ rotateX: -110 }}
+                animate={{ rotateX: step >= 3 ? 0 : -110 }}
                 transition={{ type: 'spring', stiffness: 450, damping: 20 }}
-                style={{ transformOrigin: 'top' }}
-                className="absolute inset-0 bg-amber-600 border-2 border-amber-300 rounded-2xl flex items-center justify-center shadow-lg"
+                style={{ 
+                  transformOrigin: 'top center',
+                  transformStyle: 'preserve-3d',
+                  WebkitTransformStyle: 'preserve-3d',
+                }}
+                className="absolute inset-0 bg-amber-600 border-2 border-amber-300 rounded-2xl flex items-center justify-center shadow-lg z-20"
               >
                 <div className="text-[10px] font-black text-amber-100 flex items-center gap-1">
                   <span>🍕 OLIVE</span>

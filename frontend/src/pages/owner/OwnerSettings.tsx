@@ -30,6 +30,7 @@ export default function OwnerSettings() {
     bannerUrl: "",
     isRestaurantOpen: true,
     isDeliveryAvailable: true,
+    is24x7: false,
   });
 
   useEffect(() => {
@@ -106,7 +107,9 @@ export default function OwnerSettings() {
 
   // Compute live current store open status
   const currentH = new Date().getHours();
-  const isWithinHours = currentH >= settings.openingHour && currentH < settings.closingHour;
+  const is24H = settings.is24x7 === true ||
+    (settings.openingHour === 0 && (settings.closingHour >= 23 || settings.closingHour === 24 || settings.closingTime === '23:59' || String(settings.businessHours).includes('23:59') || String(settings.businessHours).toLowerCase().includes('24')));
+  const isWithinHours = is24H || (settings.openingHour <= settings.closingHour ? (currentH >= settings.openingHour && currentH < settings.closingHour) : (currentH >= settings.openingHour || currentH < settings.closingHour));
   const isLiveOpen = settings.isRestaurantOpen && isWithinHours;
 
   return (

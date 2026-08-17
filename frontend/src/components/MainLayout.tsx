@@ -1,4 +1,4 @@
-﻿import { Outlet, Link, useNavigate, useLocation } from 'react-router';
+import { Outlet, Link, useNavigate, useLocation } from 'react-router';
 import { useAuthStore, useCartStore, useAppStore } from '../lib/store';
 import { performUpdate } from '../lib/versionManager';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -240,7 +240,7 @@ export default function MainLayout() {
               {/* Developer Dashboard 3-Lines Button (webhub2811@gmail.com account strictly) */}
               {user?.email?.toLowerCase() === 'webhub2811@gmail.com' && (
                 <Link
-                  to="/owner/developer"
+                  to="/developer"
                   title="Developer Operations & Control Center"
                   className="p-2.5 rounded-xl bg-primary-500/15 border border-primary-500/35 text-primary-400 hover:bg-primary-500/25 hover:text-primary-300 transition-all duration-200 flex items-center justify-center gap-1.5 ml-1 shadow-[0_0_15px_rgba(249,115,22,0.2)]"
                 >
@@ -323,7 +323,7 @@ export default function MainLayout() {
               {/* Mobile 3-Lines Developer Dashboard Button (webhub2811@gmail.com strictly) */}
               {user?.email?.toLowerCase() === 'webhub2811@gmail.com' && (
                 <Link
-                  to="/owner/developer"
+                  to="/developer"
                   title="Developer Operations Center"
                   className="p-2 rounded-lg bg-primary-500/20 border border-primary-500/40 text-primary-400 flex items-center justify-center shadow-[0_0_10px_rgba(249,115,22,0.3)]"
                 >

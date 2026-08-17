@@ -30,7 +30,7 @@ function ActivityFeed() {
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{log.details}</p>
                 {log.timestamp && (
                   <p className="text-[10px] text-slate-400 mt-1 uppercase tracking-wider">
-                    {log.timestamp.toDate().toLocaleString()}
+                    {typeof log.timestamp?.toDate === 'function' ? log.timestamp.toDate().toLocaleString() : new Date(log.timestamp).toLocaleString()}
                   </p>
                 )}
               </div>

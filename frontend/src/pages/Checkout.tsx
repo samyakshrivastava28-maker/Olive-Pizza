@@ -227,7 +227,7 @@ export default function Checkout() {
     }
 
     if (!storeStatus.isRestaurantOpen && !deliveryAvailability.isRestaurantOpen) {
-      toast.error('Restaurant is currently closed. We accept orders during business hours (12:00 PM - 12:00 AM).');
+      toast.error(`Restaurant is currently closed. ${storeStatus.openingTime && storeStatus.closingTime ? `Business hours: ${storeStatus.openingTime} - ${storeStatus.closingTime}` : 'Please check back soon.'}`);
       return;
     }
 
@@ -366,7 +366,7 @@ export default function Checkout() {
             <div>
               <h4 className="font-bold text-sm text-red-300">Restaurant Closed</h4>
               <p className="text-xs text-red-200/80 mt-0.5">
-                Olive Pizza is currently closed. We accept orders during business hours (12:00 PM - 12:00 AM).
+                Olive Pizza is currently closed. {storeStatus.openingTime && storeStatus.closingTime ? `Business hours: ${storeStatus.openingTime} - ${storeStatus.closingTime}.` : 'We will open shortly.'}
               </p>
             </div>
           </motion.div>

@@ -160,29 +160,29 @@ export function AdminGuard() {
   return <Outlet />;
 }
 
-// 6. Developer Guard (strictly webhub2811@gmail.com)
+// 6. Developer Guard (strictly developer role or webhub2811@gmail.com — owners cannot access)
 export function DeveloperGuard() {
-  const { isAuthenticated, user, isLoading } = useAuthStore();
+  const { isAuthenticated, user, role, isLoading } = useAuthStore();
   const location = useLocation();
 
   if (isLoading) {
     return <div className="h-screen flex items-center justify-center text-slate-400 text-sm font-bold bg-dark-950">Verifying developer access...</div>;
   }
 
-  const AUTHORIZED_DEVELOPER_EMAILS = ['webhub2811@gmail.com', 'olivepizzarjn@gmail.com'];
-  const emailOk = user?.email && AUTHORIZED_DEVELOPER_EMAILS.includes(user.email.toLowerCase());
+  const isDevUser = user?.email?.toLowerCase() === 'webhub2811@gmail.com' || role === 'developer';
 
-  if (!isAuthenticated || !emailOk) {
+  if (!isAuthenticated || !isDevUser) {
     if (isAuthenticated && user) {
       logSecurityEvent({
         action: 'unauthorized_developer_access_attempt',
         route: location.pathname,
         uid: user?.uid,
         email: user?.email,
+        role: role || undefined
       });
-      toast.error('Developer access restricted to authorized administrator accounts');
+      toast.error('Developer dashboard is restricted. Access denied.');
     }
-    return <Navigate to="/" replace />;
+    return <Navigate to="/owner/dashboard" replace />;
   }
 
   return <Outlet />;

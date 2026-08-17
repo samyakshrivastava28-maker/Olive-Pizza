@@ -41,6 +41,14 @@ router.get('/pdf/:id', async (req: AuthRequest, res: Response) => {
       cloudflarePath = data.cloudflarePath || cloudflarePath;
       monthName = data.month || monthName;
       yearNum = data.year || yearNum;
+    } else {
+      const weeklySnap = await adminDb.collection('reports').doc(id).get();
+      if (weeklySnap.exists) {
+        const data = weeklySnap.data()!;
+        cloudflarePath = data.cloudflarePath || `reports/${data.year}/OlivePizza_Weekly_Report_${data.year}_W${data.weekNumber}.pdf`;
+        monthName = data.weekLabel || 'Weekly';
+        yearNum = data.year || yearNum;
+      }
     }
 
     // 2. Fetch Buffer
@@ -112,18 +120,9 @@ router.post('/google-sheet/sync', verifyToken, requireOwnerOrAdmin, async (_req:
 
     for (const doc of ordersSnap.docs) {
       const o = doc.data();
-      await GoogleSheetsReportService.appendOrderToMonthlySheet({
-        orderId: doc.id,
-        customerName: o.customerName || o.deliveryAddress?.name || 'Guest',
-        customerPhone: o.contactPhone || o.deliveryAddress?.phone || 'N/A',
-        totalAmount: o.totalAmount || 0,
-        paymentMethod: o.paymentMethod || 'UPI',
-        orderType: o.orderType || 'delivery',
-        status: o.status || 'delivered',
-        itemCount: (o.items || []).length || 1,
-        couponCode: o.couponCode,
-        deliveryTimeMins: 25,
-        timestamp: o.createdAt || new Date().toISOString(),
+      await GoogleSheetsReportService.syncOrderToMonthlySheet({
+        id: doc.id,
+        ...o
       });
       syncedCount++;
     }

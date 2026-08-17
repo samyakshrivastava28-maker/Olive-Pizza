@@ -159,12 +159,12 @@ export default function FlagshipFooter() {
           </div>
         </div>
 
-        {/* Bottom Copyright & 28Web Hub Credit */}
-        <div className="pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs font-medium text-slate-400 text-center sm:text-left">
+        {/* Bottom Copyright & S-Web Hub Credit */}
+        <div className="pt-6 border-t border-white/10 flex flex-col items-center justify-center gap-3 text-xs font-medium text-slate-400 text-center">
           <p>© {new Date().getFullYear()} Olive Pizza. All rights reserved. Premium Wood-Fired Dining Experience.</p>
           
           {/* Developed & Maintained by S-Web Hub Credit */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center justify-center gap-2">
             <span>Developed & Maintained by</span>
             <a
               href="https://28webhub.netlify.app"

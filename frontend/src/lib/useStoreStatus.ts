@@ -9,6 +9,10 @@ interface StoreStatus {
   isLoading: boolean;
   isWithinBusinessHours: boolean;
   deliveryRadiusKm: number;
+  openingHour?: number;
+  closingHour?: number;
+  openingTime?: string;
+  closingTime?: string;
 }
 
 export function useStoreStatus(): StoreStatus {

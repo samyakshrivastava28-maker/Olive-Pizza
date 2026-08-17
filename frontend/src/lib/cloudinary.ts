@@ -16,8 +16,13 @@ export const uploadMediaToCloudinary = async (
         }
       });
       
-      if (!res.ok) throw new Error('Failed to get upload signature');
-      const { timestamp, signature, cloudName, apiKey } = await res.json();
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `Failed to get upload signature (HTTP ${res.status})`);
+      }
+      const { timestamp, signature, cloudName, apiKey, folder: signedFolder } = await res.json();
+
+      const targetFolder = signedFolder || folder;
 
       // 2. Upload via XMLHttpRequest to get progress
       const formData = new FormData();
@@ -25,7 +30,7 @@ export const uploadMediaToCloudinary = async (
       formData.append('api_key', apiKey);
       formData.append('timestamp', timestamp.toString());
       formData.append('signature', signature);
-      formData.append('folder', folder);
+      formData.append('folder', targetFolder);
 
       const xhr = new XMLHttpRequest();
       xhr.timeout = 60000; // 60s timeout
@@ -57,7 +62,14 @@ export const uploadMediaToCloudinary = async (
             reject(new Error('Invalid response from Cloudinary'));
           }
         } else {
-          reject(new Error(`Upload failed with HTTP ${xhr.status}`));
+          let errorMsg = `Upload failed with HTTP ${xhr.status}`;
+          try {
+            const errRes = JSON.parse(xhr.responseText);
+            if (errRes.error && errRes.error.message) {
+              errorMsg = errRes.error.message;
+            }
+          } catch {}
+          reject(new Error(errorMsg));
         }
       };
 

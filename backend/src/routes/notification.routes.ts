@@ -651,6 +651,19 @@ router.post('/action', verifyToken, async (req: AuthRequest, res: Response): Pro
         await db.collection('orders').doc(orderId).update(firestoreUpdates);
         trace.steps.push({ step: 'Firestore Write', status: 'success', newStatus, ms: Date.now() - startTime });
         console.log(`[Action][${requestId}] ✅ Firestore write SUCCESS. orderId=${orderId} newStatus=${newStatus} ms=${Date.now() - startTime}`);
+
+        // Automatically free delivery partner back to online/available status
+        if (['delivered', 'cancelled', 'rejected'].includes(newStatus)) {
+          const partnerId = orderData.deliveryPartnerId || orderData.delivery_partner_id || (userRole === 'delivery' || userRole === 'delivery_partner' ? userId : null);
+          if (partnerId) {
+            db.collection('users').doc(partnerId).update({
+              deliveryStatus: 'online',
+              status: 'online',
+              assignedOrderId: null,
+              activeOrderId: null,
+            }).catch(e => console.warn(`[Action] Partner status reset warning: ${e.message}`));
+          }
+        }
       } catch (firestoreErr: any) {
         console.error(`[Action][${requestId}] ❌ Firestore write FAILED:`, firestoreErr.message);
         trace.steps.push({ step: 'Firestore Write', status: 'failed', error: firestoreErr.message });

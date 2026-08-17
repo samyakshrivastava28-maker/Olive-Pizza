@@ -31,7 +31,7 @@ export class GoogleSheetsReportService {
   private static getSheetsClient() {
     if (this.sheetsClient) return this.sheetsClient;
 
-    const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_BASE64;
+    const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_BASE64 || process.env.GOOGLE_SERVICE_ACCOUNT_BASE64;
     let authClient: any;
 
     if (serviceAccountJson) {
@@ -45,6 +45,12 @@ export class GoogleSheetsReportService {
       } catch (err: any) {
         console.warn('[GoogleSheetsReport] Base64 service account parse warning:', err.message);
       }
+    } else if (process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY) {
+      authClient = new google.auth.JWT({
+        email: process.env.FIREBASE_CLIENT_EMAIL,
+        key: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+        scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+      });
     }
 
     if (!authClient) {
@@ -135,9 +141,9 @@ export class GoogleSheetsReportService {
       [`Month: ${sheetTitle}`, `Generated: ${new Date().toLocaleString()}`, '', '', '', '', '', '', '', '', '', ''],
       [''],
       ['SUMMARY METRICS', 'VALUE'],
-      ['Total Revenue (₹)', '=SUM(G8:G1000)'],
-      ['Total Completed Orders', '=COUNTIF(H8:H1000, "delivered")'],
-      ['Average Order Value (₹)', '=AVERAGE(G8:G1000)'],
+      ['Total Revenue (₹)', '=SUM(G10:G5000)'],
+      ['Total Completed Orders', '=COUNTIF(H10:H5000, "delivered")'],
+      ['Average Order Value (₹)', '=AVERAGE(G10:G5000)'],
       [''],
       ['ORDER ID', 'CUSTOMER NAME', 'PHONE', 'ORDER TYPE', 'PAYMENT METHOD', 'ITEMS', 'TOTAL AMOUNT (₹)', 'STATUS', 'COUPON', 'DELIVERY TIME (MINS)', 'TIMESTAMP']
     ];
@@ -155,45 +161,204 @@ export class GoogleSheetsReportService {
   }
 
   /**
-   * Appends a completed order incrementally to the monthly Google Sheet.
+   * Syncs a live order (creates or updates) to the monthly Google Sheet.
+   */
+  static async syncOrderToMonthlySheet(orderData: any): Promise<void> {
+    try {
+      const spreadsheetId = await this.getSpreadsheetId();
+      if (!spreadsheetId) {
+        return;
+      }
+
+      const orderId = orderData.id || orderData.orderId || '';
+      if (!orderId) return;
+
+      const orderDate = orderData.createdAt 
+        ? (typeof orderData.createdAt?.toDate === 'function' 
+            ? orderData.createdAt.toDate() 
+            : new Date(orderData.createdAt?._seconds ? orderData.createdAt._seconds * 1000 : orderData.createdAt))
+        : new Date();
+
+      const validDate = isNaN(orderDate.getTime()) ? new Date() : orderDate;
+      const sheetTitle = this.getMonthSheetTitle(validDate);
+      await this.ensureMonthlySheetExists(spreadsheetId, sheetTitle);
+
+      const shortId = orderId.slice(-6).toUpperCase();
+      const orderNumber = orderData.dailyOrderNumber 
+        ? `#${orderData.dailyOrderNumber}` 
+        : (orderData.daily_order_number || `OP-${shortId}`);
+
+      const customerName = orderData.customerName || orderData.customer_name || orderData.deliveryAddress?.name || 'Customer';
+      const customerPhone = orderData.contactPhone || orderData.phone || orderData.customerPhone || orderData.deliveryAddress?.phone || 'N/A';
+      const orderType = orderData.orderType || orderData.type || 'delivery';
+      const paymentMethod = orderData.paymentMethod || orderData.payment_method || 'COD';
+      const itemsListStr = Array.isArray(orderData.items) 
+        ? orderData.items.map((i: any) => typeof i === 'string' ? i : `${i.quantity || 1}x ${i.name || i.productName || 'Item'}`).join(', ')
+        : '1x Item';
+      const totalAmount = Number(orderData.totalAmount || orderData.total_amount || 0);
+      const status = (orderData.status || 'pending').toLowerCase();
+      const couponCode = orderData.couponCode || orderData.coupon || 'NONE';
+      const deliveryTimeMins = orderData.deliveryTimeMins || orderData.estimatedDeliveryTime || 25;
+      const timestampStr = validDate.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+
+      const row = [
+        orderNumber,
+        customerName,
+        customerPhone,
+        orderType,
+        paymentMethod,
+        itemsListStr,
+        totalAmount,
+        status,
+        couponCode,
+        deliveryTimeMins,
+        timestampStr,
+      ];
+
+      const sheets = this.getSheetsClient();
+
+      // Read existing order IDs from Column A
+      const existingRowsRes = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: `'${sheetTitle}'!A10:A5000`,
+      });
+
+      const existingOrderIds = existingRowsRes.data.values || [];
+      const rowIndex = existingOrderIds.findIndex((r: any[]) => r && (r[0] === orderNumber || r[0] === orderId || r[0] === `OP-${shortId}`));
+
+      if (rowIndex !== -1) {
+        const targetRow = 10 + rowIndex;
+        await sheets.spreadsheets.values.update({
+          spreadsheetId,
+          range: `'${sheetTitle}'!A${targetRow}:K${targetRow}`,
+          valueInputOption: 'USER_ENTERED',
+          requestBody: { values: [row] },
+        });
+        console.log(`[GoogleSheetsReport] ✅ Updated live order ${orderNumber} in Google Sheet "${sheetTitle}" at row ${targetRow}`);
+      } else {
+        await sheets.spreadsheets.values.append({
+          spreadsheetId,
+          range: `'${sheetTitle}'!A10:K10`,
+          valueInputOption: 'USER_ENTERED',
+          insertDataOption: 'INSERT_ROWS',
+          requestBody: { values: [row] },
+        });
+        console.log(`[GoogleSheetsReport] ✅ Appended live order ${orderNumber} to Google Sheet "${sheetTitle}"`);
+      }
+    } catch (err: any) {
+      console.error(`[GoogleSheetsReport] Error syncing live order to Google Sheet:`, err.message);
+    }
+  }
+
+  /**
+   * Appends a completed order incrementally to the monthly Google Sheet (Backwards compatibility).
    */
   static async appendOrderToMonthlySheet(order: OrderRowData): Promise<void> {
+    return this.syncOrderToMonthlySheet(order);
+  }
+
+  /**
+   * Ensures 'Weekly Reports' sheet exists with structured header.
+   */
+  static async ensureWeeklySheetExists(spreadsheetId: string, sheetTitle: string = 'Weekly Reports'): Promise<void> {
+    const sheets = this.getSheetsClient();
+
+    try {
+      const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId });
+      const sheetExists = (spreadsheet.data.sheets || []).some(
+        (s: any) => s.properties?.title === sheetTitle
+      );
+
+      if (!sheetExists) {
+        console.log(`[GoogleSheetsReport] Creating weekly reports sheet "${sheetTitle}"...`);
+
+        await sheets.spreadsheets.batchUpdate({
+          spreadsheetId,
+          requestBody: {
+            requests: [
+              {
+                addSheet: {
+                  properties: {
+                    title: sheetTitle,
+                    gridProperties: { rowCount: 500, columnCount: 15 },
+                  },
+                },
+              },
+            ],
+          },
+        });
+
+        const headers = [
+          ['OLIVE PIZZA — WEEKLY BUSINESS INTELLIGENCE REPORTS', '', '', '', '', '', '', '', '', '', '', '', '', '', ''],
+          [`Initialized: ${new Date().toLocaleString()}`, '', '', '', '', '', '', '', '', '', '', '', '', '', ''],
+          [''],
+          [
+            'WEEK DOC ID', 'WEEK LABEL', 'DATE RANGE', 'TOTAL ORDERS', 'COMPLETED',
+            'CANCELLED', 'TOTAL REVENUE (₹)', 'NET REVENUE (₹)', 'AVG ORDER VALUE (₹)',
+            'NEW CUSTOMERS', 'RETURNING CUSTOMERS', 'AVG RATING', 'TOP SELLER',
+            'AI INSIGHTS SUMMARY', 'GENERATED AT'
+          ]
+        ];
+
+        await sheets.spreadsheets.values.update({
+          spreadsheetId,
+          range: `'${sheetTitle}'!A1:O4`,
+          valueInputOption: 'USER_ENTERED',
+          requestBody: { values: headers },
+        });
+      }
+    } catch (err: any) {
+      console.warn(`[GoogleSheetsReport] ensureWeeklySheetExists notice:`, err.message);
+    }
+  }
+
+  /**
+   * Appends weekly business intelligence report summary to Google Sheet.
+   */
+  static async appendWeeklyReportSummary(weekInfo: any, metrics: any): Promise<void> {
     const spreadsheetId = await this.getSpreadsheetId();
     if (!spreadsheetId) {
-      console.log('[GoogleSheetsReport] Spreadsheet ID not configured. Skipping live sheet append.');
+      console.log('[GoogleSheetsReport] Spreadsheet ID not configured. Skipping weekly sheet append.');
       return;
     }
 
-    const sheetTitle = this.getMonthSheetTitle(new Date(order.timestamp));
-    await this.ensureMonthlySheetExists(spreadsheetId, sheetTitle);
+    const sheetTitle = 'Weekly Reports';
+    await this.ensureWeeklySheetExists(spreadsheetId, sheetTitle);
+
+    const topSelling = (metrics.bestSellingItems || []).map((p: any) => p.name || p).slice(0, 3).join(', ') || 'N/A';
+    const aiSummary = metrics.aiInsights?.recommendations?.[0] || 'Weekly report compiled successfully.';
 
     const row = [
-      order.orderId,
-      order.customerName || 'Guest Customer',
-      order.customerPhone || 'N/A',
-      order.orderType || 'delivery',
-      order.paymentMethod || 'UPI',
-      order.itemCount || 1,
-      order.totalAmount || 0,
-      order.status || 'delivered',
-      order.couponCode || 'NONE',
-      order.deliveryTimeMins || 25,
-      new Date(order.timestamp).toLocaleString(),
+      weekInfo.docId,
+      weekInfo.weekLabel,
+      weekInfo.dateRange,
+      metrics.totalOrders || 0,
+      metrics.completedOrders || 0,
+      metrics.cancelledOrders || 0,
+      metrics.totalRevenue || 0,
+      metrics.netRevenue || 0,
+      Math.round(metrics.averageOrderValue || 0),
+      metrics.newCustomers || 0,
+      metrics.returningCustomers || 0,
+      Number(metrics.averageRating || 5).toFixed(1),
+      topSelling,
+      aiSummary,
+      new Date().toLocaleString(),
     ];
 
     try {
       const sheets = this.getSheetsClient();
       await sheets.spreadsheets.values.append({
         spreadsheetId,
-        range: `'${sheetTitle}'!A10:K10`,
+        range: `'${sheetTitle}'!A5:O5`,
         valueInputOption: 'USER_ENTERED',
         insertDataOption: 'INSERT_ROWS',
         requestBody: { values: [row] },
       });
 
-      console.log(`[GoogleSheetsReport] Live row appended to "${sheetTitle}" for order #${order.orderId}`);
+      console.log(`[GoogleSheetsReport] Weekly report summary appended to "${sheetTitle}" for ${weekInfo.docId}`);
     } catch (err: any) {
-      console.error(`[GoogleSheetsReport] Error appending order #${order.orderId}:`, err.message);
+      console.error(`[GoogleSheetsReport] Error appending weekly report summary:`, err.message);
     }
   }
 

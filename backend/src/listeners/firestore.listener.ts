@@ -93,7 +93,8 @@ export class FirestoreListener {
             // ALWAYS set status cache for state tracking, even for historical orders
             this.orderStatusCache.set(orderData.id, orderData.status);
 
-            // Skip trigger push alarms for orders older than 10 min (server restart replay protection)
+            // Skip trigger push alarms for terminal or old orders (server restart replay protection)
+            if (['delivered', 'cancelled', 'completed', 'rejected', 'failed'].includes((orderData.status || '').toLowerCase())) continue;
             if (Date.now() - createdAt.getTime() > 10 * 60 * 1000) continue;
             
             // Prevent duplicate triggers if we already processed this order creation
@@ -154,6 +155,13 @@ export class FirestoreListener {
 
             // 2. EMAIL TO CUSTOMER & OWNER
             this.sendOrderEmail(orderData, 'pending');
+
+            // 3. SYNC LIVE ORDER TO GOOGLE SHEETS
+            import('../services/reports/GoogleSheetsReportService.js').then(({ GoogleSheetsReportService }) => {
+              GoogleSheetsReportService.syncOrderToMonthlySheet(orderData).catch(err => {
+                console.warn('[FirestoreListener] Google Sheet sync warning:', err.message);
+              });
+            }).catch(() => {});
 
             // 4. Emit AppEventBus domain event for WebSocket live updates
             appEventBus.emitTyped('order.created', {
@@ -251,6 +259,13 @@ export class FirestoreListener {
 
             // 2. EMAIL FALLBACK / TRANSACTIONAL EMAILS
             this.sendOrderEmail(orderData, currentStatus);
+
+            // 3. SYNC ORDER STATUS UPDATE TO GOOGLE SHEETS
+            import('../services/reports/GoogleSheetsReportService.js').then(({ GoogleSheetsReportService }) => {
+              GoogleSheetsReportService.syncOrderToMonthlySheet(orderData).catch(err => {
+                console.warn('[FirestoreListener] Google Sheet status sync warning:', err.message);
+              });
+            }).catch(() => {});
 
             // 4. Emit AppEventBus domain event for WebSocket live updates
             appEventBus.emitTyped('order.status_changed', {

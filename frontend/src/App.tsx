@@ -363,10 +363,9 @@ function AppContent() {
                   <Route path="logs" element={<DeveloperLogsPage />} />
                   <Route path="setup" element={<DeveloperSetupPage />} />
                   <Route path="devops" element={<Navigate to="/developer" replace />} />
-                  <Route path="*" element={<Navigate to="/developer" replace />} />
                 </Route>
-                <Route path="/owner/developer" element={<Navigate to="/developer" replace />} />
-                <Route path="/owner/developer/*" element={<Navigate to="/developer" replace />} />
+                <Route path="/owner/developer" element={<Navigate to="/owner/dashboard" replace />} />
+                <Route path="/owner/developer/*" element={<Navigate to="/owner/dashboard" replace />} />
               </Route>
 
               {/* Delivery Routes */}

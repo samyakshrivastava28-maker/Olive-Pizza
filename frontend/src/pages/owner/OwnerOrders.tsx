@@ -46,13 +46,29 @@ export default function OwnerOrders() {
           // Check for new orders and status changes
           snapshot.docChanges().forEach((change) => {
             const order = { id: change.doc.id, ...change.doc.data() } as Order;
+            const currentStatus = (order.status || '').toLowerCase();
+            const isTerminal = ['delivered', 'cancelled', 'completed', 'rejected', 'failed'].includes(currentStatus);
+
             if (change.type === 'added') {
-              // LOUD ALARM ON NEW ORDER ADDED
-              playNotificationSound('new_order');
-              toast.success(`🍕 New Order Received! ${order.dailyOrderNumber ? '#' + order.dailyOrderNumber : ''}`, { duration: 6000 });
+              // ONLY alarm for genuine incoming new active orders (never delivered/cancelled)
+              const isPending = ['pending', 'placed', 'created', 'new_order', 'pending_acceptance'].includes(currentStatus);
+              let isRecent = true;
+              if (order.createdAt) {
+                const cTime = typeof (order.createdAt as any)?.toDate === 'function'
+                  ? (order.createdAt as any).toDate().getTime()
+                  : new Date(order.createdAt as any).getTime();
+                if (!isNaN(cTime) && Date.now() - cTime > 5 * 60 * 1000) {
+                  isRecent = false;
+                }
+              }
+
+              if (isPending && isRecent) {
+                playNotificationSound('new_order');
+                toast.success(`🍕 New Order Received! ${order.dailyOrderNumber ? '#' + order.dailyOrderNumber : ''}`, { duration: 6000 });
+              }
             } else if (change.type === 'modified') {
-              const prevStatus = prevStatusMap.get(order.id!);
-              if (prevStatus && prevStatus !== order.status) {
+              const prevStatus = (prevStatusMap.get(order.id!) || '').toLowerCase();
+              if (prevStatus && prevStatus !== currentStatus && !isTerminal) {
                 const soundType = statusToSoundType(order.status || '');
                 if (soundType) playNotificationSound(soundType);
               }
@@ -82,7 +98,7 @@ export default function OwnerOrders() {
   useEffect(() => {
     const q = query(
       collection(db, "users"),
-      where("role", "==", "delivery_partner"),
+      where("role", "in", ["delivery_partner", "delivery"]),
     );
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setPartners(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));

@@ -47,8 +47,20 @@ export default function OwnerLayout() {
       snapshot.docChanges().forEach((change) => {
         if (change.type === 'added') {
           const newOrderData = { id: change.doc.id, ...change.doc.data() } as any;
-          if (['pending', 'placed', 'created', 'new_order'].includes(newOrderData.status)) {
-            setEmergencyOrder(newOrderData);
+          const status = (newOrderData.status || '').toLowerCase();
+          if (['pending', 'placed', 'created', 'new_order'].includes(status)) {
+            let isRecent = true;
+            if (newOrderData.createdAt) {
+              const cTime = typeof newOrderData.createdAt?.toDate === 'function'
+                ? newOrderData.createdAt.toDate().getTime()
+                : new Date(newOrderData.createdAt).getTime();
+              if (!isNaN(cTime) && Date.now() - cTime > 5 * 60 * 1000) {
+                isRecent = false;
+              }
+            }
+            if (isRecent) {
+              setEmergencyOrder(newOrderData);
+            }
           }
         }
       });
@@ -77,7 +89,6 @@ export default function OwnerLayout() {
     { name: 'AI Monitor', path: '/owner/ai-monitor', icon: '🤖' },
     { name: 'Notification Diagnostics', path: '/owner/notification-diagnostics', icon: '📡' },
     { name: 'Verification Diagnostics', path: '/owner/verification-metrics', icon: '🛡️' },
-    ...(['webhub2811@gmail.com', 'olivepizzarjn@gmail.com'].includes(user?.email?.toLowerCase() || '') ? [{ name: 'Developer Ops Center', path: '/developer', icon: '💻' }] : []),
     { name: 'Settings', path: '/owner/settings', icon: '⚙️' },
   ];
 
@@ -175,21 +186,6 @@ export default function OwnerLayout() {
           </div>
 
           <div className="flex items-center gap-4">
-            {/* 3-Lines Developer Dashboard Button (strictly for webhub2811@gmail.com) */}
-            {user?.email?.toLowerCase() === 'webhub2811@gmail.com' && (
-              <Link
-                to="/owner/developer"
-                title="Developer Operations & Control Center"
-                className="p-2.5 rounded-xl bg-primary-500/20 border border-primary-500/50 text-primary-400 hover:bg-primary-500/30 hover:text-white transition-all duration-200 flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(249,115,22,0.25)]"
-              >
-                <div className="flex flex-col gap-[3px] w-4 justify-center items-center">
-                  <span className="w-full h-[2px] bg-current rounded-full" />
-                  <span className="w-full h-[2px] bg-current rounded-full" />
-                  <span className="w-full h-[2px] bg-current rounded-full" />
-                </div>
-                <span className="text-xs font-bold hidden md:inline">Dev Ops</span>
-              </Link>
-            )}
 
             <div className="flex items-center gap-3 border-l border-white/10 pl-4">
               <div className="text-right hidden sm:block">

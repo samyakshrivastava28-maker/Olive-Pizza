@@ -1,10 +1,12 @@
 import { create } from 'zustand';
 import { db } from '../lib/firebase';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, orderBy, limit, onSnapshot } from 'firebase/firestore';
 
 interface MetricsState {
   todayRevenue: number;
   todayOrders: number;
+  monthRevenue: number;
+  monthOrders: number;
   pending: number;
   preparing: number;
   outForDelivery: number;
@@ -22,9 +24,20 @@ interface MetricsState {
 let unsubOrders: (() => void) | null = null;
 let unsubPartners: (() => void) | null = null;
 
+const getTimestampMillis = (val: any): number => {
+  if (!val) return 0;
+  if (typeof val?.toMillis === 'function') return val.toMillis();
+  if (typeof val?.toDate === 'function') return val.toDate().getTime();
+  if (typeof val?.seconds === 'number') return val.seconds * 1000;
+  const parsed = new Date(val).getTime();
+  return isNaN(parsed) ? 0 : parsed;
+};
+
 export const useLiveMetricsStore = create<MetricsState>((set, get) => ({
   todayRevenue: 0,
   todayOrders: 0,
+  monthRevenue: 0,
+  monthOrders: 0,
   pending: 0,
   preparing: 0,
   outForDelivery: 0,
@@ -32,40 +45,69 @@ export const useLiveMetricsStore = create<MetricsState>((set, get) => ({
   cancelled: 0,
   activeCustomers: 0,
   partnersOnline: 0,
-  ownersOnline: 0,
+  ownersOnline: 1,
   error: null,
   isInitialized: false,
 
   init: () => {
     if (get().isInitialized) return; // Prevent duplicate listeners
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
     const ordersRef = collection(db, "orders");
-    const qToday = query(ordersRef, where("createdAt", ">=", today.toISOString()));
+    const qRecent = query(ordersRef, orderBy("createdAt", "desc"), limit(300));
 
     try {
-      unsubOrders = onSnapshot(qToday, (snapshot) => {
-        let revenue = 0, count = 0, pending = 0, preparing = 0, outForDelivery = 0, completed = 0, cancelled = 0;
+      unsubOrders = onSnapshot(qRecent, (snapshot) => {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const startOfTodayMs = today.getTime();
+
+        const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1, 0, 0, 0, 0);
+        const startOfMonthMs = firstOfMonth.getTime();
+
+        let todayRevenue = 0, todayOrders = 0;
+        let monthRevenue = 0, monthOrders = 0;
+        let pending = 0, preparing = 0, outForDelivery = 0, completed = 0, cancelled = 0;
+
         snapshot.docs.forEach(doc => {
           const data = doc.data();
-          const status = data.status || '';
-          
-          if (status !== 'cancelled' && status !== 'payment_failed' && status !== 'failed') {
-            count++;
-            revenue += data.totalAmount || 0;
+          const status = (data.status || '').toLowerCase();
+          const amount = Number(data.totalAmount || data.total_amount || 0);
+          const orderTimeMs = getTimestampMillis(data.createdAt);
+
+          const isTerminalFailed = ['cancelled', 'payment_failed', 'failed', 'rejected'].includes(status);
+
+          // Today Metrics
+          if (orderTimeMs >= startOfTodayMs) {
+            if (!isTerminalFailed) {
+              todayOrders++;
+              todayRevenue += amount;
+            }
+
+            if (['pending', 'placed', 'created', 'new_order', 'pending_acceptance', 'paid', 'payment_success'].includes(status)) {
+              pending++;
+            } else if (['preparing', 'accepted', 'cooking'].includes(status)) {
+              preparing++;
+            } else if (['out_for_delivery', 'picked_up', 'partner_assigned', 'ready'].includes(status)) {
+              outForDelivery++;
+            } else if (['delivered', 'completed'].includes(status)) {
+              completed++;
+            } else if (['cancelled', 'rejected', 'failed'].includes(status)) {
+              cancelled++;
+            }
           }
 
-          if (status === 'pending') pending++;
-          else if (status === 'preparing') preparing++;
-          else if (status === 'out_for_delivery') outForDelivery++;
-          else if (status === 'delivered' || status === 'completed') completed++;
-          else if (status === 'cancelled') cancelled++;
+          // Month Metrics
+          if (orderTimeMs >= startOfMonthMs && !isTerminalFailed) {
+            monthOrders++;
+            monthRevenue += amount;
+          }
         });
+
         set({ 
-          todayRevenue: revenue, 
-          todayOrders: count, 
+          todayRevenue, 
+          todayOrders, 
+          monthRevenue,
+          monthOrders,
           pending, 
           preparing, 
           outForDelivery, 
@@ -83,8 +125,18 @@ export const useLiveMetricsStore = create<MetricsState>((set, get) => ({
 
     try {
       unsubPartners = onSnapshot(
-        query(collection(db, "users"), where("role", "==", "delivery_partner")),
-        (snapshot) => { set({ partnersOnline: snapshot.docs.length, ownersOnline: 1 }); },
+        query(collection(db, "users"), where("role", "in", ["delivery_partner", "delivery"])),
+        (snapshot) => {
+          let onlineCount = 0;
+          snapshot.docs.forEach(d => {
+            const u = d.data();
+            const status = (u.deliveryStatus || u.status || '').toLowerCase();
+            if (status === 'online' || status === 'on_delivery' || status === 'busy' || u.isOnline) {
+              onlineCount++;
+            }
+          });
+          set({ partnersOnline: onlineCount, ownersOnline: 1 });
+        },
         (error) => { console.warn('[useLiveMetrics] Partners error:', error.code); }
       );
     } catch (e: any) {

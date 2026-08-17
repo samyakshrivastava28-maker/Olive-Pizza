@@ -17,10 +17,10 @@ import { useDataStore } from './dataStore';
 
 interface AuthState {
   user: any | null;
-  role: 'customer' | 'owner' | 'delivery_partner' | 'admin' | null;
+  role: 'customer' | 'owner' | 'delivery_partner' | 'delivery' | 'admin' | 'developer' | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  setUser: (user: any, role: 'customer' | 'owner' | 'delivery_partner' | 'admin') => void;
+  setUser: (user: any, role: 'customer' | 'owner' | 'delivery_partner' | 'delivery' | 'admin' | 'developer') => void;
   logout: () => void;
   setLoading: (loading: boolean) => void;
 }

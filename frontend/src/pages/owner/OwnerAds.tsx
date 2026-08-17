@@ -16,6 +16,8 @@ import { getCurrentAuthToken } from "../../lib/firebase";
 import { logActivity } from "../../lib/logger";
 import { getScheduleStatus, getItemExpiryDate, getItemStartDate } from "../../lib/scheduling";
 
+import toast from "react-hot-toast";
+
 export default function OwnerAds() {
   const { user } = useAuthStore();
   const [ads, setAds] = useState<any[]>([]);
@@ -78,7 +80,7 @@ export default function OwnerAds() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedFile) {
-      alert("Please select a media file for the ad.");
+      toast.error("Please select a media file for the ad.");
       return;
     }
     try {
@@ -87,6 +89,7 @@ export default function OwnerAds() {
       await addDoc(collection(db, "ads"), {
         ...newAd,
         mediaUrl: result.secureUrl,
+        imageUrl: result.secureUrl,
         cloudinaryPublicId: result.publicId,
         mediaType: result.type,
         createdAt: new Date().toISOString(),
@@ -99,6 +102,7 @@ export default function OwnerAds() {
         user?.email || undefined,
       );
 
+      toast.success("Ad published to home page successfully!");
       setIsAdding(false);
       setNewAd({
         title: "",
@@ -108,8 +112,9 @@ export default function OwnerAds() {
         isActive: true,
       });
       setSelectedFile(null);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error creating ad", error);
+      toast.error(error.message || "Failed to create ad");
     }
   };
 
@@ -121,8 +126,10 @@ export default function OwnerAds() {
         `Ad status changed to ${!currentStatus ? "Active" : "Inactive"}`,
         user?.email || undefined,
       );
-    } catch (error) {
+      toast.success(`Ad is now ${!currentStatus ? "Live" : "Inactive"}`);
+    } catch (error: any) {
       console.error("Error toggling ad status", error);
+      toast.error("Failed to update ad status");
     }
   };
 
@@ -147,8 +154,10 @@ export default function OwnerAds() {
         `Deleted ad: ${ad.title}`,
         user?.email || undefined,
       );
-    } catch (error) {
+      toast.success("Ad deleted successfully");
+    } catch (error: any) {
       console.error("Error deleting ad", error);
+      toast.error("Failed to delete ad");
     }
   };
 

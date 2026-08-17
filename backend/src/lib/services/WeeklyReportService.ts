@@ -10,7 +10,7 @@ export interface WeeklyReportResult {
   weekLabel: string;
   dateRange: string;
   pdfUrl: string;
-  driveFileId: string;
+  cloudflarePath?: string;
   generatedAt: string;
   totalOrders: number;
   revenue: number;
@@ -96,20 +96,30 @@ export class WeeklyReportService {
     console.log(`[WeeklyReportService] PDF buffer rendered (${pdfBuffer.length} bytes).`);
 
     // 3. Upload PDF to Cloudflare R2 (reports/{Year}/OlivePizza_Weekly_Report_...)
-    let driveLink = '';
-    let driveFileId = '';
+    let reportUrl = '';
+    let cloudflarePath = `reports/${weekInfo.year}/OlivePizza_Weekly_Report_${weekInfo.year}_W${weekInfo.formattedWeekNum}.pdf`;
     const fileName = `OlivePizza_Weekly_Report_${weekInfo.year}_W${weekInfo.formattedWeekNum}.pdf`;
 
     try {
       const { CloudflareReportService } = await import('../../services/reports/CloudflareReportService.js');
       const r2Result = await CloudflareReportService.uploadPdfReport(weekInfo.year, `W${weekInfo.formattedWeekNum}`, pdfBuffer);
-      driveLink = r2Result.publicUrl || '';
-      console.log(`[WeeklyReportService] Uploaded to Cloudflare R2: ${r2Result.cloudflarePath}`);
+      cloudflarePath = r2Result.cloudflarePath || cloudflarePath;
+      reportUrl = r2Result.publicUrl || `/api/reports/pdf/${weekInfo.docId}`;
+      console.log(`[WeeklyReportService] Uploaded to Cloudflare R2: ${cloudflarePath}`);
     } catch (r2Err: any) {
       console.warn('[WeeklyReportService] Cloudflare R2 upload notice:', r2Err.message);
+      reportUrl = `/api/reports/pdf/${weekInfo.docId}`;
     }
 
-    // 4. Store Metadata in Firestore Collection `reports` (document ID e.g. 2026-W29)
+    // 4. Live Sync to Google Sheets
+    try {
+      const { GoogleSheetsReportService } = await import('../../services/reports/GoogleSheetsReportService.js');
+      await GoogleSheetsReportService.appendWeeklyReportSummary(weekInfo, metrics);
+    } catch (sheetErr: any) {
+      console.warn('[WeeklyReportService] Google Sheets weekly sync notice:', sheetErr.message);
+    }
+
+    // 5. Store Metadata in Firestore Collection `reports` (document ID e.g. 2026-W33)
     const generatedAt = new Date().toISOString();
     const reportData = {
       id: weekInfo.docId,
@@ -119,8 +129,9 @@ export class WeeklyReportService {
       weekLabel: weekInfo.weekLabel,
       dateRange: weekInfo.dateRange,
       generatedAt,
-      pdfUrl: driveLink,
-      driveFileId,
+      pdfUrl: reportUrl,
+      cloudflarePath,
+      storageProvider: 'cloudflare_r2',
       reportStatus: 'completed',
       totalOrders: metrics.totalOrders,
       completedOrders: metrics.completedOrders,
@@ -143,7 +154,7 @@ export class WeeklyReportService {
     await adminDb.collection('reports').doc(weekInfo.docId).set(reportData, { merge: true });
     console.log(`[WeeklyReportService] Firestore report document updated: reports/${weekInfo.docId}`);
 
-    // 5. Email Report to Owner (olivepizzarjn@gmail.com)
+    // 6. Email Report to Owner (olivepizzarjn@gmail.com)
     const ownerEmail = process.env.OWNER_EMAIL || 'olivepizzarjn@gmail.com';
     let emailed = false;
     let emailSentAt: string | undefined = undefined;
@@ -160,7 +171,7 @@ export class WeeklyReportService {
           
           <div style="padding: 20px 0;">
             <p style="color: #334155; font-size: 15px;">Hello Owner,</p>
-            <p style="color: #334155; font-size: 14px; line-height: 1.5;">Your weekly business intelligence report for <strong>${weekInfo.weekLabel}</strong> has been generated and saved securely.</p>
+            <p style="color: #334155; font-size: 14px; line-height: 1.5;">Your weekly business intelligence report for <strong>${weekInfo.weekLabel}</strong> has been generated and saved securely in Cloudflare R2 and Google Sheets.</p>
             
             <div style="background-color: #f8fafc; border: 1px solid #cbd5e1; padding: 16px; border-radius: 8px; margin: 20px 0;">
               <h3 style="margin-top: 0; color: #0f172a;">Weekly Performance Highlights:</h3>
@@ -181,21 +192,16 @@ export class WeeklyReportService {
               <p style="color: #15803d; font-size: 13px; margin-bottom: 0;"><strong>Top Recommendation:</strong> ${metrics.aiInsights.recommendations[0] || 'Focus on peak hour promotions.'}</p>
             </div>
 
-            ${driveLink ? `
-              <div style="background-color: #eff6ff; border: 1px solid #bfdbfe; padding: 16px; border-radius: 8px; margin: 20px 0; text-align: center;">
-                <p style="color: #1e40af; font-size: 13px; font-weight: bold; margin-top: 0; margin-bottom: 10px;">📄 Direct Google Drive PDF Access:</p>
+            ${reportUrl ? `
+              <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin: 20px 0; text-align: center;">
+                <p style="color: #0f172a; font-size: 13px; font-weight: bold; margin-top: 0; margin-bottom: 10px;">☁️ Cloudflare R2 Secure PDF Report Access:</p>
                 <div style="text-align: center; margin-bottom: 8px;">
-                  <a href="${driveLink}" target="_blank" style="background-color: #f97316; color: #ffffff; text-decoration: none; padding: 11px 22px; border-radius: 6px; font-weight: bold; font-size: 14px; display: inline-block;">📄 Open PDF Report in Google Drive</a>
+                  <a href="${reportUrl}" target="_blank" style="background-color: #f97316; color: #ffffff; text-decoration: none; padding: 11px 22px; border-radius: 6px; font-weight: bold; font-size: 14px; display: inline-block;">📄 View PDF Report</a>
+                  <a href="${reportUrl}?download=true" target="_blank" style="background-color: #0f172a; color: #ffffff; text-decoration: none; padding: 11px 22px; border-radius: 6px; font-weight: bold; font-size: 14px; display: inline-block; margin-left: 8px;">⬇️ Download PDF</a>
                 </div>
-                ${driveFileId ? `
-                  <div style="text-align: center; margin-bottom: 8px;">
-                    <a href="https://drive.google.com/uc?export=download&id=${driveFileId}" target="_blank" style="background-color: #1e293b; color: #ffffff; text-decoration: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; font-size: 12px; display: inline-block;">⬇️ Direct Download PDF File</a>
-                  </div>
-                ` : ''}
-                <p style="color: #64748b; font-size: 11px; margin-bottom: 0; margin-top: 8px;">Direct Link: <a href="${driveLink}" style="color: #2563eb; text-decoration: underline;">${driveLink}</a></p>
+                <p style="color: #64748b; font-size: 11px; margin-bottom: 0; margin-top: 8px;">Storage Path: <code style="background-color: #e2e8f0; padding: 2px 6px; border-radius: 4px;">${cloudflarePath}</code></p>
               </div>
             ` : ''}
-
 
             <p style="color: #64748b; font-size: 13px;">The complete 4-page executive PDF report is attached to this email.</p>
           </div>
@@ -236,14 +242,14 @@ export class WeeklyReportService {
           const ownerPushPayload = {
             notification: {
               title: `📊 Weekly Report Ready — ${weekInfo.weekLabel}`,
-              body: `Revenue: ₹${metrics.totalRevenue.toLocaleString('en-IN')} (${metrics.totalOrders} orders). PDF backed up in Google Drive.`
+              body: `Revenue: ₹${metrics.totalRevenue.toLocaleString('en-IN')} (${metrics.totalOrders} orders). PDF backed up in Cloudflare R2.`
             },
             data: {
               url: '/owner/reports',
               category: 'system' as any,
               role: 'owner',
               docId: weekInfo.docId,
-              driveLink: driveLink || ''
+              reportUrl: reportUrl || ''
             }
           };
 
@@ -260,15 +266,14 @@ export class WeeklyReportService {
       console.error('[WeeklyReportService] Email queuing failed:', emailErr.message);
     }
 
-
     return {
       docId: weekInfo.docId,
       weekNumber: weekInfo.weekNumber,
       year: weekInfo.year,
       weekLabel: weekInfo.weekLabel,
       dateRange: weekInfo.dateRange,
-      pdfUrl: driveLink,
-      driveFileId,
+      pdfUrl: reportUrl,
+      cloudflarePath,
       generatedAt,
       totalOrders: metrics.totalOrders,
       revenue: metrics.totalRevenue,

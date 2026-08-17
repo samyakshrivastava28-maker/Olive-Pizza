@@ -3,15 +3,19 @@ import { requireAuth, requireRole } from '../middleware/auth.middleware.js';
 import cloudinary from '../config/cloudinary.js';
 
 const router = Router();
-const verifyAdminOrOwner = [requireAuth, requireRole(['owner', 'admin', 'developer'])];
+const verifyAdminOrOwner = [requireAuth, requireRole(['owner', 'admin', 'developer', 'delivery_partner', 'delivery'])];
 
 const ALLOWED_FOLDERS = [
+  'olive-pizza/ads',
   'olive-pizza/menu',
   'olive-pizza/ai-generated',
   'olive-pizza/ai-product-images',
   'olive-pizza/avatars',
   'olive-pizza/promotions',
-  'olive-pizza/media'
+  'olive-pizza/media',
+  'olive-pizza/special-categories',
+  'olive-pizza/delivery-proofs',
+  'olive-pizza/general'
 ];
 
 router.get('/test', async (req: Request, res: Response) => {
@@ -31,7 +35,14 @@ router.get('/sign-upload', verifyAdminOrOwner, (req: Request, res: Response) => 
   try {
     const timestamp = Math.round((new Date).getTime() / 1000);
     const requestedFolder = req.query.folder as string | undefined;
-    const folder = requestedFolder && ALLOWED_FOLDERS.includes(requestedFolder) ? requestedFolder : 'olive-pizza/media';
+    let folder = 'olive-pizza/media';
+
+    if (requestedFolder && typeof requestedFolder === 'string') {
+      const sanitized = requestedFolder.replace(/[^a-zA-Z0-9_\-\/]/g, '');
+      if (sanitized.startsWith('olive-pizza/') || ALLOWED_FOLDERS.includes(sanitized)) {
+        folder = sanitized;
+      }
+    }
     
     const paramsToSign: any = { timestamp, folder };
 
