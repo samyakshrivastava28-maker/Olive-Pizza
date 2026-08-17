@@ -78,10 +78,14 @@ public class OliveMessagingService extends MessagingService {
                 String stage = data.get("stage");
                 String action = data.get("action");
 
-                boolean isContinuousAlert = "continuous".equals(alert) || 
+                boolean isStaff = "owner".equalsIgnoreCase(data.get("role")) || "delivery_partner".equalsIgnoreCase(data.get("role")) || "delivery".equalsIgnoreCase(data.get("role")) ||
+                                  "owner".equalsIgnoreCase(data.get("targetRole")) || "delivery_partner".equalsIgnoreCase(data.get("targetRole")) || "delivery".equalsIgnoreCase(data.get("targetRole")) ||
+                                  "alarm_actionable".equalsIgnoreCase(category);
+
+                boolean isContinuousAlert = isStaff && ("continuous".equals(alert) || 
                                             "alarm_actionable".equals(category) || 
                                             "new_order".equals(stage) || 
-                                            "delivery_assigned".equals(stage);
+                                            "delivery_assigned".equals(stage));
 
                 if ("stop_alert".equals(action)) {
                     stopNativeAlarm(data);
@@ -170,13 +174,16 @@ public class OliveMessagingService extends MessagingService {
         String orderId = data.get("orderId");
         String soundName = data.get("sound");
 
-        boolean isOngoing = "true".equals(data.get("ongoing"));
-        String alertType = data.get("alert");
+        String role = data.get("role");
+        String targetRole = data.get("targetRole");
+        boolean isStaff = "owner".equalsIgnoreCase(role) || "delivery_partner".equalsIgnoreCase(role) || "delivery".equalsIgnoreCase(role) ||
+                          "owner".equalsIgnoreCase(targetRole) || "delivery_partner".equalsIgnoreCase(targetRole) || "delivery".equalsIgnoreCase(targetRole) ||
+                          "alarm_actionable".equalsIgnoreCase(category);
 
-        boolean isContinuous = "continuous".equals(alertType) || 
+        boolean isContinuous = isStaff && ("continuous".equals(alertType) || 
                                "alarm_actionable".equals(category) || 
                                "new_order".equals(stage) || 
-                               "delivery_assigned".equals(stage);
+                               "delivery_assigned".equals(stage));
 
         int notificationId = (orderId != null) 
             ? (isOngoing ? orderId.hashCode() : (orderId.hashCode() + 1000))
@@ -184,7 +191,7 @@ public class OliveMessagingService extends MessagingService {
 
         String channelId = data.get("channelId");
         if (channelId == null || channelId.isEmpty()) {
-            channelId = isContinuous ? "olive_order_alarm_v5" : (isOngoing ? "olive_order_status" : "olive_order_new_v5");
+            channelId = isContinuous ? MainActivity.CHANNEL_ORDER_NEW : (isOngoing ? MainActivity.CHANNEL_ORDER_STATUS : MainActivity.CHANNEL_ORDER_STATUS);
         }
 
         NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
@@ -193,13 +200,13 @@ public class OliveMessagingService extends MessagingService {
         ensureChannelExists(notificationManager, channelId, isContinuous, isOngoing, soundName);
 
         Intent intent;
-        if (isContinuous && orderId != null) {
+        if (isContinuous && isStaff && orderId != null) {
             intent = new Intent(this, AlarmActivity.class);
             intent.putExtra("orderId", orderId);
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
             try {
                 startActivity(intent);
-                Log.d(TAG, "⚡ AlarmActivity started directly from OliveMessagingService");
+                Log.d(TAG, "⚡ AlarmActivity started directly from OliveMessagingService for staff role");
             } catch (Exception e) {
                 Log.e(TAG, "Could not start AlarmActivity directly: " + e.getMessage());
             }
