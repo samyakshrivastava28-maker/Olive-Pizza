@@ -13,7 +13,7 @@ import ProcessingOverlay from '../components/checkout/ProcessingOverlay';
 import PageTransition from '../components/PageTransition';
 import LocationPicker3D from '../components/map/LocationPicker3D';
 import { fetchRoute } from '../services/navigationRouting.service';
-import { RESTAURANT_LOCATION, MAX_DELIVERY_RADIUS_KM } from '../lib/config';
+import { RESTAURANT_LOCATION, MAX_DELIVERY_RADIUS_KM, fetchApi } from '../lib/config';
 import { calculateDistance } from '../lib/utils';
 import { useDataStore } from '../lib/dataStore';
 
@@ -118,7 +118,7 @@ export default function Checkout() {
   useEffect(() => {
     const checkDeliveryCapacity = async () => {
       try {
-        const res = await fetch('/api/delivery/availability');
+        const res = await fetchApi('/api/delivery/availability');
         if (res.ok) {
           const data = await res.json();
           const availStatus = data.availabilityStatus || (data.canAcceptDeliveries ? 'AVAILABLE' : 'NO_RIDERS');

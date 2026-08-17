@@ -8,6 +8,7 @@ import toast from "react-hot-toast";
 import { useAuthStore } from "../../lib/store";
 import { TruecallerService } from "../../plugins/Truecaller";
 import TruecallerQRModal from "../../components/auth/TruecallerQRModal";
+import { fetchApi } from "../../lib/config";
 
 export default function SetupPhone() {
   const { setUser, user, role } = useAuthStore();
@@ -209,7 +210,7 @@ export default function SetupPhone() {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const res = await fetch('/api/phone/send-otp', {
+      const res = await fetchApi('/api/phone/send-otp', {
         method: 'POST',
         headers,
         body: JSON.stringify({ phoneNumber: formatted })
@@ -256,7 +257,7 @@ export default function SetupPhone() {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const res = await fetch('/api/phone/verify-otp', {
+      const res = await fetchApi('/api/phone/verify-otp', {
         method: 'POST',
         headers,
         body: JSON.stringify({

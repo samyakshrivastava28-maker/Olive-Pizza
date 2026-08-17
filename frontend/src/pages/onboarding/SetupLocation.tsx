@@ -4,6 +4,7 @@ import { doc, updateDoc } from "firebase/firestore";
 import { useNavigate } from "react-router";
 import { useAuthStore } from "../../lib/store";
 import { LocationManager } from "../../lib/permissions";
+import { fetchApi } from "../../lib/config";
 import {
   MapContainer,
   TileLayer,
@@ -137,7 +138,7 @@ export default function SetupLocation() {
 
       // Call backend route as backup
       const token = await auth.currentUser.getIdToken();
-      fetch('/api/users/location', {
+      fetchApi('/api/users/location', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

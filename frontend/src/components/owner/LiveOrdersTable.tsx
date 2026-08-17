@@ -5,6 +5,7 @@ import { logActivity } from '../../lib/logger';
 import { useAuthStore } from '../../lib/store';
 import { useNotificationDebugger } from '../../hooks/useNotificationDebugger';
 import { useNavigate } from 'react-router';
+import { fetchApi } from '../../lib/config';
 
 export default function LiveOrdersTable() {
   const [orders, setOrders] = useState<any[]>([]);
@@ -30,7 +31,7 @@ export default function LiveOrdersTable() {
       const isDebug = useNotificationDebugger.getState().isDebugMode;
       if (isDebug) useNotificationDebugger.getState().startTrace('POST /api/notifications/action', newStatus, orderId);
 
-      const res = await fetch('/api/notifications/action', {
+      const res = await fetchApi('/api/notifications/action', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

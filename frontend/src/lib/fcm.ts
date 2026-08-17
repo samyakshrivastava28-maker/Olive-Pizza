@@ -3,8 +3,7 @@ import { app } from './firebase';
 import { doc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { db } from './firebase';
 import { isCapacitorNative, getPushCompatibility } from './platform';
-
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
+import { fetchApi } from './config';
 
 /**
  * Requests push notification permission from the user.
@@ -144,7 +143,7 @@ export async function saveTokenToBackend(token: string, oldToken?: string | null
       localStorage.setItem('device_id', deviceId);
     }
 
-    await fetch(`${BACKEND_URL}/api/notifications/token`, {
+    await fetchApi('/api/notifications/token', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -178,7 +177,7 @@ export async function deregisterToken(): Promise<void> {
     if (!auth.currentUser) return;
     const authToken = await auth.currentUser.getIdToken();
 
-    await fetch(`${BACKEND_URL}/api/notifications/token/deregister`, {
+    await fetchApi('/api/notifications/token/deregister', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
       body: JSON.stringify({ token }),

@@ -6,6 +6,7 @@ import { db } from '../../lib/firebase';
 import { formatDistanceToNow } from 'date-fns';
 import toast from 'react-hot-toast';
 import AIDeepSeekAssistantChatbox from '../../components/owner/AIDeepSeekAssistantChatbox';
+import { fetchApi } from '../../lib/config';
 
 interface NotificationLog {
   id: string;
@@ -87,7 +88,7 @@ export default function OwnerNotificationCenter() {
     try {
       const { getCurrentAuthToken } = await import('../../lib/firebase');
       const token = await getCurrentAuthToken();
-      const res = await fetch('/api/notifications/send-custom', {
+      const res = await fetchApi('/api/notifications/send-custom', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ title, body, audience, targetUser, category: 'broadcast' })
@@ -111,7 +112,7 @@ export default function OwnerNotificationCenter() {
     try {
       const { getCurrentAuthToken } = await import('../../lib/firebase');
       const token = await getCurrentAuthToken();
-      const res = await fetch('/api/notifications/retry-failed', {
+      const res = await fetchApi('/api/notifications/retry-failed', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -129,7 +130,7 @@ export default function OwnerNotificationCenter() {
     try {
       const { getCurrentAuthToken } = await import('../../lib/firebase');
       const token = await getCurrentAuthToken();
-      const res = await fetch('/api/notifications/clear-history', {
+      const res = await fetchApi('/api/notifications/clear-history', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ timeRange: range })
@@ -148,7 +149,7 @@ export default function OwnerNotificationCenter() {
     try {
       const { getCurrentAuthToken } = await import('../../lib/firebase');
       const token = await getCurrentAuthToken();
-      await fetch(`/api/notifications/log/${id}`, {
+      await fetchApi(`/api/notifications/log/${id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -171,7 +172,7 @@ export default function OwnerNotificationCenter() {
     setIsGeneratingAiNotif(true);
     const toastId = toast.loading('Generating notification with DeepSeek V4 Flash...');
     try {
-      const res = await fetch('/api/ai/generate-notification', {
+      const res = await fetchApi('/api/ai/generate-notification', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

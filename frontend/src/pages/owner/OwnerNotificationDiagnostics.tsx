@@ -37,6 +37,7 @@ import { PushNotifications } from '@capacitor/push-notifications';
 import { LocationManager } from '../../lib/permissions';
 import { NOTIFICATION_CHANNELS } from '../../lib/notificationChannels';
 import toast from 'react-hot-toast';
+import { fetchApi } from '../../lib/config';
 
 // ─── Status Badge Helper ───────────────────────────────────────────────────────
 function StatusBadge({ ok, label, detail }: { ok: boolean | null; label: string; detail?: string }) {
@@ -188,7 +189,7 @@ export default function OwnerNotificationDiagnostics() {
     setSelfTestReport(null);
     try {
       const idToken = await user?.getIdToken();
-      const res = await fetch('/api/health/notification-test', {
+      const res = await fetchApi('/api/health/notification-test', {
         method: 'POST',
         headers: { Authorization: `Bearer ${idToken}` }
       });
@@ -292,7 +293,7 @@ export default function OwnerNotificationDiagnostics() {
       try {
         const idToken = await user?.getIdToken();
         if (idToken) {
-          const res = await fetch('/api/notifications/analytics', {
+          const res = await fetchApi('/api/notifications/analytics', {
             headers: { Authorization: `Bearer ${idToken}` },
           });
           if (res.ok) {
@@ -356,7 +357,7 @@ export default function OwnerNotificationDiagnostics() {
   ) => {
     try {
       const token = await getAuthToken();
-      const res = await fetch('/api/notifications/send-custom', {
+      const res = await fetchApi('/api/notifications/send-custom', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(payload),
@@ -666,7 +667,7 @@ export default function OwnerNotificationDiagnostics() {
                 try {
                   // Trigger a continuous alert notification to yourself
                   const token = await getAuthToken();
-                  const res = await fetch('/api/notifications/send-custom', {
+                  const res = await fetchApi('/api/notifications/send-custom', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                     body: JSON.stringify({
@@ -712,7 +713,7 @@ export default function OwnerNotificationDiagnostics() {
               onClick={async () => {
                 try {
                   const token = await getAuthToken();
-                  const res = await fetch('/api/notifications/test-center', {
+                  const res = await fetchApi('/api/notifications/test-center', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                     body: JSON.stringify({ action: 'alarm', delayMs: 10000 }),
@@ -733,7 +734,7 @@ export default function OwnerNotificationDiagnostics() {
               onClick={async () => {
                 try {
                   const token = await getAuthToken();
-                  const res = await fetch('/api/notifications/test-center', {
+                  const res = await fetchApi('/api/notifications/test-center', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                     body: JSON.stringify({ action: 'force_email' }),
@@ -967,7 +968,7 @@ export default function OwnerNotificationDiagnostics() {
           <button
             onClick={async () => {
               const token = await auth.currentUser?.getIdToken();
-              const res = await fetch('/api/version/status', { headers: { Authorization: `Bearer ${token}` } });
+              const res = await fetchApi('/api/version/status', { headers: { Authorization: `Bearer ${token}` } });
               if (res.ok) {
                 const data = await res.json();
                 toast(`Backend: ${data.git_commit} | ${data.environment}`, { icon: 'ℹ️', duration: 5000 });

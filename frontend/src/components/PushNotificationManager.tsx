@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Olive Pizza â€” Enterprise Push Notification Manager (Production v3)
  *
  * Production Responsibilities:
@@ -32,8 +32,8 @@ import { useNavigate } from 'react-router';
 import { Capacitor } from '@capacitor/core';
 import { PushNotifications } from '@capacitor/push-notifications';
 import { NOTIFICATION_CHANNELS, NOTIFICATION_ACTION_TYPES } from '../lib/notificationChannels';
+import { fetchApi } from '../lib/config';
 
-const API_BASE = '/api';
 const BROADCAST_CHANNEL = 'olive_pizza_notifications';
 
 // â”€â”€â”€ Persistent sound state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -222,7 +222,7 @@ export default function PushNotificationManager() {
       const authToken = await auth.currentUser?.getIdToken();
       if (!authToken) return;
 
-      const res = await fetch(`${API_BASE}/notifications/token`, {
+      const res = await fetchApi('/api/notifications/token', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -280,7 +280,7 @@ export default function PushNotificationManager() {
 
         // Acknowledge delivery to backend
         if (data.queueId) {
-          fetch(`${API_BASE}/notifications/track`, {
+          fetchApi('/api/notifications/track', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ queueId: data.queueId, stage: 'delivered', orderId: data.orderId }),
@@ -346,7 +346,7 @@ export default function PushNotificationManager() {
         if (data.url) navigate(data.url);
 
         if (data.queueId) {
-          fetch(`${API_BASE}/notifications/track`, {
+          fetchApi('/api/notifications/track', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ queueId: data.queueId, stage: 'opened', orderId: data.orderId }),
@@ -384,7 +384,7 @@ export default function PushNotificationManager() {
       const orderId = data?.orderId;
 
       if (queueId) {
-        fetch(`${API_BASE}/notifications/track`, {
+        fetchApi('/api/notifications/track', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ queueId, stage: 'delivered', orderId }),
@@ -431,7 +431,7 @@ export default function PushNotificationManager() {
               toast.dismiss(t.id);
               navigate(url);
               if (queueId) {
-                fetch(`${API_BASE}/notifications/track`, {
+                fetchApi('/api/notifications/track', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ queueId, stage: 'opened', orderId }),
@@ -478,7 +478,7 @@ export default function PushNotificationManager() {
                       e.stopPropagation();
                       stopContinuousAlert();
                       const token = await auth.currentUser?.getIdToken();
-                      fetch(`${API_BASE}/notifications/action`, {
+                      fetchApi('/api/notifications/action', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                         body: JSON.stringify({ orderId, action: 'stop_alert', currentStage: data.stage }),
@@ -664,7 +664,7 @@ export default function PushNotificationManager() {
           }
         }
 
-        await fetch(`${API_BASE}/heartbeat`, {
+        await fetchApi('/api/heartbeat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify(body),

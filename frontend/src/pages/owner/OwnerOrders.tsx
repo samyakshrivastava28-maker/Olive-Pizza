@@ -16,6 +16,7 @@ import { useNotificationDebugger } from "../../hooks/useNotificationDebugger";
 import toast from "react-hot-toast";
 import CancelOrderReasonModal from "../../components/owner/CancelOrderReasonModal";
 import OwnerLiveMapModal from "../../components/owner/OwnerLiveMapModal";
+import { fetchApi } from "../../lib/config";
 
 
 export default function OwnerOrders() {
@@ -130,7 +131,7 @@ export default function OwnerOrders() {
         toast.error('Authentication error: Please log in again.');
         return;
       }
-      const res = await fetch(endpoint, {
+      const res = await fetchApi(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -198,7 +199,7 @@ export default function OwnerOrders() {
 
       console.log(`[OwnerOrders] → ${endpoint}`, { action, orderId: order.id, currentStage: order.status, partnerId });
 
-      const res = await fetch(endpoint, {
+      const res = await fetchApi(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -16,7 +16,7 @@ import {
   Crosshair, Utensils, Star, PhoneCall, CheckCircle2, Camera, Volume2, VolumeX,
   Compass, RotateCcw, Play, Square, WifiOff, AlertTriangle, AlertCircle, PackageOpen
 } from "lucide-react";
-import { RESTAURANT_LOCATION } from "../../lib/config";
+import { RESTAURANT_LOCATION, fetchApi } from "../../lib/config";
 import { playNotificationSound } from "../../hooks/useNotificationSound";
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTrackingStore } from "../../lib/trackingStore";
@@ -207,7 +207,7 @@ export default function DeliveryDashboard() {
     try {
       const token = await getCurrentAuthToken();
       // Try backend routing route first
-      const res = await fetch('/api/navigation/route', {
+      const res = await fetchApi('/api/navigation/route', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ origin, destination, orderId }),
@@ -260,7 +260,7 @@ export default function DeliveryDashboard() {
     if (activeTask?.id) {
       try {
         const token = await getCurrentAuthToken();
-        await fetch('/api/navigation/session/stop', {
+        await fetchApi('/api/navigation/session/stop', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({ orderId: activeTask.id }),
@@ -428,7 +428,7 @@ export default function DeliveryDashboard() {
     setProcessingId(decliningOrderId);
     try {
       const token = await getCurrentAuthToken();
-      const res = await fetch('/api/notifications/action', {
+      const res = await fetchApi('/api/notifications/action', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ orderId: decliningOrderId, action: 'reject_delivery', reason })
@@ -466,7 +466,7 @@ export default function DeliveryDashboard() {
       const isDebug = useNotificationDebugger.getState().isDebugMode;
       if (isDebug) useNotificationDebugger.getState().startTrace('POST /api/notifications/action', newStatus, orderId);
 
-      const res = await fetch('/api/notifications/action', {
+      const res = await fetchApi('/api/notifications/action', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -503,7 +503,7 @@ export default function DeliveryDashboard() {
       const token = await getCurrentAuthToken();
 
       // Submit delivery completion to backend (includes strict 100m validation on server)
-      const res = await fetch(`/api/delivery/orders/${completingOrderId}/status`, {
+      const res = await fetchApi(`/api/delivery/orders/${completingOrderId}/status`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',

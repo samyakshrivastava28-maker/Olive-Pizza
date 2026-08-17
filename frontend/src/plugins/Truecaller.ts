@@ -1,4 +1,5 @@
 import { registerPlugin, Capacitor } from '@capacitor/core';
+import { fetchApi } from '../lib/config';
 
 export interface TruecallerNativeResult {
   payload: string;
@@ -61,7 +62,7 @@ export const TruecallerService = {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
-    const res = await fetch('/api/phone/truecaller/session', {
+    const res = await fetchApi('/api/phone/truecaller/session', {
       method: 'POST',
       headers,
       body: JSON.stringify({ expectedPhone })
@@ -73,7 +74,7 @@ export const TruecallerService = {
   },
 
   pollWebSession: async (requestId: string): Promise<TruecallerSessionStatusResponse> => {
-    const res = await fetch(`/api/phone/truecaller/session/${requestId}`);
+    const res = await fetchApi(`/api/phone/truecaller/session/${requestId}`);
     if (!res.ok) {
       throw new Error('Failed to query Truecaller session status.');
     }
@@ -89,7 +90,7 @@ export const TruecallerService = {
       expectedPhone
     };
 
-    const res = await fetch('/api/phone/truecaller', {
+    const res = await fetchApi('/api/phone/truecaller', {
       method: 'POST',
       headers,
       body: JSON.stringify(bodyPayload)

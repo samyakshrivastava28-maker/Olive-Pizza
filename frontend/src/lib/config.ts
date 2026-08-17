@@ -8,6 +8,8 @@ export const MAX_DELIVERY_RADIUS_KM = 15;
 export const OPENING_HOUR = 12; // 12 PM (noon)
 export const CLOSING_HOUR = 24; // 12 AM (midnight)
 
+import { Capacitor } from '@capacitor/core';
+
 export const PRODUCTION_BACKEND_URL = "https://olive-pizza-backend.onrender.com";
 
 /**
@@ -19,8 +21,13 @@ export const getApiUrl = (endpoint: string): string => {
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
   if (typeof window === 'undefined') return `${PRODUCTION_BACKEND_URL}${cleanEndpoint}`;
 
-  // If running inside Capacitor Native Container
-  if ((window as any)?.Capacitor?.isNativePlatform?.()) {
+  // If running inside Capacitor Native Container or local webview
+  if (
+    Capacitor.isNativePlatform() ||
+    window.location.protocol === 'capacitor:' ||
+    window.location.protocol === 'ionic:' ||
+    (window.location.hostname === 'localhost' && window.location.port === '')
+  ) {
     return `${PRODUCTION_BACKEND_URL}${cleanEndpoint}`;
   }
 

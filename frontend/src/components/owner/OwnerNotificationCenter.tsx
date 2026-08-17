@@ -14,6 +14,7 @@ import { db, auth } from '../../lib/firebase';
 import { collection, query, orderBy, limit, onSnapshot, where } from 'firebase/firestore';
 import { Bell, CheckCircle, PackageOpen, AlertTriangle, X, Send, BarChart2, Inbox, Settings, RefreshCw, Users, Zap, ChevronDown } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { fetchApi } from '../../lib/config';
 
 type Tab = 'inbox' | 'analytics' | 'send' | 'settings';
 
@@ -93,7 +94,7 @@ export default function OwnerNotificationCenter() {
   const fetchInbox = useCallback(async () => {
     try {
       const headers = await getAuthHeader();
-      const res = await fetch('/api/notifications/inbox', { headers });
+      const res = await fetchApi('/api/notifications/inbox', { headers });
       if (res.ok) {
         const data = await res.json();
         setInbox(data.items || []);
@@ -106,7 +107,7 @@ export default function OwnerNotificationCenter() {
     setLoading(true);
     try {
       const headers = await getAuthHeader();
-      const res = await fetch('/api/notifications/analytics', { headers });
+      const res = await fetchApi('/api/notifications/analytics', { headers });
       if (res.ok) {
         const data = await res.json();
         setAnalytics(data.analytics || []);
@@ -122,7 +123,7 @@ export default function OwnerNotificationCenter() {
   const fetchPrefs = useCallback(async () => {
     try {
       const headers = await getAuthHeader();
-      const res = await fetch('/api/notifications/preferences', { headers });
+      const res = await fetchApi('/api/notifications/preferences', { headers });
       if (res.ok) {
         const data = await res.json();
         if (data.preferences) {
@@ -146,7 +147,7 @@ export default function OwnerNotificationCenter() {
   // ─── Mark Read ─────────────────────────────────────────────────────────────
   const markRead = async (id: string) => {
     const headers = await getAuthHeader();
-    await fetch(`/api/notifications/inbox/${id}`, {
+    await fetchApi(`/api/notifications/inbox/${id}`, {
       method: 'PATCH', headers, body: JSON.stringify({ isRead: true }),
     });
     setInbox(prev => prev.map(i => i.id === id ? { ...i, is_read: true } : i));
@@ -159,7 +160,7 @@ export default function OwnerNotificationCenter() {
     setSendResult('');
     try {
       const headers = await getAuthHeader();
-      const res = await fetch('/api/notifications/send-custom', {
+      const res = await fetchApi('/api/notifications/send-custom', {
         method: 'POST', headers, body: JSON.stringify(sendForm),
       });
       const data = await res.json();
@@ -175,7 +176,7 @@ export default function OwnerNotificationCenter() {
   // ─── Save Preferences ─────────────────────────────────────────────────────
   const savePrefs = async () => {
     const headers = await getAuthHeader();
-    await fetch('/api/notifications/preferences', {
+    await fetchApi('/api/notifications/preferences', {
       method: 'POST', headers, body: JSON.stringify(prefs),
     });
     setSendResult('✅ Preferences saved');

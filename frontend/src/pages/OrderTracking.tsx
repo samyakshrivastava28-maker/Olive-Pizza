@@ -12,7 +12,7 @@ import { doc, getDoc, onSnapshot, updateDoc } from "firebase/firestore";
 import { useNotificationDebugger } from "../hooks/useNotificationDebugger";
 import { supabase } from "../lib/supabase";
 import type { RealtimeChannel } from "@supabase/supabase-js";
-import { RESTAURANT_LOCATION } from "../lib/config";
+import { RESTAURANT_LOCATION, fetchApi } from "../lib/config";
 import { motion, AnimatePresence, PanInfo } from "framer-motion";
 import {
   ChevronLeft,
@@ -536,7 +536,7 @@ export default function OrderTracking() {
       const isDebug = useNotificationDebugger.getState().isDebugMode;
       if (isDebug) useNotificationDebugger.getState().startTrace('POST /api/notifications/action', 'Cancel Order', orderId);
 
-      const res = await fetch('/api/notifications/action', {
+      const res = await fetchApi('/api/notifications/action', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

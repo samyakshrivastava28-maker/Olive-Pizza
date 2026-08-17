@@ -16,6 +16,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Bell, BellOff, CheckCheck, ChevronRight, Filter, Search, X, RefreshCw, Package } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { auth } from '../../lib/firebase';
+import { fetchApi } from '../../lib/config';
 
 interface NotificationItem {
   id: string;
@@ -80,7 +81,7 @@ export default function NotificationCenter({ isOpen, onClose }: NotificationCent
     if (!token) return;
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/notifications/inbox`, {
+      const res = await fetchApi('/api/notifications/inbox', {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -107,7 +108,7 @@ export default function NotificationCenter({ isOpen, onClose }: NotificationCent
     const token = await auth.currentUser?.getIdToken();
     if (!token) return;
     setItems(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
-    fetch(`${API_BASE}/notifications/inbox/${id}`, {
+    fetchApi(`/api/notifications/inbox/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ isRead: true }),

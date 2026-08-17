@@ -1,4 +1,5 @@
 import { getCurrentAuthToken } from './firebase';
+import { fetchApi } from './config';
 
 export async function devGet(path: string, signal?: AbortSignal) {
   try {
@@ -6,7 +7,7 @@ export async function devGet(path: string, signal?: AbortSignal) {
     const headers: Record<string, string> = {};
     if (token) headers.Authorization = `Bearer ${token}`;
 
-    const res = await fetch(`/api/devops${path}`, { headers, signal });
+    const res = await fetchApi(`/api/devops${path}`, { headers, signal });
     if (res.ok) return res.json();
     const errorJson = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
     throw new Error(errorJson.error || errorJson.message || `HTTP ${res.status}`);
@@ -25,7 +26,7 @@ export async function devPost(path: string, body?: any, signal?: AbortSignal) {
     if (token) headers.Authorization = `Bearer ${token}`;
     const payload = body ? JSON.stringify(body) : undefined;
 
-    const res = await fetch(`/api/devops${path}`, {
+    const res = await fetchApi(`/api/devops${path}`, {
       method: 'POST',
       headers,
       body: payload,
@@ -48,7 +49,7 @@ export async function devDelete(path: string, signal?: AbortSignal) {
     const headers: Record<string, string> = {};
     if (token) headers.Authorization = `Bearer ${token}`;
 
-    const res = await fetch(`/api/devops${path}`, {
+    const res = await fetchApi(`/api/devops${path}`, {
       method: 'DELETE',
       headers,
       signal

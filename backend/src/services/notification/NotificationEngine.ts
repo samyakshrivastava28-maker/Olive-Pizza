@@ -26,6 +26,7 @@
  */
 
 import * as admin from 'firebase-admin';
+import { FieldValue } from 'firebase-admin/firestore';
 import { adminMessaging, adminDb as db } from '../../config/firebase.js';
 import { pgPool } from '../../config/postgres.js';
 import { NotificationLogger } from './NotificationLogger.js';
@@ -292,7 +293,7 @@ export class NotificationEngine {
       // Remove from Firestore user docs as well
       for (const uid of firebaseUserIds) {
         db.collection('users').doc(uid).update({
-          fcmTokens: admin.firestore.FieldValue.arrayRemove(...failedTokens)
+          fcmTokens: FieldValue.arrayRemove(...failedTokens)
         }).catch(() => {});
       }
 
