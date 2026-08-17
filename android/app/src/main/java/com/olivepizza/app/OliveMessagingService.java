@@ -173,6 +173,8 @@ public class OliveMessagingService extends MessagingService {
         String body = data.get("body") != null ? data.get("body") : defaultBody;
         String orderId = data.get("orderId");
         String soundName = data.get("sound");
+        boolean isOngoing = "true".equals(data.get("ongoing"));
+        String alertType = data.get("alert");
 
         String role = data.get("role");
         String targetRole = data.get("targetRole");
