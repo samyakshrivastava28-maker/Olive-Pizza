@@ -138,15 +138,19 @@ export class DeliveryCapacityService {
         availabilityStatus = 'CLOSED';
         availabilityMessage = 'Restaurant is currently closed';
         canAcceptDeliveries = false;
-      } else if (!isDeliveryEnabled || onlineCount === 0) {
+      } else if (!isDeliveryEnabled) {
         availabilityStatus = 'NO_RIDERS';
-        availabilityMessage = 'Delivery unavailable';
+        availabilityMessage = 'Delivery service is currently paused';
         canAcceptDeliveries = false;
       } else if (onlineCount > 0 && availableCount === 0) {
-        // All active delivery partners are currently assigned/busy
+        // High demand, but allow kitchen to queue orders
         availabilityStatus = 'HIGH_DEMAND';
-        availabilityMessage = 'Delivery temporarily unavailable due to high demand';
-        canAcceptDeliveries = false;
+        availabilityMessage = 'High demand in progress';
+        canAcceptDeliveries = true;
+      } else {
+        availabilityStatus = 'AVAILABLE';
+        availabilityMessage = 'Delivery available';
+        canAcceptDeliveries = true;
       }
 
       // Estimate Wait Time (approx 15 mins base + 5 mins per active delivery)
