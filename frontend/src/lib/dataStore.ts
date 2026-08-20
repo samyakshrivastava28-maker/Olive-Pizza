@@ -109,67 +109,76 @@ export const useDataStore = create<DataState>()(
           }, currentBackoff);
         };
 
-        const setupSettings = () => {
-          const unsubSettings = onSnapshot(doc(db, 'settings', 'global'), (snap) => {
-            if (snap.exists()) {
-              const data = snap.data();
-              const openH = data.openingHour !== undefined ? Number(data.openingHour) : (data.openingTime ? parseInt(data.openingTime.split(':')[0]) : 0);
-              const closeH = data.closingHour !== undefined ? Number(data.closingHour) : (data.closingTime ? parseInt(data.closingTime.split(':')[0]) : 24);
-              const currentHour = new Date().getHours();
-              
-              const is24Hours = data.is24x7 === true ||
-                (openH === 0 && (closeH >= 23 || closeH === 24 || data.closingTime === '23:59' || String(data.businessHours).includes('23:59') || String(data.businessHours).toLowerCase().includes('24')));
+        const applySettingsData = (data: any) => {
+          const openH = data.openingHour !== undefined ? Number(data.openingHour) : (data.openingTime ? parseInt(data.openingTime.split(':')[0]) : 0);
+          const closeH = data.closingHour !== undefined ? Number(data.closingHour) : (data.closingTime ? parseInt(data.closingTime.split(':')[0]) : 24);
+          const currentHour = new Date().getHours();
+          
+          const is24Hours = data.is24x7 === true ||
+            (openH === 0 && (closeH >= 23 || closeH === 24 || data.closingTime === '23:59' || String(data.businessHours).includes('23:59') || String(data.businessHours).toLowerCase().includes('24')));
 
-              let isWithinHours = true;
-              if (!is24Hours) {
-                if (openH <= closeH) {
-                  isWithinHours = currentHour >= openH && currentHour < closeH;
-                } else {
-                  isWithinHours = currentHour >= openH || currentHour < closeH;
-                }
-              }
-
-              const isDeliveryAvail = data.isDeliveryAvailable ?? true;
-              const isRestOpen = (data.isRestaurantOpen ?? true) && isWithinHours;
-              let availStatus: 'AVAILABLE' | 'HIGH_DEMAND' | 'NO_RIDERS' | 'CLOSED' = 'AVAILABLE';
-              let availMsg = 'Delivery available';
-
-              if (!isRestOpen) {
-                availStatus = 'CLOSED';
-                availMsg = 'Restaurant is currently closed';
-              } else if (!isDeliveryAvail) {
-                availStatus = 'NO_RIDERS';
-                availMsg = 'Delivery unavailable';
-              }
-
-              set({ storeStatus: {
-                isRestaurantOpen: isRestOpen,
-                isDeliveryAvailable: isDeliveryAvail,
-                canAcceptDeliveries: isRestOpen && isDeliveryAvail,
-                availabilityStatus: availStatus,
-                availabilityMessage: availMsg,
-                isLoading: false,
-                isWithinBusinessHours: isWithinHours,
-                deliveryRadiusKm: data.deliveryRadiusKm ?? 5,
-                openingHour: openH,
-                closingHour: closeH,
-                openingTime: data.openingTime || "00:00",
-                closingTime: data.closingTime || "23:59"
-              }});
+          let isWithinHours = true;
+          if (!is24Hours) {
+            if (openH <= closeH) {
+              isWithinHours = currentHour >= openH && currentHour < closeH;
             } else {
-              set((state) => ({ storeStatus: { ...state.storeStatus, isLoading: false }}));
+              isWithinHours = currentHour >= openH || currentHour < closeH;
+            }
+          }
+
+          const isDeliveryAvail = (data.isDeliveryAvailable ?? data.deliveryEnabled) ?? true;
+          const isRestOpen = ((data.isRestaurantOpen ?? data.isStoreOpen) ?? true) && isWithinHours;
+          let availStatus: 'AVAILABLE' | 'HIGH_DEMAND' | 'NO_RIDERS' | 'CLOSED' = 'AVAILABLE';
+          let availMsg = 'Delivery available';
+
+          if (!isRestOpen) {
+            availStatus = 'CLOSED';
+            availMsg = data.closureReason || 'Restaurant is currently closed';
+          } else if (!isDeliveryAvail) {
+            availStatus = 'NO_RIDERS';
+            availMsg = 'Delivery unavailable';
+          }
+
+          set({ storeStatus: {
+            isRestaurantOpen: isRestOpen,
+            isDeliveryAvailable: isDeliveryAvail,
+            canAcceptDeliveries: isRestOpen && isDeliveryAvail,
+            availabilityStatus: availStatus,
+            availabilityMessage: availMsg,
+            isLoading: false,
+            isWithinBusinessHours: isWithinHours,
+            deliveryRadiusKm: data.deliveryRadiusKm ?? data.maxDeliveryRadiusKm ?? 15,
+            openingHour: openH,
+            closingHour: closeH,
+            openingTime: data.openingTime || "00:00",
+            closingTime: data.closingTime || "23:59"
+          }});
+        };
+
+        const setupSettings = () => {
+          const unsubSettingsGlobal = onSnapshot(doc(db, 'settings', 'global'), (snap) => {
+            if (snap.exists()) {
+              applySettingsData(snap.data());
             }
             backoffMap['settings'] = 1000;
           }, handleError('settings', setupSettings));
-          unsubscribers.push(unsubSettings);
+
+          const unsubSettingsStore = onSnapshot(doc(db, 'settings', 'store_config'), (snap) => {
+            if (snap.exists()) {
+              applySettingsData(snap.data());
+            }
+          }, () => {});
+
+          unsubscribers.push(unsubSettingsGlobal, unsubSettingsStore);
         };
         setupSettings();
 
         const setupProducts = () => {
           const unsubProducts = onSnapshot(
-            query(collection(db, 'products'), where('isActive', '==', true)),
+            collection(db, 'products'),
             (snap) => {
-              const products = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+              const rawProducts = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+              const products = rawProducts.filter((p: any) => p.isActive !== false && p.isAvailable !== false);
               products.sort((a: any, b: any) => (b.createdAt || 0) - (a.createdAt || 0));
               set({ products });
               backoffMap['products'] = 1000;

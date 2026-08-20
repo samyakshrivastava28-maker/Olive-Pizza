@@ -83,20 +83,6 @@ import { AiHealthMonitorService } from './src/services/AiHealthMonitorService.js
 
 // Setup Vite in development or static files in production
 async function setupVite() {
-  if (process.env.NODE_ENV !== 'production') {
-    const { createServer: createViteServer } = await import('vite');
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa',
-    });
-    app.use(vite.middlewares);
-    console.log('[Dev] Vite middleware attached.');
-  } else {
-    const clientPath = path.resolve(__dirname, '../dist/client');
-    app.use(express.static(clientPath, { index: false }));
-    app.get('*', dynamicHtmlInjector);
-  }
-
   const server = app.listen(PORT as number, '0.0.0.0', () => {
     console.log(`Server running on http://localhost:${PORT}`);
     const interfaces = os.networkInterfaces();
@@ -115,6 +101,24 @@ async function setupVite() {
     webSocketServer.attach(server);
     console.log('[WebSocketServer] Attached on path /ws');
   });
+
+  if (process.env.NODE_ENV !== 'production') {
+    try {
+      const { createServer: createViteServer } = await import('vite');
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: 'spa',
+      });
+      app.use(vite.middlewares);
+      console.log('[Dev] Vite middleware attached.');
+    } catch (err: any) {
+      console.warn('[Dev] Vite middleware attach warning:', err?.message || err);
+    }
+  } else {
+    const clientPath = path.resolve(__dirname, '../dist/client');
+    app.use(express.static(clientPath, { index: false }));
+    app.get('*', dynamicHtmlInjector);
+  }
 
   // Background Services Initialization (Non-blocking)
   initPostgres().catch(e => console.warn('[Postgres] Non-fatal init:', e?.message || e));
