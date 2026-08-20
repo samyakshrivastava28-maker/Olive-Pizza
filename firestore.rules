@@ -11,11 +11,19 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return request.auth != null && request.auth.token.role == 'admin';
+      return request.auth != null && (
+        request.auth.token.role == 'admin' ||
+        request.auth.token.email == 'olivepizzarjn@gmail.com' ||
+        request.auth.token.email == 'webhub2811@gmail.com'
+      );
     }
 
     function isAppOwner() {
-      return request.auth != null && request.auth.token.role == 'owner';
+      return request.auth != null && (
+        request.auth.token.role == 'owner' ||
+        request.auth.token.email == 'olivepizzarjn@gmail.com' ||
+        request.auth.token.email == 'webhub2811@gmail.com'
+      );
     }
 
     function hasFullAccess() {
@@ -26,68 +34,86 @@ service cloud.firestore {
       return request.auth != null && request.auth.token.role == 'delivery_partner';
     }
 
-    // --- PROTECTED BUSINESS COLLECTIONS (NO FRONTEND WRITES ALLOWED) ---
-    // All writes must go through the backend API.
+    // --- PROTECTED BUSINESS COLLECTIONS ---
     
     match /users/{userId} {
       allow read: if isOwner(userId) || hasFullAccess();
-      allow write: if false;
+      allow write: if hasFullAccess() || isOwner(userId);
     }
 
     match /orders/{orderId} {
       allow read: if hasFullAccess() || 
                   (isSignedIn() && resource.data.userId == request.auth.uid) || 
                   (isDeliveryPartner() && (resource.data.deliveryPartnerId == request.auth.uid || resource.data.status in ['ready', 'packed', 'partner_assigned', 'picked_up', 'out_for_delivery']));
-      allow write: if false;
+      allow write: if hasFullAccess();
+    }
+
+    match /products/{productId} {
+      allow read: if true;
+      allow write: if hasFullAccess();
     }
 
     match /menu_items/{itemId} {
       allow read: if true;
-      allow write: if false;
+      allow write: if hasFullAccess();
     }
 
     match /menu_categories/{categoryId} {
       allow read: if true;
-      allow write: if false;
+      allow write: if hasFullAccess();
+    }
+
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow write: if hasFullAccess();
     }
     
     match /combos/{comboId} {
       allow read: if true;
-      allow write: if false;
+      allow write: if hasFullAccess();
     }
 
     match /offers/{offerId} {
       allow read: if true;
-      allow write: if false;
+      allow write: if hasFullAccess();
+    }
+
+    match /ads/{adId} {
+      allow read: if true;
+      allow write: if hasFullAccess();
     }
     
     match /coupons/{couponId} {
-      allow read: if isSignedIn();
-      allow write: if false;
+      allow read: if isSignedIn() || hasFullAccess();
+      allow write: if hasFullAccess();
     }
 
     match /settings/{docId} {
       allow read: if true;
-      allow write: if false;
+      allow write: if hasFullAccess();
     }
 
     match /delivery_zones/{zoneId} {
       allow read: if true;
-      allow write: if false;
+      allow write: if hasFullAccess();
+    }
+
+    match /delivery_partners/{partnerId} {
+      allow read: if hasFullAccess() || (request.auth != null && request.auth.uid == partnerId);
+      allow write: if hasFullAccess() || (request.auth != null && request.auth.uid == partnerId);
     }
 
     match /reviews/{reviewId} {
       allow read: if true;
-      allow write: if false;
+      allow write: if isSignedIn();
     }
 
     match /notifications/{notificationId} {
-      allow read: if isOwner(resource.data.userId);
-      allow write: if false;
+      allow read: if hasFullAccess() || isOwner(resource.data.userId);
+      allow write: if hasFullAccess();
     }
 
-    // --- PERMITTED CLIENT WRITES ---
-    // Only non-business operational data can be written directly by the frontend.
+    // --- OPERATIONAL DATA ---
 
     match /device_heartbeats/{sessionId} {
       allow read: if hasFullAccess() || isOwner(resource.data.uid);
@@ -97,7 +123,7 @@ service cloud.firestore {
     }
     
     match /user_carts/{userId} {
-      allow read, write: if isOwner(userId);
+      allow read, write: if isOwner(userId) || hasFullAccess();
     }
     
     match /client_errors/{errorId} {
@@ -125,7 +151,7 @@ service cloud.firestore {
     }
     
     match /{document=**} {
-      allow read, write: if false;
+      allow read, write: if hasFullAccess();
     }
   }
 }

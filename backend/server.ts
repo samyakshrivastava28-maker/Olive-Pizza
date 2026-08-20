@@ -83,13 +83,47 @@ import { AiHealthMonitorService } from './src/services/AiHealthMonitorService.js
 
 // Setup Vite in development or static files in production
 async function setupVite() {
-  await initPostgres();
+  if (process.env.NODE_ENV !== 'production') {
+    const { createServer: createViteServer } = await import('vite');
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: 'spa',
+    });
+    app.use(vite.middlewares);
+    console.log('[Dev] Vite middleware attached.');
+  } else {
+    const clientPath = path.resolve(__dirname, '../dist/client');
+    app.use(express.static(clientPath, { index: false }));
+    app.get('*', dynamicHtmlInjector);
+  }
+
+  const server = app.listen(PORT as number, '0.0.0.0', () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+    const interfaces = os.networkInterfaces();
+    for (const name of Object.keys(interfaces)) {
+      for (const net of interfaces[name]!) {
+        if (net.family === 'IPv4' && !net.internal) {
+          console.log(`Network (Mobile): http://${net.address}:${PORT}`);
+        }
+      }
+    }
+
+    // Initialize Keep Alive Scheduler after server starts
+    initKeepAlive();
+
+    // Attach WebSocketServer for real-time in-app updates
+    webSocketServer.attach(server);
+    console.log('[WebSocketServer] Attached on path /ws');
+  });
+
+  // Background Services Initialization (Non-blocking)
+  initPostgres().catch(e => console.warn('[Postgres] Non-fatal init:', e?.message || e));
   initScheduler();
   DataRetentionJob.schedule();
-  AIHeartbeatJob.schedule(); // Keeps THIS backend alive on Render
-  AiHealthMonitorService.start(); // Watches Olive Pizza AI heartbeat — alerts on failure
+  AIHeartbeatJob.schedule();
+  AiHealthMonitorService.start();
 
-  // Auto-sync all Firestore FCM tokens into PostgreSQL fcm_tokens on boot
+  // Background FCM Token Sync
   (async () => {
     try {
       const { adminDb: db } = await import('./src/config/firebase.js');
@@ -116,16 +150,13 @@ async function setupVite() {
     }
   })();
 
-  // Initialize AI Knowledge Base & Cloudflare R2 Knowledge Sync Service
+  // Initialize AI Knowledge Base & Cloudflare R2
   kb.initialize().catch(err => console.warn('[KB] Non-fatal init error:', err.message));
-  try {
-    const { KnowledgeSyncService } = await import('./src/services/knowledge/KnowledgeSyncService.js');
-    KnowledgeSyncService.initializeSync();
-  } catch (err: any) {
-    console.warn('[KnowledgeSync] Initialization warning:', err.message);
-  }
+  import('./src/services/knowledge/KnowledgeSyncService.js')
+    .then(({ KnowledgeSyncService }) => KnowledgeSyncService.initializeSync())
+    .catch((err: any) => console.warn('[KnowledgeSync] Initialization warning:', err.message));
 
-  // Initialize Pinecone Vector DB — verify connection, then auto-sync KB data
+  // Initialize Pinecone Vector DB
   pineconeService.getStatus().then(async (status: { ok: boolean; vectorCount?: number; error?: string }) => {
     if (status.ok) {
       console.log(`[Pinecone] ✅ Connected — index: olive-pizza, vectors: ${status.vectorCount ?? 0} — scheduling KB sync in 30s...`);
@@ -147,43 +178,7 @@ async function setupVite() {
     }
   }).catch((err: any) => console.warn('[Pinecone] Non-fatal init error:', err.message));
 
-
-  // Initialize Slack Notification Listeners
   FirestoreListener.init();
-
-  if (process.env.NODE_ENV !== 'production') {
-    const { createServer: createViteServer } = await import('vite');
-    console.log('[Dev] Vite imported successfully.');
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa',
-    });
-    console.log('[Dev] Vite server created.');
-    app.use(vite.middlewares);
-  } else {
-    const clientPath = path.resolve(__dirname, '../dist/client');
-    app.use(express.static(clientPath, { index: false })); // Disable default index.html serving
-    app.get('*', dynamicHtmlInjector);
-  }
-
-  const server = app.listen(PORT as number, '0.0.0.0', () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-    const interfaces = os.networkInterfaces();
-    for (const name of Object.keys(interfaces)) {
-      for (const net of interfaces[name]!) {
-        if (net.family === 'IPv4' && !net.internal) {
-          console.log(`Network (Mobile): http://${net.address}:${PORT}`);
-        }
-      }
-    }
-
-    // Initialize Keep Alive Scheduler after server starts
-    initKeepAlive();
-
-    // Attach WebSocketServer for real-time in-app updates (order tracker, live dashboard)
-    webSocketServer.attach(server);
-    console.log('[WebSocketServer] Attached on path /ws');
-  });
 }
 
 setupVite().catch(console.error);

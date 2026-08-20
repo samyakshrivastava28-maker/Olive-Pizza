@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "node --import tsx --watch-path=backend/src --watch-path=backend/server.ts backend/server.ts",
+    "dev": "tsx backend/server.ts",
     "build": "vite build && tsc --noEmit && esbuild backend/server.ts --bundle --platform=node --format=esm --packages=external --sourcemap --outfile=dist/server.js",
     "build:frontend": "vite build --sourcemap && node scripts/deploy-validator.js",
     "build:backend": "cd backend && npm run build",

@@ -95,7 +95,6 @@ const UniversalAssistant = lazyWithRetry(() => import('./pages/UniversalAssistan
 const FloatingTracker = lazyWithRetry(() => import('./components/ui/FloatingTracker'));
 
 // Lazy loaded layouts & guards
-const OwnerLayout = lazyWithRetry(() => import('./components/OwnerLayout'));
 const DeliveryLayout = lazyWithRetry(() => import('./components/DeliveryLayout'));
 const OnboardingGuard = lazyWithRetry(() => import('./components/OnboardingGuard'));
 
@@ -131,30 +130,7 @@ const SetupPhone = lazyWithRetry(() => import('./pages/onboarding/SetupPhone'));
 const SetupLocation = lazyWithRetry(() => import('./pages/onboarding/SetupLocation'));
 const OrderSuccessScreen = lazyWithRetry(() => import('./pages/OrderSuccessScreen'));
 
-// Lazy loaded owner pages
-const OwnerDashboard = lazyWithRetry(() => import('./pages/owner/OwnerDashboard'));
-const OwnerProducts = lazyWithRetry(() => import('./pages/owner/OwnerProducts'));
-const OwnerOrders = lazyWithRetry(() => import('./pages/owner/OwnerOrders'));
-const OwnerOrderHistory = lazyWithRetry(() => import('./pages/owner/OwnerOrderHistory'));
-const OwnerAnalytics = lazyWithRetry(() => import('./pages/owner/OwnerAnalytics'));
-const DeliveryPartners = lazyWithRetry(() => import('./pages/owner/DeliveryPartners'));
-const OwnerEvents = lazyWithRetry(() => import('./pages/owner/OwnerEvents'));
-const OwnerReports = lazyWithRetry(() => import('./pages/owner/OwnerReports'));
-const OwnerAds = lazyWithRetry(() => import('./pages/owner/OwnerAds'));
-const OwnerMediaLibrary = lazyWithRetry(() => import('./pages/owner/OwnerMediaLibrary'));
-const OwnerSettings = lazyWithRetry(() => import('./pages/owner/OwnerSettings'));
-const OwnerCustomers = lazyWithRetry(() => import('./pages/owner/OwnerCustomers'));
-const OwnerCoupons = lazyWithRetry(() => import('./pages/owner/OwnerCoupons'));
-const OwnerSecurity = lazyWithRetry(() => import('./pages/owner/OwnerSecurity'));
-const OwnerEmailCenter = lazyWithRetry(() => import('./pages/owner/OwnerEmailCenter'));
-const OwnerSpecialCategories = lazyWithRetry(() => import('./pages/owner/OwnerSpecialCategories'));
-const OwnerVerificationMetrics = lazyWithRetry(() => import('./pages/owner/OwnerVerificationMetrics'));
-const OwnerVersionManagement = lazyWithRetry(() => import('./pages/owner/OwnerVersionManagement'));
-const OwnerAIKnowledge = lazyWithRetry(() => import('./pages/owner/OwnerAIKnowledge'));
-const OwnerNotificationCenter = lazyWithRetry(() => import('./pages/owner/OwnerNotificationCenter'));
-const AIHealthMonitor = lazyWithRetry(() => import('./pages/owner/AIHealthMonitor'));
-const OwnerNotificationDiagnostics = lazyWithRetry(() => import('./pages/owner/OwnerNotificationDiagnostics'));
-const HomePageManager = lazyWithRetry(() => import('./pages/owner/HomePageManager'));
+// Developer and delivery lazy imports
 const DeveloperLayout = lazyWithRetry(() => import('./components/developer/DeveloperLayout'));
 const DeveloperHealthPage = lazyWithRetry(() => import('./pages/developer/DeveloperHealthPage'));
 const DeveloperDataManager = lazyWithRetry(() => import('./pages/developer/DeveloperDataManager'));
@@ -203,7 +179,7 @@ function AppContent() {
         location.pathname === '/register' ||
         location.pathname === '/forgot-password')
     ) {
-      if (role === 'owner' || role === 'admin' || (role as string) === 'developer') navigate('/owner/dashboard', { replace: true });
+      if (role === 'owner' || role === 'admin' || (role as string) === 'developer') navigate('/owner', { replace: true });
       else if (role === 'delivery_partner' || role === 'delivery') navigate('/delivery/dashboard', { replace: true });
       else navigate('/', { replace: true });
     }
@@ -236,7 +212,7 @@ function AppContent() {
     
     if ((role === 'owner' || role === 'admin' || (role as string) === 'developer') && !hasRedirectedToDashboard.current) {
       hasRedirectedToDashboard.current = true;
-      navigate('/owner/dashboard', { replace: true });
+      navigate('/owner', { replace: true });
     } else if ((role === 'delivery_partner' || role === 'delivery') && !hasRedirectedToDashboard.current) {
       hasRedirectedToDashboard.current = true;
       navigate('/delivery/dashboard', { replace: true });
@@ -308,38 +284,29 @@ function AppContent() {
                 <Route path="/onboarding/location" element={<Suspense fallback={<PizzaLoader />}><SetupLocation /></Suspense>} />
               </Route>
     
-              {/* Owner Routes */}
-              <Route element={<OwnerGuard />}>
-                <Route path="/owner" element={<OwnerLayout />}>
-                  <Route path="dashboard" element={<OwnerDashboard />} />
-                  <Route path="menu" element={<OwnerProducts />} />
-                  <Route path="products" element={<OwnerProducts />} />
-                  <Route path="orders" element={<OwnerOrders />} />
-                  <Route path="live-orders" element={<OwnerOrders />} />
-                  <Route path="order-history" element={<OwnerOrderHistory />} />
-                  <Route path="analytics" element={<OwnerAnalytics />} />
-                  <Route path="partners" element={<DeliveryPartners />} />
-                  <Route path="events" element={<OwnerEvents />} />
-                  <Route path="reports" element={<OwnerReports />} />
-                  <Route path="ads" element={<OwnerAds />} />
-                  <Route path="media" element={<OwnerMediaLibrary />} />
-                  <Route path="coupons" element={<OwnerCoupons />} />
-                  <Route path="settings" element={<OwnerSettings />} />
-                  <Route path="security" element={<OwnerSecurity />} />
-                  <Route path="customers" element={<OwnerCustomers />} />
-                  <Route path="email" element={<OwnerEmailCenter />} />
-                  <Route path="special-categories" element={<OwnerSpecialCategories />} />
-                  <Route path="notifications" element={<OwnerNotificationCenter />} />
-                  <Route path="verification-metrics" element={<OwnerVerificationMetrics />} />
-                  <Route path="versions" element={<OwnerVersionManagement />} />
-                  <Route path="home-page-manager" element={<HomePageManager />} />
-                  <Route path="website-manager" element={<HomePageManager />} />
-                  <Route path="website-manager/*" element={<HomePageManager />} />
-                  <Route path="ai-knowledge" element={<OwnerAIKnowledge />} />
-                  <Route path="ai-monitor" element={<AIHealthMonitor />} />
-                  <Route path="notification-diagnostics" element={<OwnerNotificationDiagnostics />} />
-                </Route>
-              </Route>
+              {/* Owner Routes — Replaced by Standalone Olive Pizza Owner Platform */}
+              <Route
+                path="/owner/*"
+                element={
+                  <div className="min-h-screen bg-dark-900 flex items-center justify-center p-6 text-center">
+                    <div className="max-w-md bg-dark-800 border border-dark-700 rounded-3xl p-8 shadow-2xl space-y-4">
+                      <div className="w-14 h-14 rounded-2xl bg-primary-500/10 border border-primary-500/20 text-primary-400 flex items-center justify-center mx-auto text-2xl">
+                        🍕
+                      </div>
+                      <h2 className="text-xl font-bold text-white">Olive Pizza Owner Platform</h2>
+                      <p className="text-xs text-slate-400">
+                        The Owner Dashboard has been moved to a dedicated, standalone management platform.
+                      </p>
+                      <a
+                        href="http://localhost:5174"
+                        className="inline-block w-full py-3 px-4 bg-primary-600 hover:bg-primary-500 text-white font-bold text-xs rounded-xl transition-all shadow-lg shadow-primary-600/20"
+                      >
+                        Launch Owner Application (Port 5174)
+                      </a>
+                    </div>
+                  </div>
+                }
+              />
 
 
 
@@ -364,8 +331,6 @@ function AppContent() {
                   <Route path="setup" element={<DeveloperSetupPage />} />
                   <Route path="devops" element={<Navigate to="/developer" replace />} />
                 </Route>
-                <Route path="/owner/developer" element={<Navigate to="/owner/dashboard" replace />} />
-                <Route path="/owner/developer/*" element={<Navigate to="/owner/dashboard" replace />} />
               </Route>
 
               {/* Delivery Routes */}
