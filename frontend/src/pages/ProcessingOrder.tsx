@@ -4,13 +4,14 @@ import { auth, db } from '../lib/firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import { useCartStore } from '../lib/store';
 import { fetchApi } from '../lib/config';
+import toast from 'react-hot-toast';
 import ProcessingOverlay, { CheckoutStep } from '../components/checkout/ProcessingOverlay';
 
 export default function ProcessingOrder() {
   const location = useLocation();
   const navigate = useNavigate();
   const { clearCart } = useCartStore();
-  const { items, address, location: orderLocation, addressDetails, deliveryType, paymentMethod, finalTotal, discountAmount } = location.state || {};
+  const { items, address, location: orderLocation, addressDetails, deliveryType, paymentMethod, finalTotal, discountAmount, couponCode, appliedPromo } = location.state || {};
   
   const [step, setStep] = useState<CheckoutStep>('preparing');
   const [errorMessage, setErrorMessage] = useState<string>('');
@@ -123,7 +124,10 @@ export default function ProcessingOrder() {
             addressDetails,
             location: orderLocation,
             contactPhone: customerPhone,
-            discountAmount: discountAmount || 0
+            orderSource: 'ONLINE',
+            // Send couponCode so server can independently verify and compute discount.
+            // Client-side discountAmount is intentionally NOT sent � server recalculates it.
+            couponCode: couponCode || (appliedPromo?.code || null)
           })
         });
 
@@ -136,6 +140,13 @@ export default function ProcessingOrder() {
         setStep('confirmed');
         clearCart();
         
+        // Surface coupon reject reason if server could not validate the coupon
+        if (data.couponRejectReason) {
+          toast(`Coupon not applied: ${data.couponRejectReason}`, { icon: "\uD83C\uDFF7\uFE0F" });
+        } else if (data.appliedCouponCode && data.discountAmount > 0) {
+          toast.success(`Coupon ${data.appliedCouponCode} applied! You saved \u20B9${data.discountAmount}`, { duration: 4000 });
+        }
+
         // Navigate to Order Success Screen
         setTimeout(() => {
           navigate('/order-success/' + data.orderId, { replace: true });

@@ -16,6 +16,7 @@ import AccountSettings from "../components/customer/dashboard/AccountSettings";
 import AddressBook from "../components/customer/AddressBook";
 import MyDevices from "../components/customer/dashboard/MyDevices";
 import FloatingLines from "../components/ui/FloatingLines";
+import SEO from "../components/SEO";
 
 function DashboardSkeleton() {
   return (
@@ -134,7 +135,9 @@ export default function CustomerDashboard() {
   ];
 
   return (
-    <PageTransition className="w-full relative min-h-[100dvh] text-slate-200 bg-dark-950 overflow-hidden">
+    <>
+      <SEO title="Account Dashboard" noIndex={true} />
+      <PageTransition className="w-full relative min-h-[100dvh] text-slate-200 bg-dark-950 overflow-hidden">
       <FloatingLines />
       <div className="relative z-10 max-w-7xl mx-auto p-4 md:p-8 pt-8 flex flex-col md:flex-row gap-8">
         
@@ -203,5 +206,6 @@ export default function CustomerDashboard() {
         </Link>
       )}
     </PageTransition>
+    </>
   );
 }

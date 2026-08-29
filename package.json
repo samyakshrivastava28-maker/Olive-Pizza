@@ -4,12 +4,10 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx backend/server.ts",
-    "build": "vite build && tsc --noEmit && esbuild backend/server.ts --bundle --platform=node --format=esm --packages=external --sourcemap --outfile=dist/server.js",
-    "build:frontend": "vite build --sourcemap && node scripts/deploy-validator.js",
-    "build:backend": "cd backend && npm run build",
-    "preview": "vite preview",
-    "start": "node dist/server.js",
+    "dev": "vite --port 3000",
+    "build": "vite build",
+    "build:frontend": "vite build",
+    "preview": "vite preview --port 3000",
     "lint": "tsc --noEmit",
     "test": "vitest run --coverage"
   },

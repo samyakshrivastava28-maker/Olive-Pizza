@@ -7,6 +7,8 @@ import LiveCoupons from './LiveCoupons';
 import FeaturedShowcase from './FeaturedShowcase';
 import AppDownloadSection from './AppDownloadSection';
 import LuxuryHero from '../ui/LuxuryHero';
+import PreviouslyOrdered from './PreviouslyOrdered';
+import CompleteYourMealSection from './CompleteYourMealSection';
 
 // Premium sections
 import HeroVideo from './sections/HeroVideo';
@@ -139,6 +141,14 @@ const renderSection = (
     case 'DOWNLOAD_APP':
     case 'APP':
       Component = <div className={opacity}><AppDownloadSection /></div>;
+      break;
+    case 'ORDER_AGAIN':
+    case 'PREVIOUSLY_ORDERED':
+      Component = <div className={opacity}><PreviouslyOrdered /></div>;
+      break;
+    case 'COMPLETE_MEAL':
+    case 'COMPLETE_YOUR_MEAL':
+      Component = <div className={opacity}><CompleteYourMealSection /></div>;
       break;
     default:
       Component = <div className={`text-white p-4 bg-white/5 border border-white/10 ${opacity}`}>Unknown Section Type: {section.type}</div>;

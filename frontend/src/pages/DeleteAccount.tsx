@@ -34,18 +34,36 @@ export default function DeleteAccount() {
     }
   ];
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim() || !confirmed) {
       toast.error("Please enter your email and confirm the permanent deletion statement.");
       return;
     }
     setIsSubmitting(true);
-    setTimeout(() => {
-      setIsSubmitting(false);
+    try {
+      const { auth } = await import('../lib/firebase');
+      const { fetchApi } = await import('../lib/config');
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetchApi('/api/users/deletion-request', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ email, reason, downloadData })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to submit deletion request. Please try again.');
+      }
       setSubmitted(true);
-      toast.success("Account deletion request submitted successfully.");
-    }, 1200);
+      toast.success('Account deletion request submitted successfully.');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to submit deletion request.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (

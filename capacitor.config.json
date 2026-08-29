@@ -5,7 +5,11 @@
   "server": {
     "url": "https://olive-pizza.vercel.app",
     "cleartext": false,
-    "allowNavigation": ["olive-pizza.vercel.app", "*.firebaseapp.com", "*.googleapis.com"]
+    "allowNavigation": ["olive-pizza.vercel.app", "*.firebaseapp.com", "*.googleapis.com"],
+    "iosScheme": "https"
+  },
+  "ios": {
+    "contentInset": "always"
   },
   "android": {
     "allowMixedContent": false,

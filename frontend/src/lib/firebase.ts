@@ -2,14 +2,14 @@ import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
-// Dynamic import for messaging to prevent initial heavy load
-const firebaseConfig = {
-  apiKey: "AIzaSyAqkcY-WQrW3WoZWRrv8oo7MTAI_nVrLw4",
-  authDomain: "olive-pizza-08.firebaseapp.com",
-  projectId: "olive-pizza-08",
-  storageBucket: "olive-pizza-08.firebasestorage.app",
-  messagingSenderId: "1017239455106",
-  appId: "1:1017239455106:web:ea5dd73d10722020007b9b"
+
+export const firebaseConfig = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyAqkcY-WQrW3WoZWRrv8oo7MTAI_nVrLw4",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "olive-pizza-08.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "olive-pizza-08",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "olive-pizza-08.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "1017239455106",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:1017239455106:web:ea5dd73d10722020007b9b"
 };
 
 export const app = initializeApp(firebaseConfig);
@@ -17,12 +17,16 @@ export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
 
-// Async getter for messaging
 export const getMessagingInstance = async () => {
   if (typeof window === 'undefined' || !('Notification' in window)) return null;
-  const { getMessaging } = await import('firebase/messaging');
-  return getMessaging(app);
+  try {
+    const { getMessaging } = await import('firebase/messaging');
+    return getMessaging(app);
+  } catch {
+    return null;
+  }
 };
+
 export const getCurrentAuthToken = async (): Promise<string> => {
   if (auth.currentUser) {
     try {
@@ -58,10 +62,5 @@ export const getCurrentAuthToken = async (): Promise<string> => {
       }
       reject(new Error("User not authenticated with Firebase Auth"));
     });
-
-    setTimeout(() => {
-      unsubscribe();
-      reject(new Error("Firebase auth initialization timed out"));
-    }, 4000);
   });
 };

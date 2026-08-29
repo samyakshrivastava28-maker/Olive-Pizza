@@ -71,20 +71,11 @@ export default function Register() {
             finalRole = userDoc.data()?.role || "customer";
           }
 
-          const normalizedFinalRole = finalRole === "delivery" ? "delivery_partner" : finalRole;
-          if (normalizedFinalRole === "owner" || normalizedFinalRole === "admin") {
-            toast.success("Welcome to Olive Pizza!");
-            navigate("/owner/dashboard");
-          } else if (normalizedFinalRole === "delivery_partner") {
-            toast.success("Welcome to Olive Pizza!");
-            navigate("/delivery/dashboard");
+          toast.success("Welcome to Olive Pizza!");
+          if (userDoc.exists() && userDoc.data()?.phoneVerified) {
+             navigate("/");
           } else {
-            toast.success("Welcome to Olive Pizza!");
-            if (userDoc.exists() && userDoc.data()?.phoneVerified) {
-               navigate("/");
-            } else {
-               navigate("/onboarding/phone");
-            }
+             navigate("/onboarding/phone");
           }
         } catch (err) {
           logDetailedError(err, { context: "Register Redirect Result Sync" });
@@ -252,9 +243,7 @@ export default function Register() {
         }).catch((e) => console.error("Email trigger failed:", e));
 
         toast.success("Account created! Please verify your phone number.");
-
-        if (initialRole === "owner") navigate("/owner/dashboard");
-        else navigate("/onboarding/phone");
+        navigate("/onboarding/phone");
       } catch (syncErr) {
         logDetailedError(syncErr, { context: "Register Firestore Sync" });
         console.warn("Firestore write failed. User created in Auth only.", syncErr);
@@ -331,14 +320,7 @@ export default function Register() {
         
         // Let AuthProvider handle populating the store to avoid race conditions
         toast.success("Welcome!");
-        
-        const normalizedFinalRole = finalRole === "delivery" ? "delivery_partner" : finalRole;
-        if (normalizedFinalRole === "owner" || normalizedFinalRole === "admin") navigate("/owner/dashboard");
-        else if (normalizedFinalRole === "delivery_partner") navigate("/delivery/dashboard");
-        else {
-          // If customer, we will let App.tsx Onboarding Enforcer check location/phone
-          navigate("/");
-        }
+        navigate("/");
       }
     } catch (err: any) {
       setError(translateError(err));

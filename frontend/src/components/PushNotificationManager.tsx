@@ -1,5 +1,5 @@
 /**
- * Olive Pizza â€” Enterprise Push Notification Manager (Production v3)
+ * Olive Pizza — Enterprise Push Notification Manager (Production v3)
  *
  * Production Responsibilities:
  * 1. Request notification permission on first login (native Capacitor on Android)
@@ -15,7 +15,7 @@
  * IMPORTANT RULES:
  * - Notification failure NEVER blocks login.
  * - If notifications are unavailable: log and continue, do NOT crash.
- * - Battery optimization prompt is advisory only â€” never forced.
+ * - Battery optimization prompt is advisory only — never forced.
  * - Uses @capacitor/geolocation on native, browser geolocation on web.
  */
 
@@ -167,7 +167,7 @@ export default function PushNotificationManager() {
         // Always create channels before registering
         await createNativeChannels();
 
-        // Register with FCM â€” attach listeners FIRST so registration event is never missed
+        // Register with FCM — attach listeners FIRST so registration event is never missed
         token = await new Promise<string>((resolve, reject) => {
           const timeout = setTimeout(() => {
             reject(new Error('FCM token registration timeout (15s)'));
@@ -193,7 +193,7 @@ export default function PushNotificationManager() {
           });
         });
 
-        console.log('[PushManager] âœ… Native FCM token obtained');
+        console.log('[PushManager] ✅ Native FCM token obtained');
 
       } else {
         // WEB PWA FIREBASE REGISTRATION
@@ -241,7 +241,7 @@ export default function PushNotificationManager() {
 
       if (res.ok) {
         setTokenRegistered(true);
-        console.log('[PushManager] âœ… FCM token registered in backend (multi-device safe)');
+        console.log('[PushManager] ✅ FCM token registered in backend (multi-device safe)');
 
         // Forward auth token to Service Worker for web quick actions
         if (!Capacitor.isNativePlatform() && navigator.serviceWorker.controller) {
@@ -492,7 +492,7 @@ export default function PushNotificationManager() {
                     onClick={(e) => { e.stopPropagation(); toast.dismiss(t.id); navigate(url); }}
                     className="flex-1 bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold py-2 rounded-lg"
                   >
-                    ðŸ“Š Open Order
+                    📊 Open Order
                   </button>
                 </div>
               )}
@@ -509,7 +509,7 @@ export default function PushNotificationManager() {
   // â”€â”€â”€ Web Permission Request â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const requestWebPermission = useCallback(async (uid: string): Promise<void> => {
     try {
-      // Only for web â€” native is handled inside registerToken
+      // Only for web — native is handled inside registerToken
       if (Capacitor.isNativePlatform()) {
         setShowNotifPrompt(false);
         await registerToken(uid);
@@ -544,7 +544,7 @@ export default function PushNotificationManager() {
     broadcastRef.current.onmessage = (event) => {
       const { type, action, orderId, newStatus, sound } = event.data || {};
       if (type === 'ACTION_SUCCESS' || type === 'SYNC_ACTION_SUCCESS') {
-        toast.success(`âœ… ${action} â†’ ${newStatus}`, { duration: 3000 });
+        toast.success(`✅ ${action} â†’ ${newStatus}`, { duration: 3000 });
         window.dispatchEvent(new CustomEvent('olive:order:updated', { detail: { orderId, newStatus } }));
       }
       if (type === 'GPS_UPDATE') {
@@ -796,7 +796,7 @@ export default function PushNotificationManager() {
                 <BatteryWarning className="w-6 h-6 text-yellow-400" />
               </div>
               <div className="flex-1">
-                <h3 className="text-white font-black text-sm mb-1">âš¡ Improve Order Alerts</h3>
+                <h3 className="text-white font-black text-sm mb-1">⚡ Improve Order Alerts</h3>
                 <p className="text-slate-400 text-xs leading-relaxed mb-4">
                   Battery optimization can delay or block new order notifications. For reliable order alerts,
                   go to <span className="text-yellow-400 font-bold">Settings â†’ Battery â†’ Olive Pizza â†’ Unrestricted</span>.

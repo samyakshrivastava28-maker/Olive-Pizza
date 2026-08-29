@@ -9,6 +9,8 @@ import {
   getDocs,
   where,
   limit,
+  doc,
+  onSnapshot,
 } from "firebase/firestore";
 import PageTransition from "../components/PageTransition";
 import { useDataStore } from "../lib/dataStore";
@@ -146,26 +148,39 @@ export default function Home() {
 
   const [pageSchema, setPageSchema] = useState<PageSchema>(() => cachedPageSchema || PREDEFINED_TEMPLATES[0]);
 
+  // Real-time synchronization with published homepage configuration
   useEffect(() => {
-    const now = Date.now();
-    if (cachedPageSchema && now - lastPageSchemaFetch < 60000) {
-      return; // Use cached schema within 60s window
-    }
-
     let isMounted = true;
+
+    // 1. Instant fallback / initial fetch from API
     fetch('/api/homepage/live')
       .then(res => res.json())
       .then(data => {
         if (isMounted && data.success && data.config) {
           cachedPageSchema = data.config;
-          lastPageSchemaFetch = Date.now();
           setPageSchema(data.config);
         }
       })
       .catch(() => {});
 
+    // 2. Real-time Firestore snapshot listener for zero-delay instant updates
+    const unsubscribeFirestore = onSnapshot(
+      doc(db, 'settings', 'homepage'),
+      (snapshot) => {
+        if (snapshot.exists()) {
+          const data = snapshot.data();
+          if (data?.config && isMounted) {
+            cachedPageSchema = data.config;
+            setPageSchema(data.config);
+          }
+        }
+      },
+      () => {}
+    );
+
     return () => {
       isMounted = false;
+      unsubscribeFirestore();
     };
   }, []);
 

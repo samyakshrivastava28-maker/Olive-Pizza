@@ -16,6 +16,7 @@ import { db } from "../lib/firebase";
 import { collection, getDocs, query, limit } from "firebase/firestore";
 import { MenuItem } from "../types/models";
 import toast from "react-hot-toast";
+import SEO from "../components/SEO";
 
 export default function Cart() {
   const { items, total, addItem, removeItem, updateQuantity, clearCart } = useCartStore();
@@ -173,7 +174,9 @@ export default function Cart() {
 
   // ─── ACTIVE CART DESIGN (REFERENCE ALIGNED) ──────────────────────────────────
   return (
-    <PageTransition className="responsive-container pb-36 md:pb-16 pt-4 md:pt-8">
+    <>
+      <SEO title="Your Cart" noIndex={true} />
+      <PageTransition className="responsive-container pb-36 md:pb-16 pt-4 md:pt-8">
       {/* ── Header & Restaurant Info ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 md:mb-8 pb-4 border-b border-white/10">
         <div>
@@ -507,5 +510,6 @@ export default function Cart() {
         </div>
       </div>
     </PageTransition>
+    </>
   );
 }

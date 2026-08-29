@@ -79,25 +79,20 @@ export default function FeaturedShowcase({
     return [...parsedProducts, ...parsedCombos];
   }, [propProducts, storeProducts, storeCombos]);
 
-  // Dynamically bucket available realtime products into Top, Most Ordered, and AI Recommended
+  // Dynamically bucket available realtime products based on real catalog data
   const { topProducts, mostOrderedProducts, aiRecommendedProducts } = useMemo(() => {
     const top: MenuItem[] = [];
     const mostOrdered: MenuItem[] = [];
     const aiRecs: MenuItem[] = [];
 
-    allRealtimeMenuItems.forEach((item, index) => {
-      // Top products: pizzas, premium dishes or items in top third
-      if (index % 3 === 2 || (item.category === "pizza" && item.basePrice >= 300)) {
-        top.push(item);
-      }
-      // Most ordered: combos, popular sides or items in middle third
-      if (index % 3 === 1 || item.category === "combo" || item.category === "sides") {
-        mostOrdered.push(item);
-      }
-      // AI Recommended: personalized picks or items in first third
-      if (index % 3 === 0 || (item.discountPercentage || 0) > 0) {
-        aiRecs.push(item);
-      }
+    allRealtimeMenuItems.forEach((item) => {
+      const isBest = (item as any).isBestSeller || (item as any).orderCount > 10 || item.category === "pizza";
+      const isComboOrSide = item.category === "combo" || item.category === "sides";
+      const hasDiscount = (item.discountPercentage || 0) > 0 || item.pricingMode === "offer";
+
+      if (isBest) top.push(item);
+      if (isComboOrSide) mostOrdered.push(item);
+      if (hasDiscount || item.isVegetarian) aiRecs.push(item);
     });
 
     return {

@@ -1,0 +1,20 @@
+# 🍕 Olive Pizza Production Robots Configuration
+User-agent: *
+Allow: /
+Allow: /menu
+Allow: /cart
+Allow: /about
+Allow: /contact
+Allow: /track
+
+# Disallow indexing on private operational & API paths
+Disallow: /api/
+Disallow: /ws
+Disallow: /checkout/success
+Disallow: /owner/
+Disallow: /manager/
+Disallow: /franchise/
+Disallow: /pos/
+Disallow: /delivery/
+
+Sitemap: https://olivepizza.in/sitemap.xml

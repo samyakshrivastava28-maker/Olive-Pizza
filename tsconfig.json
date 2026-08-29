@@ -28,6 +28,6 @@
       "@/*": ["./*"]
     }
   },
-  "include": ["frontend/src", "backend", "vite.config.ts"],
-  "exclude": ["node_modules", "dist"]
+  "include": ["frontend/src", "vite.config.ts"],
+  "exclude": ["node_modules", "dist", "backend"]
 }

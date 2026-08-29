@@ -73,7 +73,7 @@ export default function PreviouslyOrdered() {
                   id: pId,
                   productId: pId,
                   name: item.productName || item.name || storeProduct?.name || "Delicious Pizza",
-                  price: item.price || storeProduct?.price || 299,
+                  price: Number(storeProduct?.offerPrice || storeProduct?.basePrice || storeProduct?.price || item.price || 299),
                   image:
                     storeProduct?.image ||
                     storeProduct?.imageUrl ||

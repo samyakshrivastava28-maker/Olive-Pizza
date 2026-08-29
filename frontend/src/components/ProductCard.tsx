@@ -58,7 +58,7 @@ export default memo(function ProductCard({ item, discount = 0, wishlistIds = [],
   };
 
   const isPizza = item.category === 'pizza' || item.name.toLowerCase().includes('pizza');
-  const rating = (4.2 + (Math.abs((item.name || '').length % 7) * 0.1)).toFixed(1);
+  const realRating = typeof (item as any).rating === 'number' && (item as any).rating > 0 ? (item as any).rating.toFixed(1) : null;
 
   return (
     <motion.div
@@ -81,15 +81,21 @@ export default memo(function ProductCard({ item, discount = 0, wishlistIds = [],
         className="absolute inset-0 bg-gradient-to-tr from-primary-500/10 via-transparent to-amber-500/10 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-500 z-0"
       />
 
-      {/* Top Left: Star Rating Badge (Animated Pulsing Glow) */}
-      <motion.div 
-        animate={{ scale: [1, 1.05, 1] }}
-        transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
-        className="absolute top-3 left-3 bg-dark-950/85 backdrop-blur-md border border-amber-400/40 text-amber-400 text-xs font-black px-2.5 py-1 rounded-full flex items-center gap-1 z-10 shadow-lg"
-      >
-        <Star className="w-3.5 h-3.5 fill-amber-400 animate-pulse" />
-        <span>{rating}</span>
-      </motion.div>
+      {/* Top Left Badge: Real Rating or Pure Veg / Special Badge */}
+      {realRating ? (
+        <motion.div 
+          animate={{ scale: [1, 1.05, 1] }}
+          transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+          className="absolute top-3 left-3 bg-dark-950/85 backdrop-blur-md border border-amber-400/40 text-amber-400 text-xs font-black px-2.5 py-1 rounded-full flex items-center gap-1 z-10 shadow-lg"
+        >
+          <Star className="w-3.5 h-3.5 fill-amber-400 animate-pulse" />
+          <span>{realRating}</span>
+        </motion.div>
+      ) : item.isVegetarian ? (
+        <div className="absolute top-3 left-3 bg-emerald-950/85 backdrop-blur-md border border-emerald-500/40 text-emerald-400 text-[10px] font-black px-2.5 py-1 rounded-full flex items-center gap-1 z-10 shadow-lg">
+          <span>100% Veg 🌿</span>
+        </div>
+      ) : null}
 
       {/* Top Right: Wishlist Heart Button */}
       <div className="absolute top-3 right-3 z-10" onClick={(e) => e.stopPropagation()}>

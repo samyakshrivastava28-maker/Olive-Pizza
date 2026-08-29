@@ -16,6 +16,7 @@ import { fetchRoute } from '../services/navigationRouting.service';
 import { RESTAURANT_LOCATION, MAX_DELIVERY_RADIUS_KM, fetchApi } from '../lib/config';
 import { calculateDistance } from '../lib/utils';
 import { useDataStore } from '../lib/dataStore';
+import SEO from '../components/SEO';
 
 // Premium Checkout redesign
 export default function Checkout() {
@@ -296,7 +297,8 @@ export default function Checkout() {
         deliveryFee,
         taxes,
         total,
-        appliedPromo
+        appliedPromo,
+        couponCode: appliedPromo?.code || null
       }
     });
   };
@@ -309,7 +311,9 @@ export default function Checkout() {
   ];
 
   return (
-    <PageTransition className="min-h-screen bg-dark-950 text-white font-sans pb-32">
+    <>
+      <SEO title="Secure Checkout" noIndex={true} />
+      <PageTransition className="min-h-screen bg-dark-950 text-white font-sans pb-32">
       {/* Header */}
       <div className="sticky top-0 z-40 bg-dark-950/80 backdrop-blur-xl border-b border-white/5 px-4 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -725,5 +729,6 @@ export default function Checkout() {
         )}
       </AnimatePresence>
     </PageTransition>
+    </>
   );
 }

@@ -81,7 +81,7 @@ import AuthProvider from './components/AuthProvider';
 import AutoUpdater from "./components/ui/AutoUpdater";
 import ClickSpark from './components/ui/ClickSpark';
 import { CartAnimationProvider } from './components/ui/CartAnimationProvider';
-import { OwnerGuard, DeliveryGuard, CustomerGuard, AuthGuard, DeveloperGuard } from './components/auth/RouteGuards';
+import { OwnerGuard, CustomerGuard, AuthGuard } from './components/auth/RouteGuards';
 
 import LocationPrompt from './components/ui/LocationPrompt';
 import OrderCancelledModal from './components/customer/OrderCancelledModal';
@@ -95,7 +95,6 @@ const UniversalAssistant = lazyWithRetry(() => import('./pages/UniversalAssistan
 const FloatingTracker = lazyWithRetry(() => import('./components/ui/FloatingTracker'));
 
 // Lazy loaded layouts & guards
-const DeliveryLayout = lazyWithRetry(() => import('./components/DeliveryLayout'));
 const OnboardingGuard = lazyWithRetry(() => import('./components/OnboardingGuard'));
 
 // Lazy loaded public pages
@@ -130,31 +129,8 @@ const SetupPhone = lazyWithRetry(() => import('./pages/onboarding/SetupPhone'));
 const SetupLocation = lazyWithRetry(() => import('./pages/onboarding/SetupLocation'));
 const OrderSuccessScreen = lazyWithRetry(() => import('./pages/OrderSuccessScreen'));
 
-// Developer and delivery lazy imports
-const DeveloperLayout = lazyWithRetry(() => import('./components/developer/DeveloperLayout'));
-const DeveloperHealthPage = lazyWithRetry(() => import('./pages/developer/DeveloperHealthPage'));
-const DeveloperDataManager = lazyWithRetry(() => import('./pages/developer/DeveloperDataManager'));
-const DeveloperAIPage = lazyWithRetry(() => import('./pages/developer/DeveloperAIPage'));
-const DeveloperSchedulerPage = lazyWithRetry(() => import('./pages/developer/DeveloperSchedulerPage'));
-const DeveloperErrorCenterPage = lazyWithRetry(() => import('./pages/developer/DeveloperErrorCenterPage'));
-const DeveloperConfigsPage = lazyWithRetry(() => import('./pages/developer/DeveloperConfigsPage'));
-const DeveloperAuditPage = lazyWithRetry(() => import('./pages/developer/DeveloperAuditPage'));
-const DeveloperTemplatesPage = lazyWithRetry(() => import('./pages/developer/DeveloperTemplatesPage'));
-const DeveloperPaymentPage = lazyWithRetry(() => import('./pages/developer/DeveloperPaymentPage'));
-const DeveloperEmailPage = lazyWithRetry(() => import('./pages/developer/DeveloperEmailPage'));
-const DeveloperMonitorPage = lazyWithRetry(() => import('./pages/developer/DeveloperMonitorPage'));
-const DeveloperDiagnosticsPage = lazyWithRetry(() => import('./pages/developer/DeveloperDiagnosticsPage'));
-const DeveloperLogsPage = lazyWithRetry(() => import('./pages/developer/DeveloperLogsPage'));
-const DeveloperSetupPage = lazyWithRetry(() => import('./pages/developer/DeveloperSetupPage'));
-
-// Lazy loaded delivery pages
+// Lazy loaded customer dashboard
 const CustomerDashboard = lazyWithRetry(() => import('./pages/CustomerDashboard'));
-const DeliveryDashboard = lazyWithRetry(() => import('./pages/delivery/DeliveryDashboard'));
-const DeliveryNavigationPage = lazyWithRetry(() => import('./pages/delivery/DeliveryNavigationPage'));
-const DeliveryEarnings = lazyWithRetry(() => import('./pages/delivery/DeliveryEarnings'));
-const DeliveryPerformance = lazyWithRetry(() => import('./pages/delivery/DeliveryPerformance'));
-const DeliveryProfile = lazyWithRetry(() => import('./pages/delivery/DeliveryProfile'));
-const DeliveryNotificationCenter = lazyWithRetry(() => import('./pages/delivery/DeliveryNotificationCenter'));
 
 function AppContent() {
   const location = useLocation();
@@ -310,41 +286,8 @@ function AppContent() {
 
 
 
-              {/* Developer Routes */}
-              <Route element={<DeveloperGuard />}>
-                <Route path="/developer" element={<DeveloperLayout />}>
-                  <Route index element={<DeveloperHealthPage />} />
-                  <Route path="health" element={<DeveloperHealthPage />} />
-                  <Route path="data-manager" element={<DeveloperDataManager />} />
-                  <Route path="data-manager/*" element={<DeveloperDataManager />} />
-                  <Route path="ai" element={<DeveloperAIPage />} />
-                  <Route path="scheduler" element={<DeveloperSchedulerPage />} />
-                  <Route path="errors" element={<DeveloperErrorCenterPage />} />
-                  <Route path="configs" element={<DeveloperConfigsPage />} />
-                  <Route path="audit" element={<DeveloperAuditPage />} />
-                  <Route path="templates" element={<DeveloperTemplatesPage />} />
-                  <Route path="payment" element={<DeveloperPaymentPage />} />
-                  <Route path="email" element={<DeveloperEmailPage />} />
-                  <Route path="monitor" element={<DeveloperMonitorPage />} />
-                  <Route path="diagnostics" element={<DeveloperDiagnosticsPage />} />
-                  <Route path="logs" element={<DeveloperLogsPage />} />
-                  <Route path="setup" element={<DeveloperSetupPage />} />
-                  <Route path="devops" element={<Navigate to="/developer" replace />} />
-                </Route>
-              </Route>
-
-              {/* Delivery Routes */}
-              <Route element={<DeliveryGuard />}>
-                <Route path="/delivery" element={<DeliveryLayout />}>
-                  <Route path="dashboard" element={<DeliveryDashboard />} />
-                  <Route path="navigation/:orderId" element={<DeliveryNavigationPage />} />
-                  <Route path="navigation" element={<DeliveryNavigationPage />} />
-                  <Route path="earnings" element={<DeliveryEarnings />} />
-                  <Route path="performance" element={<DeliveryPerformance />} />
-                  <Route path="profile" element={<DeliveryProfile />} />
-                  <Route path="notifications" element={<DeliveryNotificationCenter />} />
-                </Route>
-              </Route>
+              {/* Catch-all 404 Route */}
+              <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </Suspense>
         </RouteErrorBoundary>

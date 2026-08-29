@@ -52,6 +52,17 @@ export default function AutoUpdater() {
     };
 
     const checkFrontendUpdates = async () => {
+      // 1. Coordinated Demo Keep-Warm Ping (Target ~10 mins, debounced across tabs/windows)
+      try {
+        const lastPing = localStorage.getItem('olive_last_demo_keep_warm_ping');
+        const now = Date.now();
+        const intervalMs = 9.5 * 60 * 1000; // ~9.5 to 10 minutes
+        if (!lastPing || (now - parseInt(lastPing, 10)) > intervalMs) {
+          localStorage.setItem('olive_last_demo_keep_warm_ping', now.toString());
+          fetch('/api/health/ping').catch(() => {});
+        }
+      } catch {}
+
       try {
         const res = await fetch('/api/health/version');
         if (!res.ok) return;

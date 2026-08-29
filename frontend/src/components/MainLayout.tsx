@@ -36,26 +36,6 @@ export default function MainLayout() {
     navigate('/');
   };
 
-  useEffect(() => {
-    if (user?.email === 'olivepizzarjn@gmail.com' && role !== 'owner') {
-      const upgradeToOwner = async () => {
-        try {
-          const token = await auth.currentUser?.getIdToken();
-          await fetch(`/api/admin/users/${user.uid}/role`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ role: 'owner' })
-          });
-          console.log('Successfully upgraded olivepizzarjn to owner!');
-          useAuthStore.getState().setUser(user, 'owner');
-        } catch (err) {
-          console.error('Failed to make owner:', err);
-        }
-      };
-      upgradeToOwner();
-    }
-  }, [user, role]);
-
   const [scrolled, setScrolled] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
 

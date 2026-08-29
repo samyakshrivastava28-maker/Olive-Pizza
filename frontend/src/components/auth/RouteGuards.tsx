@@ -48,7 +48,7 @@ export function AuthGuard() {
 
 // 2. Customer Guard (Must be logged in, prevents guests)
 export function CustomerGuard() {
-  const { isAuthenticated, isLoading, role } = useAuthStore();
+  const { isAuthenticated, isLoading } = useAuthStore();
   const location = useLocation();
 
   if (isLoading) return <div className="h-screen w-full flex items-center justify-center">Authenticating...</div>;
@@ -58,15 +58,7 @@ export function CustomerGuard() {
     return <Navigate to={`/login?redirect=${encodeURIComponent(location.pathname)}`} replace />;
   }
 
-  // Prevent delivery partners and owners from accessing the customer dashboard directly
-  if (role === 'delivery_partner' || role === 'delivery') {
-    return <Navigate to="/delivery/dashboard" replace />;
-  }
-  
-  if (role === 'owner' || role === 'admin' || (role as string) === 'developer') {
-    return <Navigate to="/owner/dashboard" replace />;
-  }
-
+  // All authenticated users (including owners and delivery partners) can freely access the Customer Dashboard
   return <Outlet />;
 }
 

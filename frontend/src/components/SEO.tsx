@@ -7,70 +7,75 @@ interface SEOProps {
   schemaMarkup?: object | object[];
   image?: string;
   type?: string;
-  breadcrumbs?: Array<{name: string; url: string}>;
+  noIndex?: boolean;
+  breadcrumbs?: Array<{ name: string; url: string }>;
 }
 
-const DEFAULT_TITLE = 'Olive Pizza | Premium Pizza Delivery';
-const DEFAULT_DESCRIPTION = 'Experience the best artisan pizza delivered hot and fresh to your door. Olive Pizza offers premium ingredients, fast delivery, and unforgettable taste.';
-const BASE_URL = 'https://olivepizza.com'; // Replace with actual domain
-const DEFAULT_IMAGE = `${BASE_URL}/og-image.jpg`;
+const DEFAULT_TITLE = 'Olive Pizza — Fresh Artisanal Pizzas in Rajnandgaon & Durg';
+const DEFAULT_DESCRIPTION = 'Order handcrafted artisanal pizzas, garlic bread, combos & sides from Olive Pizza. Hot & fresh contactless delivery to your door across Rajnandgaon and Durg.';
+const BASE_URL = 'https://olivepizza.in';
+const DEFAULT_IMAGE = 'https://res.cloudinary.com/olive-pizza/image/upload/v1700000000/brand/og-banner.jpg';
 
-export default function SEO({ 
-  title, 
-  description, 
-  canonicalUrl, 
+export default function SEO({
+  title,
+  description,
+  canonicalUrl,
   schemaMarkup,
   image = DEFAULT_IMAGE,
   type = 'website',
+  noIndex = false,
   breadcrumbs
 }: SEOProps) {
   const fullTitle = title ? `${title} | Olive Pizza` : DEFAULT_TITLE;
   const metaDescription = description || DEFAULT_DESCRIPTION;
-  const url = canonicalUrl ? `${BASE_URL}${canonicalUrl}` : BASE_URL;
+  const url = canonicalUrl ? `${BASE_URL}${canonicalUrl.startsWith('/') ? '' : '/'}${canonicalUrl}` : BASE_URL;
 
-  // Organization Schema
+  // Restaurant Schema
   const orgSchema = {
-    "@context": "https://schema.org",
-    "@type": "Restaurant",
-    "name": "Olive Pizza",
-    "image": DEFAULT_IMAGE,
-    "url": BASE_URL,
-    "telephone": "+1234567890",
-    "address": {
-      "@type": "PostalAddress",
-      "streetAddress": "123 Pizza Street",
-      "addressLocality": "Foodville",
-      "addressRegion": "Taste State",
-      "postalCode": "12345",
-      "addressCountry": "US"
-    },
-    "servesCuisine": "Pizza",
-    "priceRange": "$$"
+    '@context': 'https://schema.org',
+    '@type': 'Restaurant',
+    'name': 'Olive Pizza',
+    'image': image,
+    'url': BASE_URL,
+    'telephone': '+91 91799 44445',
+    'priceRange': '₹₹',
+    'servesCuisine': ['Pizza', 'Italian', 'Fast Food'],
+    'address': {
+      '@type': 'PostalAddress',
+      'streetAddress': 'Dongargaon Rd, near Saraswati school',
+      'addressLocality': 'Rajnandgaon',
+      'addressRegion': 'Chhattisgarh',
+      'postalCode': '491441',
+      'addressCountry': 'IN'
+    }
   };
 
   // WebPage Schema
   const webPageSchema = {
-    "@context": "https://schema.org",
-    "@type": "WebPage",
-    "name": fullTitle,
-    "description": metaDescription,
-    "url": url,
-    "publisher": {
-      "@type": "Organization",
-      "name": "Olive Pizza"
+    '@context': 'https://schema.org',
+    '@type': 'WebPage',
+    'name': fullTitle,
+    'description': metaDescription,
+    'url': url,
+    'publisher': {
+      '@type': 'Organization',
+      'name': 'Olive Pizza',
+      'url': BASE_URL
     }
   };
 
-  const breadcrumbSchema = breadcrumbs ? {
-    "@context": "https://schema.org",
-    "@type": "BreadcrumbList",
-    "itemListElement": breadcrumbs.map((crumb, index) => ({
-      "@type": "ListItem",
-      "position": index + 1,
-      "name": crumb.name,
-      "item": `${BASE_URL}${crumb.url}`
-    }))
-  } : null;
+  const breadcrumbSchema = breadcrumbs
+    ? {
+        '@context': 'https://schema.org',
+        '@type': 'BreadcrumbList',
+        'itemListElement': breadcrumbs.map((crumb, index) => ({
+          '@type': 'ListItem',
+          'position': index + 1,
+          'name': crumb.name,
+          'item': `${BASE_URL}${crumb.url.startsWith('/') ? '' : '/'}${crumb.url}`
+        }))
+      }
+    : null;
 
   const schemas: any[] = [orgSchema, webPageSchema];
   if (breadcrumbSchema) schemas.push(breadcrumbSchema);
@@ -88,6 +93,7 @@ export default function SEO({
       <title>{fullTitle}</title>
       <meta name="title" content={fullTitle} />
       <meta name="description" content={metaDescription} />
+      <meta name="robots" content={noIndex ? 'noindex, nofollow' : 'index, follow'} />
       <link rel="canonical" href={url} />
 
       {/* Open Graph / Facebook */}
@@ -96,8 +102,9 @@ export default function SEO({
       <meta property="og:title" content={fullTitle} />
       <meta property="og:description" content={metaDescription} />
       <meta property="og:image" content={image} />
+      <meta property="og:site_name" content="Olive Pizza" />
 
-      {/* Twitter */}
+      {/* Twitter / X */}
       <meta property="twitter:card" content="summary_large_image" />
       <meta property="twitter:url" content={url} />
       <meta property="twitter:title" content={fullTitle} />
@@ -105,9 +112,7 @@ export default function SEO({
       <meta property="twitter:image" content={image} />
 
       {/* JSON-LD Structured Data */}
-      <script type="application/ld+json">
-        {JSON.stringify(schemas)}
-      </script>
+      <script type="application/ld+json">{JSON.stringify(schemas)}</script>
     </Helmet>
   );
 }

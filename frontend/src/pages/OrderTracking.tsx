@@ -46,6 +46,7 @@ import { playNotificationSound, statusToSoundType } from "../hooks/useNotificati
 import OrderTimeline from "../components/ui/OrderTimeline";
 import UniversalMap3D from "../components/map/UniversalMap3D";
 import type { MapMarker } from "../components/map/UniversalMap3D";
+import SEO from "../components/SEO";
 
 // ─── Constants ───────────────────────────────────────────────────────
 const TRACKABLE_STATUSES = new Set([
@@ -663,7 +664,9 @@ export default function OrderTracking() {
   };
 
   return (
-    <div className="h-[100dvh] w-full bg-slate-100 flex flex-col overflow-hidden relative">
+    <>
+      <SEO title="Track Your Order" noIndex={true} />
+      <div className="h-[100dvh] w-full bg-slate-100 flex flex-col overflow-hidden relative">
       
       {/* ─── FULLSCREEN MAP (MapLibre GL JS 3D) ─── */}
       <div className="absolute inset-0 z-0">
@@ -987,5 +990,6 @@ export default function OrderTracking() {
       <OwnerAcceptedOverlay show={showAccepted} onClose={() => setShowAccepted(false)} />
       <DeliveredOverlay show={order?.status === 'delivered'} order={order} />
     </div>
+    </>
   );
 }

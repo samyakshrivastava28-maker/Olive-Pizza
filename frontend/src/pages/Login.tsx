@@ -70,10 +70,8 @@ export default function Login() {
               }, finalRole as "customer" | "owner" | "delivery_partner" | "admin");
             }
 
-            const normalizedFinalRole = finalRole === "delivery" ? "delivery_partner" : finalRole;
-            if (normalizedFinalRole === "owner" || normalizedFinalRole === "admin") navigate("/owner/dashboard");
-            else if (normalizedFinalRole === "delivery_partner") navigate("/delivery/dashboard");
-            else navigate("/");
+            // In customer app, all users (including owners/delivery partners) stay in customer flow
+            navigate("/");
           } catch (err) {
             logDetailedError(err, { context: "Redirect Result Sync" });
             console.error("Firestore sync failed on redirect result", err);
@@ -154,14 +152,8 @@ export default function Login() {
 
       toast.success("Welcome back!");
 
-      const normalizedRole = userRole === "delivery" ? "delivery_partner" : userRole;
-
-      if (normalizedRole === "owner" || normalizedRole === "admin" || normalizedRole === "developer" || ["olivepizzarjn@gmail.com", "webhub2811@gmail.com"].includes(email.toLowerCase()))
-        navigate("/owner/dashboard");
-      else if (normalizedRole === "delivery_partner") 
-        navigate("/delivery/dashboard");
-      else 
-        navigate("/");
+      // In customer app, all users (including owners/delivery partners) stay in customer flow
+      navigate("/");
     } catch (err: any) {
       setError(err.message || translateError(err));
     } finally {
@@ -256,9 +248,8 @@ export default function Login() {
         }
 
         toast.success("Welcome!");
-        if (finalRole === "owner" || finalRole === "admin" || finalRole === "developer" || ["olivepizzarjn@gmail.com", "webhub2811@gmail.com"].includes(userEmail)) navigate("/owner/dashboard");
-        else if (finalRole === "delivery_partner") navigate("/delivery/dashboard");
-        else navigate("/");
+        // In customer app, all users (including owners/delivery partners) stay in customer flow
+        navigate("/");
       }
     } catch (err: any) {
       logDetailedError(err, { context: "Google Login" });
