@@ -138,8 +138,6 @@ function AppContent() {
   const isAuthenticated = useAuthStore(state => state.isAuthenticated);
   const isLoading = useAuthStore(state => state.isLoading);
   const user = useAuthStore(state => state.user);
-  const role = useAuthStore(state => state.role);
-  const hasRedirectedToDashboard = useRef(false);
 
   // Track active device session
   useDeviceSession();
@@ -147,7 +145,7 @@ function AppContent() {
   // Automatic background update checker
   useVersionCheck();
 
-  // Prevent authenticated users from visiting login/register/forgot-password
+  // Prevent authenticated users from visiting login/register/forgot-password (always remain in Customer app)
   useEffect(() => {
     if (
       isAuthenticated &&
@@ -155,17 +153,14 @@ function AppContent() {
         location.pathname === '/register' ||
         location.pathname === '/forgot-password')
     ) {
-      if (role === 'owner' || role === 'admin' || (role as string) === 'developer') navigate('/owner', { replace: true });
-      else if (role === 'delivery_partner' || role === 'delivery') navigate('/delivery/dashboard', { replace: true });
-      else navigate('/', { replace: true });
+      navigate('/', { replace: true });
     }
-  }, [isAuthenticated, role, location.pathname, navigate]);
+  }, [isAuthenticated, location.pathname, navigate]);
 
   // Global Onboarding Enforcer: Make phone and location setup strictly compulsory for customers
   useEffect(() => {
     if (
       !isAuthenticated || 
-      role !== 'customer' || 
       !user || 
       location.pathname.startsWith('/onboarding') || 
       location.pathname.startsWith('/login') || 
@@ -180,20 +175,7 @@ function AppContent() {
     } else if (!user.locationSetupCompleted && !user.lat) {
       navigate('/onboarding/location', { replace: true });
     }
-  }, [isAuthenticated, user, role, location.pathname, navigate]);
-
-  // Role-based Landing Page Interceptor
-  useEffect(() => {
-    if (!isAuthenticated || !role || location.pathname !== '/') return;
-    
-    if ((role === 'owner' || role === 'admin' || (role as string) === 'developer') && !hasRedirectedToDashboard.current) {
-      hasRedirectedToDashboard.current = true;
-      navigate('/owner', { replace: true });
-    } else if ((role === 'delivery_partner' || role === 'delivery') && !hasRedirectedToDashboard.current) {
-      hasRedirectedToDashboard.current = true;
-      navigate('/delivery/dashboard', { replace: true });
-    }
-  }, [isAuthenticated, role, location.pathname, navigate]);
+  }, [isAuthenticated, user, location.pathname, navigate]);
 
 
   // Global Session Initializer Blocker
@@ -260,32 +242,6 @@ function AppContent() {
                 <Route path="/onboarding/location" element={<Suspense fallback={<PizzaLoader />}><SetupLocation /></Suspense>} />
               </Route>
     
-              {/* Owner Routes — Replaced by Standalone Olive Pizza Owner Platform */}
-              <Route
-                path="/owner/*"
-                element={
-                  <div className="min-h-screen bg-dark-900 flex items-center justify-center p-6 text-center">
-                    <div className="max-w-md bg-dark-800 border border-dark-700 rounded-3xl p-8 shadow-2xl space-y-4">
-                      <div className="w-14 h-14 rounded-2xl bg-primary-500/10 border border-primary-500/20 text-primary-400 flex items-center justify-center mx-auto text-2xl">
-                        🍕
-                      </div>
-                      <h2 className="text-xl font-bold text-white">Olive Pizza Owner Platform</h2>
-                      <p className="text-xs text-slate-400">
-                        The Owner Dashboard has been moved to a dedicated, standalone management platform.
-                      </p>
-                      <a
-                        href="http://localhost:5174"
-                        className="inline-block w-full py-3 px-4 bg-primary-600 hover:bg-primary-500 text-white font-bold text-xs rounded-xl transition-all shadow-lg shadow-primary-600/20"
-                      >
-                        Launch Owner Application (Port 5174)
-                      </a>
-                    </div>
-                  </div>
-                }
-              />
-
-
-
               {/* Catch-all 404 Route */}
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

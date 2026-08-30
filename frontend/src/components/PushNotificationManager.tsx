@@ -32,9 +32,21 @@ import { useNavigate } from 'react-router';
 import { Capacitor } from '@capacitor/core';
 import { PushNotifications } from '@capacitor/push-notifications';
 import { NOTIFICATION_CHANNELS, NOTIFICATION_ACTION_TYPES } from '../lib/notificationChannels';
-import { fetchApi } from '../lib/config';
-
 const BROADCAST_CHANNEL = 'olive_pizza_notifications';
+
+function resolveCustomerUrl(url?: string, orderId?: string): string {
+  if (!url) return orderId ? `/order-tracking/${orderId}` : '/';
+  if (
+    url.startsWith('/owner') ||
+    url.startsWith('/delivery') ||
+    url.startsWith('/restaurant') ||
+    url.startsWith('/franchise') ||
+    url.startsWith('/pos')
+  ) {
+    return orderId ? `/order-tracking/${orderId}` : '/dashboard';
+  }
+  return url;
+}
 
 // â”€â”€â”€ Persistent sound state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 let continuousAudio: HTMLAudioElement | null = null;
@@ -311,7 +323,8 @@ export default function PushNotificationManager() {
                 <div
                   className="flex-1 cursor-pointer pr-4"
                   onClick={() => {
-                    if (data.url) navigate(data.url);
+                    const targetUrl = resolveCustomerUrl(data.url, data.orderId);
+                    navigate(targetUrl);
                     toast.dismiss(t.id);
                     stopContinuousAlert();
                   }}
@@ -343,7 +356,8 @@ export default function PushNotificationManager() {
       const actionHandler = PushNotifications.addListener('pushNotificationActionPerformed', (notification) => {
         const data = notification.notification.data || {};
         stopContinuousAlert();
-        if (data.url) navigate(data.url);
+        const targetUrl = resolveCustomerUrl(data.url, data.orderId);
+        navigate(targetUrl);
 
         if (data.queueId) {
           fetchApi('/api/notifications/track', {
@@ -429,7 +443,8 @@ export default function PushNotificationManager() {
             onClick={() => {
               if (data?.alert === 'continuous') return;
               toast.dismiss(t.id);
-              navigate(url);
+              const targetUrl = resolveCustomerUrl(url, orderId);
+              navigate(targetUrl);
               if (queueId) {
                 fetchApi('/api/notifications/track', {
                   method: 'POST',
@@ -489,7 +504,12 @@ export default function PushNotificationManager() {
                     ðŸ”• Stop Alert
                   </button>
                   <button
-                    onClick={(e) => { e.stopPropagation(); toast.dismiss(t.id); navigate(url); }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toast.dismiss(t.id);
+                      const targetUrl = resolveCustomerUrl(url, orderId);
+                      navigate(targetUrl);
+                    }}
                     className="flex-1 bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold py-2 rounded-lg"
                   >
                     📊 Open Order

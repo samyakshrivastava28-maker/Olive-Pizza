@@ -174,19 +174,7 @@ export default function MainLayout() {
                 );
               })}
 
-              {isAuthenticated && role === 'owner' && (
-                <Link to="/owner/dashboard" onMouseEnter={() => prefetchRoute('/owner/dashboard')}
-                  className="px-4 py-2 rounded-xl text-sm font-bold text-yellow-400 hover:text-yellow-300 hover:bg-yellow-400/10 transition-all duration-200">
-                  Owner Panel
-                </Link>
-              )}
-              {isAuthenticated && role === 'delivery_partner' && (
-                <Link to="/delivery/dashboard" onMouseEnter={() => prefetchRoute('/delivery/dashboard')}
-                  className="px-4 py-2 rounded-xl text-sm font-bold text-orange-400 hover:text-orange-300 hover:bg-orange-400/10 transition-all duration-200">
-                  Delivery Panel
-                </Link>
-              )}
-              {isAuthenticated && (!role || role === 'customer') && (
+              {isAuthenticated && (
                 <Link to="/dashboard" onMouseEnter={() => prefetchRoute('/dashboard')}
                   className="px-4 py-2 rounded-xl text-sm font-bold text-emerald-400 hover:text-emerald-300 hover:bg-emerald-400/10 transition-all duration-200">
                   Dashboard
@@ -299,20 +287,6 @@ export default function MainLayout() {
                   className="text-orange-400 border border-orange-400/30 px-3 py-1.5 rounded-full text-[10px] font-bold flex items-center gap-1">
                   <Download className="w-3 h-3" /> Install
                 </button>
-              )}
-              {/* Mobile 3-Lines Developer Dashboard Button (webhub2811@gmail.com strictly) */}
-              {user?.email?.toLowerCase() === 'webhub2811@gmail.com' && (
-                <Link
-                  to="/developer"
-                  title="Developer Operations Center"
-                  className="p-2 rounded-lg bg-primary-500/20 border border-primary-500/40 text-primary-400 flex items-center justify-center shadow-[0_0_10px_rgba(249,115,22,0.3)]"
-                >
-                  <div className="flex flex-col gap-[2.5px] w-3.5 justify-center items-center">
-                    <span className="w-full h-[2px] bg-current rounded-full" />
-                    <span className="w-full h-[2px] bg-current rounded-full" />
-                    <span className="w-full h-[2px] bg-current rounded-full" />
-                  </div>
-                </Link>
               )}
 
               <Link to="/menu?search=1" className="p-2 text-slate-300 hover:text-white transition-colors">
