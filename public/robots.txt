@@ -1,20 +1,41 @@
-# 🍕 Olive Pizza Production Robots Configuration
+# Olive Pizza Robots Configuration
+# Optimized for Web Crawlers, Answer Engines & AI Search Agents
+
 User-agent: *
 Allow: /
 Allow: /menu
-Allow: /cart
 Allow: /about
 Allow: /contact
-Allow: /track
-
-# Disallow indexing on private operational & API paths
-Disallow: /api/
-Disallow: /ws
-Disallow: /checkout/success
+Allow: /faq
+Allow: /legal/
+Disallow: /admin/
 Disallow: /owner/
-Disallow: /manager/
-Disallow: /franchise/
 Disallow: /pos/
-Disallow: /delivery/
+Disallow: /api/
+Disallow: /checkout
+Disallow: /recheck-order
+Disallow: /processing-order
+
+# AI Search Crawlers Explicit Permissions
+User-agent: GPTBot
+Allow: /
+Allow: /menu
+Allow: /faq
+Allow: /about
+
+User-agent: ClaudeBot
+Allow: /
+Allow: /menu
+Allow: /faq
+Allow: /about
+
+User-agent: PerplexityBot
+Allow: /
+Allow: /menu
+Allow: /faq
+Allow: /about
+
+User-agent: Applebot
+Allow: /
 
 Sitemap: https://olivepizza.in/sitemap.xml
