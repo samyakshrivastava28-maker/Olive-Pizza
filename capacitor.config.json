@@ -3,10 +3,9 @@
   "appName": "Olive Pizza",
   "webDir": "dist/client",
   "server": {
-    "url": "https://olive-pizza.vercel.app",
-    "cleartext": false,
-    "allowNavigation": ["olive-pizza.vercel.app", "*.firebaseapp.com", "*.googleapis.com"],
-    "iosScheme": "https"
+    "androidScheme": "https",
+    "iosScheme": "https",
+    "allowNavigation": ["*.firebaseapp.com", "*.googleapis.com", "*.onrender.com"]
   },
   "ios": {
     "contentInset": "always"
