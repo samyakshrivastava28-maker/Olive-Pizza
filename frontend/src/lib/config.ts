@@ -10,7 +10,7 @@ export const CLOSING_HOUR = 24; // 12 AM (midnight)
 
 import { Capacitor } from '@capacitor/core';
 
-export const PRODUCTION_BACKEND_URL = "https://api.olivepizza.in";
+export const PRODUCTION_BACKEND_URL = "https://olivepizza-owner.onrender.com";
 
 /**
  * Resilient API URL resolver:

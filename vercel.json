@@ -35,7 +35,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://api.olivepizza.in/api/:path*"
+      "destination": "https://olivepizza-owner.onrender.com/api/:path*"
     },
     {
       "source": "/(.*)",

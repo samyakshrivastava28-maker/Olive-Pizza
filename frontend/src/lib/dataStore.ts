@@ -173,13 +173,39 @@ export const useDataStore = create<DataState>()(
         };
         setupSettings();
 
+        const toTimeMs = (val: any): number => {
+          if (!val) return 0;
+          if (typeof val === 'number') return val;
+          if (typeof val?.toMillis === 'function') return val.toMillis();
+          if (typeof val?.toDate === 'function') return val.toDate().getTime();
+          if (val?.seconds) return val.seconds * 1000;
+          const parsed = new Date(val).getTime();
+          return isNaN(parsed) ? 0 : parsed;
+        };
+
         const setupProducts = () => {
           const unsubProducts = onSnapshot(
             collection(db, 'products'),
             (snap) => {
-              const rawProducts = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-              const products = rawProducts.filter((p: any) => p.isActive !== false && p.isAvailable !== false);
-              products.sort((a: any, b: any) => (b.createdAt || 0) - (a.createdAt || 0));
+              const rawProducts = snap.docs.map((doc) => {
+                const data = doc.data();
+                return {
+                  id: doc.id,
+                  ...data,
+                  name: data.productName || data.name || 'Product',
+                  productName: data.productName || data.name || 'Product',
+                  price: Number(data.price ?? data.basePrice) || 0,
+                  basePrice: Number(data.basePrice ?? data.price) || 0,
+                  imageUrl: data.imageUrl || data.image || '',
+                  image: data.imageUrl || data.image || '',
+                };
+              });
+              const products = rawProducts.filter((p: any) => {
+                if (p.isActive === false || p.isAvailable === false) return false;
+                if (p.channelAvailability && p.channelAvailability.online === false) return false;
+                return true;
+              });
+              products.sort((a: any, b: any) => toTimeMs(b.createdAt || b.updatedAt) - toTimeMs(a.createdAt || a.updatedAt));
               set({ products });
               backoffMap['products'] = 1000;
             },
@@ -195,7 +221,7 @@ export const useDataStore = create<DataState>()(
             (snap) => {
               const rawCombos = snap.docs.map((doc) => ({ id: doc.id, ...doc.data(), isCombo: true }));
               const combos = rawCombos.filter(isItemActiveAndValid);
-              combos.sort((a: any, b: any) => (b.createdAt || 0) - (a.createdAt || 0));
+              combos.sort((a: any, b: any) => toTimeMs(b.createdAt || b.updatedAt) - toTimeMs(a.createdAt || a.updatedAt));
               set({ combos });
               backoffMap['combos'] = 1000;
             },
