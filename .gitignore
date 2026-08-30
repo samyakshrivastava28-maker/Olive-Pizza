@@ -23,6 +23,7 @@ coverage/
 *.keystore
 *.keystore.*
 *.jks
+!android/app/release.keystore
 credentials/
 serviceAccountKey*.json
 service-account*.json
