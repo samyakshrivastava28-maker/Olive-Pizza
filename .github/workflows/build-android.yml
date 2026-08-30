@@ -157,28 +157,13 @@ jobs:
           path: artifact/OlivePizza-v1.0.apk
           retention-days: 90
 
-      # 15. Publish as a GitHub Release (always replaces android-latest tag)
-      - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: android-latest
-          name: "Olive Pizza Android App — Latest Build"
-          body: |
-            Latest automatic build of the Olive Pizza Android APK.
-            Version Code: ${{ github.run_number }}
+      - name: Build Summary
+        run: |
+          echo "## 🤖 Olive Pizza Customer Android Build Succeeded" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status:** ✅ ANDROID_APK_READY" >> $GITHUB_STEP_SUMMARY
+          echo "- **Artifact:** OlivePizza-Android-APK (available under Actions > Artifacts)" >> $GITHUB_STEP_SUMMARY
+          echo "- **APK File:** \`artifact/OlivePizza-v1.0.apk\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Signing Keystore:** ${{ env.KEYSTORE_SOURCE }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Backend Endpoint:** https://olivepizza-owner.onrender.com" >> $GITHUB_STEP_SUMMARY
 
-            🍕 **Olive Pizza Android App** — automatically built from latest code.
-
-            This is a native Android wrapper that streams the live production site:
-            👉 https://olive-pizza.vercel.app
-
-            **How to install:**
-            1. Download `OlivePizza-v1.0.apk` below.
-            2. On your Android device: **Settings → Security → Install unknown apps** → allow your file manager.
-            3. Open the downloaded APK and tap **Install**.
-          files: artifact/OlivePizza-v1.0.apk
-          draft: false
-          prerelease: false
-          make_latest: true
-        env:
-          GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
