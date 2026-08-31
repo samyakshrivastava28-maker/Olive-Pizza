@@ -32,6 +32,7 @@ import { useNavigate } from 'react-router';
 import { Capacitor } from '@capacitor/core';
 import { PushNotifications } from '@capacitor/push-notifications';
 import { NOTIFICATION_CHANNELS, NOTIFICATION_ACTION_TYPES } from '../lib/notificationChannels';
+import { fetchApi } from '../lib/config';
 const BROADCAST_CHANNEL = 'olive_pizza_notifications';
 
 function resolveCustomerUrl(url?: string, orderId?: string): string {
