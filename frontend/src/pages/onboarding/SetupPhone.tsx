@@ -26,6 +26,7 @@ export default function SetupPhone() {
   const [loading, setLoading] = useState(false);
   const [countdown, setCountdown] = useState(0);
   const [isNativeApp, setIsNativeApp] = useState(false);
+  const [pinId, setPinId] = useState<string | null>(null);
 
   // Web QR Session State
   const [qrModalOpen, setQrModalOpen] = useState(false);
@@ -218,23 +219,18 @@ export default function SetupPhone() {
 
       const data = await res.json();
       if (data.success) {
+        if (data.pinId) setPinId(data.pinId);
         toast.success(data.message || "OTP sent successfully via SMS!");
         setStep('otp_input');
-        setCountdown(60);
+        setCountdown(data.cooldownSeconds || 60);
       } else {
         throw new Error(data.error || "Failed to send OTP.");
       }
     } catch (err: any) {
       console.error(err);
       const errMsg: string = err.message || "Failed to send OTP.";
-      // When Fast2SMS is blocked (website verification), guide user to Truecaller
-      if (errMsg.includes('website verification') || errMsg.includes('Truecaller')) {
-        setError("SMS is temporarily unavailable. Please use Truecaller verification above to verify your phone instantly.");
-        toast.error("SMS unavailable — please use Truecaller verification");
-      } else {
-        toast.error(errMsg);
-        setError(errMsg);
-      }
+      toast.error(errMsg);
+      setError(errMsg);
       if (isDevMode) setStep('otp_input');
     } finally {
       setLoading(false);
@@ -263,6 +259,7 @@ export default function SetupPhone() {
         body: JSON.stringify({
           phoneNumber: formatted,
           otp: otp.trim(),
+          pinId: pinId || undefined,
           userId: auth.currentUser?.uid
         })
       });
