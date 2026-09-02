@@ -128,6 +128,7 @@ const VerifyEmail = lazyWithRetry(() => import('./pages/onboarding/VerifyEmail')
 const SetupPhone = lazyWithRetry(() => import('./pages/onboarding/SetupPhone'));
 const SetupLocation = lazyWithRetry(() => import('./pages/onboarding/SetupLocation'));
 const OrderSuccessScreen = lazyWithRetry(() => import('./pages/OrderSuccessScreen'));
+const OrderCancelledPage = lazyWithRetry(() => import('./pages/OrderCancelledPage'));
 
 // Lazy loaded customer dashboard
 const CustomerDashboard = lazyWithRetry(() => import('./pages/CustomerDashboard'));
@@ -207,6 +208,7 @@ function AppContent() {
                 <Route path="/recheck-order" element={<RecheckOrder />} />
                 <Route path="/processing-order" element={<ProcessingOrder />} />
                 <Route path="/order-success/:orderId" element={<OrderSuccessScreen />} />
+                <Route path="/order-cancelled/:id" element={<Suspense fallback={<PizzaLoader />}><OrderCancelledPage /></Suspense>} />
                 <Route path="/order-tracking/:orderId" element={<OrderTracking />} />
                 <Route path="/tracking/:orderId" element={<OrderTracking />} />
                 <Route path="/contact" element={<Contact />} />

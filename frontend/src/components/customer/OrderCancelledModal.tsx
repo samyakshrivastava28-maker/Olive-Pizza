@@ -4,6 +4,7 @@ import { XCircle, ShoppingBag, ArrowRight, AlertTriangle, X } from "lucide-react
 import { useNavigate } from "react-router";
 import { auth, db } from "../../lib/firebase";
 import { collection, query, where, onSnapshot, limit } from "firebase/firestore";
+import { fetchApi } from "../../lib/config";
 import { GlassButton } from "../ui/glass/GlassSystem";
 import { Order } from "../../types/models";
 
@@ -15,7 +16,7 @@ export default function OrderCancelledModal() {
     const user = auth.currentUser;
     if (!user) return;
 
-    // Listen to user's recent orders to detect cancellations
+    // Listen to user's recent orders to detect unacknowledged cancellations
     const q = query(
       collection(db, "orders"),
       where("userId", "==", user.uid),
@@ -27,9 +28,14 @@ export default function OrderCancelledModal() {
       // Sort newest first
       docs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-      // Find the most recent cancelled order that hasn't been dismissed by customer
+      // Find the most recent cancelled order that hasn't been acknowledged
       const recentCancelled = docs.find((o) => {
         if (o.status !== "cancelled") return false;
+        // Server-backed acknowledgement check
+        if ((o as any).cancellationAcknowledged === true || (o as any).cancellationAcknowledgedAt) {
+          return false;
+        }
+        // Local immediate suppression fallback
         const isDismissed = localStorage.getItem(`dismissed_cancel_${o.id}`) === "true";
         return !isDismissed;
       });
@@ -52,11 +58,21 @@ export default function OrderCancelledModal() {
     (cancelledOrder as any).lastRejectionReason ||
     (cancelledOrder as any).reason;
 
-  const orderNum = cancelledOrder.dailyOrderNumber || `#${cancelledOrder.id?.slice(-6).toUpperCase()}`;
+  const isTimeout = (cancelledOrder as any).cancellationReason === "RESTAURANT_ACCEPT_TIMEOUT";
+  const orderNum = cancelledOrder.dailyOrderNumber ? `#${cancelledOrder.dailyOrderNumber}` : `#${cancelledOrder.id?.slice(-6).toUpperCase()}`;
+
+  const acknowledgeServer = async (orderId: string) => {
+    localStorage.setItem(`dismissed_cancel_${orderId}`, "true");
+    try {
+      await fetchApi(`/api/orders/${orderId}/acknowledge-cancellation`, { method: 'POST' });
+    } catch (err) {
+      console.warn("Failed to acknowledge cancellation on server:", err);
+    }
+  };
 
   const handleDismiss = () => {
     if (cancelledOrder?.id) {
-      localStorage.setItem(`dismissed_cancel_${cancelledOrder.id}`, "true");
+      acknowledgeServer(cancelledOrder.id);
     }
     setCancelledOrder(null);
   };
@@ -67,8 +83,10 @@ export default function OrderCancelledModal() {
   };
 
   const handleViewDetails = () => {
-    handleDismiss();
-    navigate(`/order-tracking/${cancelledOrder.id}`);
+    if (cancelledOrder?.id) {
+      acknowledgeServer(cancelledOrder.id);
+      navigate(`/order-cancelled/${cancelledOrder.id}`);
+    }
   };
 
   return (
@@ -99,7 +117,7 @@ export default function OrderCancelledModal() {
             </div>
             <div>
               <span className="text-[10px] font-black tracking-widest text-red-400 uppercase bg-red-500/10 px-2.5 py-1 rounded-full border border-red-500/20 inline-block mb-1">
-                Order Cancelled by Owner
+                {isTimeout ? "Automatic Timeout" : "Order Cancelled"}
               </span>
               <h2 className="text-xl font-black text-white">
                 Order {orderNum}
@@ -108,7 +126,9 @@ export default function OrderCancelledModal() {
           </div>
 
           <p className="text-slate-300 text-sm mb-4">
-            Your order was cancelled by the restaurant owner with the following reason:
+            {isTimeout 
+              ? "The restaurant was unable to accept your order within the 10-minute window. We apologize for the inconvenience."
+              : "Your order was cancelled by restaurant operations with the following reason:"}
           </p>
 
           {/* Exact Reason Box */}
@@ -120,7 +140,9 @@ export default function OrderCancelledModal() {
                   Cancellation Reason
                 </p>
                 <p className="text-white font-bold text-base leading-snug">
-                  {reasonText ? `"${reasonText}"` : "No reason provided."}
+                  {isTimeout
+                    ? "Restaurant acceptance deadline timed out (10 mins)."
+                    : (reasonText ? `"${reasonText}"` : "No specific reason provided.")}
                 </p>
               </div>
             </div>

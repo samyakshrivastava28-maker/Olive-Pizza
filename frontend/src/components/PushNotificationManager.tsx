@@ -36,6 +36,7 @@ import { fetchApi } from '../lib/config';
 const BROADCAST_CHANNEL = 'olive_pizza_notifications';
 
 function resolveCustomerUrl(url?: string, orderId?: string): string {
+  if (url && url.startsWith('/order-cancelled/')) return url;
   if (!url) return orderId ? `/order-tracking/${orderId}` : '/';
   if (
     url.startsWith('/owner') ||
@@ -249,6 +250,7 @@ export default function PushNotificationManager() {
           platform: Capacitor.isNativePlatform() ? 'android' : navigator.platform,
           browser: Capacitor.isNativePlatform() ? 'capacitor' : getBrowserName(),
           appVersion: import.meta.env.VITE_APP_VERSION || '1.0',
+          appName: 'customer',
         }),
       });
 
