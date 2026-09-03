@@ -42,6 +42,7 @@ import FeaturedShowcase from "../components/home/FeaturedShowcase";
 import AppDownloadSection from "../components/home/AppDownloadSection";
 import FlagshipFooter from "../components/home/FlagshipFooter";
 import PageRenderer from "../components/home/PageRenderer";
+import StitchMidnightGlowHome from "../components/home/StitchMidnightGlowHome";
 import { PageSchema } from "../types/PageSchema";
 
 
@@ -238,7 +239,11 @@ export default function Home() {
           />
 
           {pageSchema ? (
-            <PageRenderer schema={pageSchema} />
+            pageSchema.pageId === 'default' ? (
+              <StitchMidnightGlowHome />
+            ) : (
+              <PageRenderer schema={pageSchema} />
+            )
           ) : (
             <div className="w-full flex flex-col gap-8 py-16 relative z-10 min-h-[600px] items-center justify-center">
               <PizzaLoader text="Handcrafting your menu..." size="medium" />
