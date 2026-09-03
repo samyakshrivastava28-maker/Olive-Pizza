@@ -17,6 +17,8 @@ import CountdownBanner from './sections/CountdownBanner';
 import GallerySection from './sections/GallerySection';
 import TestimonialsSection from './sections/TestimonialsSection';
 
+import { useStoreStatus } from '../../lib/useStoreStatus';
+
 interface PageRendererProps {
   schema: PageSchema;
   isEditorMode?: boolean;
@@ -30,7 +32,8 @@ const renderSection = (
   isEditorMode: boolean, 
   onElementSelect?: (sid: string, eid?: string) => void,
   selectedSectionId?: string | null,
-  viewMode: 'mobile' | 'tablet' | 'desktop' = 'mobile'
+  viewMode: 'mobile' | 'tablet' | 'desktop' = 'mobile',
+  isStoreOpen: boolean = true
 ) => {
   if (section.isHidden && !isEditorMode) return null;
   
@@ -56,7 +59,7 @@ const renderSection = (
     case 'HERO':
       Component = !activeMediaUrl ? (
         <div className={opacity}>
-          <LuxuryHero isStoreOpen={true} showIntro={false} />
+          <LuxuryHero isStoreOpen={isStoreOpen} showIntro={false} />
         </div>
       ) : (
         <div 
@@ -210,6 +213,9 @@ export default function PageRenderer({ schema, isEditorMode = false, onElementSe
     return true;
   });
 
+  const storeStatus = useStoreStatus();
+  const isStoreOpen = storeStatus.isRestaurantOpen && storeStatus.isWithinBusinessHours;
+
   // Check if sections array explicitly includes an ads section
   const hasAdsSection = cleanSections.some(
     (s) => ['ADS', 'ADVERTISEMENTS', 'PROMOTIONS'].includes((s.type || '').toUpperCase()) && !s.isHidden
@@ -221,7 +227,7 @@ export default function PageRenderer({ schema, isEditorMode = false, onElementSe
         const isCravings = ['CRAVINGS', 'CRAVING_CATEGORIES'].includes((section.type || '').toUpperCase());
         return (
           <React.Fragment key={section.id}>
-            {renderSection(section, isEditorMode, onElementSelect, selectedSectionId, viewMode)}
+            {renderSection(section, isEditorMode, onElementSelect, selectedSectionId, viewMode, isStoreOpen)}
             {/* If schema didn't contain an explicit ADS section, guarantee published Ads appear directly below Cravings section */}
             {!hasAdsSection && isCravings && (
               <div key={`auto-ads-${section.id}`}>

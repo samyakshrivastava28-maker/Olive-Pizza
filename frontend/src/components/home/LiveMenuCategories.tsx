@@ -331,7 +331,7 @@ export default function LiveMenuCategories() {
         p.category &&
         (p.category.toLowerCase().includes("dessert") ||
           p.category.toLowerCase().includes("sweet") ||
-          p.category.toLowerCase().includes("cake") ||
+        p.category.toLowerCase().includes("cake") ||
           p.category.toLowerCase().includes("brownie") ||
           p.category.toLowerCase().includes("ice"))
     );
@@ -342,25 +342,22 @@ export default function LiveMenuCategories() {
         name: p.productName || p.name || "Artisan Dessert",
       }));
 
-    // Standard Core Categories
+    // Standard Core Categories (Driven strictly by live real items)
     const coreCategories: CategoryItem[] = [
       {
         id: "pizza",
         name: "Artisan Pizza",
-        defaultImage:
-          "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=400&q=80",
+        defaultImage: pizzaImages[0]?.image || "https://res.cloudinary.com/dxmlvkff1/image/upload/v1786517437/olive-pizza/ai-product-images/dv4uty06rq4tznlpqz2i.jpg",
         productImages: pizzaImages,
         itemCount: pizzaProducts.length,
         glowColor: "rgba(249, 115, 22, 0.6)",
-        badge: "Bestseller",
         isRecommended: true,
         targetUrl: "/menu?category=pizza",
       },
       {
         id: "burgers",
         name: "Burgers",
-        defaultImage:
-          "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400&q=80",
+        defaultImage: burgerImages[0]?.image || "",
         productImages: burgerImages,
         itemCount: burgerProducts.length,
         glowColor: "rgba(234, 179, 8, 0.6)",
@@ -369,19 +366,16 @@ export default function LiveMenuCategories() {
       {
         id: "pasta",
         name: "Pastas",
-        defaultImage:
-          "https://images.unsplash.com/photo-1621996346565-e3d5d6281691?w=400&q=80",
+        defaultImage: pastaImages[0]?.image || "",
         productImages: pastaImages,
         itemCount: pastaProducts.length,
         glowColor: "rgba(239, 68, 68, 0.6)",
-        badge: "NEW",
         targetUrl: "/menu?category=pasta",
       },
       {
         id: "sides",
         name: "Garlic Bread & Sides",
-        defaultImage:
-          "https://images.unsplash.com/photo-1573140247632-f8fd74997d5c?w=400&q=80",
+        defaultImage: sideImages[0]?.image || "",
         productImages: sideImages,
         itemCount: sideProducts.length,
         glowColor: "rgba(16, 185, 129, 0.6)",
@@ -390,19 +384,16 @@ export default function LiveMenuCategories() {
       {
         id: "combo",
         name: "Value Combos",
-        defaultImage:
-          "https://images.unsplash.com/photo-1544982503-9f984c14501a?w=400&q=80",
+        defaultImage: comboImages[0]?.image || "",
         productImages: comboImages,
         itemCount: comboList.length,
         glowColor: "rgba(168, 85, 247, 0.6)",
-        badge: "Super Value",
         targetUrl: "/menu?category=combo",
       },
       {
         id: "beverage",
         name: "Beverages",
-        defaultImage:
-          "https://images.unsplash.com/photo-1622483767028-3f66f32aef97?w=400&q=80",
+        defaultImage: beverageImages[0]?.image || "",
         productImages: beverageImages,
         itemCount: beverageProducts.length,
         glowColor: "rgba(59, 130, 246, 0.6)",
@@ -411,8 +402,7 @@ export default function LiveMenuCategories() {
       {
         id: "dessert",
         name: "Desserts",
-        defaultImage:
-          "https://images.unsplash.com/photo-1551024709-8f23befc6f87?w=400&q=80",
+        defaultImage: dessertImages[0]?.image || "",
         productImages: dessertImages,
         itemCount: dessertProducts.length,
         glowColor: "rgba(236, 72, 153, 0.6)",

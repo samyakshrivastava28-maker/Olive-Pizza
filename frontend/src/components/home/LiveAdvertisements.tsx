@@ -87,7 +87,7 @@ export default function LiveAdvertisements() {
     currentAd.bannerUrl ||
     currentAd.bannerImage ||
     currentAd.url ||
-    "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=1600&q=80";
+    "https://res.cloudinary.com/dxmlvkff1/image/upload/f_auto,q_auto:best,w_1920/v1783008946/olive-pizza-hero-background_d9rbzc.webp";
 
   const isVideo =
     currentAd.mediaType === "video" ||

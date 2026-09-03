@@ -152,11 +152,15 @@ export default function Home() {
   useEffect(() => {
     let isMounted = true;
 
+    const isValidSchema = (config: any): config is PageSchema => {
+      return config && typeof config === 'object' && Array.isArray(config.sections) && config.sections.length > 0;
+    };
+
     // 1. Instant fallback / initial fetch from API
     fetch('/api/homepage/live')
       .then(res => res.json())
       .then(data => {
-        if (isMounted && data.success && data.config) {
+        if (isMounted && data.success && isValidSchema(data.config)) {
           cachedPageSchema = data.config;
           setPageSchema(data.config);
         }
@@ -169,9 +173,13 @@ export default function Home() {
       (snapshot) => {
         if (snapshot.exists()) {
           const data = snapshot.data();
-          if (data?.config && isMounted) {
-            cachedPageSchema = data.config;
-            setPageSchema(data.config);
+          if (isMounted) {
+            if (isValidSchema(data?.config)) {
+              cachedPageSchema = data.config;
+              setPageSchema(data.config);
+            } else {
+              setPageSchema(PREDEFINED_TEMPLATES[0]);
+            }
           }
         }
       },

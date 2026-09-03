@@ -18,6 +18,7 @@ import { withAuthRetry } from "../lib/authRetry";
 import { translateError, logDetailedError } from "../lib/errorTranslator";
 import { Mail, Lock, EyeOff, Eye, AlertCircle, ArrowRight, User } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { fetchApi } from "../lib/config";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -92,67 +93,67 @@ export default function Login() {
     setError("");
     setLoading(true);
     try {
-      // ReCaptcha Enterprise Assessment (Non-blocking as requested)
+      // ReCaptcha Enterprise Assessment (Non-blocking fallback)
       try {
-        if (typeof (window as any).grecaptcha !== 'undefined') {
+        if (typeof (window as any).grecaptcha !== 'undefined' && (window as any).grecaptcha?.enterprise) {
           const grecaptcha = (window as any).grecaptcha;
           await Promise.race([
             new Promise<void>((resolve) => grecaptcha.enterprise.ready(resolve)),
-            new Promise<void>((_, reject) => setTimeout(() => reject(new Error("ReCaptcha timeout")), 3000))
+            new Promise<void>((_, reject) => setTimeout(() => reject(new Error("ReCaptcha timeout")), 2000))
           ]);
           const token = await grecaptcha.enterprise.execute('6LdqyDctAAAAABn8isXOdDe-0roVqILKuAdIl_x-', {action: 'LOGIN'});
-          
-          await withAuthRetry(() => fetch('/api/auth/verify-recaptcha', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token, action: 'LOGIN' })
-          }).then(async res => {
-             const data = await res.json();
-             if (data.success === false) {
-                console.warn("Recaptcha assessment failed or flagged:", data.reason);
-             }
-             return data;
-          }), "Recaptcha Login", 1);
+          if (token) {
+            fetchApi('/api/auth/verify-recaptcha', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ token, action: 'LOGIN' })
+            }).catch(() => {});
+          }
         }
       } catch (recaptchaError) {
-        logDetailedError(recaptchaError, { context: "Recaptcha" });
-        console.warn("Recaptcha execution failed, proceeding to login to not block workflow:", recaptchaError);
+        console.warn("Recaptcha non-blocking notice:", recaptchaError);
       }
 
       const userCredential = await withAuthRetry(() => signInWithEmailAndPassword(
         auth,
-        email,
+        email.trim(),
         password,
       ), "Email Login");
       
       const { getDoc } = await import("firebase/firestore");
-      const userDoc = await withAuthRetry(() => getDoc(doc(db, "users", userCredential.user.uid)), "Fetch User Doc");
-      const data = userDoc.data();
+      let data: any = null;
+      try {
+        const userDoc = await getDoc(doc(db, "users", userCredential.user.uid));
+        if (userDoc.exists()) {
+          data = userDoc.data();
+        }
+      } catch (docErr) {
+        console.warn("User doc fetch notice:", docErr);
+      }
+
       const userRole = data?.role || "customer";
 
-      if (userDoc.exists()) {
-        useAuthStore.getState().setUser({
-          uid: userCredential.user.uid,
-          email: userCredential.user.email,
-          name: data?.name,
-          phone: data?.phone,
-          photoURL: userCredential.user.photoURL || data?.photoUrl,
-          phoneVerified: data?.phoneVerified ?? false,
-          phoneSetupCompleted: data?.phoneVerified ? (data?.phoneSetupCompleted ?? true) : false,
-          locationSetupCompleted: data?.locationSetupCompleted ?? !!data?.fullAddress,
-          lat: data?.lat,
-          lng: data?.lng,
-          fullAddress: data?.fullAddress,
-          emailVerified: userCredential.user.emailVerified,
-          approvalStatus: data?.approvalStatus,
-          status: data?.status,
-          photoUrl: data?.photoUrl,
-        }, userRole as "customer" | "owner" | "delivery_partner" | "admin");
-      }
+      useAuthStore.getState().setUser({
+        uid: userCredential.user.uid,
+        email: userCredential.user.email,
+        name: data?.name || userCredential.user.displayName || userCredential.user.email?.split('@')[0] || "Customer",
+        phone: data?.phone || userCredential.user.phoneNumber,
+        photoURL: userCredential.user.photoURL || data?.photoUrl,
+        phoneVerified: data?.phoneVerified ?? false,
+        phoneSetupCompleted: data?.phoneVerified ? (data?.phoneSetupCompleted ?? true) : false,
+        locationSetupCompleted: data?.locationSetupCompleted ?? !!data?.fullAddress,
+        lat: data?.lat,
+        lng: data?.lng,
+        fullAddress: data?.fullAddress,
+        emailVerified: userCredential.user.emailVerified,
+        approvalStatus: data?.approvalStatus,
+        status: data?.status,
+        photoUrl: data?.photoUrl,
+      }, userRole as "customer" | "owner" | "delivery_partner" | "admin");
 
       toast.success("Welcome back!");
 
-      // In customer app, all users (including owners/delivery partners) stay in customer flow
+      // In customer app, all users stay in customer flow
       navigate("/");
     } catch (err: any) {
       setError(err.message || translateError(err));
@@ -186,27 +187,32 @@ export default function Login() {
           throw new Error("Google Sign-In failed on device.");
         }
       } else {
-        result = await withAuthRetry(() => signInWithPopup(auth, provider), "Google Popup");
+        result = await signInWithPopup(auth, provider);
       }
       
       if (result && result.user) {
         const userRef = doc(db, "users", result.user.uid);
         const { getDoc } = await import("firebase/firestore");
-        const userDoc = await getDoc(userRef);
+        let userDoc: any = null;
+        try {
+          userDoc = await getDoc(userRef);
+        } catch (fsErr) {
+          console.warn("User doc fetch notice:", fsErr);
+        }
 
         const userEmail = result.user.email?.toLowerCase() || "";
         const initialRole = ["olivepizzarjn@gmail.com", "webhub2811@gmail.com"].includes(userEmail) ? "owner" : "customer";
         let finalRole = initialRole;
 
-        if (!userDoc.exists()) {
+        if (!userDoc?.exists()) {
           await setDoc(userRef, {
             email: userEmail,
             name: result.user.displayName || "",
             role: initialRole,
             createdAt: new Date().toISOString(),
-          });
+          }, { merge: true }).catch(() => {});
 
-          fetch("/api/email/auth/welcome", {
+          fetchApi("/api/email/auth/welcome", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -248,21 +254,14 @@ export default function Login() {
         }
 
         toast.success("Welcome!");
-        // In customer app, all users (including owners/delivery partners) stay in customer flow
+        // Always navigate to customer home on customer app
         navigate("/");
       }
     } catch (err: any) {
-      logDetailedError(err, { context: "Google Login" });
-      const errMsg = err.message || translateError(err);
-      
-      // Specifically check for Varnish 503 or network errors
-      if (errMsg.includes('503') || errMsg.includes('network') || errMsg.includes('backend read error') || errMsg.includes('Varnish')) {
-        const customMsg = "Google's authentication servers are temporarily unavailable in your region. Please log in with Email & Password.";
-        setError(customMsg);
-        toast.error(customMsg, { duration: 6000 });
-      } else {
-        setError(errMsg);
+      if (err.code !== 'auth/popup-closed-by-user' && !err.message?.includes('closed-by-user')) {
+        setError(err.message || translateError(err));
       }
+    } finally {
       setLoading(false);
     }
   };

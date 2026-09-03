@@ -54,7 +54,7 @@ export default function FeaturedShowcase({
         basePrice: Number(data.basePrice || data.price || 0),
         offerPrice: Number(data.offerPrice || 0),
         discountPercentage: Number(data.discountPercentage || 0),
-        image: data.imageUrl || data.image || "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=500&q=80",
+        image: data.imageUrl || data.image || "https://res.cloudinary.com/dxmlvkff1/image/upload/v1786517437/olive-pizza/ai-product-images/dv4uty06rq4tznlpqz2i.jpg",
         isVegetarian: data.isVegetarian !== undefined ? Boolean(data.isVegetarian) : Boolean(data.isVeg ?? true),
         isAvailable: data.isActive !== undefined ? Boolean(data.isActive) : true,
       }));
@@ -70,7 +70,7 @@ export default function FeaturedShowcase({
         basePrice: Number(c.basePrice || 0),
         offerPrice: Number(c.offerPrice || 0),
         discountPercentage: Number(c.discountPercentage || 0),
-        image: c.imageUrl || c.image || "https://images.unsplash.com/photo-1544982503-9f984c14501a?w=500&q=80",
+        image: c.imageUrl || c.image || "https://res.cloudinary.com/dxmlvkff1/image/upload/v1786517437/olive-pizza/ai-product-images/dv4uty06rq4tznlpqz2i.jpg",
         isVegetarian: false,
         isAvailable: c.isActive !== undefined ? Boolean(c.isActive) : true,
         productIds: c.productIds,

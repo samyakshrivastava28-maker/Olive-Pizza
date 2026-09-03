@@ -63,6 +63,16 @@ service cloud.firestore {
       allow write: if hasFullAccess() || isOwner(userId);
     }
 
+    match /customer_identities/{phone} {
+      allow read: if true;
+      allow create, update: if isSignedIn() || hasFullAccess();
+    }
+
+    match /security_logs/{logId} {
+      allow create: if true;
+      allow read, update, delete: if hasFullAccess();
+    }
+
     match /orders/{orderId} {
       allow read: if hasFullAccess() || 
                   (isSignedIn() && resource.data.userId == request.auth.uid) || 

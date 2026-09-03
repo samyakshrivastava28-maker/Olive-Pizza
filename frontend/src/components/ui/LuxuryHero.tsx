@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { motion, useMotionValue, useSpring, useTransform, AnimatePresence } from "framer-motion";
 import { Link } from "react-router";
-import { ChevronRight, Sparkles } from "lucide-react";
+import { ChevronRight, Sparkles, Flame, MapPin, Leaf, CheckCircle2 } from "lucide-react";
 
 const DESKTOP_BG = "https://res.cloudinary.com/dxmlvkff1/image/upload/f_auto,q_auto:best,w_1920/v1783008946/olive-pizza-hero-background_d9rbzc.webp";
 const MOBILE_BG = "https://res.cloudinary.com/dxmlvkff1/image/upload/f_auto,q_auto:best,w_750/v1783008965/olive-pizza-mobile-hero_h4g3py.webp";
@@ -306,27 +306,36 @@ export default function LuxuryHero({ isStoreOpen, showIntro }: LuxuryHeroProps) 
             </Link>
           </motion.div>
 
-          {/* Stats row */}
+          {/* Real Operational Signals — Zero Fake Data */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.8, delay: delay + 0.55 }}
-            className="flex items-center gap-6 mt-8 md:mt-10"
+            className="flex flex-wrap items-center gap-3 sm:gap-4 mt-6 md:mt-8"
           >
-            {[
-              { value: "4.9★", label: "Rating" },
-              { value: "30min", label: "Delivery" },
-              { value: "100%", label: "Fresh" },
-            ].map((stat) => (
-              <div key={stat.label} className="flex flex-col">
-                <span className="text-white font-black text-lg md:text-xl leading-none">
-                  {stat.value}
-                </span>
-                <span className="text-slate-400 text-xs font-medium mt-0.5">
-                  {stat.label}
-                </span>
-              </div>
-            ))}
+            {/* Live Kitchen Status */}
+            <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/5 border border-white/10 backdrop-blur-md">
+              <span className={`w-2 h-2 rounded-full ${isStoreOpen ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+              <span className="text-white text-xs font-semibold">
+                {isStoreOpen ? 'Kitchen Live & Baking' : 'Opening Soon'}
+              </span>
+            </div>
+
+            {/* 100% Pure Veg Certification */}
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 backdrop-blur-md">
+              <Leaf className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="text-emerald-300 text-xs font-semibold">
+                100% Pure Veg Artisan
+              </span>
+            </div>
+
+            {/* Real Branch Context */}
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 backdrop-blur-md">
+              <MapPin className="w-3.5 h-3.5 text-primary-400" />
+              <span className="text-slate-300 text-xs font-medium">
+                Rajnandgaon (Main)
+              </span>
+            </div>
           </motion.div>
         </div>
       </div>

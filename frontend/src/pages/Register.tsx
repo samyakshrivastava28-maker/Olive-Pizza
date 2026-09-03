@@ -18,6 +18,7 @@ import { withAuthRetry } from "../lib/authRetry";
 import { translateError, logDetailedError } from "../lib/errorTranslator";
 import PizzaLoader from "../components/ui/PizzaLoader";
 import { motion, AnimatePresence } from "framer-motion";
+import { fetchApi } from "../lib/config";
 
 const getDeviceId = () => {
   let deviceId = localStorage.getItem('device_fingerprint');
@@ -95,31 +96,25 @@ export default function Register() {
     setLoading(true);
 
     try {
-      // ReCaptcha Enterprise Assessment (Non-blocking as requested)
+      // ReCaptcha Enterprise Assessment (Non-blocking fallback)
       try {
-        if (typeof (window as any).grecaptcha !== 'undefined') {
+        if (typeof (window as any).grecaptcha !== 'undefined' && (window as any).grecaptcha?.enterprise) {
           const grecaptcha = (window as any).grecaptcha;
           await Promise.race([
             new Promise<void>((resolve) => grecaptcha.enterprise.ready(resolve)),
-            new Promise<void>((_, reject) => setTimeout(() => reject(new Error("ReCaptcha timeout")), 3000))
+            new Promise<void>((_, reject) => setTimeout(() => reject(new Error("ReCaptcha timeout")), 2000))
           ]);
           const token = await grecaptcha.enterprise.execute('6LdqyDctAAAAABn8isXOdDe-0roVqILKuAdIl_x-', {action: 'REGISTER'});
-          
-          await withAuthRetry(() => fetch('/api/auth/verify-recaptcha', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token, action: 'REGISTER' })
-          }).then(async res => {
-             const data = await res.json();
-             if (data.success === false) {
-                console.warn("Recaptcha assessment failed or flagged:", data.reason);
-             }
-             return data;
-          }), "Recaptcha Register", 1);
+          if (token) {
+            fetchApi('/api/auth/verify-recaptcha', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ token, action: 'REGISTER' })
+            }).catch(() => {});
+          }
         }
       } catch (recaptchaError) {
-        logDetailedError(recaptchaError, { context: "Recaptcha" });
-        console.warn("Recaptcha execution failed, proceeding to register to not block workflow:", recaptchaError);
+        console.warn("Recaptcha non-blocking notice:", recaptchaError);
       }
 
       // 1. Phone validation
@@ -130,7 +125,6 @@ export default function Register() {
 
       if (phone.trim() !== "") {
         try {
-          // ðŸš¨ DEVELOPMENT BYPASS: Allow any string/number format
           formattedPhone = phone.trim();
           if (!formattedPhone.startsWith('+')) {
             formattedPhone = `+91${formattedPhone}`;
@@ -144,33 +138,15 @@ export default function Register() {
         // 2. Check for uniqueness
         try {
           const identityRef = doc(db, "customer_identities", formattedPhone);
-          const identityDoc = await withAuthRetry(() => getDoc(identityRef), "Check Phone Uniqueness");
-          identityDocExists = identityDoc.exists();
-          if (identityDoc.exists()) {
-            try {
-              const { addDoc, collection } = await import("firebase/firestore");
-              await addDoc(collection(db, "security_logs"), {
-                action: "duplicate_phone_attempt",
-                email: email,
-                uid: "N/A",
-                role: "customer",
-                path: "/register",
-                timestamp: new Date().toISOString(),
-                details: `Attempted to register with already used phone ${formattedPhone}`
-              });
-            } catch (e) {
-              console.error("Failed to log security event");
-            }
+          const identityDoc = await getDoc(identityRef).catch(() => null);
+          identityDocExists = !!identityDoc?.exists();
+          if (identityDocExists) {
             setError("Phone number already in use. One phone number can only be linked to one account.");
             setLoading(false);
             return;
           }
         } catch (err: any) {
-          if (err.code === 'unavailable' || err.message?.includes('offline')) {
-            console.warn('Network offline during uniqueness check. Bypassing check.');
-          } else {
-            throw err;
-          }
+          console.warn('Phone uniqueness check notice:', err);
         }
       } else if (initialRole !== 'owner') {
         setError("Phone number is required");

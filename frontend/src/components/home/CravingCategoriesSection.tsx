@@ -318,22 +318,21 @@ export default function CravingCategoriesSection({ config }: { config?: any }) {
         image: p.image || p.imageUrl,
       }));
 
-    // Core Categories Array
+    // Core Categories Array (Driven strictly by live real items)
     const coreList: CravingCategory[] = [
       {
         id: 'pizza',
         name: 'Pizzas',
-        defaultImage: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=400&q=80',
+        defaultImage: pizzaItems[0]?.image || 'https://res.cloudinary.com/dxmlvkff1/image/upload/v1786517437/olive-pizza/ai-product-images/dv4uty06rq4tznlpqz2i.jpg',
         products: pizzaItems,
         itemCount: pizzaItems.length,
         glowColor: 'rgba(249, 115, 22, 0.6)',
-        badge: 'Popular',
         targetUrl: '/menu?category=pizza',
       },
       {
         id: 'burgers',
         name: 'Burgers',
-        defaultImage: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400&q=80',
+        defaultImage: burgerItems[0]?.image || '',
         products: burgerItems,
         itemCount: burgerItems.length,
         glowColor: 'rgba(234, 179, 8, 0.6)',
@@ -342,7 +341,7 @@ export default function CravingCategoriesSection({ config }: { config?: any }) {
       {
         id: 'pasta',
         name: 'Pastas',
-        defaultImage: 'https://images.unsplash.com/photo-1621996346565-e3d5d6281691?w=400&q=80',
+        defaultImage: pastaItems[0]?.image || '',
         products: pastaItems,
         itemCount: pastaItems.length,
         glowColor: 'rgba(239, 68, 68, 0.6)',
@@ -351,7 +350,7 @@ export default function CravingCategoriesSection({ config }: { config?: any }) {
       {
         id: 'sides',
         name: 'Sides & Breads',
-        defaultImage: 'https://images.unsplash.com/photo-1573140247632-f8fd74997d5c?w=400&q=80',
+        defaultImage: sideItems[0]?.image || '',
         products: sideItems,
         itemCount: sideItems.length,
         glowColor: 'rgba(16, 185, 129, 0.6)',
@@ -360,17 +359,16 @@ export default function CravingCategoriesSection({ config }: { config?: any }) {
       {
         id: 'combo',
         name: 'Value Combos',
-        defaultImage: 'https://images.unsplash.com/photo-1544982503-9f984c14501a?w=400&q=80',
+        defaultImage: comboItems[0]?.image || '',
         products: comboItems,
         itemCount: comboItems.length,
         glowColor: 'rgba(168, 85, 247, 0.6)',
-        badge: 'Super Value',
         targetUrl: '/menu?category=combo',
       },
       {
         id: 'beverage',
         name: 'Drinks & Shakes',
-        defaultImage: 'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?w=400&q=80',
+        defaultImage: beverageItems[0]?.image || '',
         products: beverageItems,
         itemCount: beverageItems.length,
         glowColor: 'rgba(59, 130, 246, 0.6)',
@@ -379,7 +377,7 @@ export default function CravingCategoriesSection({ config }: { config?: any }) {
       {
         id: 'dessert',
         name: 'Desserts',
-        defaultImage: 'https://images.unsplash.com/photo-1551024709-8f23befc6f87?w=400&q=80',
+        defaultImage: dessertItems[0]?.image || '',
         products: dessertItems,
         itemCount: dessertItems.length,
         glowColor: 'rgba(236, 72, 153, 0.6)',
