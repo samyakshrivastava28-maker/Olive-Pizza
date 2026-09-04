@@ -201,21 +201,11 @@ public class OliveMessagingService extends MessagingService {
         // Ensure channel exists with MAX importance and USAGE_ALARM for emergency alarms
         ensureChannelExists(notificationManager, channelId, isContinuous, isOngoing, soundName);
 
-        Intent intent;
-        if (isContinuous && isStaff && orderId != null) {
-            intent = new Intent(this, AlarmActivity.class);
+        Intent intent = new Intent(this, MainActivity.class);
+        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        intent.putExtra("url", data.get("url"));
+        if (orderId != null) {
             intent.putExtra("orderId", orderId);
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-            try {
-                startActivity(intent);
-                Log.d(TAG, "⚡ AlarmActivity started directly from OliveMessagingService for staff role");
-            } catch (Exception e) {
-                Log.e(TAG, "Could not start AlarmActivity directly: " + e.getMessage());
-            }
-        } else {
-            intent = new Intent(this, MainActivity.class);
-            intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-            intent.putExtra("url", data.get("url"));
         }
         PendingIntent pendingIntent = PendingIntent.getActivity(
             this,
