@@ -1,0 +1,39 @@
+﻿{
+  "appId": "com.olivepizza.app",
+  "productName": "Olive Pizza",
+  "npmRebuild": false,
+  "directories": {
+    "buildResources": "electron/resources",
+    "output": "dist-electron"
+  },
+  "files": [
+    "electron/**/*",
+    "dist/**/*",
+    "!node_modules/**/*"
+  ],
+  "win": {
+    "target": [{ "target": "nsis", "arch": ["x64"] }],
+    "artifactName": "OlivePizza-Setup.${ext}",
+    "icon": "electron/resources/icon.png"
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "Olive Pizza"
+  },
+  "mac": {
+    "target": [{ "target": "dmg", "arch": ["x64", "arm64"] }],
+    "artifactName": "OlivePizza.${ext}",
+    "category": "public.app-category.lifestyle",
+    "icon": "electron/resources/icon.png"
+  },
+  "dmg": {
+    "background": null,
+    "window": {
+      "width": 540,
+      "height": 380
+    }
+  }
+}

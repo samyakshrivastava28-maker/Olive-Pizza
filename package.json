@@ -9,7 +9,10 @@
     "build:frontend": "vite build",
     "preview": "vite preview --port 3000",
     "lint": "tsc --noEmit",
-    "test": "vitest run --coverage"
+    "test": "vitest run --coverage",
+    "desktop": "electron electron/main.cjs",
+    "build:electron": "npm run build && electron-builder --win --x64 --config electron-builder.json",
+    "build:mac": "npm run build && electron-builder --mac --config electron-builder.json"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1104.0",
@@ -122,6 +125,8 @@
     "@vitejs/plugin-react": "^4.3.4",
     "@vitest/coverage-v8": "^4.1.10",
     "esbuild": "^0.25.0",
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8",
     "supertest": "^7.2.2",
     "tsx": "^4.19.2",
     "typescript": "^6.0.3",
