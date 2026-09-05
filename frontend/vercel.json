@@ -5,7 +5,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://olive-pizza-backend.onrender.com/api/:path*"
+      "destination": "https://olivepizza-owner.onrender.com/api/:path*"
     },
     {
       "source": "/(.*)",
