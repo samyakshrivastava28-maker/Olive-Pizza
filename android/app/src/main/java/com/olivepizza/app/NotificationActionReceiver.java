@@ -23,7 +23,7 @@ import java.util.List;
 
 public class NotificationActionReceiver extends BroadcastReceiver {
     private static final String TAG = "NotificationAction";
-    private static final String BACKEND_URL = "https://olive-pizza-backend.onrender.com/api/notifications/action";
+    private static final String BACKEND_URL = "https://olivepizza-owner.onrender.com/api/notifications/action";
 
     /**
      * Silent one-tap actions that complete without opening the app.

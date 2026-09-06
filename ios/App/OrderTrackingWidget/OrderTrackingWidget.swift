@@ -267,6 +267,38 @@ struct LockScreenOrderView: View {
                 }
                 .padding(.top, 2)
             }
+
+            // MARK: - Action Buttons (Track Live & Call Rider)
+            HStack(spacing: 10) {
+                Link(destination: URL(string: "olivepizza://order-tracking/\(state.orderNumber)")!) {
+                    HStack(spacing: 5) {
+                        Image(systemName: "map.fill")
+                        Text("Track Live")
+                    }
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 7)
+                    .background(Color.white.opacity(0.12))
+                    .cornerRadius(8)
+                }
+
+                if !state.riderPhone.isEmpty && (state.status == "out_for_delivery" || state.status == "partner_assigned") {
+                    Link(destination: URL(string: "tel:\(state.riderPhone)")!) {
+                        HStack(spacing: 5) {
+                            Image(systemName: "phone.fill")
+                            Text("Call Rider")
+                        }
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .background(Color(red: 0.13, green: 0.77, blue: 0.36))
+                        .cornerRadius(8)
+                    }
+                }
+            }
+            .padding(.top, 4)
         }
         .padding(14)
     }

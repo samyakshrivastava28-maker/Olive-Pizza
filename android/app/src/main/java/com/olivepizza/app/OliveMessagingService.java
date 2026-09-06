@@ -237,13 +237,19 @@ public class OliveMessagingService extends MessagingService {
         }
         builder.setSound(soundUri);
 
+        builder.setColor(0xFFFF6B00);
+
         if (isOngoing) {
-            builder.setOngoing(true).setOnlyAlertOnce(true);
+            builder.setOngoing(true)
+                   .setOnlyAlertOnce(true)
+                   .setCategory(NotificationCompat.CATEGORY_PROGRESS);
 
             String status = data.get("stage");
             if ("delivered".equals(status) || "cancelled".equals(status) || "completed".equals(status)) {
                 notificationManager.cancel(notificationId);
-                builder.setOngoing(false).setAutoCancel(true);
+                builder.setOngoing(false)
+                       .setAutoCancel(true)
+                       .setCategory(NotificationCompat.CATEGORY_STATUS);
                 notificationManager.notify(notificationId + 1, builder.build());
                 return;
             }
@@ -256,8 +262,10 @@ public class OliveMessagingService extends MessagingService {
             }
         }
 
-        // Action Buttons (Accept / Reject / Stop Alert)
+        // Action Buttons (Track Order / Call Rider / Accept / Reject / Stop Alert)
         String actionsStr = data.get("actions");
+        boolean hasActionButtons = false;
+
         if (actionsStr != null && orderId != null) {
             try {
                 JSONArray actionsArr = new JSONArray(actionsStr);
@@ -266,21 +274,80 @@ public class OliveMessagingService extends MessagingService {
                     String actionName = actionObj.getString("action");
                     String actionTitle = actionObj.getString("title");
 
-                    Intent actionIntent = new Intent(this, NotificationActionReceiver.class);
-                    actionIntent.setAction(actionName);
-                    actionIntent.putExtra("orderId", orderId);
-                    actionIntent.putExtra("notificationId", notificationId);
+                    if ("track".equalsIgnoreCase(actionName) || "open".equalsIgnoreCase(actionName)) {
+                        // Deep link directly to order tracking screen in MainActivity
+                        Intent trackIntent = new Intent(this, MainActivity.class);
+                        trackIntent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                        trackIntent.putExtra("url", "/order-tracking/" + orderId);
+                        trackIntent.putExtra("orderId", orderId);
+                        PendingIntent trackPendingIntent = PendingIntent.getActivity(
+                                this,
+                                orderId.hashCode() + i + 10,
+                                trackIntent,
+                                PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT
+                        );
+                        builder.addAction(0, actionTitle != null ? actionTitle : "Track Order", trackPendingIntent);
+                        hasActionButtons = true;
+                    } else if ("call_partner".equalsIgnoreCase(actionName) || "call_rider".equalsIgnoreCase(actionName)) {
+                        // Open system dialer interface (ACTION_DIAL) with sanitized rider number
+                        String riderPhone = data.get("riderPhone");
+                        if (riderPhone != null && !riderPhone.trim().isEmpty() && !riderPhone.contains("••")) {
+                            Intent dialIntent = new Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + riderPhone.trim()));
+                            PendingIntent dialPendingIntent = PendingIntent.getActivity(
+                                    this,
+                                    orderId.hashCode() + i + 20,
+                                    dialIntent,
+                                    PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT
+                            );
+                            builder.addAction(0, "📞 Call Rider", dialPendingIntent);
+                            hasActionButtons = true;
+                        }
+                    } else {
+                        // Background / Broadcast Action (Staff / Rider transitions)
+                        Intent actionIntent = new Intent(this, NotificationActionReceiver.class);
+                        actionIntent.setAction(actionName);
+                        actionIntent.putExtra("orderId", orderId);
+                        actionIntent.putExtra("notificationId", notificationId);
 
-                    PendingIntent actionPendingIntent = PendingIntent.getBroadcast(
-                            this,
-                            orderId.hashCode() + i,
-                            actionIntent,
-                            PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT
-                    );
-                    builder.addAction(0, actionTitle, actionPendingIntent);
+                        PendingIntent actionPendingIntent = PendingIntent.getBroadcast(
+                                this,
+                                orderId.hashCode() + i,
+                                actionIntent,
+                                PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT
+                        );
+                        builder.addAction(0, actionTitle, actionPendingIntent);
+                        hasActionButtons = true;
+                    }
                 }
             } catch (Exception e) {
                 Log.e(TAG, "Error parsing actions", e);
+            }
+        }
+
+        // Fallback for ongoing customer notifications without explicit actions JSON
+        if (!hasActionButtons && isOngoing && orderId != null) {
+            Intent trackIntent = new Intent(this, MainActivity.class);
+            trackIntent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            trackIntent.putExtra("url", "/order-tracking/" + orderId);
+            trackIntent.putExtra("orderId", orderId);
+            PendingIntent trackPendingIntent = PendingIntent.getActivity(
+                    this,
+                    orderId.hashCode() + 101,
+                    trackIntent,
+                    PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT
+            );
+            builder.addAction(0, "📍 Track Order", trackPendingIntent);
+
+            String riderPhone = data.get("riderPhone");
+            if (riderPhone != null && !riderPhone.trim().isEmpty() && !riderPhone.contains("••")) {
+                Intent dialIntent = new Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + riderPhone.trim()));
+                PendingIntent dialPendingIntent = PendingIntent.getActivity(
+                        this,
+                        orderId.hashCode() + 102,
+                        dialIntent,
+                        PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT
+                );
+                builder.addAction(0, "📞 Call Rider", dialPendingIntent);
             }
         }
 
