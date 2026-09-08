@@ -88,13 +88,23 @@ const TIMELINE_STAGES = [
 ];
 
 function getStageIndex(status: string): number {
-  if (status === "pending") return -1;
-  if (status === "accepted") return 0;
-  if (status === "preparing") return 1;
-  if (status === "ready" || status === "partner_assigned" || status === "picked_up") return 2;
-  if (status === "out_for_delivery") return 3;
-  if (status === "delivered") return 4;
-  return -1;
+  switch (status) {
+    case 'accepted':
+      return 0;
+    case 'preparing':
+      return 1;
+    case 'ready':
+    case 'partner_assigned':
+    case 'picked_up':
+      return 2;
+    case 'out_for_delivery':
+      return 3;
+    case 'delivered':
+      return 4;
+    case 'pending':
+    default:
+      return -1;
+  }
 }
 
 // ─── Particles ──────────────────────────────────────────────────────
@@ -521,10 +531,23 @@ export default function OrderTracking() {
   // ── Fallback ETA ──
   useEffect(() => {
     if (!order || LOCKED_STATUSES.has(order.status)) return;
-    if (order.status === "accepted") setEta(25);
-    else if (order.status === "preparing") setEta(18);
-    else if (order.status === "ready" || order.status === "partner_assigned") setEta(12);
-    else if (order.status === "picked_up") setEta(8);
+    switch (order.status) {
+      case "accepted":
+        setEta(25);
+        break;
+      case "preparing":
+        setEta(18);
+        break;
+      case "ready":
+      case "partner_assigned":
+        setEta(12);
+        break;
+      case "picked_up":
+        setEta(8);
+        break;
+      default:
+        break;
+    }
   }, [order?.status]);
 
   const handleCancel = async () => {
