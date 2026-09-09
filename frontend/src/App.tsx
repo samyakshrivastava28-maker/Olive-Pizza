@@ -104,6 +104,7 @@ const Cart = lazyWithRetry(() => import('./pages/Cart'));
 const Checkout = lazyWithRetry(() => import('./pages/Checkout'));
 const ProductDetail = lazyWithRetry(() => import('./pages/ProductDetail'));
 const OrderTracking = lazyWithRetry(() => import('./pages/OrderTracking'));
+const BillPage = lazyWithRetry(() => import('./pages/BillPage'));
 const RecheckOrder = lazyWithRetry(() => import('./pages/RecheckOrder'));
 const ProcessingOrder = lazyWithRetry(() => import('./pages/ProcessingOrder'));
 
@@ -211,6 +212,7 @@ function AppContent() {
                 <Route path="/order-cancelled/:id" element={<Suspense fallback={<PizzaLoader />}><OrderCancelledPage /></Suspense>} />
                 <Route path="/order-tracking/:orderId" element={<OrderTracking />} />
                 <Route path="/tracking/:orderId" element={<OrderTracking />} />
+                <Route path="/bill/:billReference" element={<Suspense fallback={<PizzaLoader />}><BillPage /></Suspense>} />
                 <Route path="/contact" element={<Contact />} />
                 <Route path="/assistant" element={<Suspense fallback={<PizzaLoader />}><UniversalAssistant /></Suspense>} />
                 <Route path="/login" element={<Suspense fallback={<PizzaLoader />}><Login /></Suspense>} />

@@ -37,6 +37,7 @@ import {
   Star,
   Camera,
   Clock,
+  Receipt,
 } from "lucide-react";
 
 import { GlassCard, GlassButton } from "../components/ui/glass/GlassSystem";
@@ -46,6 +47,7 @@ import { playNotificationSound, statusToSoundType } from "../hooks/useNotificati
 import OrderTimeline from "../components/ui/OrderTimeline";
 import UniversalMap3D from "../components/map/UniversalMap3D";
 import type { MapMarker } from "../components/map/UniversalMap3D";
+import { fetchRoute } from "../services/navigationRouting.service";
 import SEO from "../components/SEO";
 
 // ─── Constants ───────────────────────────────────────────────────────
@@ -364,10 +366,14 @@ function DeliverySuccessScreen({ order, orderId, partnerDetails, navigate }: any
         </GlassCard>
 
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }} className="grid grid-cols-2 gap-4">
-          <GlassButton variant="secondary" onClick={handleDownloadInvoice} className="w-full flex justify-center gap-2 py-4 rounded-2xl">
-            <Download size={18} /> Invoice
+          <GlassButton 
+            variant="secondary" 
+            onClick={() => navigate(`/bill/${order.billReference || order.id || orderId}`)} 
+            className="w-full flex justify-center items-center gap-2 py-4 rounded-2xl text-xs font-bold"
+          >
+            <Receipt size={18} /> View Bill
           </GlassButton>
-          <GlassButton variant="primary" onClick={() => navigate("/menu")} className="w-full flex justify-center gap-2 py-4 rounded-2xl shadow-[0_0_30px_rgba(249,115,22,0.3)]">
+          <GlassButton variant="primary" onClick={() => navigate("/menu")} className="w-full flex justify-center items-center gap-2 py-4 rounded-2xl shadow-[0_0_30px_rgba(249,115,22,0.3)] text-xs font-bold">
             <RotateCcw size={18} /> Reorder
           </GlassButton>
         </motion.div>
@@ -392,10 +398,13 @@ export default function OrderTracking() {
   // Data State
   const [order, setOrder] = useState<any>(null);
   const [partnerDetails, setPartnerDetails] = useState<any>(null);
+  const [orderNotFound, setOrderNotFound] = useState(false);
+  const [orderError, setOrderError] = useState<string | null>(null);
 
   // GPS State
   const [partnerLocation, setPartnerLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [partnerHeading, setPartnerHeading] = useState<number>(0);
+  const [routeGeoJSON, setRouteGeoJSON] = useState<GeoJSON.Feature<GeoJSON.LineString> | null>(null);
   const [eta, setEta] = useState<number | null>(null);
   const [distance, setDistance] = useState<number | null>(null);
   const [cancelling, setCancelling] = useState(false);
@@ -403,7 +412,6 @@ export default function OrderTracking() {
   // Bottom Sheet State
   const [sheetState, setSheetState] = useState<"collapsed" | "half" | "expanded">("half");
   const [showAccepted, setShowAccepted] = useState(false);
-
 
   // Refs
   const channelRef = useRef<RealtimeChannel | null>(null);
@@ -432,61 +440,161 @@ export default function OrderTracking() {
     }, 30000);
   }, []);
 
-  // ── FIRESTORE: Order ──
+  // ── FIRESTORE: Order & Live Telemetry ──
   const prevOrderStatusRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!orderId) return;
-    const unsub = onSnapshot(doc(db, "orders", orderId), (docSnap) => {
-      if (docSnap.exists()) {
-        const data = { id: docSnap.id, ...(docSnap.data() as any) };
-        // Play sound when status changes
-        if (prevOrderStatusRef.current && prevOrderStatusRef.current !== data.status) {
-          const soundType = statusToSoundType(data.status);
-          if (soundType) playNotificationSound(soundType);
+    if (!orderId) {
+      setOrderNotFound(true);
+      return;
+    }
+
+    setOrderError(null);
+    setOrderNotFound(false);
+
+    const unsub = onSnapshot(
+      doc(db, "orders", orderId),
+      (docSnap) => {
+        if (docSnap.exists()) {
+          const data = { id: docSnap.id, ...(docSnap.data() as any) };
+
+          // Security check: customer, assigned partner, or staff can view
+          const currentUser = auth.currentUser;
+          const userRole = useAuthStore.getState().user?.role;
+          const isStaff = userRole === 'owner' || userRole === 'admin' || userRole === 'restaurant_manager';
+          const isAssignedRider = currentUser && data.deliveryPartnerId === currentUser.uid;
+          const isCustomer = !currentUser || !data.userId || data.userId === currentUser.uid || data.customerId === currentUser.uid;
+
+          if (!isStaff && !isAssignedRider && !isCustomer) {
+            setOrderError("Access restricted: You are not authorized to view tracking for this order.");
+            return;
+          }
+
+          // Play sound when status changes
+          if (prevOrderStatusRef.current && prevOrderStatusRef.current !== data.status) {
+            const soundType = statusToSoundType(data.status);
+            if (soundType) playNotificationSound(soundType);
+          }
+          if (prevOrderStatusRef.current === 'pending' && data.status === 'accepted') {
+            setShowAccepted(true);
+          }
+          prevOrderStatusRef.current = data.status;
+          setOrder(data);
+
+          // Populate sanitized partner details from order snapshot
+          if (data.deliveryPartnerDetails) {
+            setPartnerDetails(data.deliveryPartnerDetails);
+          } else if (data.deliveryPartnerName) {
+            setPartnerDetails((prev: any) => ({
+              ...prev,
+              name: data.deliveryPartnerName,
+              phone: data.deliveryPartnerPhone || prev?.phone,
+              vehicleType: data.deliveryPartnerVehicleType || prev?.vehicleType || 'Scooter'
+            }));
+          }
+
+          // Live GPS Telemetry direct from Firestore order.driverLocation
+          if (TRACKABLE_STATUSES.has(data.status) && (data.status === "picked_up" || data.status === "out_for_delivery")) {
+            if (data.driverLocation?.lat && data.driverLocation?.lng) {
+              const lat = Number(data.driverLocation.lat);
+              const lng = Number(data.driverLocation.lng);
+              setPartnerLocation({ lat, lng });
+              if (data.driverLocation.heading !== undefined) {
+                setPartnerHeading(Number(data.driverLocation.heading));
+              }
+              resetOfflineTimer();
+
+              if (data.deliveryAddress?.lat && data.deliveryAddress?.lng) {
+                const dist = haversine(lat, lng, data.deliveryAddress.lat, data.deliveryAddress.lng);
+                const speedKmh = data.driverLocation.speed ? data.driverLocation.speed * 3.6 : 25;
+                setDistance(Math.round(dist * 10) / 10);
+                setEta(Math.max(1, Math.ceil((dist / speedKmh) * 60)));
+              }
+            }
+          }
+
+          if (LOCKED_STATUSES.has(data.status)) {
+            lockTracking();
+          }
+        } else {
+          setOrderNotFound(true);
         }
-        if (prevOrderStatusRef.current === 'pending' && data.status === 'accepted') {
-          setShowAccepted(true);
-        }
-        prevOrderStatusRef.current = data.status;
-        setOrder(data);
-        if (LOCKED_STATUSES.has(data.status)) lockTracking();
+      },
+      (err) => {
+        console.error("[OrderTracking] Snapshot error:", err);
+        setOrderError("Unable to load order. Please verify your internet connection.");
       }
-    });
+    );
+
     return () => unsub();
-  }, [orderId, lockTracking]);
+  }, [orderId, lockTracking, resetOfflineTimer]);
 
-
-  // ── FIRESTORE: Partner ──
+  // ── ROUTE POLYLINE (OSRM Driving Road Path) ──
   useEffect(() => {
-    if (!order?.deliveryPartnerId) return;
-    const unsub = onSnapshot(doc(db, "users", order.deliveryPartnerId), (docSnap) => {
-      if (docSnap.exists()) {
-        const { liveLocation: _stripped, ...safeData } = docSnap.data();
-        setPartnerDetails(safeData);
-      }
-    });
-    return () => unsub();
-  }, [order?.deliveryPartnerId]);
+    if (!order?.deliveryAddress?.lat || !order?.deliveryAddress?.lng) return;
+    const dest = { lat: Number(order.deliveryAddress.lat), lng: Number(order.deliveryAddress.lng) };
+    const origin = { lat: RESTAURANT_LOCATION.lat, lng: RESTAURANT_LOCATION.lng };
 
-  // ── SUPABASE REALTIME: GPS ──
+    fetchRoute(origin, dest, orderId)
+      .then((routeResult) => {
+        if (routeResult?.geojson) {
+          setRouteGeoJSON(routeResult.geojson);
+          if (routeResult.distanceMetres && !distance) {
+            setDistance(Math.round((routeResult.distanceMetres / 1000) * 10) / 10);
+          }
+        }
+      })
+      .catch((e) => {
+        console.warn("[OrderTracking] Route calculation notice:", e);
+      });
+  }, [orderId, order?.deliveryAddress?.lat, order?.deliveryAddress?.lng, distance]);
+
+  // ── BACKEND REST FALLBACK FOR PARTNER INFO & GPS ──
+  useEffect(() => {
+    if (!orderId || !order?.deliveryPartnerId) return;
+    if (order.deliveryPartnerDetails) return;
+
+    fetchApi(`/api/tracking/order/${orderId}`)
+      .then(async (res) => {
+        if (res.ok) {
+          const data = await res.json();
+          if (data) {
+            setPartnerDetails((prev: any) => ({
+              ...prev,
+              name: order.deliveryPartnerName || prev?.name || "Delivery Partner",
+              phone: order.deliveryPartnerPhone || prev?.phone,
+              vehicleType: prev?.vehicleType || "Scooter",
+              speed: data.speed,
+              heading: data.heading,
+            }));
+            if (data.partner_lat && data.partner_lng && !partnerLocation && (order.status === 'picked_up' || order.status === 'out_for_delivery')) {
+              setPartnerLocation({ lat: Number(data.partner_lat), lng: Number(data.partner_lng) });
+              if (data.heading) setPartnerHeading(Number(data.heading));
+            }
+          }
+        }
+      })
+      .catch(() => {});
+  }, [orderId, order?.deliveryPartnerId, order?.deliveryPartnerDetails, order?.deliveryPartnerName, order?.status, partnerLocation]);
+
+  // ── SUPABASE REALTIME: GPS (Instant Second Channel) ──
   useEffect(() => {
     if (!order?.deliveryPartnerId || !orderId) return;
-    if (!TRACKABLE_STATUSES.has(order.status) || order.status !== "out_for_delivery") {
+    if (!TRACKABLE_STATUSES.has(order.status) || (order.status !== "out_for_delivery" && order.status !== "picked_up")) {
       if (channelRef.current) { supabase.removeChannel(channelRef.current); channelRef.current = null; }
       return;
     }
 
     const partnerId = order.deliveryPartnerId;
 
-    // Initial position
+    // Initial position from Supabase
     supabase.from("delivery_locations").select("latitude,longitude,heading,speed").eq("delivery_partner_id", partnerId).single()
       .then(({ data, error }) => {
         if (error || trackingLockedRef.current) return;
-        if (data) {
-          const lat = data.latitude;
-          const lng = data.longitude;
+        if (data && data.latitude && data.longitude) {
+          const lat = Number(data.latitude);
+          const lng = Number(data.longitude);
           setPartnerLocation({ lat, lng });
-          setPartnerHeading(data.heading || 0);
+          setPartnerHeading(Number(data.heading || 0));
           resetOfflineTimer();
           
           if (order?.deliveryAddress?.lat && order?.deliveryAddress?.lng) {
@@ -496,7 +604,8 @@ export default function OrderTracking() {
             setEta(Math.max(1, Math.ceil((dist / speedKmh) * 60)));
           }
         }
-      });
+      })
+      .catch(() => {});
 
     // Realtime subscription
     const channel = supabase.channel(`tracking-${orderId}`)
@@ -505,13 +614,12 @@ export default function OrderTracking() {
         const row = payload.new as any;
         if (!row?.latitude || !row?.longitude) return;
 
-        const lat = row.latitude as number;
-        const lng = row.longitude as number;
+        const lat = Number(row.latitude);
+        const lng = Number(row.longitude);
         setPartnerLocation({ lat, lng });
-        setPartnerHeading(row.heading || 0);
+        setPartnerHeading(Number(row.heading || 0));
         resetOfflineTimer();
 
-        // Calculate dynamic ETA
         if (order?.deliveryAddress?.lat && order?.deliveryAddress?.lng) {
           const dist = haversine(lat, lng, order.deliveryAddress.lat, order.deliveryAddress.lng);
           const speedKmh = row.speed ? row.speed * 3.6 : 25;
@@ -585,6 +693,40 @@ export default function OrderTracking() {
       setCancelling(false);
     }
   };
+
+  if (orderNotFound) {
+    return (
+      <div className="h-[100dvh] bg-dark-950 flex flex-col items-center justify-center p-6 text-center relative overflow-hidden">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-amber-500/10 blur-[120px] rounded-full pointer-events-none" />
+        <div className="w-20 h-20 bg-dark-900 border border-amber-500/30 rounded-3xl flex items-center justify-center mb-6 shadow-[0_0_40px_rgba(245,158,11,0.2)] relative z-10">
+          <Package className="w-10 h-10 text-amber-500" />
+        </div>
+        <h1 className="text-2xl font-black text-white mb-2 relative z-10">Order Not Found</h1>
+        <p className="text-slate-400 mb-6 max-w-sm text-sm relative z-10">
+          We couldn't find an order with ID <span className="font-mono text-white font-bold">{orderId}</span>. Please verify your order link.
+        </p>
+        <GlassButton variant="primary" onClick={() => navigate("/dashboard")} className="py-3.5 px-6 text-sm font-bold flex items-center gap-2 relative z-10">
+          Return to Dashboard
+        </GlassButton>
+      </div>
+    );
+  }
+
+  if (orderError) {
+    return (
+      <div className="h-[100dvh] bg-dark-950 flex flex-col items-center justify-center p-6 text-center relative overflow-hidden">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-red-500/10 blur-[120px] rounded-full pointer-events-none" />
+        <div className="w-20 h-20 bg-dark-900 border border-red-500/30 rounded-3xl flex items-center justify-center mb-6 shadow-[0_0_40px_rgba(239,68,68,0.2)] relative z-10">
+          <Shield className="w-10 h-10 text-red-500" />
+        </div>
+        <h1 className="text-2xl font-black text-white mb-2 relative z-10">Unable to Track Order</h1>
+        <p className="text-slate-400 mb-6 max-w-sm text-sm relative z-10">{orderError}</p>
+        <GlassButton variant="primary" onClick={() => navigate("/dashboard")} className="py-3.5 px-6 text-sm font-bold flex items-center gap-2 relative z-10">
+          Return to Dashboard
+        </GlassButton>
+      </div>
+    );
+  }
 
   if (!order) {
     return (
@@ -701,6 +843,7 @@ export default function OrderTracking() {
               ? { lat: order.deliveryAddress.lat, lng: order.deliveryAddress.lng }
               : { lat: RESTAURANT_LOCATION.lat, lng: RESTAURANT_LOCATION.lng })
           }
+          routeGeoJSON={routeGeoJSON}
           markers={[
             // Restaurant pin
             {
@@ -714,10 +857,10 @@ export default function OrderTracking() {
               id: 'customer',
               position: { lat: order.deliveryAddress.lat, lng: order.deliveryAddress.lng },
               type: 'customer' as const,
-              label: order.deliveryAddress?.addressLine || 'Your location',
+              label: order.deliveryAddress?.addressLine || order.deliveryAddress?.address || 'Your location',
             }] : []),
-            // Rider marker (only when GPS available)
-            ...(partnerLocation ? [{
+            // Rider marker (only when live GPS is available and order is in active transit)
+            ...(partnerLocation && TRACKABLE_STATUSES.has(order?.status) && (order?.status === 'picked_up' || order?.status === 'out_for_delivery') ? [{
               id: 'rider',
               position: partnerLocation,
               type: 'rider' as const,
@@ -837,6 +980,32 @@ export default function OrderTracking() {
 
           {/* Divider */}
           <div className="h-2 bg-slate-50 border-y border-slate-100" />
+
+          {/* ── Takeaway / Store Pickup Notice ── */}
+          {(order.deliveryType === 'takeaway' || order.fulfillmentType === 'takeaway') && (
+            <div className="px-5 py-3.5 bg-amber-50/70 border-b border-amber-100 flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
+                <Store className="w-5 h-5 text-amber-700" />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-amber-900">Takeaway / Self-Pickup Order</p>
+                <p className="text-[11px] text-amber-700/80 mt-0.5">Pick up your order directly at Olive Pizza counter when ready.</p>
+              </div>
+            </div>
+          )}
+
+          {/* ── Kitchen Preparation Notice (Before Partner Assigned) ── */}
+          {order.deliveryType !== 'takeaway' && order.fulfillmentType !== 'takeaway' && ['pending', 'accepted', 'preparing'].includes(order.status) && (
+            <div className="px-5 py-3.5 bg-slate-50/70 border-b border-slate-100 flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-primary-50 flex items-center justify-center shrink-0">
+                <ChefHat className="w-5 h-5 text-primary-600" />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-slate-800">Fresh in the Kitchen</p>
+                <p className="text-[11px] text-slate-500 mt-0.5">A delivery partner will be allocated as your pizza finishes baking.</p>
+              </div>
+            </div>
+          )}
 
           {/* ── Delivery Partner (Gated on Partner Acceptance) ── */}
           {partnerDetails && ['partner_assigned', 'picked_up', 'out_for_delivery', 'delivered'].includes(order.status) && (
@@ -993,6 +1162,12 @@ export default function OrderTracking() {
 
           {/* ── Actions ── */}
           <div className="px-5 pt-2 pb-6 space-y-3">
+            <button
+              onClick={() => navigate(`/bill/${order.billReference || order.id || orderId}`)}
+              className="w-full py-3.5 rounded-2xl border border-slate-200 bg-slate-900 hover:bg-slate-800 text-white font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-md active:scale-[0.98]"
+            >
+              <Receipt size={16} className="text-primary-400" /> View Official Bill
+            </button>
             {["pending", "accepted", "preparing"].includes(order.status) && (
               <button
                 onClick={handleCancel}

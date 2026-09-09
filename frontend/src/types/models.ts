@@ -109,8 +109,21 @@ export interface NotificationState {
 
 export interface Order {
   id?: string;
+  orderNumber?: string;
   dailyOrderNumber?: string;
   permanentOrderId?: string;
+  permanentBillNo?: number;
+  billNumber?: string;
+  billReference?: string;
+  orderSource?: string;
+  fulfillmentType?: string;
+  deliveryType?: string;
+  paymentMethod?: string;
+  paymentStatus?: string;
+  subtotal?: number;
+  taxes?: number;
+  discountAmount?: number;
+  packagingCharge?: number;
   userId: string;
   customerName?: string;
   customerInfo?: {

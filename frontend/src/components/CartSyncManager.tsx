@@ -19,7 +19,7 @@ export default function CartSyncManager() {
       const user = auth.currentUser;
       if (!user) return;
       
-      const cartRef = doc(db, 'users', user.uid, 'private', 'cart');
+      const cartRef = doc(db, 'user_carts', user.uid);
       
       unsubscribe = onSnapshot(cartRef, (docSnap) => {
         if (docSnap.exists()) {
@@ -71,9 +71,29 @@ export default function CartSyncManager() {
     if (isInternalUpdate.current) return;
     
     const timeoutId = setTimeout(() => {
-      const cartRef = doc(db, 'users', user.uid, 'private', 'cart');
-      setDoc(cartRef, { items, total, updatedAt: new Date().toISOString() }, { merge: true })
-        .catch(err => console.error("Failed to sync cart to Firestore:", err));
+      const nowIso = new Date().toISOString();
+      const itemCount = items.reduce((acc, it) => acc + (it.quantity || 1), 0);
+
+      // 1. Sync to user_carts collection (used by AbandonedCartJob & cross-device cart)
+      const userCartRef = doc(db, 'user_carts', user.uid);
+      const cartPayload = {
+        userId: user.uid,
+        items,
+        total,
+        itemCount,
+        cartLastUpdatedAt: nowIso,
+        updatedAt: nowIso,
+        // Reset reminder flag if user actively has items in cart, otherwise mark as satisfied
+        abandonedCartReminderSentAt: itemCount > 0 ? null : nowIso,
+      };
+
+      setDoc(userCartRef, cartPayload, { merge: true })
+        .catch(err => console.error("Failed to sync cart to user_carts:", err));
+
+      // 2. Backward compatibility with users/{uid}/private/cart
+      const legacyCartRef = doc(db, 'users', user.uid, 'private', 'cart');
+      setDoc(legacyCartRef, { items, total, updatedAt: nowIso }, { merge: true })
+        .catch(err => console.error("Failed to sync cart to legacy Firestore path:", err));
     }, 500); // Debounce writes
     
     return () => clearTimeout(timeoutId);

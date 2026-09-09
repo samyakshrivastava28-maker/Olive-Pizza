@@ -202,6 +202,8 @@ const UniversalMap3D = forwardRef<UniversalMap3DRef, UniversalMap3DProps>(
     const [autoFollow, setAutoFollow] = useState(true);
     const [mapLoaded, setMapLoaded] = useState(false);
 
+    const hasInitialFittedRef = useRef(false);
+
     // ── Expose imperative API ─────────────────────────────────────────────────
     useImperativeHandle(ref, () => ({
       flyTo(pos, z) {
@@ -212,7 +214,16 @@ const UniversalMap3D = forwardRef<UniversalMap3DRef, UniversalMap3DProps>(
         if (!route || !mapRef.current) return;
         const bounds = new maplibregl.LngLatBounds();
         for (const [lng, lat] of route) bounds.extend([lng, lat]);
-        mapRef.current.fitBounds(bounds, { padding: 60, duration: 1000 });
+        mapRef.current.fitBounds(bounds, {
+          padding: { top: 70, bottom: 220, left: 50, right: 50 },
+          duration: 1000
+        });
+      },
+      fitBounds(bounds: maplibregl.LngLatBoundsLike, padding?: maplibregl.PaddingOptions) {
+        mapRef.current?.fitBounds(bounds, {
+          padding: padding || { top: 70, bottom: 220, left: 50, right: 50 },
+          duration: 1000
+        });
       },
       getMap() { return mapRef.current; },
       getCenter() {
@@ -320,14 +331,30 @@ const UniversalMap3D = forwardRef<UniversalMap3DRef, UniversalMap3DProps>(
         onMapReady?.(map);
       });
 
-      // Detect manual drag — disengage auto-follow and switch rider map to top view
-      map.on('dragstart', () => {
-        autoFollowRef.current = false;
-        setAutoFollow(false);
-        if (mode === 'delivery') {
-          map.easeTo({ pitch: 0, duration: 400 });
+      // Detect manual gestures — disengage auto-follow smoothly
+      const disengageAutoFollow = () => {
+        if (autoFollowRef.current) {
+          autoFollowRef.current = false;
+          setAutoFollow(false);
+          if (mode === 'delivery') {
+            map.easeTo({ pitch: 0, duration: 400 });
+          }
+          onUserDrag?.();
         }
-        onUserDrag?.();
+      };
+
+      map.on('dragstart', disengageAutoFollow);
+      map.on('zoomstart', (e: any) => {
+        if (e.originalEvent) disengageAutoFollow();
+      });
+      map.on('rotatestart', (e: any) => {
+        if (e.originalEvent) disengageAutoFollow();
+      });
+      map.on('pitchstart', (e: any) => {
+        if (e.originalEvent) disengageAutoFollow();
+      });
+      map.on('touchstart', (e: any) => {
+        if (e.points && e.points.length > 1) disengageAutoFollow();
       });
       
       map.on('moveend', () => {
@@ -353,6 +380,17 @@ const UniversalMap3D = forwardRef<UniversalMap3DRef, UniversalMap3DProps>(
       source.setData(
         routeGeoJSON || { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: [] } }
       );
+
+      // Auto-fit route once on customer mode if not already manually explored
+      if (!hasInitialFittedRef.current && routeGeoJSON?.geometry?.coordinates?.length) {
+        hasInitialFittedRef.current = true;
+        const bounds = new maplibregl.LngLatBounds();
+        for (const [lng, lat] of routeGeoJSON.geometry.coordinates) bounds.extend([lng, lat]);
+        mapRef.current.fitBounds(bounds, {
+          padding: { top: 70, bottom: 220, left: 50, right: 50 },
+          duration: 1000
+        });
+      }
     }, [routeGeoJSON, mapLoaded]);
 
     // ── Update Markers ────────────────────────────────────────────────────────
@@ -438,13 +476,35 @@ const UniversalMap3D = forwardRef<UniversalMap3DRef, UniversalMap3DProps>(
       autoFollowRef.current = true;
       setAutoFollow(true);
       const riderMarker = markers.find((m) => m.type === 'rider');
-      const target = riderMarker?.position || center;
-      if (target && mapRef.current) {
+      if (riderMarker && mapRef.current) {
         const targetPitch = mode === 'delivery' ? 45 : 0;
         const targetBearing = mode === 'delivery' ? (riderMarker?.heading || 0) : 0;
-        mapRef.current.flyTo({ center: [target.lng, target.lat], zoom, pitch: targetPitch, bearing: targetBearing, duration: 800 });
+        mapRef.current.flyTo({
+          center: [riderMarker.position.lng, riderMarker.position.lat],
+          zoom: Math.max(15, zoom || 15),
+          pitch: targetPitch,
+          bearing: targetBearing,
+          duration: 800
+        });
+      } else if (routeGeoJSON?.geometry?.coordinates?.length && mapRef.current) {
+        const bounds = new maplibregl.LngLatBounds();
+        for (const [lng, lat] of routeGeoJSON.geometry.coordinates) bounds.extend([lng, lat]);
+        mapRef.current.fitBounds(bounds, {
+          padding: { top: 70, bottom: 220, left: 50, right: 50 },
+          duration: 800
+        });
+      } else {
+        const target = center || { lat: RESTAURANT_LOCATION.lat, lng: RESTAURANT_LOCATION.lng };
+        if (mapRef.current) {
+          mapRef.current.flyTo({
+            center: [target.lng, target.lat],
+            zoom: zoom || 15,
+            pitch: DEFAULT_PITCH,
+            duration: 800
+          });
+        }
       }
-    }, [markers, center, zoom, mode]);
+    }, [markers, center, zoom, mode, routeGeoJSON]);
 
     return (
       <div className={`relative overflow-hidden rounded-2xl ${className}`} style={{ minHeight: 320 }}>

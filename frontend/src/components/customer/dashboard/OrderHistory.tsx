@@ -93,20 +93,33 @@ export default function OrderHistory({ orders }: Props) {
                 </div>
               )}
 
-              <div className="flex justify-between items-start mb-4">
+              <div className="flex justify-between items-start mb-3">
                 <div>
-                  <span className="font-bold text-white text-lg">
-                    {order.dailyOrderNumber || `Order #${order.id?.slice(-6).toUpperCase()}`}
-                  </span>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-black text-primary-400 text-base">
+                      {order.billNumber || (order.permanentBillNo ? `#${order.permanentBillNo}` : '')}
+                    </span>
+                    <span className="text-xs font-bold text-slate-300 bg-white/10 px-2 py-0.5 rounded-md">
+                      {order.dailyOrderNumber || order.orderNumber || `#${order.id?.slice(-6).toUpperCase()}`}
+                    </span>
+                    <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider bg-slate-800/80 px-2 py-0.5 rounded">
+                      {order.fulfillmentType === 'pickup' || order.deliveryType === 'takeaway' ? 'Pickup' : 'Delivery'}
+                    </span>
+                  </div>
                   <p className="text-xs text-slate-400 mt-1">
                     {new Date(order.createdAt).toLocaleString(undefined, {
                       weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
                     })}
                   </p>
                 </div>
-                <span className="font-black text-primary-400 text-lg">
-                  ₹{order.totalAmount}
-                </span>
+                <div className="text-right">
+                  <span className="font-black text-primary-400 text-lg block">
+                    ₹{order.totalAmount}
+                  </span>
+                  <span className="text-[10px] font-medium text-slate-400 uppercase">
+                    {(order.paymentMethod || 'COD').toUpperCase()} · {(order.paymentStatus || 'PAID').toUpperCase()}
+                  </span>
+                </div>
               </div>
 
               {/* Cancelled Reason Snippet */}
@@ -122,25 +135,30 @@ export default function OrderHistory({ orders }: Props) {
               )}
 
               {/* Items preview */}
-              <div className="flex gap-2 mb-5 overflow-hidden">
-                {order.items.slice(0, 4).map((item: CartItem, i: number) => (
-                  item.image && (
-                    <div key={i} className="relative w-12 h-12 rounded-xl overflow-hidden border border-white/10 group">
-                      <img src={item.image} alt={item.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
+              <div className="mb-4">
+                <div className="flex gap-2 mb-2 overflow-hidden">
+                  {order.items.slice(0, 4).map((item: CartItem, i: number) => (
+                    item.image && (
+                      <div key={i} className="relative w-11 h-11 rounded-xl overflow-hidden border border-white/10 group shrink-0">
+                        <img src={item.image} alt={item.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
+                      </div>
+                    )
+                  ))}
+                  {order.items.length > 4 && (
+                    <div className="w-11 h-11 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-xs font-bold text-slate-300 shrink-0">
+                      +{order.items.length - 4}
                     </div>
-                  )
-                ))}
-                {order.items.length > 4 && (
-                  <div className="w-12 h-12 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-xs font-bold text-slate-300">
-                    +{order.items.length - 4}
-                  </div>
-                )}
+                  )}
+                </div>
+                <p className="text-xs text-slate-300 font-medium truncate">
+                  {order.items.map(it => `${it.name}${it.quantity > 1 ? ` (×${it.quantity})` : ''}`).join(', ')}
+                </p>
               </div>
 
               {/* Status Badge & Actions */}
-              <div className="flex items-center justify-between mt-auto">
+              <div className="flex items-center justify-between mt-auto pt-3 border-t border-white/10 flex-wrap gap-2">
                 <span
-                  className={`px-3 py-1.5 text-xs font-bold rounded-full border ${
+                  className={`px-3 py-1 text-[11px] font-bold rounded-full border ${
                     order.status === "delivered"
                       ? "bg-green-500/10 text-green-400 border-green-500/20"
                       : order.status === "cancelled"
@@ -152,29 +170,24 @@ export default function OrderHistory({ orders }: Props) {
                 </span>
                 
                 <div className="flex items-center gap-2">
-                  <a
-                    href={`/api/payment/invoice/${order.id}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                    className="text-xs font-bold text-slate-300 hover:text-white flex items-center gap-1 bg-white/10 px-3 py-1.5 rounded-lg border border-white/10 transition-colors"
-                    title="Download Official Tax Invoice"
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigate(`/bill/${order.billReference || order.id}`);
+                    }}
+                    className="text-xs font-bold text-slate-200 hover:text-white flex items-center gap-1 bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg border border-white/15 transition-all shadow-sm"
+                    title="View & Print Official Bill"
                   >
-                    📄 Invoice
-                  </a>
+                    🧾 View Bill
+                  </button>
                   {order.status === "delivered" && (
                     <GlassButton
                       variant="primary"
-                      className="!px-4 !py-1.5 text-xs font-bold h-auto rounded-lg hover:shadow-lg hover:shadow-primary-500/25"
+                      className="!px-3.5 !py-1.5 text-xs font-bold h-auto rounded-lg hover:shadow-lg hover:shadow-primary-500/25"
                       onClick={(e) => handleReorder(order, e)}
                     >
                       <RotateCcw className="w-3 h-3 mr-1 inline" /> Reorder
                     </GlassButton>
-                  )}
-                  {order.status === "cancelled" && (
-                    <span className="text-xs font-bold text-red-400 flex items-center gap-1 bg-red-500/10 px-3 py-1.5 rounded-lg border border-red-500/20">
-                      View Details
-                    </span>
                   )}
                   {isActive && (
                     <span className="text-xs font-bold text-primary-400 flex items-center gap-1 bg-primary-500/10 px-3 py-1.5 rounded-lg border border-primary-500/20">
