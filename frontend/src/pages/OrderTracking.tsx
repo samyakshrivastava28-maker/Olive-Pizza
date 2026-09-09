@@ -587,7 +587,7 @@ export default function OrderTracking() {
     const partnerId = order.deliveryPartnerId;
 
     // Initial position from Supabase
-    supabase.from("delivery_locations").select("latitude,longitude,heading,speed").eq("delivery_partner_id", partnerId).single()
+    Promise.resolve(supabase.from("delivery_locations").select("latitude,longitude,heading,speed").eq("delivery_partner_id", partnerId).single())
       .then(({ data, error }) => {
         if (error || trackingLockedRef.current) return;
         if (data && data.latitude && data.longitude) {

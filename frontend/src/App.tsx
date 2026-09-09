@@ -134,6 +134,9 @@ const OrderCancelledPage = lazyWithRetry(() => import('./pages/OrderCancelledPag
 // Lazy loaded customer dashboard
 const CustomerDashboard = lazyWithRetry(() => import('./pages/CustomerDashboard'));
 
+// Lazy loaded 404 page
+const NotFound = lazyWithRetry(() => import('./pages/NotFound'));
+
 function AppContent() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -237,6 +240,8 @@ function AppContent() {
                     <Route path="/dashboard" element={<CustomerDashboard />} />
                   </Route>
                 </Route>
+                {/* Catch-all 404 Route */}
+                <Route path="*" element={<Suspense fallback={<PizzaLoader />}><NotFound /></Suspense>} />
               </Route>
     
               {/* Onboarding Routes (Auth Required) */}
@@ -245,9 +250,6 @@ function AppContent() {
                 <Route path="/onboarding/phone" element={<Suspense fallback={<PizzaLoader />}><SetupPhone /></Suspense>} />
                 <Route path="/onboarding/location" element={<Suspense fallback={<PizzaLoader />}><SetupLocation /></Suspense>} />
               </Route>
-    
-              {/* Catch-all 404 Route */}
-              <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </Suspense>
         </RouteErrorBoundary>

@@ -13,6 +13,7 @@ import { useLoadingStore } from "../lib/loadingStore";
 import { useMotionValue, useTransform } from "framer-motion";
 import SEO from "../components/SEO";
 import { generateProductSchema } from "../lib/schema";
+import NotFound from "./NotFound";
 
 function ProductSkeleton() {
   return (
@@ -37,6 +38,8 @@ export default function ProductDetail() {
   const { triggerAnimation } = useCartAnimation();
 
   const [item, setItem] = useState<MenuItem | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
 
   // Customization State
   const [selectedSize, setSelectedSize] = useState<string>("regular");
@@ -135,10 +138,14 @@ export default function ProductDetail() {
           if (productData.crusts?.length) {
             setSelectedCrust(productData.crusts[0].name);
           }
+        } else {
+          setNotFound(true);
         }
       } catch (err) {
         console.error("Error fetching product", err);
-        toast.error("Failed to load product details");
+        setNotFound(true);
+      } finally {
+        setLoading(false);
       }
     };
     fetchProduct();
@@ -252,7 +259,17 @@ export default function ProductDetail() {
   };
 
 
-  if (!item) {
+  if (notFound) {
+    return (
+      <NotFound 
+        title="Oops! This item got lost in the oven. 🍕"
+        subtitle="The pizza, combo, or treat you're looking for doesn't exist, may have been retired, or is temporarily off our menu."
+        isProductNotFound={true}
+      />
+    );
+  }
+
+  if (loading || !item) {
     return (
       <PageTransition className="max-w-7xl mx-auto p-4 md:p-8 min-h-[calc(100vh-80px)]">
         <ProductSkeleton />
