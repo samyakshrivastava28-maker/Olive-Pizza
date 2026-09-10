@@ -95,15 +95,39 @@ export default function FloatingTracker() {
 
   // ─── Firestore Listener ────────────────────────────────────────────────────
   const subscribeToOrders = useCallback(() => {
-    if (!auth.currentUser) return () => {};
+    if (!auth.currentUser) {
+      const cachedId = localStorage.getItem('lastPlacedOrderId') || localStorage.getItem('activeOrderId');
+      if (cachedId) {
+        return onSnapshot(doc(db, 'orders', cachedId), (docSnap) => {
+          if (docSnap.exists()) {
+            const data = { id: docSnap.id, ...docSnap.data() } as ActiveOrder;
+            if (ACTIVE_STATUSES.includes(data.status)) {
+              setOrders([data]);
+              setCurrentIdx(0);
+              return;
+            }
+          }
+          setOrders([]);
+        }, (err) => {
+          console.warn('[FloatingTracker] Cached order snapshot warning:', err);
+          setOrders([]);
+        });
+      }
+      return () => {};
+    }
+
     const q = query(
       collection(db, 'orders'),
       where('userId', '==', auth.currentUser!.uid),
-      where('status', 'in', ACTIVE_STATUSES),
-      orderBy('createdAt', 'desc')
+      where('status', 'in', ACTIVE_STATUSES)
     );
     return onSnapshot(q, snap => {
       const items = snap.docs.map(d => ({ id: d.id, ...d.data() } as ActiveOrder));
+      items.sort((a, b) => {
+        const timeA = a.createdAt?.seconds ? a.createdAt.seconds * 1000 : (a.createdAt ? new Date(a.createdAt).getTime() : 0);
+        const timeB = b.createdAt?.seconds ? b.createdAt.seconds * 1000 : (b.createdAt ? new Date(b.createdAt).getTime() : 0);
+        return timeB - timeA;
+      });
       
       // Detect transitions for overlays
       setLastKnownStatus(prev => {
@@ -123,7 +147,10 @@ export default function FloatingTracker() {
 
       setOrders(items);
       setCurrentIdx(idx => Math.min(idx, Math.max(0, items.length - 1)));
-    }, () => setOrders([]));
+    }, (err) => {
+      console.warn('[FloatingTracker] Orders snapshot warning:', err);
+      setOrders([]);
+    });
   }, []);
 
   useEffect(() => {

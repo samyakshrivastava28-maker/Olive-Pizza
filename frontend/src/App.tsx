@@ -215,6 +215,8 @@ function AppContent() {
                 <Route path="/order-cancelled/:id" element={<Suspense fallback={<PizzaLoader />}><OrderCancelledPage /></Suspense>} />
                 <Route path="/order-tracking/:orderId" element={<OrderTracking />} />
                 <Route path="/tracking/:orderId" element={<OrderTracking />} />
+                <Route path="/order-tracking" element={<OrderTracking />} />
+                <Route path="/tracking" element={<OrderTracking />} />
                 <Route path="/bill/:billReference" element={<Suspense fallback={<PizzaLoader />}><BillPage /></Suspense>} />
                 <Route path="/contact" element={<Contact />} />
                 <Route path="/assistant" element={<Suspense fallback={<PizzaLoader />}><UniversalAssistant /></Suspense>} />

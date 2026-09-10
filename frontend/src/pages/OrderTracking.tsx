@@ -8,7 +8,7 @@ import {
 import { useParams, useNavigate, useSearchParams } from "react-router";
 import { useAuthStore } from "../lib/store";
 import { auth, db } from "../lib/firebase";
-import { doc, getDoc, onSnapshot, updateDoc } from "firebase/firestore";
+import { doc, getDoc, onSnapshot, updateDoc, collection, getDocs, query, where } from "firebase/firestore";
 import { useNotificationDebugger } from "../hooks/useNotificationDebugger";
 import { supabase } from "../lib/supabase";
 import type { RealtimeChannel } from "@supabase/supabase-js";
@@ -16,6 +16,9 @@ import { RESTAURANT_LOCATION, fetchApi } from "../lib/config";
 import { motion, AnimatePresence, PanInfo } from "framer-motion";
 import {
   ChevronLeft,
+  ChevronRight,
+  Search,
+  ArrowRight,
   Phone,
   MapPin,
   Package,
@@ -392,8 +395,17 @@ function DeliverySuccessScreen({ order, orderId, partnerDetails, navigate }: any
 
 // ─── Main Component ──────────────────────────────────────────────────
 export default function OrderTracking() {
-  const { orderId } = useParams();
+  const { orderId: paramOrderId } = useParams();
+  const [searchParams] = useSearchParams();
+  const queryOrderId = searchParams.get('orderId') || searchParams.get('id');
   const navigate = useNavigate();
+
+  // Active tracking target ID
+  const [resolvedOrderId, setResolvedOrderId] = useState<string | null>(paramOrderId || queryOrderId || null);
+  const [isResolving, setIsResolving] = useState<boolean>(!paramOrderId && !queryOrderId);
+  const [userOrders, setUserOrders] = useState<any[]>([]);
+
+  const orderId = resolvedOrderId || paramOrderId || queryOrderId || null;
 
   // Data State
   const [order, setOrder] = useState<any>(null);
@@ -417,6 +429,61 @@ export default function OrderTracking() {
   const channelRef = useRef<RealtimeChannel | null>(null);
   const offlineTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const trackingLockedRef = useRef(false);
+
+  // Auto-resolve active order if no ID provided in URL
+  useEffect(() => {
+    if (paramOrderId || queryOrderId) {
+      setResolvedOrderId(paramOrderId || queryOrderId);
+      setIsResolving(false);
+      return;
+    }
+
+    // 1. Check local storage
+    const cachedId = localStorage.getItem('activeOrderId') || localStorage.getItem('lastPlacedOrderId');
+    if (cachedId) {
+      setResolvedOrderId(cachedId);
+      setIsResolving(false);
+    }
+
+    // 2. Fetch authenticated user's recent orders
+    const currentUser = auth.currentUser || useAuthStore.getState().user;
+    if (currentUser?.uid) {
+      const q = query(
+        collection(db, "orders"),
+        where("userId", "==", currentUser.uid)
+      );
+      getDocs(q).then((snap) => {
+        if (!snap.empty) {
+          const list = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
+          list.sort((a, b) => {
+            const tA = a.createdAt?.seconds ? a.createdAt.seconds * 1000 : (a.createdAt ? new Date(a.createdAt).getTime() : 0);
+            const tB = b.createdAt?.seconds ? b.createdAt.seconds * 1000 : (b.createdAt ? new Date(b.createdAt).getTime() : 0);
+            return tB - tA;
+          });
+          setUserOrders(list.slice(0, 5));
+
+          // If no cached order or cached order is missing, check for active order
+          if (!cachedId) {
+            const active = list.find(o => 
+              TRACKABLE_STATUSES.has(o.status) || 
+              ['pending', 'accepted', 'preparing', 'ready', 'partner_assigned'].includes(o.status)
+            );
+            if (active) {
+              setResolvedOrderId(active.id);
+            } else if (list[0]) {
+              setResolvedOrderId(list[0].id);
+            }
+          }
+        }
+      }).catch(err => {
+        console.warn("[OrderTracking] Failed to fetch user orders:", err);
+      }).finally(() => {
+        setIsResolving(false);
+      });
+    } else {
+      setIsResolving(false);
+    }
+  }, [paramOrderId, queryOrderId]);
 
   // ── Privacy Guard ──
   const lockTracking = useCallback(() => {
@@ -444,16 +511,22 @@ export default function OrderTracking() {
   const prevOrderStatusRef = useRef<string | null>(null);
   useEffect(() => {
     if (!orderId) {
-      setOrderNotFound(true);
+      if (!isResolving) {
+        setOrder(null);
+      }
       return;
     }
 
     setOrderError(null);
     setOrderNotFound(false);
 
+    try {
+      localStorage.setItem('activeOrderId', orderId);
+    } catch {}
+
     const unsub = onSnapshot(
       doc(db, "orders", orderId),
-      (docSnap) => {
+      async (docSnap) => {
         if (docSnap.exists()) {
           const data = { id: docSnap.id, ...(docSnap.data() as any) };
 
@@ -462,7 +535,12 @@ export default function OrderTracking() {
           const userRole = useAuthStore.getState().user?.role;
           const isStaff = userRole === 'owner' || userRole === 'admin' || userRole === 'restaurant_manager';
           const isAssignedRider = currentUser && data.deliveryPartnerId === currentUser.uid;
-          const isCustomer = !currentUser || !data.userId || data.userId === currentUser.uid || data.customerId === currentUser.uid;
+          const isCustomer = !currentUser || 
+            !data.userId || 
+            data.userId === currentUser.uid || 
+            data.customerId === currentUser.uid ||
+            Boolean(currentUser.phoneNumber && (data.contactPhone === currentUser.phoneNumber || data.customerPhone === currentUser.phoneNumber || data.customerInfo?.phone === currentUser.phoneNumber)) ||
+            Boolean(currentUser.email && (data.userEmail === currentUser.email || data.customerInfo?.email === currentUser.email));
 
           if (!isStaff && !isAssignedRider && !isCustomer) {
             setOrderError("Access restricted: You are not authorized to view tracking for this order.");
@@ -516,6 +594,19 @@ export default function OrderTracking() {
             lockTracking();
           }
         } else {
+          // Fallback: Check if orderId is a daily order number or short code
+          try {
+            const qDaily = query(
+              collection(db, "orders"),
+              where("dailyOrderNumber", "==", orderId)
+            );
+            const dailySnap = await getDocs(qDaily);
+            if (!dailySnap.empty) {
+              const found = dailySnap.docs[0];
+              setResolvedOrderId(found.id);
+              return;
+            }
+          } catch {}
           setOrderNotFound(true);
         }
       },
@@ -526,7 +617,7 @@ export default function OrderTracking() {
     );
 
     return () => unsub();
-  }, [orderId, lockTracking, resetOfflineTimer]);
+  }, [orderId, isResolving, lockTracking, resetOfflineTimer]);
 
   // ── ROUTE POLYLINE (OSRM Driving Road Path) ──
   useEffect(() => {
@@ -696,18 +787,96 @@ export default function OrderTracking() {
 
   if (orderNotFound) {
     return (
-      <div className="h-[100dvh] bg-dark-950 flex flex-col items-center justify-center p-6 text-center relative overflow-hidden">
+      <div className="min-h-[100dvh] bg-dark-950 flex flex-col items-center justify-center p-6 text-center relative overflow-hidden">
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-amber-500/10 blur-[120px] rounded-full pointer-events-none" />
         <div className="w-20 h-20 bg-dark-900 border border-amber-500/30 rounded-3xl flex items-center justify-center mb-6 shadow-[0_0_40px_rgba(245,158,11,0.2)] relative z-10">
           <Package className="w-10 h-10 text-amber-500" />
         </div>
         <h1 className="text-2xl font-black text-white mb-2 relative z-10">Order Not Found</h1>
         <p className="text-slate-400 mb-6 max-w-sm text-sm relative z-10">
-          We couldn't find an order with ID <span className="font-mono text-white font-bold">{orderId}</span>. Please verify your order link.
+          We couldn't find an order with ID <span className="font-mono text-white font-bold">#{orderId || 'requested'}</span>. Please verify your order ID or search below:
         </p>
-        <GlassButton variant="primary" onClick={() => navigate("/dashboard")} className="py-3.5 px-6 text-sm font-bold flex items-center gap-2 relative z-10">
-          Return to Dashboard
-        </GlassButton>
+
+        {/* Quick Search Box */}
+        <div className="w-full max-w-md relative z-10 mb-6">
+          <div className="relative flex items-center">
+            <input
+              type="text"
+              placeholder="Enter Order ID (e.g. OP-1234 or #05)"
+              defaultValue={searchOrderIdInput}
+              onChange={(e) => setSearchOrderIdInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  const val = searchOrderIdInput.trim().replace(/^#/, '');
+                  if (val) {
+                    setOrderNotFound(false);
+                    setResolvedOrderId(val);
+                    navigate(`/order-tracking/${val}`);
+                  }
+                }
+              }}
+              className="w-full bg-dark-900 border border-white/15 focus:border-amber-500 rounded-2xl py-3.5 pl-4 pr-12 text-white text-sm font-mono focus:outline-none transition-all shadow-inner"
+            />
+            <button
+              onClick={() => {
+                const val = searchOrderIdInput.trim().replace(/^#/, '');
+                if (val) {
+                  setOrderNotFound(false);
+                  setResolvedOrderId(val);
+                  navigate(`/order-tracking/${val}`);
+                }
+              }}
+              disabled={!searchOrderIdInput.trim()}
+              className="absolute right-2 p-2 bg-amber-500 disabled:opacity-40 text-dark-950 font-bold rounded-xl transition-all cursor-pointer"
+            >
+              <Search className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* User's recent orders */}
+        {userOrders.length > 0 && (
+          <div className="w-full max-w-md mb-6 text-left relative z-10">
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 px-1">
+              Your Recent Orders
+            </p>
+            <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+              {userOrders.map((o) => (
+                <div
+                  key={o.id}
+                  onClick={() => {
+                    setOrderNotFound(false);
+                    setResolvedOrderId(o.id);
+                    navigate(`/order-tracking/${o.id}`);
+                  }}
+                  className="bg-dark-900/80 hover:bg-dark-800 border border-white/10 hover:border-amber-500/40 rounded-2xl p-3 flex items-center justify-between cursor-pointer transition-all active:scale-[0.99]"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 font-bold text-xs font-mono">
+                      #{o.dailyOrderNumber || o.id.slice(-4).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-white">₹{o.totalAmount || o.pricing?.finalTotal || 0}</p>
+                      <p className="text-[10px] text-slate-400 capitalize">{o.status?.replace(/_/g, ' ') || 'Order'}</p>
+                    </div>
+                  </div>
+                  <span className="text-xs font-semibold text-amber-400 flex items-center gap-1">
+                    Track <ChevronRight className="w-3.5 h-3.5" />
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="flex items-center gap-3 relative z-10">
+          <GlassButton variant="ghost" onClick={() => navigate("/dashboard")} className="py-3 px-5 text-sm">
+            Dashboard
+          </GlassButton>
+          <GlassButton variant="primary" onClick={() => navigate("/menu")} className="py-3 px-5 text-sm font-bold">
+            Explore Menu
+          </GlassButton>
+        </div>
       </div>
     );
   }
@@ -724,6 +893,116 @@ export default function OrderTracking() {
         <GlassButton variant="primary" onClick={() => navigate("/dashboard")} className="py-3.5 px-6 text-sm font-bold flex items-center gap-2 relative z-10">
           Return to Dashboard
         </GlassButton>
+      </div>
+    );
+  }
+
+  // If no order ID resolved and finished resolving, display the Lookup View
+  if (!orderId && !isResolving) {
+    return (
+      <div className="min-h-[100dvh] bg-dark-950 flex flex-col items-center justify-center p-6 text-center relative overflow-hidden">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-primary-500/10 blur-[140px] rounded-full pointer-events-none" />
+
+        <motion.div
+          initial={{ scale: 0.95, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          className="w-full max-w-md relative z-10"
+        >
+          <div className="w-20 h-20 mx-auto bg-dark-900 border border-primary-500/30 rounded-3xl flex items-center justify-center mb-6 shadow-[0_0_40px_rgba(234,88,12,0.2)]">
+            <Navigation className="w-10 h-10 text-primary-400 animate-pulse" />
+          </div>
+
+          <h1 className="text-3xl font-black text-white mb-2 tracking-tight">
+            Track Your Order
+          </h1>
+          <p className="text-slate-400 mb-8 text-sm max-w-sm mx-auto">
+            Enter your Order ID from SMS, WhatsApp, or checkout confirmation to follow your pizza live from oven to doorstep.
+          </p>
+
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const val = searchOrderIdInput.trim().replace(/^#/, '');
+              if (val) {
+                setResolvedOrderId(val);
+                navigate(`/order-tracking/${val}`);
+              }
+            }}
+            className="mb-8"
+          >
+            <div className="relative flex items-center">
+              <input
+                type="text"
+                value={searchOrderIdInput}
+                onChange={(e) => setSearchOrderIdInput(e.target.value)}
+                placeholder="Enter Order ID (e.g. OP-1234 or #05)"
+                className="w-full bg-dark-900/90 border border-white/15 focus:border-primary-500 rounded-2xl py-4 pl-5 pr-14 text-white text-base placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500/30 transition-all font-mono shadow-inner"
+              />
+              <button
+                type="submit"
+                disabled={!searchOrderIdInput.trim()}
+                className="absolute right-2 p-2.5 bg-primary-600 hover:bg-primary-500 disabled:opacity-40 text-white rounded-xl transition-all cursor-pointer shadow-lg active:scale-95"
+              >
+                <ArrowRight className="w-5 h-5" />
+              </button>
+            </div>
+          </form>
+
+          {/* Recent orders if user has any */}
+          {userOrders && userOrders.length > 0 && (
+            <div className="mb-6 text-left">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 px-1">
+                Your Recent Orders
+              </p>
+              <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                {userOrders.map((o) => (
+                  <div
+                    key={o.id}
+                    onClick={() => {
+                      setResolvedOrderId(o.id);
+                      navigate(`/order-tracking/${o.id}`);
+                    }}
+                    className="bg-dark-900/80 hover:bg-dark-800/90 border border-white/10 hover:border-primary-500/40 rounded-2xl p-3.5 flex items-center justify-between cursor-pointer transition-all active:scale-[0.99] group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-primary-500/10 border border-primary-500/20 flex items-center justify-center text-primary-400 font-bold text-xs font-mono">
+                        #{o.dailyOrderNumber || o.id.slice(-4).toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-white group-hover:text-primary-400 transition-colors">
+                          ₹{o.totalAmount || o.pricing?.finalTotal || 0}
+                        </p>
+                        <p className="text-xs text-slate-400 capitalize">
+                          {o.status?.replace(/_/g, ' ') || 'Order'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 text-xs font-semibold text-primary-400">
+                      Track <ChevronRight className="w-4 h-4" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="flex items-center justify-center gap-3">
+            <GlassButton
+              variant="ghost"
+              onClick={() => navigate("/dashboard")}
+              className="py-3 px-5 text-sm text-slate-400 hover:text-white"
+            >
+              Dashboard
+            </GlassButton>
+            <GlassButton
+              variant="primary"
+              onClick={() => navigate("/menu")}
+              className="py-3 px-5 text-sm font-bold"
+            >
+              Order Pizza
+            </GlassButton>
+          </div>
+        </motion.div>
       </div>
     );
   }

@@ -16,7 +16,7 @@ export default function FloatingOrderTracker() {
     const q = query(
       collection(db, 'orders'),
       where('userId', '==', user.uid),
-      where('status', 'in', ['accepted', 'preparing', 'out_for_delivery'])
+      where('status', 'in', ['accepted', 'preparing', 'ready', 'partner_assigned', 'picked_up', 'out_for_delivery'])
     );
     const unsub = onSnapshot(q, (snap) => {
       if (!snap.empty) {
@@ -34,6 +34,12 @@ export default function FloatingOrderTracker() {
            return { title: 'Order Accepted', icon: CheckCircle, color: 'text-blue-400', bg: 'bg-blue-500/20' };
         case 'preparing':
            return { title: 'Preparing Food', icon: ChefHat, color: 'text-orange-400', bg: 'bg-orange-500/20' };
+        case 'ready':
+           return { title: 'Order Ready', icon: CheckCircle, color: 'text-emerald-400', bg: 'bg-emerald-500/20' };
+        case 'partner_assigned':
+           return { title: 'Rider Assigned', icon: Bike, color: 'text-purple-400', bg: 'bg-purple-500/20' };
+        case 'picked_up':
+           return { title: 'Order Picked Up', icon: Bike, color: 'text-yellow-400', bg: 'bg-yellow-500/20' };
         case 'out_for_delivery':
            return { title: 'On The Way', icon: Bike, color: 'text-primary-400', bg: 'bg-primary-500/20' };
         default:
