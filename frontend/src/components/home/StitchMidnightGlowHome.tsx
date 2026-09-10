@@ -3,8 +3,7 @@ import { motion } from "framer-motion";
 import { Link, useNavigate } from "react-router";
 import { 
   Flame, Leaf, MapPin, ChevronRight, Plus, 
-  ArrowRight, Star, Award, Search, ShoppingBag, 
-  User, ShieldCheck, Gift
+  ArrowRight, Star, Award, ShieldCheck, Gift
 } from "lucide-react";
 import { useDataStore } from "../../lib/dataStore";
 import { useStoreStatus } from "../../lib/useStoreStatus";
@@ -23,7 +22,7 @@ import toast from "react-hot-toast";
 export default function StitchMidnightGlowHome() {
   const storeStatus = useStoreStatus();
   const { products, combos } = useDataStore();
-  const { items: cartItems, total: cartTotal, addItem } = useCartStore();
+  const { addItem } = useCartStore();
   const { user, isAuthenticated } = useAuthStore();
   const { triggerAnimation } = useCartAnimation();
   const navigate = useNavigate();
@@ -128,82 +127,34 @@ export default function StitchMidnightGlowHome() {
       basePrice: Number(product.basePrice || product.price || 0),
       offerPrice: Number(product.offerPrice || 0),
       discountPercentage: Number(product.discountPercentage || 0),
-      image: product.imageUrl || product.image || "/images/pizza-placeholder.webp",
+      image: product.imageUrl || product.image || "https://res.cloudinary.com/dxmlvkff1/image/upload/v1786517437/olive-pizza/ai-product-images/dv4uty06rq4tznlpqz2i.jpg",
       isVegetarian: product.isVegetarian !== undefined ? Boolean(product.isVegetarian) : Boolean(product.isVeg ?? true),
       isAvailable: true,
     });
   }, []);
 
   return (
-    <div className="w-full text-slate-100 antialiased selection:bg-[#FF6B00] selection:text-white bg-[#06070A] min-h-screen">
+    <div className="w-full text-slate-100 antialiased selection:bg-[#FF6B00] selection:text-white bg-[#06070A] min-h-screen pt-20 md:pt-24">
       
-      {/* ── 1. Live Smart Header / Operational Beacon ────────────────── */}
-      <header className="sticky top-0 z-40 w-full bg-[#0C0E14]/90 backdrop-blur-xl border-b border-white/5 transition-all">
-        <div className="max-w-7xl mx-auto px-4 sm:px-8 py-3 flex items-center justify-between gap-3">
-          {/* Location Selector Beacon */}
-          <div className="flex items-center gap-2.5 min-w-0 flex-1">
-            <div className="w-9 h-9 rounded-full bg-white/5 border border-white/10 flex items-center justify-center shrink-0 text-[#FF6B00]">
-              <MapPin className="w-4 h-4 text-[#FF6B00]" />
-            </div>
-            <div className="flex flex-col min-w-0">
-              <div className="flex items-center gap-1">
-                <span className="text-sm font-bold text-white truncate">{userLocationText}</span>
-                <ChevronRight className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-              </div>
-              <div className="flex items-center gap-1.5 text-xs">
-                <span className="relative flex h-2 w-2 shrink-0">
-                  <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
-                    isStoreOpen ? "bg-emerald-400" : "bg-amber-400"
-                  }`} />
-                  <span className={`relative inline-flex rounded-full h-2 w-2 ${
-                    isStoreOpen ? "bg-emerald-500" : "bg-amber-500"
-                  }`} />
-                </span>
-                <span className="text-slate-400 truncate text-[11px]">
-                  {statusMessage}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Header Action Clusters */}
-          <div className="flex items-center gap-2 shrink-0">
-            {/* Search Trigger */}
-            <button 
-              onClick={() => navigate("/menu")}
-              aria-label="Search Menu"
-              className="w-9 h-9 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 text-slate-300 hover:text-white flex items-center justify-center transition-all active:scale-95"
-            >
-              <Search className="w-4 h-4" />
-            </button>
-
-            {/* Cart Button with Real Item Count */}
-            <Link 
-              to="/cart"
-              aria-label="View Cart"
-              className="relative w-9 h-9 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 text-slate-300 hover:text-white flex items-center justify-center transition-all active:scale-95"
-            >
-              <ShoppingBag className="w-4 h-4" />
-              {cartItems.length > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#FF6B00] text-white text-[10px] font-black rounded-full flex items-center justify-center border-2 border-[#06070A]">
-                  {cartItems.length}
-                </span>
-              )}
-            </Link>
-
-            {/* Profile Avatar */}
-            <Link 
-              to={isAuthenticated ? "/profile" : "/login"}
-              aria-label="Customer Account"
-              className="w-9 h-9 rounded-full p-[1.5px] bg-gradient-to-tr from-[#FF6B00] via-[#D4AF37] to-[#50C878] shrink-0 active:scale-95 transition-transform"
-            >
-              <div className="w-full h-full rounded-full bg-[#111319] flex items-center justify-center text-slate-200 overflow-hidden">
-                <User className="w-4 h-4 text-orange-400" />
-              </div>
-            </Link>
-          </div>
+      {/* ── 1. Live Operational Beacon & Delivery Location Pill ──────── */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-8 pt-3 pb-1">
+        <div className="inline-flex items-center gap-2.5 px-3.5 py-1.5 rounded-full bg-white/[0.04] border border-white/10 backdrop-blur-md">
+          <MapPin className="w-3.5 h-3.5 text-[#FF6B00] shrink-0" />
+          <span className="text-xs font-semibold text-white truncate max-w-[140px] sm:max-w-[240px]">{userLocationText}</span>
+          <span className="h-3 w-px bg-white/20" />
+          <span className="relative flex h-2 w-2 shrink-0">
+            <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+              isStoreOpen ? "bg-emerald-400" : "bg-amber-400"
+            }`} />
+            <span className={`relative inline-flex rounded-full h-2 w-2 ${
+              isStoreOpen ? "bg-emerald-500" : "bg-amber-500"
+            }`} />
+          </span>
+          <span className="text-[11px] text-slate-300 font-medium">
+            {statusMessage}
+          </span>
         </div>
-      </header>
+      </div>
 
       {/* ── 2. Cinematic Sensory Hero Section ("Hot. Fresh. Made for you.") ─── */}
       <section className="relative w-full overflow-hidden pt-4 pb-8 max-w-7xl mx-auto px-4 sm:px-8">
@@ -328,7 +279,7 @@ export default function StitchMidnightGlowHome() {
               <div className="relative w-full rounded-3xl overflow-hidden bg-[#161922]/80 backdrop-blur-2xl border border-white/10 p-3 shadow-2xl group">
                 <div className="relative w-full h-[260px] sm:h-[340px] rounded-2xl overflow-hidden bg-black/50">
                   <img 
-                    src={heroProduct.imageUrl || heroProduct.image || "/images/pizza-placeholder.webp"}
+                    src={heroProduct.imageUrl || heroProduct.image || "https://res.cloudinary.com/dxmlvkff1/image/upload/v1786517437/olive-pizza/ai-product-images/dv4uty06rq4tznlpqz2i.jpg"}
                     alt={heroProduct.productName || heroProduct.name}
                     className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700 ease-out"
                   />
@@ -445,7 +396,7 @@ export default function StitchMidnightGlowHome() {
                   <div className="flex items-center gap-4 w-full sm:w-auto">
                     <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden bg-black/50 shrink-0">
                       <img
-                        src={combo.imageUrl || combo.image || "/images/pizza-placeholder.webp"}
+                        src={combo.imageUrl || combo.image || "https://res.cloudinary.com/dxmlvkff1/image/upload/v1786517437/olive-pizza/ai-product-images/dv4uty06rq4tznlpqz2i.jpg"}
                         alt={combo.name}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                       />
@@ -493,44 +444,6 @@ export default function StitchMidnightGlowHome() {
       {/* ── 9. Mobile App Download & Delivery Platform Assurance ───── */}
       <AppDownloadSection />
 
-      {/* ── 10. Persistent Floating Cart Pill (Shows ONLY if items in cart) ── */}
-      {cartItems.length > 0 && (
-        <div className="fixed bottom-20 sm:bottom-8 left-0 right-0 z-40 px-4 max-w-lg mx-auto pointer-events-none">
-          <motion.div
-            initial={{ opacity: 0, y: 25 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 25 }}
-            className="pointer-events-auto w-full p-3 px-5 rounded-full bg-[#161922]/95 backdrop-blur-2xl border border-[#FF6B00]/40 flex items-center justify-between shadow-[0_15px_35px_rgba(0,0,0,0.85)]"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-[#FF6B00] flex items-center justify-center text-white shrink-0 shadow-md">
-                <ShoppingBag className="w-4 h-4" />
-              </div>
-              <div>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-sm font-bold text-white">
-                    {cartItems.length} {cartItems.length === 1 ? "Item" : "Items"}
-                  </span>
-                  <span className="text-slate-500 text-xs">•</span>
-                  <span className="text-sm font-black text-[#FFB693]">₹{cartTotal}</span>
-                </div>
-                <span className="text-[11px] text-emerald-400 font-semibold flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                  Cart ready for checkout
-                </span>
-              </div>
-            </div>
-
-            <Link
-              to="/cart"
-              className="px-5 py-2.5 rounded-full bg-gradient-to-r from-[#FF6B00] to-[#FF8800] text-white font-black text-xs uppercase tracking-wider flex items-center gap-1.5 active:scale-95 shadow-[0_4px_14px_rgba(255,107,0,0.4)] transition-transform"
-            >
-              <span>View Cart</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
-          </motion.div>
-        </div>
-      )}
 
       {/* ── 11. Product Customization Modal ──────────────────────────── */}
       <ProductCustomizationModal

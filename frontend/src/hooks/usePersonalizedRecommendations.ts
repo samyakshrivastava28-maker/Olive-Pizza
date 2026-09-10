@@ -121,7 +121,7 @@ export function usePersonalizedRecommendations(): RecommendationResult {
       price: finalPrice,
       basePrice: hasDiscount ? basePrice : undefined,
       offerPrice: hasDiscount ? offerPrice : undefined,
-      image: raw.imageUrl || raw.image || '/images/pizza-placeholder.webp',
+      image: raw.imageUrl || raw.image || 'https://res.cloudinary.com/dxmlvkff1/image/upload/v1786517437/olive-pizza/ai-product-images/dv4uty06rq4tznlpqz2i.jpg',
       category: raw.category,
       isVegetarian: raw.isVegetarian !== undefined ? Boolean(raw.isVegetarian) : Boolean(raw.isVeg ?? false),
       isAvailable: true,

@@ -178,8 +178,11 @@ export default function PersonalizedProductDiscovery({ onCustomize }: Personaliz
                 >
                   <div className="relative w-full h-44 overflow-hidden bg-black/40">
                     <img
-                      src={item.image}
+                      src={item.image || "https://res.cloudinary.com/dxmlvkff1/image/upload/v1786517437/olive-pizza/ai-product-images/dv4uty06rq4tznlpqz2i.jpg"}
                       alt={item.name}
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = "https://res.cloudinary.com/dxmlvkff1/image/upload/v1786517437/olive-pizza/ai-product-images/dv4uty06rq4tznlpqz2i.jpg";
+                      }}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                       loading="lazy"
                     />
@@ -285,8 +288,11 @@ export default function PersonalizedProductDiscovery({ onCustomize }: Personaliz
           >
             <div className="relative w-full h-44 overflow-hidden bg-black/40">
               <img
-                src={item.image}
+                src={item.image || "https://res.cloudinary.com/dxmlvkff1/image/upload/v1786517437/olive-pizza/ai-product-images/dv4uty06rq4tznlpqz2i.jpg"}
                 alt={item.name}
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = "https://res.cloudinary.com/dxmlvkff1/image/upload/v1786517437/olive-pizza/ai-product-images/dv4uty06rq4tznlpqz2i.jpg";
+                }}
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                 loading="lazy"
               />
