@@ -78,22 +78,20 @@ public class OliveMessagingService extends MessagingService {
                 String stage = data.get("stage");
                 String action = data.get("action");
 
-                boolean isStaff = "owner".equalsIgnoreCase(data.get("role")) || "delivery_partner".equalsIgnoreCase(data.get("role")) || "delivery".equalsIgnoreCase(data.get("role")) ||
-                                  "owner".equalsIgnoreCase(data.get("targetRole")) || "delivery_partner".equalsIgnoreCase(data.get("targetRole")) || "delivery".equalsIgnoreCase(data.get("targetRole")) ||
-                                  "alarm_actionable".equalsIgnoreCase(category);
-
-                boolean isContinuousAlert = isStaff && ("continuous".equals(alert) || 
-                                            "alarm_actionable".equals(category) || 
-                                            "new_order".equals(stage) || 
-                                            "delivery_assigned".equals(stage));
+                // Customer app must never trigger new order alarms or wake screen for staff alerts
+                if ("alarm_actionable".equalsIgnoreCase(category) || 
+                    "new_order".equalsIgnoreCase(stage) ||
+                    "NEW_ORDER".equalsIgnoreCase(data.get("type")) ||
+                    "NEW_ORDER".equalsIgnoreCase(data.get("eventType")) ||
+                    "continuous".equalsIgnoreCase(alert)) {
+                    Log.d(TAG, "Ignoring staff new order alert in customer app");
+                    return;
+                }
 
                 if ("stop_alert".equals(action)) {
                     stopNativeAlarm(data);
                     handledNatively = true;
                 } else {
-                    if (isContinuousAlert) {
-                        wakeScreenOnEmergency(powerManager);
-                    }
                     showNativeNotification(data);
                     handledNatively = true;
                 }
@@ -178,22 +176,33 @@ public class OliveMessagingService extends MessagingService {
 
         String role = data.get("role");
         String targetRole = data.get("targetRole");
-        boolean isStaff = "owner".equalsIgnoreCase(role) || "delivery_partner".equalsIgnoreCase(role) || "delivery".equalsIgnoreCase(role) ||
-                          "owner".equalsIgnoreCase(targetRole) || "delivery_partner".equalsIgnoreCase(targetRole) || "delivery".equalsIgnoreCase(targetRole) ||
-                          "alarm_actionable".equalsIgnoreCase(category);
+        // Customer app never displays continuous emergency alarms
+        boolean isContinuous = false;
 
-        boolean isContinuous = isStaff && ("continuous".equals(alertType) || 
-                               "alarm_actionable".equals(category) || 
-                               "new_order".equals(stage) || 
-                               "delivery_assigned".equals(stage));
+        // Monotonic state guard for live order updates
+        if (orderId != null && (isOngoing || "pinned_live".equals(data.get("category")) || MainActivity.CHANNEL_ORDER_TRACKING.equals(data.get("channelId")))) {
+            String verStr = data.get("version");
+            if (verStr != null && !verStr.isEmpty()) {
+                try {
+                    int version = Integer.parseInt(verStr);
+                    android.content.SharedPreferences prefs = getSharedPreferences("olive_order_versions", Context.MODE_PRIVATE);
+                    int lastSeen = prefs.getInt("order_" + orderId, -1);
+                    if (version < lastSeen) {
+                        Log.w(TAG, "Dropping out-of-order live update for order " + orderId + ": v" + version + " < v" + lastSeen);
+                        return;
+                    }
+                    prefs.edit().putInt("order_" + orderId, version).apply();
+                } catch (Exception ignored) {}
+            }
+        }
 
         int notificationId = (orderId != null) 
             ? (isOngoing ? orderId.hashCode() : (orderId.hashCode() + 1000))
             : (int) (System.currentTimeMillis() & 0x7fffffff);
 
         String channelId = data.get("channelId");
-        if (channelId == null || channelId.isEmpty()) {
-            channelId = isContinuous ? MainActivity.CHANNEL_ORDER_NEW : (isOngoing ? MainActivity.CHANNEL_ORDER_STATUS : MainActivity.CHANNEL_ORDER_STATUS);
+        if (channelId == null || channelId.isEmpty() || channelId.equals(MainActivity.CHANNEL_ORDER_STATUS)) {
+            channelId = isContinuous ? MainActivity.CHANNEL_ORDER_NEW : (isOngoing ? MainActivity.CHANNEL_ORDER_TRACKING : MainActivity.CHANNEL_ORDER_STATUS);
         }
 
         NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
@@ -203,7 +212,7 @@ public class OliveMessagingService extends MessagingService {
 
         Intent intent = new Intent(this, MainActivity.class);
         intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-        intent.putExtra("url", data.get("url"));
+        intent.putExtra("url", data.get("url") != null ? data.get("url") : (orderId != null ? "/order-tracking/" + orderId : "/"));
         if (orderId != null) {
             intent.putExtra("orderId", orderId);
         }
@@ -244,11 +253,27 @@ public class OliveMessagingService extends MessagingService {
                    .setOnlyAlertOnce(true)
                    .setCategory(NotificationCompat.CATEGORY_PROGRESS);
 
-            String status = data.get("stage");
+            // Numeric progress step representation
+            String stepStr = data.get("step");
+            if (stepStr != null && !stepStr.isEmpty()) {
+                try {
+                    int step = Integer.parseInt(stepStr);
+                    if (step > 0 && step <= 7) {
+                        builder.setProgress(7, step, false);
+                    }
+                } catch (Exception ignored) {}
+            }
+
+            String status = data.get("stage") != null ? data.get("stage") : data.get("status");
             if ("delivered".equals(status) || "cancelled".equals(status) || "completed".equals(status)) {
                 notificationManager.cancel(notificationId);
+                // Clear order version cache upon terminal delivery
+                getSharedPreferences("olive_order_versions", Context.MODE_PRIVATE)
+                    .edit().remove("order_" + orderId).apply();
+
                 builder.setOngoing(false)
                        .setAutoCancel(true)
+                       .setProgress(0, 0, false)
                        .setCategory(NotificationCompat.CATEGORY_STATUS);
                 notificationManager.notify(notificationId + 1, builder.build());
                 return;

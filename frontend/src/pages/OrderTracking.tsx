@@ -52,6 +52,7 @@ import UniversalMap3D from "../components/map/UniversalMap3D";
 import type { MapMarker } from "../components/map/UniversalMap3D";
 import { fetchRoute } from "../services/navigationRouting.service";
 import SEO from "../components/SEO";
+import { useLiveOrderTracking } from "../hooks/useLiveOrderTracking";
 
 // ─── Constants ───────────────────────────────────────────────────────
 const TRACKABLE_STATUSES = new Set([
@@ -402,6 +403,7 @@ export default function OrderTracking() {
 
   // Active tracking target ID
   const [resolvedOrderId, setResolvedOrderId] = useState<string | null>(paramOrderId || queryOrderId || null);
+  const [searchOrderIdInput, setSearchOrderIdInput] = useState<string>('');
   const [isResolving, setIsResolving] = useState<boolean>(!paramOrderId && !queryOrderId);
   const [userOrders, setUserOrders] = useState<any[]>([]);
 
@@ -424,6 +426,29 @@ export default function OrderTracking() {
   // Bottom Sheet State
   const [sheetState, setSheetState] = useState<"collapsed" | "half" | "expanded">("half");
   const [showAccepted, setShowAccepted] = useState(false);
+
+  // Live Activity & Dynamic Island / Native Notification Synchronization
+  const itemsSummary = useMemo(() => {
+    if (!order?.items || !Array.isArray(order.items)) return '';
+    return order.items.map((i: any) => typeof i === 'string' ? i : `${i.quantity || 1}× ${i.name || 'Item'}`).join(', ');
+  }, [order?.items]);
+
+  useLiveOrderTracking(
+    order
+      ? {
+          orderId: order.id || orderId || undefined,
+          orderNumber: order.orderNumber || (order.id ? order.id.slice(-6) : ''),
+          status: order.status,
+          step: getStageIndex(order.status) + 1,
+          itemsSummary,
+          totalAmount: Number(order.totalAmount || 0),
+          etaMinutes: eta || order.estimatedDeliveryMinutes || (order.estimatedDeliveryTime ? parseInt(order.estimatedDeliveryTime) : 25),
+          riderName: partnerDetails?.name || order.deliveryPartnerName || '',
+          riderPhone: partnerDetails?.phone || order.deliveryPartnerPhone || '',
+          restaurantName: 'Olive Pizza',
+        }
+      : null
+  );
 
   // Refs
   const channelRef = useRef<RealtimeChannel | null>(null);
@@ -625,7 +650,7 @@ export default function OrderTracking() {
     const dest = { lat: Number(order.deliveryAddress.lat), lng: Number(order.deliveryAddress.lng) };
     const origin = { lat: RESTAURANT_LOCATION.lat, lng: RESTAURANT_LOCATION.lng };
 
-    fetchRoute(origin, dest, orderId)
+    fetchRoute(origin, dest, orderId || undefined)
       .then((routeResult) => {
         if (routeResult?.geojson) {
           setRouteGeoJSON(routeResult.geojson);
@@ -870,7 +895,7 @@ export default function OrderTracking() {
         )}
 
         <div className="flex items-center gap-3 relative z-10">
-          <GlassButton variant="ghost" onClick={() => navigate("/dashboard")} className="py-3 px-5 text-sm">
+          <GlassButton variant="secondary" onClick={() => navigate("/dashboard")} className="py-3 px-5 text-sm">
             Dashboard
           </GlassButton>
           <GlassButton variant="primary" onClick={() => navigate("/menu")} className="py-3 px-5 text-sm font-bold">
@@ -988,7 +1013,7 @@ export default function OrderTracking() {
 
           <div className="flex items-center justify-center gap-3">
             <GlassButton
-              variant="ghost"
+              variant="secondary"
               onClick={() => navigate("/dashboard")}
               className="py-3 px-5 text-sm text-slate-400 hover:text-white"
             >
@@ -1086,387 +1111,419 @@ export default function OrderTracking() {
 
   const stageIndex = getStageIndex(order.status);
   const statusLabel = order.status === "accepted" ? "Order Accepted" : order.status === "preparing" ? "Preparing Your Pizza" : order.status === "ready" || order.status === "partner_assigned" || order.status === "picked_up" ? "Packing Your Order" : order.status === "out_for_delivery" ? "On the Way" : "Processing";
-  
-  // Bottom sheet drag logic
-  const handleDragEnd = (event: any, info: PanInfo) => {
-    const offset = info.offset.y;
-    const velocity = info.velocity.y;
-    
-    if (offset > 100 || velocity > 500) {
-      if (sheetState === "expanded") setSheetState("half");
-      else if (sheetState === "half") setSheetState("collapsed");
-    } else if (offset < -100 || velocity < -500) {
-      if (sheetState === "collapsed") setSheetState("half");
-      else if (sheetState === "half") setSheetState("expanded");
-    }
-  };
 
-  const sheetVariants = {
-    collapsed: { y: "calc(100vh - 200px)" }, // Peek top bar
-    half: { y: "55vh" },
-    expanded: { y: "15vh" }
-  };
+  const mapCenter = useMemo(() => {
+    if (partnerLocation) return partnerLocation;
+    if (order?.deliveryAddress?.lat && order?.deliveryAddress?.lng) {
+      return { lat: Number(order.deliveryAddress.lat), lng: Number(order.deliveryAddress.lng) };
+    }
+    return { lat: RESTAURANT_LOCATION.lat, lng: RESTAURANT_LOCATION.lng };
+  }, [partnerLocation, order?.deliveryAddress]);
+
+  const mapMarkers: MapMarker[] = useMemo(() => {
+    const list: MapMarker[] = [
+      {
+        id: 'restaurant',
+        position: { lat: RESTAURANT_LOCATION.lat, lng: RESTAURANT_LOCATION.lng },
+        type: 'restaurant',
+        label: 'Olive Pizza (Gokul Nagar)',
+      }
+    ];
+
+    if (order?.deliveryAddress?.lat && order?.deliveryAddress?.lng) {
+      list.push({
+        id: 'customer',
+        position: { lat: Number(order.deliveryAddress.lat), lng: Number(order.deliveryAddress.lng) },
+        type: 'customer',
+        label: order.deliveryAddress?.addressLine || order.deliveryAddress?.address || 'Your Delivery Location',
+      });
+    }
+
+    if (partnerLocation && TRACKABLE_STATUSES.has(order?.status) && (order?.status === 'picked_up' || order?.status === 'out_for_delivery')) {
+      list.push({
+        id: 'rider',
+        position: partnerLocation,
+        type: 'rider',
+        heading: partnerHeading,
+      });
+    }
+
+    return list;
+  }, [order?.deliveryAddress, partnerLocation, partnerHeading, order?.status]);
 
   return (
     <>
       <SEO title="Track Your Order" noIndex={true} />
-      <div className="h-[100dvh] w-full bg-slate-100 flex flex-col overflow-hidden relative">
-      
-      {/* ─── FULLSCREEN MAP (MapLibre GL JS 3D) ─── */}
-      <div className="absolute inset-0 z-0">
-        <UniversalMap3D
-          mode="customer"
-          center={
-            partnerLocation ||
-            (order?.deliveryAddress?.lat && order?.deliveryAddress?.lng
-              ? { lat: order.deliveryAddress.lat, lng: order.deliveryAddress.lng }
-              : { lat: RESTAURANT_LOCATION.lat, lng: RESTAURANT_LOCATION.lng })
-          }
-          routeGeoJSON={routeGeoJSON}
-          markers={[
-            // Restaurant pin
-            {
-              id: 'restaurant',
-              position: { lat: RESTAURANT_LOCATION.lat, lng: RESTAURANT_LOCATION.lng },
-              type: 'restaurant',
-              label: 'Olive Pizza',
-            },
-            // Customer destination
-            ...(order?.deliveryAddress?.lat && order?.deliveryAddress?.lng ? [{
-              id: 'customer',
-              position: { lat: order.deliveryAddress.lat, lng: order.deliveryAddress.lng },
-              type: 'customer' as const,
-              label: order.deliveryAddress?.addressLine || order.deliveryAddress?.address || 'Your location',
-            }] : []),
-            // Rider marker (only when live GPS is available and order is in active transit)
-            ...(partnerLocation && TRACKABLE_STATUSES.has(order?.status) && (order?.status === 'picked_up' || order?.status === 'out_for_delivery') ? [{
-              id: 'rider',
-              position: partnerLocation,
-              type: 'rider' as const,
-              heading: partnerHeading,
-            }] : []),
-          ] satisfies MapMarker[]}
-          zoom={15}
-          className="w-full h-full rounded-none"
-        />
-        {/* Subtle bottom gradient so the sheet blends in */}
-        <div className="absolute bottom-0 left-0 right-0 h-48 bg-gradient-to-t from-white/60 to-transparent pointer-events-none z-10" />
-      </div>
-
-      {/* ─── FLOATING TOP HUD ─── */}
-      <div className="absolute top-0 left-0 right-0 z-50 p-4 pt-safe flex flex-col gap-3 pointer-events-none">
-        
-        {/* Navbar Row */}
-        <div className="flex items-center justify-between pointer-events-auto">
-          <button
-            onClick={() => navigate("/dashboard")}
-            className="w-11 h-11 flex items-center justify-center bg-white/90 backdrop-blur-xl rounded-full border border-black/10 text-slate-700 shadow-lg hover:bg-white transition-colors active:scale-95"
-          >
-            <ChevronLeft size={22} />
-          </button>
+      <div className="min-h-screen bg-[#07090E] text-slate-100 antialiased selection:bg-[#FF6B00] selection:text-white pt-20 pb-24">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           
-          <div className="flex bg-white/90 backdrop-blur-xl rounded-full border border-black/10 shadow-lg px-5 py-2.5 items-center gap-3">
-            <span className="relative flex h-2.5 w-2.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-            </span>
-            <span className="text-[11px] font-black tracking-widest text-emerald-600 uppercase">Live</span>
-            <div className="w-px h-4 bg-slate-200" />
-            <span className="text-sm font-bold text-slate-800">{order?.dailyOrderNumber || `#${orderId?.slice(-6).toUpperCase()}`}</span>
+          {/* ── Top Header Navigation Bar ─────────────────────────────── */}
+          <div className="flex items-center justify-between gap-3 mb-6">
+            <button
+              onClick={() => navigate("/dashboard")}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white transition-all text-xs font-bold active:scale-95"
+            >
+              <ChevronLeft className="w-4 h-4 text-orange-400" />
+              <span>Dashboard</span>
+            </button>
+
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                </span>
+                <span>Live Order</span>
+              </div>
+              <span className="text-xs font-mono font-bold text-slate-300 bg-white/5 border border-white/10 px-3 py-1.5 rounded-xl">
+                {order?.dailyOrderNumber || `#${orderId?.slice(-6).toUpperCase()}`}
+              </span>
+            </div>
+
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(window.location.href);
+                toast.success("Tracking link copied! 📋", {
+                  style: { background: "#0C0E14", color: "#fff", border: "1px solid rgba(255, 107, 0, 0.4)" }
+                });
+              }}
+              aria-label="Share Link"
+              className="w-10 h-10 flex items-center justify-center bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl text-slate-300 hover:text-white transition-all active:scale-95"
+            >
+              <Share2 className="w-4 h-4 text-orange-400" />
+            </button>
           </div>
 
-          <button
-            onClick={() => { navigator.clipboard.writeText(window.location.href); toast.success("Tracking link copied!"); }}
-            className="w-11 h-11 flex items-center justify-center bg-white/90 backdrop-blur-xl rounded-full border border-black/10 text-slate-700 shadow-lg hover:bg-white transition-colors active:scale-95"
-          >
-            <Share2 size={18} />
-          </button>
-        </div>
+          {/* ── Responsive Grid: Left Column (Status & Details) / Right Column (Map) ── */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
+            
+            {/* ── Left Column: Status Hero, Stepper, Details, Bill ──────── */}
+            <div className="lg:col-span-7 flex flex-col gap-6">
 
-        {/* ETA Pill */}
-        {eta && (
-          <motion.div
-            initial={{ opacity: 0, y: -16 }} animate={{ opacity: 1, y: 0 }}
-            className="self-center pointer-events-auto"
-          >
-            <div className="bg-white/95 backdrop-blur-xl border border-black/10 shadow-xl rounded-2xl px-7 py-3.5 flex flex-col items-center">
-              <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-0.5">Estimated Arrival</p>
-              <div className="flex items-baseline gap-1.5">
-                <motion.span
-                  key={eta} initial={{ opacity: 0, scale: 0.8, y: 8 }} animate={{ opacity: 1, scale: 1, y: 0 }}
-                  className="text-3xl font-black text-slate-900 tracking-tighter"
-                >
-                  {eta}
-                </motion.span>
-                <span className="text-base font-bold text-slate-400">min</span>
-              </div>
-              {distance && (
-                <div className="mt-1.5 flex items-center gap-1.5 px-3 py-0.5 bg-blue-50 rounded-full border border-blue-100">
-                  <Navigation size={10} className="text-blue-500" />
-                  <span className="text-[10px] font-bold text-blue-600">{distance} km away</span>
-                </div>
-              )}
-            </div>
-          </motion.div>
-        )}
-      </div>
+              {/* 1. Status Hero Card (Primary Focal Point) */}
+              <div className="p-5 sm:p-6 rounded-3xl bg-[#12151E] border border-white/10 shadow-xl relative overflow-hidden">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-white/5">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                        order.status === 'out_for_delivery'
+                          ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                          : order.status === 'preparing'
+                          ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                          : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                      }`}>
+                        {order.status === 'out_for_delivery' ? 'On The Road' : order.status === 'preparing' ? 'In Kitchen' : 'Confirmed'}
+                      </span>
+                      <span className="text-slate-500 text-xs">•</span>
+                      <span className="text-slate-400 text-xs font-medium">Stone oven prep</span>
+                    </div>
 
-      {/* ─── DRAGGABLE BOTTOM SHEET ─── */}
-      <motion.div
-        className="absolute bottom-0 left-0 right-0 bg-white rounded-t-[2rem] shadow-[0_-8px_40px_rgba(0,0,0,0.15)] z-[100] flex flex-col"
-        initial="half"
-        animate={sheetState}
-        variants={sheetVariants}
-        transition={{ type: "spring", damping: 28, stiffness: 220 }}
-        drag="y"
-        dragConstraints={{ top: 0, bottom: 0 }}
-        dragElastic={0.18}
-        onDragEnd={handleDragEnd}
-        style={{ height: "100vh" }}
-      >
-        {/* Drag Handle */}
-        <div className="w-full flex justify-center pt-3 pb-2 cursor-grab active:cursor-grabbing">
-          <div className="w-10 h-1 bg-slate-300 rounded-full" />
-        </div>
+                    <h1 className="text-xl sm:text-2xl font-serif font-black text-white tracking-tight">
+                      {statusLabel}
+                    </h1>
+                    <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                      {order.status === 'preparing'
+                        ? 'Your pizzas are hand-stretched and baking inside our wood-fired oven.'
+                        : order.status === 'out_for_delivery'
+                        ? 'Your order has been collected and is actively en-route to your address.'
+                        : 'Your order is confirmed and scheduled for instant preparation.'}
+                    </p>
+                  </div>
 
-        {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto overscroll-contain pb-10">
-
-          {/* ── Status Banner ── */}
-          <div className="px-5 pt-2 pb-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-black text-slate-900 tracking-tight">{statusLabel}</h2>
-                <p className="text-xs text-slate-400 font-medium mt-0.5">Updating in real-time</p>
-              </div>
-              {order.status === "preparing" && (
-                <div className="w-11 h-11 bg-amber-50 rounded-xl flex items-center justify-center">
-                  <ChefHat size={22} className="text-amber-500" />
-                </div>
-              )}
-              {order.status === "out_for_delivery" && (
-                <div className="w-11 h-11 bg-blue-50 rounded-xl flex items-center justify-center animate-pulse">
-                  <span className="text-2xl">🛵</span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* ── Timeline ── */}
-          <div className="px-5 pb-5">
-            <OrderTimeline status={order.status} />
-          </div>
-
-          {/* Divider */}
-          <div className="h-2 bg-slate-50 border-y border-slate-100" />
-
-          {/* ── Takeaway / Store Pickup Notice ── */}
-          {(order.deliveryType === 'takeaway' || order.fulfillmentType === 'takeaway') && (
-            <div className="px-5 py-3.5 bg-amber-50/70 border-b border-amber-100 flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
-                <Store className="w-5 h-5 text-amber-700" />
-              </div>
-              <div>
-                <p className="text-xs font-bold text-amber-900">Takeaway / Self-Pickup Order</p>
-                <p className="text-[11px] text-amber-700/80 mt-0.5">Pick up your order directly at Olive Pizza counter when ready.</p>
-              </div>
-            </div>
-          )}
-
-          {/* ── Kitchen Preparation Notice (Before Partner Assigned) ── */}
-          {order.deliveryType !== 'takeaway' && order.fulfillmentType !== 'takeaway' && ['pending', 'accepted', 'preparing'].includes(order.status) && (
-            <div className="px-5 py-3.5 bg-slate-50/70 border-b border-slate-100 flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-primary-50 flex items-center justify-center shrink-0">
-                <ChefHat className="w-5 h-5 text-primary-600" />
-              </div>
-              <div>
-                <p className="text-xs font-bold text-slate-800">Fresh in the Kitchen</p>
-                <p className="text-[11px] text-slate-500 mt-0.5">A delivery partner will be allocated as your pizza finishes baking.</p>
-              </div>
-            </div>
-          )}
-
-          {/* ── Delivery Partner (Gated on Partner Acceptance) ── */}
-          {partnerDetails && ['partner_assigned', 'picked_up', 'out_for_delivery', 'delivered'].includes(order.status) && (
-            <div className="px-5 py-4">
-              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3">Your Delivery Partner</p>
-              <div className="flex items-center gap-4">
-                {/* Avatar */}
-                <div className="relative shrink-0">
-                  <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-orange-400 shadow-md">
-                    {partnerDetails.photoUrl ? (
-                      <img src={partnerDetails.photoUrl} alt="" className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full bg-orange-50 flex items-center justify-center">
-                        <User size={24} className="text-orange-400" />
-                      </div>
+                  {/* Timing & Distance Pill */}
+                  <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center p-3 sm:p-0 rounded-2xl bg-white/[0.03] sm:bg-transparent border sm:border-0 border-white/5 shrink-0">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      {order.status === 'out_for_delivery' ? 'Estimated Arrival' : 'Standard Window'}
+                    </span>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-2xl font-black text-[#FFB693]">
+                        {eta ? `${eta}` : '25-35'}
+                      </span>
+                      <span className="text-xs font-bold text-slate-400">min</span>
+                    </div>
+                    {distance && (
+                      <span className="text-[10px] text-blue-400 font-semibold mt-0.5">
+                        📍 {distance} km away
+                      </span>
                     )}
                   </div>
-                  {/* Online dot */}
-                  <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-emerald-500 border-2 border-white rounded-full" />
                 </div>
 
-                {/* Info */}
-                <div className="flex-1 min-w-0">
-                  <h4 className="text-base font-bold text-slate-900 truncate">{partnerDetails.name || "Delivery Partner"}</h4>
-                  <p className="text-xs text-slate-500 mt-0.5 truncate">
-                    {partnerDetails.vehicleType || "Scooter"}{partnerDetails.vehicleNumber ? ` · ${partnerDetails.vehicleNumber}` : ""}
-                  </p>
-                  <div className="flex items-center gap-1 mt-1">
-                    <Star size={11} className="text-amber-400 fill-amber-400" />
-                    <span className="text-xs font-bold text-slate-600">
-                      {partnerDetails.metrics?.ratingSum && partnerDetails.metrics?.ratingCount
-                        ? (partnerDetails.metrics.ratingSum / partnerDetails.metrics.ratingCount).toFixed(1)
-                        : "4.9"}
-                    </span>
-                    <span className="text-xs text-slate-400 ml-1">
-                      {partnerDetails.metrics?.totalDeliveries ? `${partnerDetails.metrics.totalDeliveries} deliveries` : ""}
-                    </span>
+                {/* 5-Step Visual Stepper */}
+                <div className="pt-6">
+                  <div className="grid grid-cols-5 gap-2 relative">
+                    <div className="absolute top-4 left-4 right-4 h-1 bg-white/10 -z-0 rounded-full">
+                      <div 
+                        className="h-full bg-gradient-to-r from-[#FF6B00] to-amber-400 rounded-full transition-all duration-700"
+                        style={{ width: `${Math.min(100, Math.max(0, (stageIndex / 4) * 100))}%` }}
+                      />
+                    </div>
+
+                    {[
+                      { label: "Placed", icon: CheckCircle2, step: 0 },
+                      { label: "Confirmed", icon: CheckCircle2, step: 1 },
+                      { label: "Baking", icon: ChefHat, step: 2 },
+                      { label: "On Way", icon: Truck, step: 3 },
+                      { label: "Delivered", icon: CheckCircle2, step: 4 },
+                    ].map((s, idx) => {
+                      const isPassed = stageIndex > s.step;
+                      const isCurrent = stageIndex === s.step;
+
+                      return (
+                        <div key={idx} className="flex flex-col items-center text-center relative z-10">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
+                            isCurrent
+                              ? "bg-gradient-to-tr from-[#FF6B00] to-amber-400 text-white shadow-[0_0_15px_rgba(255,107,0,0.5)] scale-110"
+                              : isPassed
+                              ? "bg-emerald-500 text-white"
+                              : "bg-[#1A1D27] text-slate-500 border border-white/10"
+                          }`}>
+                            <s.icon className="w-4 h-4" />
+                          </div>
+                          <span className={`text-[10px] font-bold mt-2 truncate max-w-[60px] ${
+                            isCurrent ? "text-amber-400" : isPassed ? "text-slate-300" : "text-slate-500"
+                          }`}>
+                            {s.label}
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
+              </div>
 
-                {/* Call button */}
-                {partnerDetails.phone && (
-                  <div className="flex gap-2 shrink-0">
+              {/* 2. Mobile Supporting Live Map (Rendered here on mobile screen sizes) */}
+              <div className="lg:hidden w-full rounded-3xl overflow-hidden bg-[#12151E] border border-white/10 p-2 shadow-xl">
+                <div className="px-3 py-2 flex items-center justify-between text-xs">
+                  <span className="font-bold text-white flex items-center gap-1.5">
+                    <Navigation className="w-3.5 h-3.5 text-orange-400" />
+                    <span>Live GPS Route</span>
+                  </span>
+                  <span className="text-[11px] text-slate-400 font-mono">OpenStreetMap</span>
+                </div>
+                <div className="relative w-full h-[220px] rounded-2xl overflow-hidden bg-[#0A0D14]">
+                  <UniversalMap3D
+                    mode="customer"
+                    center={mapCenter}
+                    routeGeoJSON={routeGeoJSON}
+                    markers={mapMarkers}
+                    zoom={14}
+                    className="w-full h-full rounded-2xl"
+                  />
+                </div>
+              </div>
+
+              {/* 3. Delivery Partner Info Card (Only if assigned) */}
+              {partnerDetails && ['partner_assigned', 'picked_up', 'out_for_delivery'].includes(order.status) && (
+                <div className="p-5 rounded-3xl bg-[#12151E] border border-white/10 flex items-center justify-between gap-4 shadow-lg">
+                  <div className="flex items-center gap-3.5 min-w-0">
+                    <div className="relative shrink-0">
+                      <div className="w-12 h-12 rounded-2xl bg-orange-500/10 border border-orange-500/30 flex items-center justify-center overflow-hidden">
+                        {partnerDetails.photoUrl ? (
+                          <img src={partnerDetails.photoUrl} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <Truck className="w-6 h-6 text-orange-400" />
+                        )}
+                      </div>
+                      <div className="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-emerald-500 border-2 border-[#12151E] rounded-full" />
+                    </div>
+
+                    <div className="min-w-0">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-orange-400 block">
+                        Delivery Partner
+                      </span>
+                      <h4 className="text-base font-bold text-white truncate">
+                        {partnerDetails.name || "Delivery Partner"}
+                      </h4>
+                      <p className="text-xs text-slate-400 truncate">
+                        {partnerDetails.vehicleType || "Scooter"}{partnerDetails.vehicleNumber ? ` · ${partnerDetails.vehicleNumber}` : ""}
+                      </p>
+                    </div>
+                  </div>
+
+                  {partnerDetails.phone && (
                     <a
                       href={`tel:${partnerDetails.phone}`}
-                      className="w-11 h-11 rounded-full bg-emerald-500 flex items-center justify-center text-white shadow-md shadow-emerald-200 hover:bg-emerald-600 active:scale-95 transition-all"
+                      className="w-11 h-11 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white flex items-center justify-center shadow-lg shadow-emerald-500/20 active:scale-95 transition-all shrink-0"
+                      aria-label="Call Partner"
                     >
-                      <Phone size={18} />
+                      <Phone className="w-5 h-5" />
                     </a>
-                    <button className="w-11 h-11 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-200 active:scale-95 transition-all">
-                      <MessageSquare size={18} />
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          <div className="h-2 bg-slate-50 border-y border-slate-100" />
-
-          {/* ── Delivery Address ── */}
-          <div className="px-5 py-4">
-            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3">Delivery Address</p>
-            <div className="flex items-start gap-3">
-              <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center shrink-0 mt-0.5">
-                <MapPin size={18} className="text-blue-500" />
-              </div>
-              <div>
-                <p className="text-sm font-bold text-slate-800 leading-snug">
-                  {order.deliveryAddress?.address || order.deliveryAddress?.fullAddress || "Your Location"}
-                </p>
-                {order.deliveryAddress?.landmark && (
-                  <p className="text-xs text-slate-400 mt-0.5">Near {order.deliveryAddress.landmark}</p>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="h-2 bg-slate-50 border-y border-slate-100" />
-
-          {/* ── Restaurant Info ── */}
-          <div className="px-5 py-4">
-            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3">Restaurant</p>
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-orange-50 flex items-center justify-center shrink-0">
-                <span className="text-lg">🍕</span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold text-slate-800">Olive Pizza</p>
-                <p className="text-xs text-slate-400 truncate mt-0.5">{RESTAURANT_LOCATION.address}</p>
-              </div>
-              <a
-                href="tel:9999999999"
-                className="w-9 h-9 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-200 transition-colors"
-              >
-                <Phone size={15} />
-              </a>
-            </div>
-          </div>
-
-          <div className="h-2 bg-slate-50 border-y border-slate-100" />
-
-          {/* ── Order Summary ── */}
-          <div className="px-5 py-4">
-            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
-              <ShoppingBag size={12} /> Your Order
-            </p>
-            <div className="space-y-3 mb-4">
-              {order.items?.map((item: any, i: number) => (
-                <div key={i} className="flex items-center gap-3">
-                  {item.image && (
-                    <div className="w-11 h-11 rounded-xl overflow-hidden border border-slate-100 shrink-0">
-                      <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
-                    </div>
                   )}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-slate-800 truncate">{item.name}</p>
-                    {(item.variant || item.crust) && (
-                      <p className="text-xs text-slate-400 truncate">{[item.variant, item.crust].filter(Boolean).join(" · ")}</p>
+                </div>
+              )}
+
+              {/* 4. Delivery Address & Store Hub */}
+              <div className="p-5 rounded-3xl bg-[#12151E] border border-white/10 shadow-lg flex flex-col gap-4">
+                <div className="flex items-start gap-3.5">
+                  <div className="w-10 h-10 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 shrink-0 mt-0.5">
+                    <MapPin className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-black uppercase tracking-wider text-blue-400 block">
+                      Delivering To
+                    </span>
+                    <p className="text-sm font-bold text-white mt-0.5">
+                      {order.deliveryAddress?.addressLine || order.deliveryAddress?.address || order.deliveryAddress?.fullAddress || "Your Selected Location"}
+                    </p>
+                    {order.deliveryAddress?.landmark && (
+                      <p className="text-xs text-slate-400 mt-0.5">Landmark: {order.deliveryAddress.landmark}</p>
                     )}
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">×{item.quantity}</span>
-                    <span className="text-sm font-bold text-slate-900">₹{item.price * item.quantity}</span>
+                </div>
+
+                <div className="h-px bg-white/5" />
+
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded-2xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-orange-400 shrink-0">
+                      <Store className="w-5 h-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-orange-400 block">
+                        Fulfilling Kitchen
+                      </span>
+                      <p className="text-xs font-bold text-white truncate">Olive Pizza • Central Hub</p>
+                      <p className="text-[11px] text-slate-400 truncate">{RESTAURANT_LOCATION.address}</p>
+                    </div>
+                  </div>
+
+                  <a
+                    href={`tel:${RESTAURANT_LOCATION.phone || '9999999999'}`}
+                    className="px-3.5 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white text-xs font-bold flex items-center gap-1.5 active:scale-95 transition-all shrink-0"
+                  >
+                    <Phone className="w-3.5 h-3.5 text-orange-400" />
+                    <span>Call Store</span>
+                  </a>
+                </div>
+              </div>
+
+              {/* 5. Order Items Breakdown & Bill */}
+              <div className="p-5 sm:p-6 rounded-3xl bg-[#12151E] border border-white/10 shadow-lg">
+                <h3 className="text-base font-serif font-black text-white mb-4 flex items-center gap-2">
+                  <ShoppingBag className="w-4 h-4 text-orange-400" />
+                  <span>Order Items ({order.items?.length || 0})</span>
+                </h3>
+
+                <div className="space-y-3 mb-5 divide-y divide-white/5">
+                  {order.items?.map((item: any, i: number) => (
+                    <div key={i} className="flex items-center justify-between gap-3 pt-3 first:pt-0">
+                      <div className="flex items-center gap-3 min-w-0">
+                        {item.image && (
+                          <div className="w-10 h-10 rounded-xl overflow-hidden bg-black/40 border border-white/10 shrink-0">
+                            <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <p className="text-sm font-bold text-white truncate">{item.name}</p>
+                          {(item.variant || item.crust) && (
+                            <p className="text-xs text-slate-400 truncate">
+                              {[item.variant, item.crust].filter(Boolean).join(" • ")}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-baseline gap-2 shrink-0">
+                        <span className="text-xs font-bold text-slate-400">×{item.quantity}</span>
+                        <span className="text-sm font-black text-[#FFB693]">₹{item.price * item.quantity}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Bill Summary */}
+                <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5 space-y-2">
+                  <div className="flex justify-between text-xs text-slate-400">
+                    <span>Subtotal</span>
+                    <span>₹{order.totalAmount - (order.deliveryFee || 40)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs text-slate-400">
+                    <span>Delivery Fee</span>
+                    <span>₹{order.deliveryFee || 40}</span>
+                  </div>
+                  <div className="flex justify-between items-center pt-2 mt-1 border-t border-white/5">
+                    <span className="text-sm font-bold text-white">Grand Total</span>
+                    <span className="text-lg font-black text-amber-400">₹{order.totalAmount}</span>
+                  </div>
+                  <div className="flex items-center justify-between pt-1 text-[11px] text-slate-400">
+                    <span>Payment Mode</span>
+                    <span className="font-bold text-emerald-400">
+                      {order.paymentMethod === "online" ? "Paid Online" : "Cash on Delivery"}
+                    </span>
                   </div>
                 </div>
-              ))}
-            </div>
 
-            {/* Bill summary */}
-            <div className="bg-slate-50 rounded-2xl p-4 space-y-2">
-              <div className="flex justify-between text-sm text-slate-500">
-                <span>Item Total</span>
-                <span>₹{order.totalAmount - (order.deliveryFee || 40)}</span>
-              </div>
-              <div className="flex justify-between text-sm text-slate-500">
-                <span>Delivery Fee</span>
-                <span>₹{order.deliveryFee || 40}</span>
-              </div>
-              <div className="flex justify-between items-center pt-2 mt-1 border-t border-slate-200">
-                <span className="text-sm font-bold text-slate-800">Grand Total</span>
-                <span className="text-lg font-black text-orange-500">₹{order.totalAmount}</span>
-              </div>
-              <div className="flex items-center gap-1.5 pt-1">
-                <div className="w-4 h-4 rounded-full bg-slate-200 flex items-center justify-center">
-                  <span className="text-[9px]">💳</span>
+                {/* Actions */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
+                  <button
+                    onClick={() => navigate(`/bill/${order.billReference || order.id || orderId}`)}
+                    className="py-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white font-bold text-xs flex items-center justify-center gap-2 active:scale-95 transition-all"
+                  >
+                    <Receipt className="w-4 h-4 text-orange-400" />
+                    <span>View Official Bill</span>
+                  </button>
+
+                  {["pending", "accepted"].includes(order.status) && (
+                    <button
+                      onClick={handleCancel}
+                      disabled={cancelling}
+                      className="py-3 rounded-xl bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 font-bold text-xs flex items-center justify-center gap-1.5 active:scale-95 transition-all disabled:opacity-50"
+                    >
+                      <span>{cancelling ? "Cancelling..." : "Cancel Order"}</span>
+                    </button>
+                  )}
                 </div>
-                <span className="text-xs text-slate-400 font-medium">
-                  {order.paymentMethod === "online" ? "Paid Online" : "Cash on Delivery"}
-                </span>
+              </div>
+
+            </div>
+
+            {/* ── Right Column (Desktop Sticky Live 2.5D Map) ─────────── */}
+            <div className="hidden lg:block lg:col-span-5 sticky top-24">
+              <div className="rounded-3xl overflow-hidden bg-[#12151E] border border-white/10 p-3 shadow-2xl">
+                <div className="px-3 py-2 flex items-center justify-between text-xs border-b border-white/5 mb-2">
+                  <span className="font-bold text-white flex items-center gap-1.5">
+                    <Navigation className="w-3.5 h-3.5 text-orange-400" />
+                    <span>Live GPS Tracking</span>
+                  </span>
+                  <span className="text-[11px] text-slate-400 font-mono">OpenStreetMap 2.5D</span>
+                </div>
+
+                <div className="relative w-full h-[460px] rounded-2xl overflow-hidden bg-[#0A0D14]">
+                  <UniversalMap3D
+                    mode="customer"
+                    center={mapCenter}
+                    routeGeoJSON={routeGeoJSON}
+                    markers={mapMarkers}
+                    zoom={14}
+                    className="w-full h-full rounded-2xl"
+                  />
+                  
+                  {/* Floating Map Status Info */}
+                  <div className="absolute bottom-3 left-3 right-3 p-3 rounded-xl bg-[#0C0E14]/90 backdrop-blur-md border border-white/10 flex items-center justify-between text-xs pointer-events-none">
+                    <div className="flex items-center gap-2">
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                      </span>
+                      <span className="font-bold text-white">Live Fulfill Route</span>
+                    </div>
+                    <span className="text-slate-400 font-mono text-[11px]">
+                      {distance ? `${distance} km` : 'Active'}
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* ── Actions ── */}
-          <div className="px-5 pt-2 pb-6 space-y-3">
-            <button
-              onClick={() => navigate(`/bill/${order.billReference || order.id || orderId}`)}
-              className="w-full py-3.5 rounded-2xl border border-slate-200 bg-slate-900 hover:bg-slate-800 text-white font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-md active:scale-[0.98]"
-            >
-              <Receipt size={16} className="text-primary-400" /> View Official Bill
-            </button>
-            {["pending", "accepted", "preparing"].includes(order.status) && (
-              <button
-                onClick={handleCancel}
-                disabled={cancelling}
-                className="w-full py-3.5 rounded-2xl border-2 border-red-200 bg-red-50 text-red-500 font-bold text-sm hover:bg-red-100 active:scale-[0.98] transition-all disabled:opacity-50"
-              >
-                {cancelling ? "Cancelling..." : "Cancel Order"}
-              </button>
-            )}
-            <button className="w-full py-3.5 rounded-2xl border border-slate-200 bg-slate-50 text-slate-600 font-semibold text-sm hover:bg-slate-100 active:scale-[0.98] transition-all">
-              Need Help? Contact Support
-            </button>
           </div>
 
         </div>
-      </motion.div>
 
-      <OwnerAcceptedOverlay show={showAccepted} onClose={() => setShowAccepted(false)} />
-      <DeliveredOverlay show={order?.status === 'delivered'} order={order} />
-    </div>
+        <OwnerAcceptedOverlay show={showAccepted} onClose={() => setShowAccepted(false)} />
+        <DeliveredOverlay show={order?.status === 'delivered'} order={order} />
+      </div>
     </>
   );
 }
+

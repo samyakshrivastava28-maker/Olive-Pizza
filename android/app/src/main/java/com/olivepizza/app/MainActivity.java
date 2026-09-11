@@ -55,6 +55,7 @@ public class MainActivity extends BridgeActivity {
     // These match NotificationTemplates.ANDROID_CHANNELS and the manifest default.
     public static final String CHANNEL_ORDER_NEW           = "olive_order_new";
     public static final String CHANNEL_ORDER_STATUS       = "olive_order_status";
+    public static final String CHANNEL_ORDER_TRACKING     = "olive_order_tracking";
     public static final String CHANNEL_ORDER_COMPLETED    = "olive_order_completed";
     public static final String CHANNEL_DELIVERY_ASSIGN    = "olive_delivery_assignment";
     public static final String CHANNEL_DELIVERY_UPDATES   = "olive_delivery_updates";
@@ -165,6 +166,7 @@ public class MainActivity extends BridgeActivity {
 
         // Customer-safe standard channels
         createChannel(nm, CHANNEL_ORDER_STATUS,     "Olive Order Updates",      NotificationManager.IMPORTANCE_HIGH,    "soft_pop",        false, AudioAttributes.USAGE_NOTIFICATION);
+        createChannel(nm, CHANNEL_ORDER_TRACKING,   "Olive Live Order Tracking",NotificationManager.IMPORTANCE_HIGH,    "soft_pop",        false, AudioAttributes.USAGE_NOTIFICATION);
         createChannel(nm, CHANNEL_ORDER_COMPLETED,  "Olive Order Complete",     NotificationManager.IMPORTANCE_HIGH,    "success_ding",    false, AudioAttributes.USAGE_NOTIFICATION);
         createChannel(nm, CHANNEL_DELIVERY_UPDATES, "Olive Delivery Updates",   NotificationManager.IMPORTANCE_HIGH,    "default",         false, AudioAttributes.USAGE_NOTIFICATION);
         createChannel(nm, CHANNEL_MARKETING,        "Olive Promotions",         NotificationManager.IMPORTANCE_DEFAULT, "soft_pop",        false, AudioAttributes.USAGE_NOTIFICATION);

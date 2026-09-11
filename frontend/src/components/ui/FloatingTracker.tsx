@@ -15,7 +15,7 @@
  */
 
 import { useEffect, useState, useCallback } from 'react';
-import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, orderBy, doc, type DocumentSnapshot } from 'firebase/firestore';
 import { db, auth } from '../../lib/firebase';
 import { useNavigate, useLocation } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -98,7 +98,7 @@ export default function FloatingTracker() {
     if (!auth.currentUser) {
       const cachedId = localStorage.getItem('lastPlacedOrderId') || localStorage.getItem('activeOrderId');
       if (cachedId) {
-        return onSnapshot(doc(db, 'orders', cachedId), (docSnap) => {
+        return onSnapshot(doc(db, 'orders', cachedId), (docSnap: DocumentSnapshot) => {
           if (docSnap.exists()) {
             const data = { id: docSnap.id, ...docSnap.data() } as ActiveOrder;
             if (ACTIVE_STATUSES.includes(data.status)) {
@@ -108,7 +108,7 @@ export default function FloatingTracker() {
             }
           }
           setOrders([]);
-        }, (err) => {
+        }, (err: any) => {
           console.warn('[FloatingTracker] Cached order snapshot warning:', err);
           setOrders([]);
         });

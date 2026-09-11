@@ -1,5 +1,6 @@
 export const RESTAURANT_LOCATION = {
   address: "Dongargaon Rd, near Saraswati school, Gokul Nagar, Rajnandgaon, Chhattisgarh 491441",
+  phone: "7771000000",
   lat: 21.0810244,
   lng: 81.0123793
 };

@@ -33,8 +33,9 @@ const DeliveryMap = React.memo(({ destinationLat, destinationLng }: DeliveryMapP
       dragging={false}
     >
       <TileLayer 
-        url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" 
-        attribution="&copy; CARTO" 
+        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" 
+        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' 
+        maxZoom={19}
       />
       <Marker position={[targetLat, targetLng]} icon={restaurantIcon} />
       

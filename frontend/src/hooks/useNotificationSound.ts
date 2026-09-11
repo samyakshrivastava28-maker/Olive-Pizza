@@ -79,12 +79,9 @@ function playTone(
 // ── Sound definitions per event ───────────────────────────────────────────────
 
 const SOUNDS: Record<SoundType, (ctx: AudioContext) => void> = {
-  /** 🍕 New Order — loud commanding 4-note emergency alarm chime */
-  new_order: (ctx) => {
-    playTone(880,  0.25, 'triangle', 0.8, 0,    ctx); // A5
-    playTone(1174, 0.25, 'sine',     0.8, 0.15, ctx); // D6
-    playTone(880,  0.25, 'triangle', 0.8, 0.30, ctx); // A5
-    playTone(1174, 0.35, 'sine',     0.9, 0.45, ctx); // D6
+  /** 🍕 New Order — muted for customer app (customers do not receive kitchen alarms) */
+  new_order: () => {
+    // No-op for customer app
   },
 
   /** ✅ Accepted — warm positive double-bell */
@@ -195,7 +192,7 @@ export function playNotificationSound(type: SoundType) {
 export function statusToSoundType(status: string): SoundType | null {
   const s = (status || '').toLowerCase();
   if (['pending', 'new_order', 'placed', 'order_placed', 'created', 'paid', 'payment_success'].includes(s)) {
-    return 'new_order';
+    return null; // Customers do not hear new order alarms
   }
   const map: Record<string, SoundType> = {
     accepted:         'accepted',

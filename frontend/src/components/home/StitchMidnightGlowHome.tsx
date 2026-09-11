@@ -3,7 +3,8 @@ import { motion } from "framer-motion";
 import { Link, useNavigate } from "react-router";
 import { 
   Flame, Leaf, MapPin, ChevronRight, Plus, 
-  ArrowRight, Star, Award, ShieldCheck, Gift
+  ArrowRight, Star, Award, ShieldCheck, Gift,
+  Search, Utensils
 } from "lucide-react";
 import { useDataStore } from "../../lib/dataStore";
 import { useStoreStatus } from "../../lib/useStoreStatus";
@@ -27,7 +28,17 @@ export default function StitchMidnightGlowHome() {
   const { triggerAnimation } = useCartAnimation();
   const navigate = useNavigate();
 
+  const [searchQuery, setSearchQuery] = useState("");
   const [customizingItem, setCustomizingItem] = useState<MenuItem | null>(null);
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      navigate(`/menu?q=${encodeURIComponent(searchQuery.trim())}`);
+    } else {
+      navigate("/menu?search=1");
+    }
+  };
 
   const isStoreOpen = storeStatus.isRestaurantOpen && storeStatus.isWithinBusinessHours;
 
@@ -136,215 +147,174 @@ export default function StitchMidnightGlowHome() {
   return (
     <div className="w-full text-slate-100 antialiased selection:bg-[#FF6B00] selection:text-white bg-[#06070A] min-h-screen pt-20 md:pt-24">
       
-      {/* ── 1. Live Operational Beacon & Delivery Location Pill ──────── */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-8 pt-3 pb-1">
-        <div className="inline-flex items-center gap-2.5 px-3.5 py-1.5 rounded-full bg-white/[0.04] border border-white/10 backdrop-blur-md">
-          <MapPin className="w-3.5 h-3.5 text-[#FF6B00] shrink-0" />
-          <span className="text-xs font-semibold text-white truncate max-w-[140px] sm:max-w-[240px]">{userLocationText}</span>
-          <span className="h-3 w-px bg-white/20" />
-          <span className="relative flex h-2 w-2 shrink-0">
-            <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
-              isStoreOpen ? "bg-emerald-400" : "bg-amber-400"
-            }`} />
-            <span className={`relative inline-flex rounded-full h-2 w-2 ${
-              isStoreOpen ? "bg-emerald-500" : "bg-amber-500"
-            }`} />
-          </span>
-          <span className="text-[11px] text-slate-300 font-medium">
-            {statusMessage}
-          </span>
+      {/* ── 1. Food-App Native Header: Location & Store Status ──────── */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-8 pt-2 pb-3">
+        <div className="flex flex-wrap items-center justify-between gap-2.5">
+          {/* Deliver To Location with Click-to-Change */}
+          <Link
+            to={isAuthenticated ? "/dashboard" : "/profile"}
+            className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/[0.05] hover:bg-white/[0.08] border border-white/10 backdrop-blur-md transition-colors group"
+          >
+            <MapPin className="w-3.5 h-3.5 text-[#FF6B00] shrink-0" />
+            <div className="flex items-center gap-1.5 text-xs">
+              <span className="text-slate-400 font-medium">Deliver to:</span>
+              <span className="font-bold text-white truncate max-w-[130px] sm:max-w-[220px] group-hover:text-orange-300 transition-colors">
+                {userLocationText}
+              </span>
+            </div>
+            <ChevronRight className="w-3 h-3 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
+          </Link>
+
+          {/* Kitchen Live Status & Speed Pill */}
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/[0.03] border border-white/5 backdrop-blur-md">
+            <span className="relative flex h-2 w-2 shrink-0">
+              <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                isStoreOpen ? "bg-emerald-400" : "bg-amber-400"
+              }`} />
+              <span className={`relative inline-flex rounded-full h-2 w-2 ${
+                isStoreOpen ? "bg-emerald-500" : "bg-amber-500"
+              }`} />
+            </span>
+            <span className="text-[11px] text-slate-200 font-semibold">
+              {statusMessage}
+            </span>
+            <span className="h-3 w-px bg-white/20 hidden sm:inline-block" />
+            <span className="text-[11px] text-amber-400 font-medium hidden sm:inline-flex items-center gap-1">
+              <Flame className="w-3 h-3 text-orange-500" />
+              Stone Oven Fresh
+            </span>
+          </div>
         </div>
       </div>
 
-      {/* ── 2. Cinematic Sensory Hero Section ("Hot. Fresh. Made for you.") ─── */}
-      <section className="relative w-full overflow-hidden pt-4 pb-8 max-w-7xl mx-auto px-4 sm:px-8">
-        {/* Ambient Ember Glow Backing */}
-        <div className="absolute -top-16 left-1/2 -translate-x-1/2 w-[360px] sm:w-[540px] h-[360px] bg-[#FF6B00]/15 blur-[120px] pointer-events-none rounded-full" />
-        <div className="absolute top-1/2 -right-20 w-[300px] h-[300px] bg-emerald-500/10 blur-[100px] pointer-events-none rounded-full" />
+      {/* ── 2. Quick Search & Category Shortcut Chips ────────────────── */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-8 pb-4">
+        {/* Search Input Box */}
+        <form onSubmit={handleSearchSubmit} className="relative mb-3">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search artisanal pizzas, garlic bread, desserts, drinks..."
+            className="w-full h-12 pl-11 pr-24 rounded-2xl bg-white/[0.06] border border-white/10 text-white placeholder-slate-400 text-sm focus:outline-none focus:border-[#FF6B00] focus:ring-1 focus:ring-[#FF6B00] transition-all backdrop-blur-md"
+          />
+          <button
+            type="submit"
+            className="absolute right-1.5 top-1/2 -translate-y-1/2 px-4 py-2 rounded-xl bg-gradient-to-r from-[#FF6B00] to-orange-600 hover:from-orange-500 hover:to-amber-500 text-white font-bold text-xs uppercase tracking-wider transition-all shadow-md active:scale-95"
+          >
+            Search
+          </button>
+        </form>
 
-        <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
-          
-          {/* Left Text & Messaging Column */}
-          <div className="lg:col-span-6 flex flex-col justify-center">
-            {/* Authentic Brand Quality Badges */}
-            <motion.div 
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-              className="flex flex-wrap items-center gap-2 mb-3"
+        {/* Quick Shortcut Chips (Horizontal Touch Scrollable) */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1.5 scrollbar-none">
+          {[
+            { label: "All Pizzas", icon: "🍕", link: "/menu?category=pizza" },
+            { label: "Signature", icon: "🧀", link: "/menu?category=special" },
+            { label: "Sides & Breads", icon: "🥖", link: "/menu?category=sides" },
+            { label: "Drinks", icon: "🥤", link: "/menu?category=beverages" },
+            { label: "Desserts", icon: "🍰", link: "/menu?category=dessert" },
+            { label: "Combos", icon: "🎁", link: "/menu?category=combo" },
+            { label: "Pure Veg", icon: "🌿", link: "/menu?veg=1" },
+          ].map((chip) => (
+            <Link
+              key={chip.label}
+              to={chip.link}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white/[0.04] hover:bg-[#FF6B00]/15 hover:border-[#FF6B00]/40 border border-white/10 text-xs font-semibold text-slate-200 hover:text-white transition-all whitespace-nowrap active:scale-95 shrink-0"
             >
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FF6B00]/15 border border-[#FF6B00]/30 text-[#FF8800] text-xs font-bold uppercase tracking-wider backdrop-blur-md">
-                <Flame className="w-3.5 h-3.5 text-[#FF6B00] animate-pulse" />
-                Wood-Fired Pizzeria
-              </span>
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-bold uppercase tracking-wider backdrop-blur-md">
-                <Leaf className="w-3.5 h-3.5 text-emerald-400" />
-                Pure Veg Options
-              </span>
-            </motion.div>
+              <span>{chip.icon}</span>
+              <span>{chip.label}</span>
+            </Link>
+          ))}
+        </div>
+      </section>
 
-            {/* Headline */}
-            <motion.h1 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.1 }}
-              className="text-4xl sm:text-6xl lg:text-7xl font-serif font-black text-white leading-[1.05] tracking-tight mb-4"
-            >
-              Hot. Fresh. <br />
-              <span className="bg-gradient-to-r from-[#FF6B00] via-amber-400 to-[#FF8800] bg-clip-text text-transparent italic">
-                Made for you.
-              </span>
-            </motion.h1>
+      {/* ── 3. Compact Daily Special Spotlight Card (High-Conversion Food Banner) ── */}
+      {heroProduct && (
+        <section className="max-w-7xl mx-auto px-4 sm:px-8 pb-5">
+          <div className="relative rounded-3xl overflow-hidden bg-gradient-to-r from-[#1C120C] via-[#161922] to-[#12151C] border border-[#FF6B00]/25 p-4 sm:p-5 shadow-2xl group">
+            {/* Ambient Ember Glow */}
+            <div className="absolute top-0 right-1/4 w-72 h-72 bg-[#FF6B00]/10 blur-[90px] pointer-events-none rounded-full" />
 
-            <motion.p 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.2 }}
-              className="text-slate-300 text-sm sm:text-base lg:text-lg font-medium max-w-xl mb-6 leading-relaxed"
-            >
-              Artisanal handcrafted pizzas baked with whole-milk mozzarella, signature sauces, and slow-proved crusts.
-            </motion.p>
-
-            {/* Dual Hero CTAs */}
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.3 }}
-              className="flex flex-wrap items-center gap-3 mb-6"
-            >
-              <Link
-                to="/menu"
-                className="px-8 py-3.5 rounded-full bg-gradient-to-r from-[#FF6B00] via-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-black text-sm uppercase tracking-wider shadow-[0_10px_30px_rgba(255,107,0,0.45)] transition-all hover:scale-105 active:scale-95 flex items-center gap-2 min-h-[48px]"
-              >
-                <span>{isStoreOpen ? "Order Now" : "View Menu"}</span>
-                <ArrowRight className="w-4 h-4" />
-              </Link>
-
-              <Link
-                to="/menu"
-                className="px-7 py-3.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/15 backdrop-blur-xl text-white font-bold text-sm transition-all hover:scale-105 active:scale-95 min-h-[48px] flex items-center gap-2"
-              >
-                <span>Explore Full Menu</span>
-                <ChevronRight className="w-4 h-4 text-slate-400" />
-              </Link>
-            </motion.div>
-
-            {/* Genuine Quality Pillars */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-4 border-t border-white/10 max-w-xl">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-orange-500/15 border border-orange-500/30 flex items-center justify-center shrink-0">
-                  <Flame className="w-3.5 h-3.5 text-orange-400" />
+            <div className="relative z-10 flex flex-col-reverse sm:flex-row items-center justify-between gap-4 sm:gap-6">
+              {/* Product Info & CTA */}
+              <div className="flex-1 min-w-0 text-left w-full sm:w-auto">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#FF6B00]/20 border border-[#FF6B00]/40 text-[#FF8800] text-[10px] font-black uppercase tracking-wider">
+                    <Flame className="w-3 h-3 text-[#FF6B00] animate-pulse" />
+                    Today's Kitchen Spotlight
+                  </span>
+                  {(heroProduct.isVegetarian || heroProduct.isVeg) && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-[10px] font-bold">
+                      <Leaf className="w-3 h-3 text-emerald-400" />
+                      Pure Veg
+                    </span>
+                  )}
                 </div>
-                <div className="text-xs">
-                  <span className="font-bold text-white block text-[11px]">Stone Oven</span>
-                  <span className="text-slate-400 text-[10px]">Freshly Baked</span>
+
+                <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight truncate">
+                  {heroProduct.productName || heroProduct.name}
+                </h3>
+
+                {heroProduct.description && (
+                  <p className="text-xs text-slate-300 line-clamp-1 sm:line-clamp-2 mt-0.5 max-w-lg">
+                    {heroProduct.description}
+                  </p>
+                )}
+
+                {/* Price & Actions Row */}
+                <div className="flex flex-wrap items-center gap-4 mt-3">
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-xl sm:text-2xl font-black text-amber-400">
+                      ₹{heroProduct.offerPrice && Number(heroProduct.offerPrice) > 0 ? heroProduct.offerPrice : (heroProduct.basePrice || heroProduct.price || 0)}
+                    </span>
+                    {Number(heroProduct.offerPrice) > 0 && Number(heroProduct.offerPrice) < Number(heroProduct.basePrice || heroProduct.price) && (
+                      <span className="text-xs text-slate-500 line-through">
+                        ₹{heroProduct.basePrice || heroProduct.price}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={(e) => handleAddToCart(e, heroProduct)}
+                      className="px-5 py-2.5 rounded-full bg-gradient-to-r from-[#FF6B00] to-orange-600 hover:from-orange-500 hover:to-amber-500 text-white font-extrabold text-xs uppercase tracking-wider flex items-center gap-1.5 shadow-[0_4px_16px_rgba(255,107,0,0.4)] active:scale-95 transition-all min-h-[40px]"
+                    >
+                      <span>Add to Cart</span>
+                      <Plus className="w-3.5 h-3.5" />
+                    </button>
+
+                    <Link
+                      to={`/product/${heroProduct.id}`}
+                      className="px-4 py-2.5 rounded-full bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 font-bold text-xs uppercase tracking-wider flex items-center gap-1 transition-all active:scale-95 min-h-[40px]"
+                    >
+                      <span>Details</span>
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </Link>
+                  </div>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center shrink-0">
-                  <Leaf className="w-3.5 h-3.5 text-emerald-400" />
-                </div>
-                <div className="text-xs">
-                  <span className="font-bold text-white block text-[11px]">Pure Veg</span>
-                  <span className="text-slate-400 text-[10px]">Dedicated Items</span>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-amber-500/15 border border-amber-500/30 flex items-center justify-center shrink-0">
-                  <Award className="w-3.5 h-3.5 text-amber-400" />
-                </div>
-                <div className="text-xs">
-                  <span className="font-bold text-white block text-[11px]">Real Cheese</span>
-                  <span className="text-slate-400 text-[10px]">100% Mozzarella</span>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-blue-500/15 border border-blue-500/30 flex items-center justify-center shrink-0">
-                  <ShieldCheck className="w-3.5 h-3.5 text-blue-400" />
-                </div>
-                <div className="text-xs">
-                  <span className="font-bold text-white block text-[11px]">Fresh Delivery</span>
-                  <span className="text-slate-400 text-[10px]">Thermal Pack</span>
-                </div>
+              {/* Real Food Image Card (appetizing, crisp thumbnail) */}
+              <div className="relative w-full sm:w-44 sm:h-36 h-36 rounded-2xl overflow-hidden bg-black/60 shrink-0 border border-white/10 shadow-lg group-hover:border-orange-500/40 transition-colors">
+                <img
+                  src={heroProduct.imageUrl || heroProduct.image || "https://res.cloudinary.com/dxmlvkff1/image/upload/v1786517437/olive-pizza/ai-product-images/dv4uty06rq4tznlpqz2i.jpg"}
+                  alt={heroProduct.productName || heroProduct.name}
+                  className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
+                {typeof heroProduct.rating === "number" && heroProduct.rating > 0 && (
+                  <div className="absolute top-2 left-2 flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/80 backdrop-blur-md border border-white/10 text-white text-[10px] font-bold">
+                    <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
+                    <span>{heroProduct.rating.toFixed(1)}</span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
-
-          {/* Right Visual Hero Showcase Card: Renders ONLY if real products exist in database */}
-          {heroProduct && (
-            <div className="lg:col-span-6 relative mt-2 lg:mt-0">
-              <div className="relative w-full rounded-3xl overflow-hidden bg-[#161922]/80 backdrop-blur-2xl border border-white/10 p-3 shadow-2xl group">
-                <div className="relative w-full h-[260px] sm:h-[340px] rounded-2xl overflow-hidden bg-black/50">
-                  <img 
-                    src={heroProduct.imageUrl || heroProduct.image || "https://res.cloudinary.com/dxmlvkff1/image/upload/v1786517437/olive-pizza/ai-product-images/dv4uty06rq4tznlpqz2i.jpg"}
-                    alt={heroProduct.productName || heroProduct.name}
-                    className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700 ease-out"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-[#06070A]/95 via-[#06070A]/20 to-transparent pointer-events-none" />
-
-                  {/* Real Rating Badge ONLY if real rating > 0 in database */}
-                  {typeof heroProduct.rating === "number" && heroProduct.rating > 0 && (
-                    <div className="absolute top-3 left-3 flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#06070A]/85 backdrop-blur-md border border-white/10 text-white text-xs font-bold">
-                      <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
-                      <span>{heroProduct.rating.toFixed(1)}</span>
-                    </div>
-                  )}
-
-                  {/* Bottom Card Title & Authoritative Pricing */}
-                  <div className="absolute bottom-3 left-3 right-3 flex items-end justify-between">
-                    <div>
-                      <span className="text-[10px] font-black uppercase tracking-widest text-[#FF6B00] block">
-                        {heroProduct.category?.toUpperCase() || "FEATURED"}
-                      </span>
-                      <h3 className="text-lg sm:text-xl font-serif font-black text-white">
-                        {heroProduct.productName || heroProduct.name}
-                      </h3>
-                    </div>
-                    <div className="text-right">
-                      {Number(heroProduct.offerPrice) > 0 && Number(heroProduct.offerPrice) < Number(heroProduct.basePrice || heroProduct.price) ? (
-                        <>
-                          <span className="text-xs text-slate-400 line-through block">
-                            ₹{heroProduct.basePrice || heroProduct.price}
-                          </span>
-                          <span className="text-xl sm:text-2xl font-black text-[#FFB693]">
-                            ₹{heroProduct.offerPrice}
-                          </span>
-                        </>
-                      ) : (
-                        <span className="text-xl sm:text-2xl font-black text-[#FFB693]">
-                          ₹{heroProduct.basePrice || heroProduct.price || 0}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Real Actions underneath Showcase */}
-                <div className="grid grid-cols-2 gap-2.5 mt-3">
-                  <button
-                    onClick={(e) => handleAddToCart(e, heroProduct)}
-                    className="w-full h-11 rounded-full bg-gradient-to-r from-[#FF6B00] to-[#FF8800] text-white font-extrabold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-[0_8px_20px_rgba(255,107,0,0.35)] active:scale-95 transition-all"
-                  >
-                    <span>Add to Cart</span>
-                    <Plus className="w-3.5 h-3.5" />
-                  </button>
-                  <Link
-                    to={`/product/${heroProduct.id}`}
-                    className="w-full h-11 rounded-full bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all active:scale-95"
-                  >
-                    <span>View Details</span>
-                    <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-                  </Link>
-                </div>
-              </div>
-            </div>
-          )}
-
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* ── 3. Category Discovery Rail (5-Second Real Product Image Rotation) ── */}
       <CategoryDiscoveryRail />
@@ -432,7 +402,36 @@ export default function StitchMidnightGlowHome() {
         </section>
       )}
 
-      {/* ── 6. Active Promo Coupons (Renders ONLY if real coupons exist in DB) ── */}
+      {/* ── 6. High-Conversion "Explore Full Menu" Callout Banner ──────── */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-8 py-6">
+        <div className="relative rounded-3xl overflow-hidden p-6 sm:p-8 bg-gradient-to-r from-orange-950/40 via-[#161922] to-amber-950/30 border border-orange-500/20 shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-6">
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 rounded-2xl bg-orange-500/15 border border-orange-500/30 flex items-center justify-center shrink-0">
+              <Utensils className="w-7 h-7 text-orange-400" />
+            </div>
+            <div>
+              <span className="text-xs font-black uppercase tracking-wider text-orange-400 block mb-0.5">
+                Complete Wood-Fired Catalog
+              </span>
+              <h4 className="text-xl sm:text-2xl font-black text-white">
+                Looking for something specific?
+              </h4>
+              <p className="text-xs text-slate-300 mt-1 max-w-xl">
+                Browse our entire menu of handcrafted stone-oven pizzas, stuffed crusts, crispy sides, desserts, and refreshing beverages.
+              </p>
+            </div>
+          </div>
+          <Link
+            to="/menu"
+            className="w-full sm:w-auto px-7 py-3 rounded-full bg-gradient-to-r from-[#FF6B00] via-orange-500 to-amber-500 text-white font-extrabold text-sm uppercase tracking-wider shadow-[0_8px_25px_rgba(255,107,0,0.4)] flex items-center justify-center gap-2 hover:scale-105 active:scale-95 transition-all shrink-0 min-h-[46px]"
+          >
+            <span>Explore Full Menu</span>
+            <ArrowRight className="w-4 h-4" />
+          </Link>
+        </div>
+      </section>
+
+      {/* ── 7. Active Promo Coupons (Renders ONLY if real coupons exist in DB) ── */}
       <LiveCoupons />
 
       {/* ── 7. Live Advertisements (Returns null if no active ads) ───── */}

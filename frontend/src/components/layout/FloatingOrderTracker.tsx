@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router';
 import { useAuthStore } from '../../lib/store';
 import { db } from '../../lib/firebase';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { useLiveOrderTracking } from '../../hooks/useLiveOrderTracking';
 
 export default function FloatingOrderTracker() {
   const { user, isAuthenticated } = useAuthStore();
@@ -27,6 +28,32 @@ export default function FloatingOrderTracker() {
     });
     return () => unsub();
   }, [user, isAuthenticated]);
+
+  const itemsSummary = React.useMemo(() => {
+    if (!activeOrder?.items || !Array.isArray(activeOrder.items)) return '';
+    return activeOrder.items.map((i: any) => typeof i === 'string' ? i : `${i.quantity || 1}× ${i.name || 'Item'}`).join(', ');
+  }, [activeOrder?.items]);
+
+  const stepMap: Record<string, number> = {
+    pending: 1, accepted: 2, preparing: 3, ready: 4, partner_assigned: 5, picked_up: 5, out_for_delivery: 6, delivered: 7
+  };
+
+  useLiveOrderTracking(
+    activeOrder
+      ? {
+          orderId: activeOrder.id,
+          orderNumber: activeOrder.orderNumber || activeOrder.id?.slice(-6),
+          status: activeOrder.status,
+          step: stepMap[activeOrder.status] || 1,
+          itemsSummary,
+          totalAmount: Number(activeOrder.totalAmount || 0),
+          etaMinutes: activeOrder.estimatedDeliveryMinutes || (activeOrder.eta ? parseInt(activeOrder.eta) : 25),
+          riderName: activeOrder.deliveryPartnerName || '',
+          riderPhone: activeOrder.deliveryPartnerPhone || '',
+          restaurantName: 'Olive Pizza',
+        }
+      : null
+  );
 
   const getStatusInfo = (status: string) => {
      switch (status) {

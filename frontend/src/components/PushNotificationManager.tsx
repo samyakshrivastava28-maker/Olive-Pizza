@@ -302,10 +302,20 @@ export default function PushNotificationManager() {
           }).catch(() => {});
         }
 
+        // Customer app must never receive or play new order alarms or continuous alarms
+        if (
+          data.alert === 'continuous' ||
+          data.category === 'new_order' ||
+          data.category === 'alarm_actionable' ||
+          data.category === 'owner_orders' ||
+          data.stage === 'new_order' ||
+          data.type === 'NEW_ORDER'
+        ) {
+          return;
+        }
+
         // Play sound for foreground alerts
-        if (data.alert === 'continuous') {
-          startContinuousAlert(data.sound || 'order_alert.mp3');
-        } else if (data.sound && data.sound !== 'default') {
+        if (data.sound && data.sound !== 'default' && data.sound !== 'order_alert' && data.sound !== 'new_order') {
           playNotificationSound(data.sound);
         }
 
@@ -390,8 +400,17 @@ export default function PushNotificationManager() {
 
       // Role isolation guard: skip if notification belongs to another role
       if (targetRole && targetRole !== userRole) return;
-      if ((category === 'alarm_actionable' || category === 'delivery') && userRole !== 'delivery_partner') return;
-      if ((category === 'owner_orders' || category === 'new_order') && userRole !== 'owner' && userRole !== 'admin') return;
+      if (
+        data?.alert === 'continuous' ||
+        category === 'alarm_actionable' ||
+        category === 'owner_orders' ||
+        category === 'new_order' ||
+        data?.stage === 'new_order' ||
+        data?.type === 'NEW_ORDER'
+      ) {
+        return; // Customer app never receives or alerts on new orders
+      }
+      if (category === 'delivery' && userRole !== 'delivery_partner') return;
       if (category === 'customer' && userRole !== 'customer') return;
 
       const title = notification?.title || 'Olive Pizza';
@@ -429,9 +448,7 @@ export default function PushNotificationManager() {
         } catch {}
       }
 
-      if (data?.alert === 'continuous') {
-        startContinuousAlert(data.sound || 'order_alert.mp3');
-      } else if (data?.sound && data.sound !== 'default') {
+      if (data?.sound && data.sound !== 'default' && data.sound !== 'order_alert' && data.sound !== 'new_order') {
         playNotificationSound(data.sound);
       }
 

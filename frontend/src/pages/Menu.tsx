@@ -73,7 +73,10 @@ export default function Menu() {
     if (cat) {
       setCategory(cat.toLowerCase());
     }
-    if (params.get("search") === "1" && searchInputRef.current) {
+    const q = params.get("q") || params.get("query");
+    if (q && q !== "1") {
+      setSearchQuery(q);
+    } else if (params.get("search") === "1" && searchInputRef.current) {
       searchInputRef.current.focus();
     }
   }, [location.search]);
