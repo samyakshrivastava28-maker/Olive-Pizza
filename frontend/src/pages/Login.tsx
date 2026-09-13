@@ -1,32 +1,71 @@
 import { useState, useEffect } from "react";
 import {
   signInWithEmailAndPassword,
-  signInWithRedirect,
   signInWithPopup,
   getRedirectResult,
   GoogleAuthProvider,
-  signInWithCredential
+  signInWithCredential,
+  signOut,
+  RecaptchaVerifier,
+  signInWithPhoneNumber
 } from "firebase/auth";
 import { Capacitor } from '@capacitor/core';
 import { auth, db } from "../lib/firebase";
-import { doc, setDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc } from "firebase/firestore";
 import { useNavigate, Link } from "react-router";
 import toast from 'react-hot-toast';
 import { useAuthStore } from "../lib/store";
 import PizzaLoader from "../components/ui/PizzaLoader";
 import { withAuthRetry } from "../lib/authRetry";
 import { translateError, logDetailedError } from "../lib/errorTranslator";
-import { Mail, Lock, EyeOff, Eye, AlertCircle, ArrowRight, User } from "lucide-react";
+import { Mail, Lock, EyeOff, Eye, AlertCircle, ArrowRight, User, Phone, CheckCircle2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { fetchApi } from "../lib/config";
 
 export default function Login() {
+  const [authMethod, setAuthMethod] = useState<'email' | 'phone'>('email');
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [phone, setPhone] = useState("");
+  const [phoneOtp, setPhoneOtp] = useState("");
+  const [confirmationResult, setConfirmationResult] = useState<any>(null);
+  const [otpSent, setOtpSent] = useState(false);
+  const [phoneLoading, setPhoneLoading] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+
+  // Authorize customer app access via canonical backend
+  const verifyCustomerAccess = async (userCredential: any) => {
+    try {
+      const idToken = await userCredential.user.getIdToken();
+      const res = await fetchApi('/api/auth/authorize-app', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`
+        },
+        body: JSON.stringify({ targetApp: 'CUSTOMER' })
+      });
+
+      const data = await res.json().catch(() => null);
+
+      if (res.status === 429) {
+        await signOut(auth);
+        throw new Error("Too many login attempts. Please try again later.");
+      }
+
+      if (res.status === 403 || !res.ok || !data?.authorized) {
+        await signOut(auth);
+        throw new Error(data?.reason || "This account is not authorized to access the customer application.");
+      }
+
+      return data;
+    } catch (err: any) {
+      throw err;
+    }
+  };
 
   // Handle redirect result on mount
   useEffect(() => {
@@ -35,19 +74,19 @@ export default function Login() {
         const result = await getRedirectResult(auth);
         if (result && result.user) {
           try {
+            await verifyCustomerAccess(result);
+
             const userRef = doc(db, "users", result.user.uid);
-            const { getDoc } = await import("firebase/firestore");
             const userDoc = await getDoc(userRef);
 
             const userEmail = result.user.email?.toLowerCase() || "";
-            const initialRole = userEmail === "olivepizzarjn@gmail.com" ? "owner" : "customer";
-            let finalRole = initialRole;
+            let finalRole = "customer";
 
             if (!userDoc.exists()) {
               await setDoc(userRef, {
                 email: userEmail,
                 name: result.user.displayName || "",
-                role: initialRole,
+                role: "customer",
                 createdAt: new Date().toISOString(),
               });
             } else {
@@ -68,20 +107,17 @@ export default function Login() {
                 fullAddress: data?.fullAddress,
                 emailVerified: result.user.emailVerified,
                 status: data?.status,
-              }, finalRole as "customer" | "owner" | "delivery_partner" | "admin");
+              }, finalRole as any);
             }
 
-            // In customer app, all users (including owners/delivery partners) stay in customer flow
             navigate("/");
-          } catch (err) {
+          } catch (err: any) {
             logDetailedError(err, { context: "Redirect Result Sync" });
-            console.error("Firestore sync failed on redirect result", err);
-            toast.error("Failed to sync user data after login.");
+            toast.error(err?.message || "Failed to authorize customer access.");
           }
         }
       } catch (err: any) {
         logDetailedError(err, { context: "Redirect Sign-In Error" });
-        console.error("Redirect sign-in error", err);
         toast.error(translateError(err));
       }
     };
@@ -93,34 +129,15 @@ export default function Login() {
     setError("");
     setLoading(true);
     try {
-      // ReCaptcha Enterprise Assessment (Non-blocking fallback)
-      try {
-        if (typeof (window as any).grecaptcha !== 'undefined' && (window as any).grecaptcha?.enterprise) {
-          const grecaptcha = (window as any).grecaptcha;
-          await Promise.race([
-            new Promise<void>((resolve) => grecaptcha.enterprise.ready(resolve)),
-            new Promise<void>((_, reject) => setTimeout(() => reject(new Error("ReCaptcha timeout")), 2000))
-          ]);
-          const token = await grecaptcha.enterprise.execute('6LdqyDctAAAAABn8isXOdDe-0roVqILKuAdIl_x-', {action: 'LOGIN'});
-          if (token) {
-            fetchApi('/api/auth/verify-recaptcha', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ token, action: 'LOGIN' })
-            }).catch(() => {});
-          }
-        }
-      } catch (recaptchaError) {
-        console.warn("Recaptcha non-blocking notice:", recaptchaError);
-      }
-
       const userCredential = await withAuthRetry(() => signInWithEmailAndPassword(
         auth,
         email.trim(),
         password,
       ), "Email Login");
+
+      // Verify customer authorization and enforce rate limits
+      await verifyCustomerAccess(userCredential);
       
-      const { getDoc } = await import("firebase/firestore");
       let data: any = null;
       try {
         const userDoc = await getDoc(doc(db, "users", userCredential.user.uid));
@@ -149,14 +166,102 @@ export default function Login() {
         approvalStatus: data?.approvalStatus,
         status: data?.status,
         photoUrl: data?.photoUrl,
-      }, userRole as "customer" | "owner" | "delivery_partner" | "admin");
+      }, userRole as any);
 
       toast.success("Welcome back!");
-
-      // In customer app, all users stay in customer flow
       navigate("/");
     } catch (err: any) {
       setError(err.message || translateError(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSendPhoneOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+
+    const cleanPhone = phone.trim().replace(/\D/g, '');
+    if (cleanPhone.length < 10) {
+      setError("Please enter a valid 10-digit mobile number.");
+      return;
+    }
+
+    const formattedPhone = cleanPhone.startsWith('91') && cleanPhone.length === 12
+      ? `+${cleanPhone}`
+      : `+91${cleanPhone.slice(-10)}`;
+
+    setPhoneLoading(true);
+
+    try {
+      if (!(window as any).recaptchaCustomerVerifier) {
+        (window as any).recaptchaCustomerVerifier = new RecaptchaVerifier(auth, 'recaptcha-customer-login', {
+          size: 'invisible',
+          callback: () => {}
+        });
+      }
+
+      const appVerifier = (window as any).recaptchaCustomerVerifier;
+      const confirmation = await signInWithPhoneNumber(auth, formattedPhone, appVerifier);
+      setConfirmationResult(confirmation);
+      setOtpSent(true);
+      toast.success("Verification code sent to your phone!");
+    } catch (err: any) {
+      console.error("Phone OTP error:", err);
+      if ((window as any).recaptchaCustomerVerifier) {
+        try {
+          (window as any).recaptchaCustomerVerifier.clear();
+          delete (window as any).recaptchaCustomerVerifier;
+        } catch (_) {}
+      }
+      setError(translateError(err) || "Failed to send SMS code. Please try again.");
+    } finally {
+      setPhoneLoading(false);
+    }
+  };
+
+  const handleVerifyPhoneOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!confirmationResult || !phoneOtp) return;
+
+    setError("");
+    setLoading(true);
+
+    try {
+      const userCredential = await confirmationResult.confirm(phoneOtp.trim());
+
+      // Verify customer authorization
+      await verifyCustomerAccess(userCredential);
+
+      const userDoc = await getDoc(doc(db, "users", userCredential.user.uid));
+      let data: any = null;
+      if (userDoc.exists()) {
+        data = userDoc.data();
+      } else {
+        await setDoc(doc(db, "users", userCredential.user.uid), {
+          phone: userCredential.user.phoneNumber,
+          phoneVerified: true,
+          phoneSetupCompleted: true,
+          role: 'customer',
+          createdAt: new Date().toISOString()
+        }, { merge: true });
+      }
+
+      useAuthStore.getState().setUser({
+        uid: userCredential.user.uid,
+        email: userCredential.user.email || data?.email,
+        name: data?.name || "Valued Customer",
+        phone: userCredential.user.phoneNumber,
+        phoneVerified: true,
+        phoneSetupCompleted: true,
+        locationSetupCompleted: data?.locationSetupCompleted ?? false,
+        emailVerified: userCredential.user.emailVerified,
+      }, 'customer');
+
+      toast.success("Welcome back!");
+      navigate("/");
+    } catch (err: any) {
+      setError(err.message || "Invalid OTP code. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -176,7 +281,6 @@ export default function Login() {
     try {
       const provider = new GoogleAuthProvider();
       let result;
-      // Use native plugin on Android to avoid WebView storage issues
       if (Capacitor.isNativePlatform()) {
         const { FirebaseAuthentication } = await import('@capacitor-firebase/authentication');
         const nativeResult = await FirebaseAuthentication.signInWithGoogle();
@@ -191,8 +295,10 @@ export default function Login() {
       }
       
       if (result && result.user) {
+        // Enforce customer app authorization (blocks owners)
+        await verifyCustomerAccess(result);
+
         const userRef = doc(db, "users", result.user.uid);
-        const { getDoc } = await import("firebase/firestore");
         let userDoc: any = null;
         try {
           userDoc = await getDoc(userRef);
@@ -201,14 +307,12 @@ export default function Login() {
         }
 
         const userEmail = result.user.email?.toLowerCase() || "";
-        const initialRole = ["olivepizzarjn@gmail.com", "webhub2811@gmail.com"].includes(userEmail) ? "owner" : "customer";
-        let finalRole = initialRole;
 
         if (!userDoc?.exists()) {
           await setDoc(userRef, {
             email: userEmail,
             name: result.user.displayName || "",
-            role: initialRole,
+            role: "customer",
             createdAt: new Date().toISOString(),
           }, { merge: true }).catch(() => {});
 
@@ -231,10 +335,9 @@ export default function Login() {
             onboardingComplete: false,
             phoneSetupCompleted: false,
             locationSetupCompleted: false,
-          }, initialRole as "customer" | "owner" | "delivery_partner" | "admin");
+          }, "customer");
         } else {
           const data = userDoc.data();
-          finalRole = data?.role || (["olivepizzarjn@gmail.com", "webhub2811@gmail.com"].includes(userEmail) ? "owner" : "customer");
           
           useAuthStore.getState().setUser({
             uid: result.user.uid,
@@ -250,11 +353,10 @@ export default function Login() {
             fullAddress: data?.fullAddress,
             emailVerified: result.user.emailVerified,
             status: data?.status,
-          }, finalRole as "customer" | "owner" | "delivery_partner" | "admin");
+          }, "customer");
         }
 
         toast.success("Welcome!");
-        // Always navigate to customer home on customer app
         navigate("/");
       }
     } catch (err: any) {
@@ -267,7 +369,9 @@ export default function Login() {
   };
 
   return (
-    <div className="relative max-w-md mx-auto mt-16 p-8 glass-card overflow-hidden">
+    <div className="relative max-w-md mx-auto my-6 sm:my-12 p-5 sm:p-8 glass-card overflow-hidden w-full">
+      <div id="recaptcha-customer-login"></div>
+
       <AnimatePresence>
         {loading && (
           <motion.div
@@ -290,83 +394,206 @@ export default function Login() {
           alt="Olive Pizza Logo"
           className="h-16 w-auto object-contain mb-3 bg-transparent drop-shadow-lg"
         />
-        <h1 className="text-3xl font-extrabold text-center text-primary-500 tracking-tight">
+        <h1 className="text-2xl sm:text-3xl font-extrabold text-center text-primary-500 tracking-tight">
           Welcome Back
         </h1>
         <p className="text-xs text-slate-400 mt-1">Sign in to your Olive Pizza account</p>
       </div>
+
       {error && (
-        <div className="bg-red-100 text-red-700 p-3 rounded-lg mb-4 text-sm font-medium relative z-10">
-          {error}
+        <div className="bg-red-100 dark:bg-red-950/50 border border-red-200 dark:border-red-900/50 text-red-700 dark:text-red-300 p-3 rounded-lg mb-4 text-sm font-medium relative z-10 flex items-start gap-2">
+          <AlertCircle size={18} className="shrink-0 mt-0.5" />
+          <span>{error}</span>
         </div>
       )}
-      <form onSubmit={handleLogin} className="flex flex-col gap-4 relative z-10">
-        <input
-          type="email"
-          placeholder="Email Address"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="p-3 border border-slate-200 dark:border-slate-700 rounded-lg bg-white/50 dark:bg-slate-900/50 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all"
-          required
-        />
-        <div className="relative">
-          <input
-            type={showPassword ? "text" : "password"}
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full p-3 border border-slate-200 dark:border-slate-700 rounded-lg bg-white/50 dark:bg-slate-900/50 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all pr-12"
-            required
-          />
+
+      {/* Credential Selection Prompt */}
+      <div className="mb-5 relative z-10">
+        <label className="text-xs font-bold text-slate-400 block text-center mb-2">
+          How would you like to log in?
+        </label>
+        <div className="grid grid-cols-2 gap-2 bg-slate-100 dark:bg-slate-900 p-1.5 rounded-2xl border border-slate-200 dark:border-slate-800">
           <button
             type="button"
-            onClick={() => setShowPassword(!showPassword)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 font-medium text-sm"
+            onClick={() => {
+              setAuthMethod('email');
+              setError('');
+            }}
+            className={`min-h-[44px] py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 ${
+              authMethod === 'email'
+                ? 'bg-primary-500 text-white shadow-md shadow-primary-500/20'
+                : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
+            }`}
           >
-            {showPassword ? "Hide" : "Show"}
+            <Mail size={14} /> Email
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setAuthMethod('phone');
+              setError('');
+            }}
+            className={`min-h-[44px] py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 ${
+              authMethod === 'phone'
+                ? 'bg-primary-500 text-white shadow-md shadow-primary-500/20'
+                : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
+            }`}
+          >
+            <Phone size={14} /> Phone Number
           </button>
         </div>
-        <div className="text-right">
-          <Link
-            to="/forgot-password"
-            className="text-sm text-primary-600 hover:underline"
-          >
-            Forgot password?
-          </Link>
-        </div>
-        <button
-          type="submit"
-          disabled={loading}
-          className="bg-primary-500 hover:bg-primary-600 text-white p-3 rounded-lg font-bold mt-2 transition-colors disabled:opacity-50"
-        >
-          {loading ? "Signing in..." : "Sign In"}
-        </button>
+      </div>
 
-        <div className="relative flex py-2 items-center">
-          <div className="flex-grow border-t border-slate-300 dark:border-slate-600"></div>
-          <span className="flex-shrink-0 mx-4 text-slate-400 text-sm">or</span>
-          <div className="flex-grow border-t border-slate-300 dark:border-slate-600"></div>
-        </div>
-
-        <button
-          type="button"
-          onClick={handleGoogleSignIn}
-          disabled={loading}
-          className="flex items-center justify-center gap-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-white p-3 rounded-lg font-bold transition-colors disabled:opacity-50"
-        >
-          <img
-            src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
-            alt="Google"
-            className="w-5 h-5"
+      {/* Email Login Form */}
+      {authMethod === 'email' && (
+        <form onSubmit={handleLogin} className="flex flex-col gap-4 relative z-10">
+          <input
+            type="email"
+            placeholder="Email Address"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="min-h-[44px] p-3 border border-slate-200 dark:border-slate-700 rounded-lg bg-white/50 dark:bg-slate-900/50 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all text-base sm:text-sm"
+            required
           />
-          Continue with Google
-        </button>
-      </form>
+          <div className="relative">
+            <input
+              type={showPassword ? "text" : "password"}
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full min-h-[44px] p-3 border border-slate-200 dark:border-slate-700 rounded-lg bg-white/50 dark:bg-slate-900/50 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all pr-12 text-base sm:text-sm"
+              required
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 font-medium text-sm p-1 min-h-[44px] flex items-center"
+            >
+              {showPassword ? "Hide" : "Show"}
+            </button>
+          </div>
+          <div className="text-right">
+            <Link
+              to="/forgot-password"
+              className="text-sm text-primary-600 hover:underline inline-block py-1"
+            >
+              Forgot password?
+            </Link>
+          </div>
+          <button
+            type="submit"
+            disabled={loading}
+            className="min-h-[48px] bg-primary-500 hover:bg-primary-600 active:scale-[0.98] text-white p-3 rounded-lg font-bold mt-2 transition-all disabled:opacity-50 flex items-center justify-center"
+          >
+            {loading ? "Signing in..." : "Sign In"}
+          </button>
+        </form>
+      )}
+
+      {/* Phone Login Form */}
+      {authMethod === 'phone' && (
+        <div className="space-y-4 relative z-10">
+          {!otpSent ? (
+            <form onSubmit={handleSendPhoneOtp} className="space-y-4">
+              <div>
+                <label className="text-xs font-bold text-slate-400 block mb-1">
+                  Mobile Number (India)
+                </label>
+                <div className="flex rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-white/50 dark:bg-slate-900/50 focus-within:ring-2 focus-within:ring-primary-500 min-h-[44px]">
+                  <span className="bg-slate-100 dark:bg-slate-800 px-3.5 py-3 text-xs font-bold text-slate-500 flex items-center border-r border-slate-200 dark:border-slate-700">
+                    +91
+                  </span>
+                  <input
+                    type="tel"
+                    inputMode="tel"
+                    required
+                    placeholder="9876543210"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                    className="w-full p-3 bg-transparent text-base sm:text-sm focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={phoneLoading}
+                className="w-full min-h-[48px] bg-primary-500 hover:bg-primary-600 active:scale-[0.98] text-white p-3 rounded-lg font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {phoneLoading ? "Sending SMS..." : "Send Verification Code"}
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleVerifyPhoneOtp} className="space-y-4">
+              <div className="text-center">
+                <p className="text-xs text-slate-400">
+                  Enter the 6-digit code sent to <strong className="text-slate-200">+91 {phone}</strong>
+                </p>
+              </div>
+
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                autoComplete="one-time-code"
+                required
+                maxLength={6}
+                placeholder="123456"
+                value={phoneOtp}
+                onChange={(e) => setPhoneOtp(e.target.value.replace(/\D/g, ''))}
+                className="w-full min-h-[48px] text-center tracking-widest text-xl font-bold p-3 border border-slate-200 dark:border-slate-700 rounded-lg bg-white/50 dark:bg-slate-900/50 focus:outline-none focus:ring-2 focus:ring-primary-500"
+              />
+
+              <button
+                type="submit"
+                disabled={loading || phoneOtp.length < 6}
+                className="w-full min-h-[48px] bg-primary-500 hover:bg-primary-600 active:scale-[0.98] text-white p-3 rounded-lg font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {loading ? "Verifying..." : "Verify & Sign In"}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setOtpSent(false);
+                  setPhoneOtp('');
+                }}
+                className="w-full min-h-[44px] text-xs text-slate-400 hover:text-slate-200 py-2 flex items-center justify-center"
+              >
+                Change Phone Number
+              </button>
+            </form>
+          )}
+        </div>
+      )}
+
+      {/* Social Divider */}
+      <div className="relative flex py-2 items-center z-10">
+        <div className="flex-grow border-t border-slate-300 dark:border-slate-600"></div>
+        <span className="flex-shrink-0 mx-4 text-slate-400 text-sm">or</span>
+        <div className="flex-grow border-t border-slate-300 dark:border-slate-600"></div>
+      </div>
+
+      {/* Google Sign-In */}
+      <button
+        type="button"
+        onClick={handleGoogleSignIn}
+        disabled={loading}
+        className="w-full min-h-[48px] flex items-center justify-center gap-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 active:scale-[0.98] text-slate-700 dark:text-white p-3 rounded-lg font-bold transition-all disabled:opacity-50 relative z-10"
+      >
+        <img
+          src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
+          alt="Google"
+          className="w-5 h-5"
+        />
+        Continue with Google
+      </button>
+
       <div className="mt-6 text-center text-slate-500 dark:text-slate-400 text-sm relative z-10">
         Don't have an account?{" "}
         <Link
           to="/register"
-          className="text-primary-600 font-bold hover:underline"
+          className="text-primary-600 font-bold hover:underline inline-block p-1"
         >
           Create Account
         </Link>

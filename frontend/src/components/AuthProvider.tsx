@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { onAuthStateChanged } from 'firebase/auth';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth, db } from '../lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { useAuthStore } from '../lib/store';
@@ -19,11 +19,22 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
           if (!mounted) return;
           if (firebaseUser) {
             try {
+              const emailLower = (firebaseUser.email || '').toLowerCase().trim();
+              const isCanonicalOwner = emailLower === 'olivepizzarjn@gmail.com' || emailLower === 'webhub2811@gmail.com';
+
               const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
               if (!mounted) return;
               
               if (userDoc.exists()) {
                 const data = userDoc.data();
+                const staffRoles = ['owner', 'platform_owner', 'restaurant_manager', 'delivery_partner', 'delivery', 'pos_operator', 'cashier', 'kitchen_staff', 'franchise_manager', 'franchise_owner', 'admin', 'developer'];
+                if (isCanonicalOwner || (data.role && staffRoles.includes(data.role))) {
+                  console.warn('[AuthProvider] Staff or Owner account detected on customer app. Enforcing operational boundary.');
+                  await signOut(auth);
+                  logout();
+                  setLoading(false);
+                  return;
+                }
                 setUser(
                   {
                     uid: firebaseUser.uid,
