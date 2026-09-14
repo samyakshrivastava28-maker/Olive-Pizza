@@ -35,23 +35,42 @@ export const getApiUrl = (endpoint: string): string => {
   return cleanEndpoint;
 };
 
+function getOrGenerateDeviceId(): string {
+  try {
+    let id = localStorage.getItem('device_fingerprint');
+    if (!id) {
+      id = 'dev_' + Math.random().toString(36).substring(2, 12) + Date.now().toString(36);
+      localStorage.setItem('device_fingerprint', id);
+    }
+    return id;
+  } catch {
+    return 'dev_web_client';
+  }
+}
+
 /**
  * Resilient Fetch wrapper that automatically retries directly against Render backend
  * if local proxy / edge rewrite encounters a cold start or network glitch.
+ * Automatically injects X-Device-Id header for hardware rate-limiting.
  */
 export const fetchApi = async (endpoint: string, init?: RequestInit): Promise<Response> => {
   const primaryUrl = getApiUrl(endpoint);
+  const headers = new Headers(init?.headers || {});
+  if (!headers.has('X-Device-Id')) {
+    headers.set('X-Device-Id', getOrGenerateDeviceId());
+  }
+  const mergedInit = { ...init, headers };
   
   try {
-    const res = await fetch(primaryUrl, init);
+    const res = await fetch(primaryUrl, mergedInit);
     if (res.ok || !primaryUrl.startsWith('/')) return res;
     // If relative fetch failed with 404/502/504, try direct production Render backend
     const directUrl = `${PRODUCTION_BACKEND_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
-    return await fetch(directUrl, init);
+    return await fetch(directUrl, mergedInit);
   } catch (err) {
     if (primaryUrl.startsWith('/')) {
       const directUrl = `${PRODUCTION_BACKEND_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
-      return await fetch(directUrl, init);
+      return await fetch(directUrl, mergedInit);
     }
     throw err;
   }

@@ -114,23 +114,15 @@ export class GlobalErrorBoundary extends Component<Props, State> {
               We encountered a critical error while rendering this part of the application.
             </p>
             
-            <div className="w-full text-left bg-black/50 p-4 rounded-xl border border-slate-800 overflow-auto max-h-[300px] mb-8">
-              <div className="text-red-400 font-mono text-sm font-bold mb-2 break-words">
-                {this.state.error?.toString()}
+            <div className="w-full text-center bg-black/40 p-6 rounded-2xl border border-slate-800 mb-8">
+              <p className="text-slate-300 text-sm font-medium mb-3">
+                {this.state.error?.message && !this.state.error.message.includes('at ') && !this.state.error.message.includes('node_modules')
+                  ? "We encountered a temporary interface issue. Please refresh or return home."
+                  : "An unexpected error occurred. Please try reloading."}
+              </p>
+              <div className="inline-block bg-slate-900/80 px-3.5 py-1.5 rounded-lg border border-slate-700 text-xs font-mono text-slate-400">
+                Incident Reference: <span className="text-amber-400 font-bold font-mono">OP-{Math.abs((this.state.error?.message || '').split('').reduce((a, b) => ((a << 5) - a) + b.charCodeAt(0), 0)).toString(16).toUpperCase().padStart(6, '0').slice(-6)}</span>
               </div>
-              {(this.state.error as any)?.code && (
-                <div className="text-orange-400 font-mono text-xs font-bold mb-2">
-                  Code: {(this.state.error as any)?.code}
-                </div>
-              )}
-              <pre className="text-slate-400 font-mono text-xs whitespace-pre-wrap mb-4 border-b border-slate-700 pb-2">
-                {this.state.error?.stack}
-              </pre>
-              {this.state.errorInfo && (
-                <pre className="text-slate-500 font-mono text-[10px] whitespace-pre-wrap mt-2">
-                  {this.state.errorInfo.componentStack}
-                </pre>
-              )}
             </div>
 
             <div className="flex flex-col sm:flex-row w-full gap-3">

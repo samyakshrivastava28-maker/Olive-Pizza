@@ -83,15 +83,13 @@ export class RouteErrorBoundary extends Component<Props, State> {
             We encountered a critical error while rendering this section.
           </p>
           
-          <div className="w-full text-left bg-[#0f172a] p-4 rounded-xl border border-red-500/30 overflow-auto max-h-[300px] mb-6">
-            <div className="text-red-400 font-mono text-sm font-bold mb-2 break-words">
-              {this.state.error?.toString()}
+          <div className="w-full text-center bg-[#0f172a] p-4 rounded-xl border border-red-500/30 mb-6">
+            <p className="text-slate-300 text-xs font-medium mb-2">
+              The interface encountered a temporary rendering issue. Please retry.
+            </p>
+            <div className="inline-block bg-slate-900/80 px-3 py-1 rounded-md border border-slate-700 text-[11px] font-mono text-slate-400">
+              Reference: <span className="text-amber-400 font-bold font-mono">OP-{Math.abs((this.state.error?.message || '').split('').reduce((a, b) => ((a << 5) - a) + b.charCodeAt(0), 0)).toString(16).toUpperCase().padStart(6, '0').slice(-6)}</span>
             </div>
-            {this.state.errorInfo && (
-              <pre className="text-slate-400 font-mono text-xs whitespace-pre-wrap">
-                {this.state.errorInfo.componentStack}
-              </pre>
-            )}
           </div>
           <button
             onClick={() => {

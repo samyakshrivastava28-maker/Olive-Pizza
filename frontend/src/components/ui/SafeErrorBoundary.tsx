@@ -91,23 +91,13 @@ export class SafeErrorBoundary extends Component<Props, State> {
             We encountered a critical error while loading this part of the application. 
           </p>
 
-          <div className="w-full text-left bg-[#0f172a] p-4 rounded-xl border border-red-500/30 overflow-auto max-h-[300px] mb-8 w-full max-w-2xl">
-            <div className="text-red-400 font-mono text-sm font-bold mb-2 break-words">
-              {this.state.error?.toString()}
+          <div className="w-full text-center bg-[#0f172a] p-5 rounded-xl border border-red-500/30 mb-8 w-full max-w-md">
+            <p className="text-slate-300 text-sm font-medium mb-3">
+              This component encountered an unexpected error.
+            </p>
+            <div className="inline-block bg-slate-900/80 px-3 py-1 rounded-md border border-slate-700 text-xs font-mono text-slate-400">
+              Incident Reference: <span className="text-amber-400 font-bold font-mono">OP-{Math.abs((this.state.error?.message || '').split('').reduce((a, b) => ((a << 5) - a) + b.charCodeAt(0), 0)).toString(16).toUpperCase().padStart(6, '0').slice(-6)}</span>
             </div>
-            {(this.state.error as any)?.code && (
-              <div className="text-orange-400 font-mono text-xs font-bold mb-2">
-                Firebase/API Code: {(this.state.error as any)?.code}
-              </div>
-            )}
-            <pre className="text-slate-400 font-mono text-xs whitespace-pre-wrap mb-4 border-b border-slate-700 pb-2">
-              {this.state.error?.stack}
-            </pre>
-            {this.state.errorInfo && (
-              <pre className="text-slate-500 font-mono text-[10px] whitespace-pre-wrap mt-2">
-                {this.state.errorInfo.componentStack}
-              </pre>
-            )}
           </div>
 
           <button
