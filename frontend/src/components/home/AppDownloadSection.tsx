@@ -1,10 +1,10 @@
-﻿import React, { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Download, QrCode, Smartphone, Monitor, Zap, WifiOff, BellRing, Bot, Gift, Sparkles, CheckCircle2 } from "lucide-react";
 import { isCapacitorNative } from "../../lib/platform";
 
 interface PlatformTab {
-  id: "android" | "ios" | "windows" | "macos";
+  id: "android" | "ios";
   name: string;
   badge: string;
   tagline: string;
@@ -13,12 +13,10 @@ interface PlatformTab {
 }
 
 export default function AppDownloadSection() {
-  const [selectedPlatform, setSelectedPlatform] = useState<"android" | "ios" | "windows" | "macos">("android");
+  const [selectedPlatform, setSelectedPlatform] = useState<"android" | "ios">("android");
   const [platforms, setPlatforms] = useState<Record<string, { url: string; size: string | null }>>({
     android: { url: "https://github.com/samyakshrivastava28-maker/Olive-Pizza/releases/latest", size: null },
     ios: { url: "https://github.com/samyakshrivastava28-maker/Olive-Pizza/releases/latest", size: null },
-    windows: { url: "https://github.com/samyakshrivastava28-maker/Olive-Pizza/releases/latest", size: null },
-    macos: { url: "https://github.com/samyakshrivastava28-maker/Olive-Pizza/releases/latest", size: null },
   });
   const [loading, setLoading] = useState<boolean>(true);
 
@@ -41,13 +39,9 @@ export default function AppDownloadSection() {
             const ghData = await ghRes.json();
             const apk = ghData.assets?.find((a: any) => a.name?.endsWith(".apk"));
             const ipa = ghData.assets?.find((a: any) => a.name?.endsWith(".ipa"));
-            const exe = ghData.assets?.find((a: any) => a.name?.endsWith(".exe"));
-            const dmg = ghData.assets?.find((a: any) => a.name?.endsWith(".dmg"));
             releaseData = {
               apk: apk ? { download_url: apk.browser_download_url, size: apk.size } : null,
               ipa: ipa ? { download_url: ipa.browser_download_url, size: ipa.size } : null,
-              exe: exe ? { download_url: exe.browser_download_url, size: exe.size } : null,
-              dmg: dmg ? { download_url: dmg.browser_download_url, size: dmg.size } : null,
             };
           }
         }
@@ -63,14 +57,6 @@ export default function AppDownloadSection() {
               url: releaseData.ipa?.download_url || releaseData.ipa?.downloadUrl || "/api/github/download-ipa?app=customer",
               size: formatSize(releaseData.ipa?.size)
             },
-            windows: {
-              url: releaseData.exe?.download_url || releaseData.exe?.downloadUrl || "/api/github/download-exe?app=customer",
-              size: formatSize(releaseData.exe?.size)
-            },
-            macos: {
-              url: releaseData.dmg?.download_url || releaseData.dmg?.downloadUrl || "/api/github/download-dmg?app=customer",
-              size: formatSize(releaseData.dmg?.size)
-            },
           });
         }
       } catch (err) {
@@ -83,10 +69,8 @@ export default function AppDownloadSection() {
   }, []);
 
   const platformTabs: PlatformTab[] = [
-    { id: "android", name: "Android", badge: "APK", tagline: "For all Android phones & tablets", ext: ".apk", icon: Smartphone },
-    { id: "ios", name: "iOS (Apple)", badge: "IPA", tagline: "For iPhone & iPad devices", ext: ".ipa", icon: Smartphone },
-    { id: "windows", name: "Windows", badge: "EXE", tagline: "Windows 10 / 11 Desktop", ext: ".exe", icon: Monitor },
-    { id: "macos", name: "macOS", badge: "DMG", tagline: "Apple Silicon & Intel Mac", ext: ".dmg", icon: Monitor },
+    { id: "android", name: "Android", badge: "APK", tagline: "For Android phones & tablets", ext: ".apk", icon: Smartphone },
+    { id: "ios", name: "iOS / iPadOS", badge: "IPA", tagline: "Single build for iPhone & iPad", ext: ".ipa", icon: Smartphone },
   ];
 
   const currentPlatformInfo = platforms[selectedPlatform] || platforms.android;
@@ -124,7 +108,7 @@ export default function AppDownloadSection() {
               <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-primary-500/10 border border-primary-500/20 text-primary-400 mb-4 backdrop-blur-md">
                 <Sparkles className="w-4 h-4 animate-spin" />
                 <span className="text-xs font-black uppercase tracking-wider">
-                  Official Downloads — All Platforms
+                  Official Mobile & Tablet Apps
                 </span>
               </div>
 
