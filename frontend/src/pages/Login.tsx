@@ -7,7 +7,8 @@ import {
   signInWithCredential,
   signOut,
   RecaptchaVerifier,
-  signInWithPhoneNumber
+  signInWithPhoneNumber,
+  signInWithCustomToken
 } from "firebase/auth";
 import { Capacitor } from '@capacitor/core';
 import { auth, db } from "../lib/firebase";
@@ -18,9 +19,11 @@ import { useAuthStore } from "../lib/store";
 import PizzaLoader from "../components/ui/PizzaLoader";
 import { withAuthRetry } from "../lib/authRetry";
 import { translateError, logDetailedError } from "../lib/errorTranslator";
-import { Mail, Lock, EyeOff, Eye, AlertCircle, ArrowRight, User, Phone, CheckCircle2 } from "lucide-react";
+import { Mail, Lock, EyeOff, Eye, AlertCircle, ArrowRight, User, Phone, CheckCircle2, ShieldCheck, Zap, Smartphone } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { fetchApi } from "../lib/config";
+import { TruecallerService } from "../plugins/Truecaller";
+import TruecallerQRModal from "../components/auth/TruecallerQRModal";
 
 export default function Login() {
   const [authMethod, setAuthMethod] = useState<'email' | 'phone'>('email');
@@ -32,6 +35,11 @@ export default function Login() {
   const [confirmationResult, setConfirmationResult] = useState<any>(null);
   const [otpSent, setOtpSent] = useState(false);
   const [phoneLoading, setPhoneLoading] = useState(false);
+  const [pinId, setPinId] = useState<string | null>(null);
+  const [phoneOtpMode, setPhoneOtpMode] = useState<'infobip' | 'firebase'>('infobip');
+  const [qrModalOpen, setQrModalOpen] = useState(false);
+  const [webSession, setWebSession] = useState<{ deepLink: string; requestId: string } | null>(null);
+  const [truecallerLoading, setTruecallerLoading] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -177,8 +185,9 @@ export default function Login() {
     }
   };
 
-  const handleSendPhoneOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // 1. Send SMS OTP via Infobip with fallback to Firebase
+  const handleSendInfobipOtp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     setError("");
 
     const cleanPhone = phone.trim().replace(/\D/g, '');
@@ -194,74 +203,252 @@ export default function Login() {
     setPhoneLoading(true);
 
     try {
-      if (!(window as any).recaptchaCustomerVerifier) {
-        (window as any).recaptchaCustomerVerifier = new RecaptchaVerifier(auth, 'recaptcha-customer-login', {
-          size: 'invisible',
-          callback: () => {}
-        });
+      const res = await fetchApi('/api/phone/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phoneNumber: formattedPhone })
+      });
+
+      const data = await res.json().catch(() => null);
+
+      if (res.ok && data?.success) {
+        if (data.pinId) setPinId(data.pinId);
+        setPhoneOtpMode('infobip');
+        setOtpSent(true);
+        toast.success(data.message || "SMS verification code sent!");
+        return;
       }
 
-      const appVerifier = (window as any).recaptchaCustomerVerifier;
-      const confirmation = await signInWithPhoneNumber(auth, formattedPhone, appVerifier);
-      setConfirmationResult(confirmation);
-      setOtpSent(true);
-      toast.success("Verification code sent to your phone!");
+      // If backend reports rate limit or specific issue, fall back to Firebase Recaptcha
+      console.warn("[Login] Infobip SMS notice, attempting Firebase fallback:", data?.error);
+      setPhoneOtpMode('firebase');
+      await sendFirebasePhoneOtp(formattedPhone);
     } catch (err: any) {
-      console.error("Phone OTP error:", err);
-      if ((window as any).recaptchaCustomerVerifier) {
-        try {
-          (window as any).recaptchaCustomerVerifier.clear();
-          delete (window as any).recaptchaCustomerVerifier;
-        } catch (_) {}
+      console.warn("[Login] Send OTP network issue, falling back to Firebase:", err);
+      setPhoneOtpMode('firebase');
+      try {
+        await sendFirebasePhoneOtp(formattedPhone);
+      } catch (fallbackErr: any) {
+        setError(translateError(fallbackErr) || "Failed to send SMS code. Please try again.");
       }
-      setError(translateError(err) || "Failed to send SMS code. Please try again.");
     } finally {
       setPhoneLoading(false);
     }
   };
 
+  const sendFirebasePhoneOtp = async (formattedPhone: string) => {
+    if (!(window as any).recaptchaCustomerVerifier) {
+      (window as any).recaptchaCustomerVerifier = new RecaptchaVerifier(auth, 'recaptcha-customer-login', {
+        size: 'invisible',
+        callback: () => {}
+      });
+    }
+
+    const appVerifier = (window as any).recaptchaCustomerVerifier;
+    const confirmation = await signInWithPhoneNumber(auth, formattedPhone, appVerifier);
+    setConfirmationResult(confirmation);
+    setOtpSent(true);
+    toast.success("Verification code sent to your phone!");
+  };
+
+  // 2. Verify SMS OTP (Infobip signin or Firebase confirm)
   const handleVerifyPhoneOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!confirmationResult || !phoneOtp) return;
+    if (!phoneOtp || phoneOtp.length < 4) return;
 
     setError("");
     setLoading(true);
 
+    const cleanPhone = phone.trim().replace(/\D/g, '');
+    const formattedPhone = cleanPhone.startsWith('91') && cleanPhone.length === 12
+      ? `+${cleanPhone}`
+      : `+91${cleanPhone.slice(-10)}`;
+
     try {
-      const userCredential = await confirmationResult.confirm(phoneOtp.trim());
+      if (phoneOtpMode === 'infobip') {
+        const res = await fetchApi('/api/phone/signin', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            method: 'sms',
+            phoneNumber: formattedPhone,
+            otp: phoneOtp.trim(),
+            pinId: pinId || undefined
+          })
+        });
 
-      // Verify customer authorization
-      await verifyCustomerAccess(userCredential);
+        const data = await res.json().catch(() => null);
 
-      const userDoc = await getDoc(doc(db, "users", userCredential.user.uid));
-      let data: any = null;
-      if (userDoc.exists()) {
-        data = userDoc.data();
+        if (!res.ok || !data?.success || !data?.customToken) {
+          throw new Error(data?.error || "Invalid OTP code. Please try again.");
+        }
+
+        const userCredential = await signInWithCustomToken(auth, data.customToken);
+        await verifyCustomerAccess(userCredential);
+
+        useAuthStore.getState().setUser({
+          uid: userCredential.user.uid,
+          email: data.user?.email || null,
+          name: data.user?.name || "Customer",
+          phone: data.user?.phone || formattedPhone,
+          phoneVerified: true,
+          phoneSetupCompleted: true,
+          locationSetupCompleted: true,
+        }, 'customer');
+
+        toast.success("Welcome back!");
+        navigate("/");
       } else {
-        await setDoc(doc(db, "users", userCredential.user.uid), {
+        // Firebase confirmation fallback
+        if (!confirmationResult) throw new Error("Verification session expired. Please resend code.");
+        const userCredential = await confirmationResult.confirm(phoneOtp.trim());
+        await verifyCustomerAccess(userCredential);
+
+        const userDoc = await getDoc(doc(db, "users", userCredential.user.uid));
+        let userData: any = null;
+        if (userDoc.exists()) {
+          userData = userDoc.data();
+        } else {
+          await setDoc(doc(db, "users", userCredential.user.uid), {
+            phone: userCredential.user.phoneNumber,
+            phoneVerified: true,
+            phoneSetupCompleted: true,
+            role: 'customer',
+            createdAt: new Date().toISOString()
+          }, { merge: true });
+        }
+
+        useAuthStore.getState().setUser({
+          uid: userCredential.user.uid,
+          email: userCredential.user.email || userData?.email,
+          name: userData?.name || "Customer",
           phone: userCredential.user.phoneNumber,
           phoneVerified: true,
           phoneSetupCompleted: true,
-          role: 'customer',
-          createdAt: new Date().toISOString()
-        }, { merge: true });
+          locationSetupCompleted: userData?.locationSetupCompleted ?? false,
+          emailVerified: userCredential.user.emailVerified,
+        }, 'customer');
+
+        toast.success("Welcome back!");
+        navigate("/");
       }
+    } catch (err: any) {
+      setError(err.message || "Invalid OTP code. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 3. Truecaller 1-Tap & Web QR Login
+  const handleTruecallerSignIn = async () => {
+    setError("");
+    setTruecallerLoading(true);
+
+    const cleanPhone = phone.trim().replace(/\D/g, '');
+    const formattedPhone = cleanPhone.length === 10 ? `+91${cleanPhone}` : (cleanPhone.startsWith('91') ? `+${cleanPhone}` : undefined);
+
+    try {
+      if (TruecallerService.isNative()) {
+        const isSupported = await TruecallerService.isNativeSupported();
+        if (!isSupported) {
+          toast("Truecaller 1-Tap is available on devices with Truecaller app installed. Switching to fast SMS OTP.", { icon: '⚡' });
+          return;
+        }
+
+        const nativeResult = await TruecallerService.verifyNative();
+        
+        const res = await fetchApi('/api/phone/signin', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            method: 'truecaller',
+            payload: nativeResult.payload,
+            signature: nativeResult.signature,
+            signatureAlgorithm: (nativeResult as any).signatureAlgorithm
+          })
+        });
+
+        const data = await res.json();
+        if (!res.ok || !data.success || !data.customToken) {
+          throw new Error(data.error || "Truecaller authentication rejected.");
+        }
+
+        const userCredential = await signInWithCustomToken(auth, data.customToken);
+        await verifyCustomerAccess(userCredential);
+
+        useAuthStore.getState().setUser({
+          uid: userCredential.user.uid,
+          email: data.user?.email || null,
+          name: data.user?.name || "Customer",
+          phone: data.user?.phone,
+          phoneVerified: true,
+          phoneSetupCompleted: true,
+          locationSetupCompleted: true,
+        }, 'customer');
+
+        toast.success("Welcome back! Verified via Truecaller ✓");
+        navigate("/");
+      } else {
+        const sessionRes = await TruecallerService.createWebSession(formattedPhone);
+        const isMobileBrowser = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+        if (isMobileBrowser) {
+          setWebSession({ deepLink: sessionRes.deepLink, requestId: sessionRes.requestId });
+          setQrModalOpen(true);
+          window.location.href = sessionRes.deepLink;
+        } else {
+          setWebSession({ deepLink: sessionRes.deepLink, requestId: sessionRes.requestId });
+          setQrModalOpen(true);
+        }
+      }
+    } catch (err: any) {
+      console.error("[Login] Truecaller error:", err);
+      const msg = err.message || "Truecaller verification was cancelled or unavailable.";
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      setTruecallerLoading(false);
+    }
+  };
+
+  const handleTruecallerQRSuccess = async (result: any) => {
+    setQrModalOpen(false);
+    setLoading(true);
+    try {
+      if (!webSession?.requestId) throw new Error("Session expired");
+
+      const res = await fetchApi('/api/phone/signin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          method: 'truecaller',
+          requestId: webSession.requestId
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success || !data.customToken) {
+        throw new Error(data.error || "Failed to sign in with Truecaller.");
+      }
+
+      const userCredential = await signInWithCustomToken(auth, data.customToken);
+      await verifyCustomerAccess(userCredential);
 
       useAuthStore.getState().setUser({
         uid: userCredential.user.uid,
-        email: userCredential.user.email || data?.email,
-        name: data?.name || "Valued Customer",
-        phone: userCredential.user.phoneNumber,
+        email: data.user?.email || null,
+        name: data.user?.name || "Customer",
+        phone: data.user?.phone || result.phone,
         phoneVerified: true,
         phoneSetupCompleted: true,
-        locationSetupCompleted: data?.locationSetupCompleted ?? false,
-        emailVerified: userCredential.user.emailVerified,
+        locationSetupCompleted: true,
       }, 'customer');
 
-      toast.success("Welcome back!");
+      toast.success("Welcome back! Verified via Truecaller ✓");
       navigate("/");
     } catch (err: any) {
-      setError(err.message || "Invalid OTP code. Please try again.");
+      setError(err.message || "Truecaller sign-in failed.");
+      toast.error(err.message || "Truecaller sign-in failed.");
     } finally {
       setLoading(false);
     }
@@ -494,7 +681,7 @@ export default function Login() {
       {authMethod === 'phone' && (
         <div className="space-y-4 relative z-10">
           {!otpSent ? (
-            <form onSubmit={handleSendPhoneOtp} className="space-y-4">
+            <form onSubmit={handleSendInfobipOtp} className="space-y-4">
               <div>
                 <label className="text-xs font-bold text-slate-400 block mb-1">
                   Mobile Number (India)
@@ -515,12 +702,48 @@ export default function Login() {
                 </div>
               </div>
 
+              {/* Truecaller 1-Tap Login */}
+              <button
+                type="button"
+                onClick={handleTruecallerSignIn}
+                disabled={truecallerLoading || phoneLoading}
+                className="w-full min-h-[48px] bg-[#0087FF] hover:bg-[#0077E6] active:scale-[0.98] text-white p-3 rounded-lg font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm cursor-pointer"
+              >
+                {truecallerLoading ? (
+                  <span className="flex items-center gap-2">
+                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Connecting Truecaller...
+                  </span>
+                ) : (
+                  <>
+                    <Zap size={18} className="text-yellow-300 fill-yellow-300" />
+                    1-Tap Login with Truecaller
+                  </>
+                )}
+              </button>
+
+              <div className="flex items-center gap-2 my-1">
+                <div className="flex-grow border-t border-slate-200 dark:border-slate-800"></div>
+                <span className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">Or with OTP</span>
+                <div className="flex-grow border-t border-slate-200 dark:border-slate-800"></div>
+              </div>
+
               <button
                 type="submit"
-                disabled={phoneLoading}
-                className="w-full min-h-[48px] bg-primary-500 hover:bg-primary-600 active:scale-[0.98] text-white p-3 rounded-lg font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                disabled={phoneLoading || phone.length < 10}
+                className="w-full min-h-[48px] bg-primary-500 hover:bg-primary-600 active:scale-[0.98] text-white p-3 rounded-lg font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
               >
-                {phoneLoading ? "Sending SMS..." : "Send Verification Code"}
+                {phoneLoading ? (
+                  <span className="flex items-center gap-2">
+                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Sending SMS...
+                  </span>
+                ) : (
+                  <>
+                    <Phone size={16} />
+                    Continue with SMS OTP
+                  </>
+                )}
               </button>
             </form>
           ) : (
@@ -546,22 +769,33 @@ export default function Login() {
 
               <button
                 type="submit"
-                disabled={loading || phoneOtp.length < 6}
-                className="w-full min-h-[48px] bg-primary-500 hover:bg-primary-600 active:scale-[0.98] text-white p-3 rounded-lg font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                disabled={loading || phoneOtp.length < 4}
+                className="w-full min-h-[48px] bg-primary-500 hover:bg-primary-600 active:scale-[0.98] text-white p-3 rounded-lg font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
               >
                 {loading ? "Verifying..." : "Verify & Sign In"}
               </button>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setOtpSent(false);
-                  setPhoneOtp('');
-                }}
-                className="w-full min-h-[44px] text-xs text-slate-400 hover:text-slate-200 py-2 flex items-center justify-center"
-              >
-                Change Phone Number
-              </button>
+              <div className="flex items-center justify-between text-xs pt-1">
+                <button
+                  type="button"
+                  disabled={phoneLoading}
+                  onClick={() => handleSendInfobipOtp()}
+                  className="text-primary-500 hover:underline font-semibold disabled:opacity-50 cursor-pointer"
+                >
+                  {phoneLoading ? "Resending..." : "Resend Code"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOtpSent(false);
+                    setPhoneOtp('');
+                    setPinId(null);
+                  }}
+                  className="text-slate-400 hover:text-slate-200 py-1 cursor-pointer"
+                >
+                  Change Number
+                </button>
+              </div>
             </form>
           )}
         </div>
@@ -610,6 +844,16 @@ export default function Login() {
           S-Web Hub
         </a>
       </div>
+
+      {/* Truecaller QR Modal for Desktop */}
+      {qrModalOpen && webSession && (
+        <TruecallerQRModal
+          deepLink={webSession.deepLink}
+          requestId={webSession.requestId}
+          onSuccess={handleTruecallerQRSuccess}
+          onClose={() => setQrModalOpen(false)}
+        />
+      )}
     </div>
   );
 }

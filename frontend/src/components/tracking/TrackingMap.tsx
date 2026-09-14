@@ -3,6 +3,7 @@ import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import React from 'react';
+import { Radio, AlertCircle, Navigation, ShieldCheck } from 'lucide-react';
 
 // ─── Global CSS injected into the page ──────────────────────────────────
 const GLOBAL_CSS = `
@@ -25,23 +26,27 @@ const GLOBAL_CSS = `
     animation: route-dash 1.5s linear infinite;
   }
   .premium-popup .leaflet-popup-content-wrapper {
-    background: rgba(255,255,255,0.97);
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(0,0,0,0.08);
-    color: #1e293b;
-    border-radius: 14px;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+    background: rgba(18, 21, 30, 0.95);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: #f8fafc;
+    border-radius: 16px;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.5);
     font-family: 'Inter', sans-serif;
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 600;
   }
   .premium-popup .leaflet-popup-tip-container { display: none; }
   .leaflet-attribution-flag { display: none !important; }
   .leaflet-control-attribution {
-    background: rgba(255,255,255,0.7) !important;
+    background: rgba(10, 13, 20, 0.75) !important;
     backdrop-filter: blur(4px);
     border-radius: 8px 0 0 0 !important;
-    font-size: 10px !important;
+    font-size: 9px !important;
+    color: #94a3b8 !important;
+  }
+  .leaflet-control-attribution a {
+    color: #f97316 !important;
   }
 `;
 
@@ -68,9 +73,9 @@ const customerIcon = new L.DivIcon({
 const restaurantMapIcon = new L.DivIcon({
   html: `
   <div style="position:relative;width:60px;height:74px;display:flex;flex-direction:column;align-items:center;">
-    <div style="position:absolute;top:-24px;left:50%;transform:translateX(-50%);background:white;color:#ea580c;font-size:10px;font-weight:800;padding:2px 9px;border-radius:10px;white-space:nowrap;box-shadow:0 3px 10px rgba(249,115,22,0.22);animation:float-label 2.5s ease-in-out infinite;border:1.5px solid #fed7aa;letter-spacing:0.2px;">🍕 Olive Pizza</div>
-    <div style="position:relative;z-index:10;width:44px;height:44px;border-radius:14px;background:linear-gradient(135deg,#fff7ed,#ffedd5);display:flex;align-items:center;justify-content:center;box-shadow:0 8px 22px rgba(249,115,22,0.28),inset 0 1px 4px rgba(255,255,255,0.9);border:2px solid #f97316;margin-top:25px;">
-      <span style="font-size:24px;line-height:1;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.15));">🍕</span>
+    <div style="position:absolute;top:-24px;left:50%;transform:translateX(-50%);background:#18181b;color:#f97316;font-size:10px;font-weight:800;padding:2px 9px;border-radius:10px;white-space:nowrap;box-shadow:0 3px 10px rgba(0,0,0,0.4);animation:float-label 2.5s ease-in-out infinite;border:1.5px solid rgba(249,115,22,0.4);letter-spacing:0.2px;">🍕 Olive Pizza</div>
+    <div style="position:relative;z-index:10;width:44px;height:44px;border-radius:14px;background:linear-gradient(135deg,#1f130b,#2d1a0c);display:flex;align-items:center;justify-content:center;box-shadow:0 8px 22px rgba(249,115,22,0.3),inset 0 1px 4px rgba(255,255,255,0.2);border:2px solid #f97316;margin-top:25px;">
+      <span style="font-size:24px;line-height:1;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.3));">🍕</span>
     </div>
     <div style="width:2.5px;height:9px;background:linear-gradient(to bottom,#f97316,transparent);margin-top:-1px;z-index:9;border-radius:2px;"></div>
   </div>`,
@@ -83,8 +88,10 @@ const restaurantMapIcon = new L.DivIcon({
 const riderIcon = new L.DivIcon({
   html: `
   <div style="position:relative;width:64px;height:64px;display:flex;align-items:center;justify-content:center;transform-origin:center;">
-    <div style="position:absolute;inset:0;border-radius:50%;background:rgba(255,247,237,0.92);border:2px solid rgba(249,115,22,0.4);animation:rider-glow 2s infinite;"></div>
-    <div style="position:relative;z-index:10;font-size:28px;line-height:1;filter:drop-shadow(0 3px 8px rgba(0,0,0,0.22));">🛵</div>
+    <div style="position:absolute;inset:0;border-radius:50%;background:rgba(249,115,22,0.25);border:2px solid rgba(249,115,22,0.6);animation:rider-glow 2s infinite;"></div>
+    <div style="position:relative;z-index:10;width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,#ea580c,#f97316);display:flex;align-items:center;justify-content:center;box-shadow:0 6px 18px rgba(234,88,12,0.5);border:2px solid white;">
+      <span style="font-size:22px;line-height:1;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.3));">🛵</span>
+    </div>
   </div>`,
   className: '',
   iconSize: [64, 64],
@@ -98,11 +105,12 @@ function FitBounds({ points }: { points: [number, number][] }) {
 
   useEffect(() => {
     if (points.length === 0) return;
-    // Only auto-fit once we have multiple points (restaurant + customer or partner)
     if (fitted.current && points.length === 1) return;
-    const bounds = L.latLngBounds(points.map(p => L.latLng(p[0], p[1])));
-    map.fitBounds(bounds, { padding: [75, 75], maxZoom: 16, animate: true });
-    if (points.length > 1) fitted.current = true;
+    try {
+      const bounds = L.latLngBounds(points.map(p => L.latLng(p[0], p[1])));
+      map.fitBounds(bounds, { padding: [60, 60], maxZoom: 16, animate: true });
+      if (points.length > 1) fitted.current = true;
+    } catch {}
   }, [points.length, points[0]?.[0], points[0]?.[1]]);
 
   return null;
@@ -133,19 +141,18 @@ function SmoothMarker({
     let startH = prevHeading.current;
     let endH = heading || 0;
 
-    // Shortest-path rotation
     let diff = endH - startH;
     while (diff < -180) diff += 360;
     while (diff > 180) diff -= 360;
     endH = startH + diff;
 
-    const duration = 2000;
+    const duration = 1800;
     const startTime = Date.now();
     let rafId: number;
 
     const tick = () => {
       const t = Math.min((Date.now() - startTime) / duration, 1);
-      const ease = 1 - Math.pow(1 - t, 3); // cubic ease-out
+      const ease = 1 - Math.pow(1 - t, 3);
 
       marker.setLatLng([
         startLat + (endLat - startLat) * ease,
@@ -178,7 +185,7 @@ function SmoothMarker({
 }
 
 // ─── Main TrackingMap Component ───────────────────────────────────────────
-interface TrackingMapProps {
+export interface TrackingMapProps {
   restaurantLat: number;
   restaurantLng: number;
   customerLat?: number;
@@ -186,7 +193,10 @@ interface TrackingMapProps {
   partnerLat?: number;
   partnerLng?: number;
   partnerHeading?: number;
+  partnerName?: string;
   status: string;
+  lastTelemetryAt?: string | number | null;
+  onRouteChange?: (info: { distanceKm: number | null; durationMinutes: number | null; routeStatus: 'available' | 'unavailable' }) => void;
 }
 
 const TrackingMap = React.memo(function TrackingMap({
@@ -197,15 +207,17 @@ const TrackingMap = React.memo(function TrackingMap({
   partnerLat,
   partnerLng,
   partnerHeading,
+  partnerName,
   status,
+  lastTelemetryAt,
+  onRouteChange,
 }: TrackingMapProps) {
-  // Initial map center: partner position if available, else restaurant
   const center = useMemo<[number, number]>(() => {
     if (partnerLat && partnerLng) return [partnerLat, partnerLng];
+    if (customerLat && customerLng) return [customerLat, customerLng];
     return [restaurantLat, restaurantLng];
-  }, [restaurantLat, restaurantLng, partnerLat, partnerLng]);
+  }, [restaurantLat, restaurantLng, customerLat, customerLng, partnerLat, partnerLng]);
 
-  // Points to fit in view
   const fitPoints = useMemo<[number, number][]>(() => {
     const pts: [number, number][] = [[restaurantLat, restaurantLng]];
     if (customerLat && customerLng) pts.push([customerLat, customerLng]);
@@ -215,48 +227,79 @@ const TrackingMap = React.memo(function TrackingMap({
 
   // Real-road route via OSRM
   const [routeCoords, setRouteCoords] = useState<[number, number][]>([]);
+  const [routeStatus, setRouteStatus] = useState<'available' | 'unavailable' | 'loading'>('loading');
+
+  // GPS Telemetry Freshness Assessment
+  const telemetryAgeSeconds = useMemo(() => {
+    if (!lastTelemetryAt) return null;
+    const timeMs = typeof lastTelemetryAt === 'number' ? lastTelemetryAt : new Date(lastTelemetryAt).getTime();
+    return Math.max(0, Math.floor((Date.now() - timeMs) / 1000));
+  }, [lastTelemetryAt, partnerLat, partnerLng]);
+
+  const gpsStatus = useMemo<'live' | 'stale' | 'unavailable'>(() => {
+    if (!partnerLat || !partnerLng) return 'unavailable';
+    if (telemetryAgeSeconds === null) return 'live';
+    return telemetryAgeSeconds <= 45 ? 'live' : 'stale';
+  }, [partnerLat, partnerLng, telemetryAgeSeconds]);
 
   useEffect(() => {
     const fetchRoute = async () => {
       const waypoints: string[] = [];
 
-      if (status === 'out_for_delivery') {
+      if (status === 'out_for_delivery' || status === 'picked_up') {
         waypoints.push(
           partnerLat && partnerLng
             ? `${partnerLng},${partnerLat}`
             : `${restaurantLng},${restaurantLat}`
         );
-        if (customerLat && customerLng) waypoints.push(`${customerLng},${customerLat}`);
-        else return; // can't draw route without destination
+        if (customerLat && customerLng) {
+          waypoints.push(`${customerLng},${customerLat}`);
+        } else {
+          setRouteStatus('unavailable');
+          onRouteChange?.({ distanceKm: null, durationMinutes: null, routeStatus: 'unavailable' });
+          return;
+        }
       } else {
         waypoints.push(`${restaurantLng},${restaurantLat}`);
-        if (partnerLat && partnerLng) waypoints.push(`${partnerLng},${partnerLat}`);
-        if (customerLat && customerLng) waypoints.push(`${customerLng},${customerLat}`);
+        if (customerLat && customerLng) {
+          waypoints.push(`${customerLng},${customerLat}`);
+        } else {
+          setRouteStatus('unavailable');
+          onRouteChange?.({ distanceKm: null, durationMinutes: null, routeStatus: 'unavailable' });
+          return;
+        }
       }
 
-      if (waypoints.length < 2) return;
+      if (waypoints.length < 2) {
+        setRouteStatus('unavailable');
+        onRouteChange?.({ distanceKm: null, durationMinutes: null, routeStatus: 'unavailable' });
+        return;
+      }
 
       try {
         const res = await fetch(
           `https://router.project-osrm.org/route/v1/driving/${waypoints.join(';')}?overview=full&geometries=geojson`
         );
         const data = await res.json();
-        if (data.routes?.[0]) {
-          setRouteCoords(
-            data.routes[0].geometry.coordinates.map((c: number[]) => [c[1], c[0]] as [number, number])
-          );
-        }
-      } catch {
-        // Straight-line fallback
-        const fb: [number, number][] = [];
-        if (status === 'out_for_delivery') {
-          fb.push(partnerLat && partnerLng ? [partnerLat, partnerLng] : [restaurantLat, restaurantLng]);
-          if (customerLat && customerLng) fb.push([customerLat, customerLng]);
+        if (data.routes?.[0]?.geometry?.coordinates) {
+          const coords = data.routes[0].geometry.coordinates.map((c: number[]) => [c[1], c[0]] as [number, number]);
+          setRouteCoords(coords);
+          setRouteStatus('available');
+
+          const durationSeconds = data.routes[0].duration || 0;
+          const distanceMeters = data.routes[0].distance || 0;
+
+          const durationMinutes = Math.max(1, Math.ceil(durationSeconds / 60));
+          const distanceKm = Math.round((distanceMeters / 1000) * 10) / 10;
+
+          onRouteChange?.({ distanceKm, durationMinutes, routeStatus: 'available' });
         } else {
-          fb.push([restaurantLat, restaurantLng]);
-          if (customerLat && customerLng) fb.push([customerLat, customerLng]);
+          throw new Error('No route returned by OSRM');
         }
-        setRouteCoords(fb);
+      } catch (e) {
+        setRouteCoords([]);
+        setRouteStatus('unavailable');
+        onRouteChange?.({ distanceKm: null, durationMinutes: null, routeStatus: 'unavailable' });
       }
     };
 
@@ -265,9 +308,54 @@ const TrackingMap = React.memo(function TrackingMap({
     return () => clearInterval(id);
   }, [restaurantLat, restaurantLng, partnerLat, partnerLng, customerLat, customerLng, status]);
 
+  const popupText = partnerName 
+    ? `🛵 ${partnerName} is on the way!` 
+    : "🛵 Your delivery partner is on the way!";
+
   return (
-    <div className="w-full h-full relative">
+    <div className="w-full h-full relative rounded-2xl overflow-hidden bg-[#0a0d14]">
       <style>{GLOBAL_CSS}</style>
+
+      {/* Floating Truthful Telemetry Badge */}
+      <div className="absolute top-3 left-3 z-[400] flex flex-col gap-1.5 pointer-events-none">
+        {status === 'out_for_delivery' || status === 'picked_up' ? (
+          <div className={`px-3 py-1.5 rounded-xl backdrop-blur-md border text-[11px] font-bold flex items-center gap-2 shadow-lg ${
+            gpsStatus === 'live'
+              ? 'bg-emerald-950/80 border-emerald-500/30 text-emerald-400'
+              : gpsStatus === 'stale'
+              ? 'bg-amber-950/80 border-amber-500/30 text-amber-400'
+              : 'bg-slate-900/80 border-white/10 text-slate-400'
+          }`}>
+            <span className="relative flex h-2 w-2">
+              {gpsStatus === 'live' && (
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+              )}
+              <span className={`relative inline-flex rounded-full h-2 w-2 ${
+                gpsStatus === 'live' ? 'bg-emerald-500' : gpsStatus === 'stale' ? 'bg-amber-500' : 'bg-slate-500'
+              }`} />
+            </span>
+            <span>
+              {gpsStatus === 'live'
+                ? 'Rider location updated just now'
+                : gpsStatus === 'stale'
+                ? 'Rider location is temporarily unavailable'
+                : 'Awaiting rider telemetry'}
+            </span>
+          </div>
+        ) : (
+          <div className="px-3 py-1.5 rounded-xl backdrop-blur-md border border-white/10 bg-slate-900/80 text-[11px] font-bold text-slate-300 flex items-center gap-2 shadow-lg">
+            <Radio className="w-3.5 h-3.5 text-primary-400 animate-pulse" />
+            <span>Kitchen prep in progress</span>
+          </div>
+        )}
+
+        {routeStatus === 'unavailable' && (
+          <div className="px-3 py-1 rounded-xl backdrop-blur-md border border-amber-500/20 bg-amber-950/70 text-[10px] font-medium text-amber-300 flex items-center gap-1.5 shadow-md">
+            <AlertCircle className="w-3 h-3" />
+            <span>Route information is temporarily unavailable</span>
+          </div>
+        )}
+      </div>
 
       <MapContainer
         center={center}
@@ -276,7 +364,6 @@ const TrackingMap = React.memo(function TrackingMap({
         zoomControl={false}
         attributionControl={true}
       >
-        {/* ── Natural OpenStreetMap Standard Tiles (Zero API Key Required) ── */}
         <TileLayer
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -285,28 +372,25 @@ const TrackingMap = React.memo(function TrackingMap({
 
         <FitBounds points={fitPoints} />
 
-        {/* ── Route Lines ── */}
+        {/* ── Route Polylines ── */}
         {routeCoords.length >= 2 && (
           <>
-            {/* Wide soft glow */}
             <Polyline
               positions={routeCoords}
-              pathOptions={{ color: '#3b82f6', weight: 16, opacity: 0.10, lineCap: 'round', lineJoin: 'round' }}
+              pathOptions={{ color: '#ea580c', weight: 14, opacity: 0.15, lineCap: 'round', lineJoin: 'round' }}
             />
-            {/* Core road line */}
             <Polyline
               positions={routeCoords}
-              pathOptions={{ color: '#2563eb', weight: 5, opacity: 0.85, lineCap: 'round', lineJoin: 'round' }}
+              pathOptions={{ color: '#f97316', weight: 4.5, opacity: 0.9, lineCap: 'round', lineJoin: 'round' }}
             />
-            {/* Animated white dashes on top when en-route */}
             <Polyline
               positions={routeCoords}
               pathOptions={{
                 color: '#ffffff',
-                weight: 2.5,
-                opacity: 0.9,
-                dashArray: status === 'out_for_delivery' ? '12, 14' : '0',
-                className: status === 'out_for_delivery' ? 'route-path-animated' : '',
+                weight: 2,
+                opacity: 0.85,
+                dashArray: (status === 'out_for_delivery' || status === 'picked_up') ? '10, 14' : '0',
+                className: (status === 'out_for_delivery' || status === 'picked_up') ? 'route-path-animated' : '',
               }}
             />
           </>
@@ -315,18 +399,18 @@ const TrackingMap = React.memo(function TrackingMap({
         {/* Restaurant pin */}
         <Marker position={[restaurantLat, restaurantLng]} icon={restaurantMapIcon} zIndexOffset={100} />
 
-        {/* Customer / destination pin */}
+        {/* Customer destination pin */}
         {customerLat && customerLng && (
           <Marker position={[customerLat, customerLng]} icon={customerIcon} zIndexOffset={150} />
         )}
 
-        {/* Rider — smooth animated, only visible when out for delivery */}
-        {partnerLat && partnerLng && status === 'out_for_delivery' && (
+        {/* Rider marker — only when coordinates exist and order is on the way */}
+        {partnerLat && partnerLng && (status === 'out_for_delivery' || status === 'picked_up') && (
           <SmoothMarker
             position={[partnerLat, partnerLng]}
             heading={partnerHeading}
             icon={riderIcon}
-            popupText="🛵 Your delivery partner is on the way!"
+            popupText={popupText}
           />
         )}
       </MapContainer>

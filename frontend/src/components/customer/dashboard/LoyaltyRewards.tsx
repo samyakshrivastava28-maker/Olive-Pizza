@@ -1,18 +1,63 @@
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Award, Sparkles, Gift, Check, ArrowRight, Star, Zap } from "lucide-react";
+import { Award, Sparkles, Gift, Check, ArrowRight, Star, Zap, History, ArrowUpRight, ArrowDownLeft } from "lucide-react";
 import { Link } from "react-router";
 import { TiltCard } from "../../ui/TiltCard";
 import { GlassButton } from "../../ui/glass/GlassSystem";
+import { auth } from "../../../lib/firebase";
+import { fetchApi } from "../../../lib/config";
 
 interface Props {
-  stats: any;
+  stats?: any;
+  loyaltyData?: any;
 }
 
-export default function LoyaltyRewards({ stats }: Props) {
-  const points = stats?.rewardPoints || 0;
+export default function LoyaltyRewards({ stats, loyaltyData: propLoyaltyData }: Props) {
+  const [loyalty, setLoyalty] = useState<any>(propLoyaltyData || null);
+  const [loading, setLoading] = useState(!propLoyaltyData);
+
+  useEffect(() => {
+    if (propLoyaltyData) {
+      setLoyalty(propLoyaltyData);
+      setLoading(false);
+      return;
+    }
+
+    const fetchAuthoritativeLoyalty = async () => {
+      if (!auth.currentUser) {
+        setLoading(false);
+        return;
+      }
+      try {
+        const token = await auth.currentUser.getIdToken();
+        const res = await fetchApi('/api/user/loyalty', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success) {
+            setLoyalty(data);
+          }
+        }
+      } catch (err) {
+        console.warn("[LoyaltyRewards] Notice fetching loyalty:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAuthoritativeLoyalty();
+  }, [propLoyaltyData]);
+
+  const points = loyalty?.balance !== undefined ? loyalty.balance : (stats?.rewardPoints || 0);
 
   // Determine Tier & Next Tier Target
-  let currentTier = "Bronze";
+  let currentTier = loyalty?.tier || "Bronze";
+  if (currentTier === "BRONZE") currentTier = "Bronze";
+  if (currentTier === "SILVER") currentTier = "Silver";
+  if (currentTier === "GOLD") currentTier = "Gold";
+  if (currentTier === "PLATINUM") currentTier = "Platinum";
+
   let nextTier = "Silver";
   let targetPoints = 200;
   let progressPercent = Math.min(100, Math.round((points / 200) * 100));
@@ -195,6 +240,68 @@ export default function LoyaltyRewards({ stats }: Props) {
             </GlassButton>
           </Link>
         </TiltCard>
+      </div>
+
+      {/* Real Transaction History / Ledger */}
+      <div className="rounded-3xl bg-[#12151E] border border-white/10 p-6 shadow-xl">
+        <div className="flex items-center justify-between mb-4">
+          <h4 className="text-lg font-bold text-white flex items-center gap-2">
+            <History size={18} className="text-amber-400" /> Points History
+          </h4>
+          <span className="text-xs text-slate-400">
+            {loyalty?.history?.length || 0} transaction{loyalty?.history?.length === 1 ? '' : 's'}
+          </span>
+        </div>
+
+        {loading ? (
+          <div className="py-8 text-center text-xs text-slate-400">Loading points history...</div>
+        ) : !loyalty?.history || loyalty.history.length === 0 ? (
+          <div className="py-10 px-4 text-center rounded-2xl bg-white/[0.02] border border-white/5">
+            <Award className="w-10 h-10 text-slate-600 mx-auto mb-2" />
+            <p className="text-sm font-bold text-slate-300">No point transactions yet</p>
+            <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+              Place an order from our wood-fired menu to earn points and level up your membership tier!
+            </p>
+          </div>
+        ) : (
+          <div className="divide-y divide-white/5 max-h-72 overflow-y-auto pr-1">
+            {loyalty.history.map((item: any, idx: number) => {
+              const isEarn = item.type === 'earned' || item.points > 0;
+              const formattedDate = item.createdAt
+                ? new Date(item.createdAt).toLocaleDateString("en-IN", {
+                    day: 'numeric',
+                    month: 'short',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })
+                : 'Recent';
+
+              return (
+                <div key={item.id || idx} className="py-3.5 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
+                      isEarn ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                    }`}>
+                      {isEarn ? <ArrowUpRight size={16} /> : <ArrowDownLeft size={16} />}
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-white">
+                        {item.reason || (isEarn ? 'Order Reward Points' : 'Points Redeemed')}
+                      </p>
+                      <p className="text-[10px] text-slate-400">{formattedDate}</p>
+                    </div>
+                  </div>
+                  <span className={`text-xs font-black font-mono ${
+                    isEarn ? 'text-emerald-400' : 'text-amber-400'
+                  }`}>
+                    {isEarn ? `+${Math.abs(item.points)} pts` : `-${Math.abs(item.points)} pts`}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );

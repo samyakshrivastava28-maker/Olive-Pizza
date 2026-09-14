@@ -48,8 +48,7 @@ import { OwnerAcceptedOverlay, DeliveredOverlay } from "../components/tracking/O
 import { toast } from "react-hot-toast";
 import { playNotificationSound, statusToSoundType } from "../hooks/useNotificationSound";
 import OrderTimeline from "../components/ui/OrderTimeline";
-import UniversalMap3D from "../components/map/UniversalMap3D";
-import type { MapMarker } from "../components/map/UniversalMap3D";
+import TrackingMap from "../components/tracking/TrackingMap";
 import { fetchRoute } from "../services/navigationRouting.service";
 import SEO from "../components/SEO";
 import { useLiveOrderTracking } from "../hooks/useLiveOrderTracking";
@@ -442,7 +441,7 @@ export default function OrderTracking() {
           step: getStageIndex(order.status) + 1,
           itemsSummary,
           totalAmount: Number(order.totalAmount || 0),
-          etaMinutes: eta || order.estimatedDeliveryMinutes || (order.estimatedDeliveryTime ? parseInt(order.estimatedDeliveryTime) : 25),
+          etaMinutes: eta || null,
           riderName: partnerDetails?.name || order.deliveryPartnerName || '',
           riderPhone: partnerDetails?.phone || order.deliveryPartnerPhone || '',
           restaurantName: 'Olive Pizza',
@@ -751,28 +750,6 @@ export default function OrderTracking() {
       if (offlineTimerRef.current) clearTimeout(offlineTimerRef.current);
     };
   }, [order?.deliveryPartnerId, order?.status, orderId, resetOfflineTimer]);
-
-  // ── Fallback ETA ──
-  useEffect(() => {
-    if (!order || LOCKED_STATUSES.has(order.status)) return;
-    switch (order.status) {
-      case "accepted":
-        setEta(25);
-        break;
-      case "preparing":
-        setEta(18);
-        break;
-      case "ready":
-      case "partner_assigned":
-        setEta(12);
-        break;
-      case "picked_up":
-        setEta(8);
-        break;
-      default:
-        break;
-    }
-  }, [order?.status]);
 
   const handleCancel = async () => {
     if (!orderId || cancelling) return;
@@ -1120,37 +1097,6 @@ export default function OrderTracking() {
     return { lat: RESTAURANT_LOCATION.lat, lng: RESTAURANT_LOCATION.lng };
   }, [partnerLocation, order?.deliveryAddress]);
 
-  const mapMarkers: MapMarker[] = useMemo(() => {
-    const list: MapMarker[] = [
-      {
-        id: 'restaurant',
-        position: { lat: RESTAURANT_LOCATION.lat, lng: RESTAURANT_LOCATION.lng },
-        type: 'restaurant',
-        label: 'Olive Pizza (Gokul Nagar)',
-      }
-    ];
-
-    if (order?.deliveryAddress?.lat && order?.deliveryAddress?.lng) {
-      list.push({
-        id: 'customer',
-        position: { lat: Number(order.deliveryAddress.lat), lng: Number(order.deliveryAddress.lng) },
-        type: 'customer',
-        label: order.deliveryAddress?.addressLine || order.deliveryAddress?.address || 'Your Delivery Location',
-      });
-    }
-
-    if (partnerLocation && TRACKABLE_STATUSES.has(order?.status) && (order?.status === 'picked_up' || order?.status === 'out_for_delivery')) {
-      list.push({
-        id: 'rider',
-        position: partnerLocation,
-        type: 'rider',
-        heading: partnerHeading,
-      });
-    }
-
-    return list;
-  }, [order?.deliveryAddress, partnerLocation, partnerHeading, order?.status]);
-
   return (
     <>
       <SEO title="Track Your Order" noIndex={true} />
@@ -1233,15 +1179,21 @@ export default function OrderTracking() {
                   {/* Timing & Distance Pill */}
                   <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center p-3 sm:p-0 rounded-2xl bg-white/[0.03] sm:bg-transparent border sm:border-0 border-white/5 shrink-0">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                      {order.status === 'out_for_delivery' ? 'Estimated Arrival' : 'Standard Window'}
+                      Estimated Arrival
                     </span>
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-2xl font-black text-[#FFB693]">
-                        {eta ? `${eta}` : '25-35'}
+                    {eta !== null ? (
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-2xl font-black text-[#FFB693]">
+                          {eta}
+                        </span>
+                        <span className="text-xs font-bold text-slate-400">min</span>
+                      </div>
+                    ) : (
+                      <span className="text-xs font-semibold text-slate-400 mt-1">
+                        Arrival time unavailable
                       </span>
-                      <span className="text-xs font-bold text-slate-400">min</span>
-                    </div>
-                    {distance && (
+                    )}
+                    {distance !== null && (
                       <span className="text-[10px] text-blue-400 font-semibold mt-0.5">
                         📍 {distance} km away
                       </span>
@@ -1301,54 +1253,84 @@ export default function OrderTracking() {
                   </span>
                   <span className="text-[11px] text-slate-400 font-mono">OpenStreetMap</span>
                 </div>
-                <div className="relative w-full h-[220px] rounded-2xl overflow-hidden bg-[#0A0D14]">
-                  <UniversalMap3D
-                    mode="customer"
-                    center={mapCenter}
-                    routeGeoJSON={routeGeoJSON}
-                    markers={mapMarkers}
-                    zoom={14}
-                    className="w-full h-full rounded-2xl"
+                <div className="relative w-full h-[260px] rounded-2xl overflow-hidden bg-[#0A0D14]">
+                  <TrackingMap
+                    restaurantLat={RESTAURANT_LOCATION.lat}
+                    restaurantLng={RESTAURANT_LOCATION.lng}
+                    customerLat={order?.deliveryAddress?.lat ? Number(order.deliveryAddress.lat) : undefined}
+                    customerLng={order?.deliveryAddress?.lng ? Number(order.deliveryAddress.lng) : undefined}
+                    partnerLat={partnerLocation?.lat}
+                    partnerLng={partnerLocation?.lng}
+                    partnerHeading={partnerHeading}
+                    partnerName={partnerDetails?.name}
+                    status={order.status}
+                    lastTelemetryAt={order?.driverLocation?.updatedAt || order?.updatedAt}
+                    onRouteChange={({ distanceKm, durationMinutes, routeStatus }) => {
+                      if (routeStatus === 'available') {
+                        if (distanceKm !== null) setDistance(distanceKm);
+                        if (durationMinutes !== null) setEta(durationMinutes);
+                      } else {
+                        setDistance(null);
+                        setEta(null);
+                      }
+                    }}
                   />
                 </div>
               </div>
 
-              {/* 3. Delivery Partner Info Card (Only if assigned) */}
-              {partnerDetails && ['partner_assigned', 'picked_up', 'out_for_delivery'].includes(order.status) && (
+              {/* 3. Delivery Partner Info Card */}
+              {['partner_assigned', 'picked_up', 'out_for_delivery'].includes(order.status) && (
                 <div className="p-5 rounded-3xl bg-[#12151E] border border-white/10 flex items-center justify-between gap-4 shadow-lg">
-                  <div className="flex items-center gap-3.5 min-w-0">
-                    <div className="relative shrink-0">
-                      <div className="w-12 h-12 rounded-2xl bg-orange-500/10 border border-orange-500/30 flex items-center justify-center overflow-hidden">
-                        {partnerDetails.photoUrl ? (
-                          <img src={partnerDetails.photoUrl} alt="" className="w-full h-full object-cover" />
-                        ) : (
-                          <Truck className="w-6 h-6 text-orange-400" />
-                        )}
+                  {partnerDetails ? (
+                    <>
+                      <div className="flex items-center gap-3.5 min-w-0">
+                        <div className="relative shrink-0">
+                          <div className="w-12 h-12 rounded-2xl bg-orange-500/10 border border-orange-500/30 flex items-center justify-center overflow-hidden">
+                            {partnerDetails.photoUrl ? (
+                              <img src={partnerDetails.photoUrl} alt="" className="w-full h-full object-cover" />
+                            ) : (
+                              <Truck className="w-6 h-6 text-orange-400" />
+                            )}
+                          </div>
+                          <div className="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-emerald-500 border-2 border-[#12151E] rounded-full" />
+                        </div>
+
+                        <div className="min-w-0">
+                          <span className="text-[10px] font-black uppercase tracking-wider text-orange-400 block">
+                            Delivery Partner
+                          </span>
+                          <h4 className="text-base font-bold text-white truncate">
+                            {partnerDetails.name || "Delivery Partner"}
+                          </h4>
+                          <p className="text-xs text-slate-400 truncate">
+                            {partnerDetails.vehicleType || "Scooter"}{partnerDetails.vehicleNumber ? ` · ${partnerDetails.vehicleNumber}` : ""}
+                          </p>
+                        </div>
                       </div>
-                      <div className="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-emerald-500 border-2 border-[#12151E] rounded-full" />
-                    </div>
 
-                    <div className="min-w-0">
-                      <span className="text-[10px] font-black uppercase tracking-wider text-orange-400 block">
-                        Delivery Partner
-                      </span>
-                      <h4 className="text-base font-bold text-white truncate">
-                        {partnerDetails.name || "Delivery Partner"}
-                      </h4>
-                      <p className="text-xs text-slate-400 truncate">
-                        {partnerDetails.vehicleType || "Scooter"}{partnerDetails.vehicleNumber ? ` · ${partnerDetails.vehicleNumber}` : ""}
-                      </p>
+                      {partnerDetails.phone && (
+                        <a
+                          href={`tel:${partnerDetails.phone}`}
+                          className="w-11 h-11 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white flex items-center justify-center shadow-lg shadow-emerald-500/20 active:scale-95 transition-all shrink-0"
+                          aria-label="Call Partner"
+                        >
+                          <Phone className="w-5 h-5" />
+                        </a>
+                      )}
+                    </>
+                  ) : (
+                    <div className="flex items-center gap-3.5">
+                      <div className="w-12 h-12 rounded-2xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-orange-400">
+                        <Truck className="w-6 h-6 animate-pulse" />
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-black uppercase tracking-wider text-orange-400 block">
+                          Delivery Partner
+                        </span>
+                        <h4 className="text-sm font-bold text-white">Assigning partner...</h4>
+                        <p className="text-xs text-slate-400">Rider details will appear as soon as assigned</p>
+                      </div>
                     </div>
-                  </div>
-
-                  {partnerDetails.phone && (
-                    <a
-                      href={`tel:${partnerDetails.phone}`}
-                      className="w-11 h-11 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white flex items-center justify-center shadow-lg shadow-emerald-500/20 active:scale-95 transition-all shrink-0"
-                      aria-label="Call Partner"
-                    >
-                      <Phone className="w-5 h-5" />
-                    </a>
                   )}
                 </div>
               )}
@@ -1489,29 +1471,28 @@ export default function OrderTracking() {
                   <span className="text-[11px] text-slate-400 font-mono">OpenStreetMap 2.5D</span>
                 </div>
 
-                <div className="relative w-full h-[460px] rounded-2xl overflow-hidden bg-[#0A0D14]">
-                  <UniversalMap3D
-                    mode="customer"
-                    center={mapCenter}
-                    routeGeoJSON={routeGeoJSON}
-                    markers={mapMarkers}
-                    zoom={14}
-                    className="w-full h-full rounded-2xl"
+                <div className="relative w-full h-[520px] rounded-2xl overflow-hidden bg-[#0A0D14]">
+                  <TrackingMap
+                    restaurantLat={RESTAURANT_LOCATION.lat}
+                    restaurantLng={RESTAURANT_LOCATION.lng}
+                    customerLat={order?.deliveryAddress?.lat ? Number(order.deliveryAddress.lat) : undefined}
+                    customerLng={order?.deliveryAddress?.lng ? Number(order.deliveryAddress.lng) : undefined}
+                    partnerLat={partnerLocation?.lat}
+                    partnerLng={partnerLocation?.lng}
+                    partnerHeading={partnerHeading}
+                    partnerName={partnerDetails?.name}
+                    status={order.status}
+                    lastTelemetryAt={order?.driverLocation?.updatedAt || order?.updatedAt}
+                    onRouteChange={({ distanceKm, durationMinutes, routeStatus }) => {
+                      if (routeStatus === 'available') {
+                        if (distanceKm !== null) setDistance(distanceKm);
+                        if (durationMinutes !== null) setEta(durationMinutes);
+                      } else {
+                        setDistance(null);
+                        setEta(null);
+                      }
+                    }}
                   />
-                  
-                  {/* Floating Map Status Info */}
-                  <div className="absolute bottom-3 left-3 right-3 p-3 rounded-xl bg-[#0C0E14]/90 backdrop-blur-md border border-white/10 flex items-center justify-between text-xs pointer-events-none">
-                    <div className="flex items-center gap-2">
-                      <span className="relative flex h-2 w-2">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-                      </span>
-                      <span className="font-bold text-white">Live Fulfill Route</span>
-                    </div>
-                    <span className="text-slate-400 font-mono text-[11px]">
-                      {distance ? `${distance} km` : 'Active'}
-                    </span>
-                  </div>
                 </div>
               </div>
             </div>

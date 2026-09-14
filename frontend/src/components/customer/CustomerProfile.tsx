@@ -6,6 +6,8 @@ import toast from 'react-hot-toast';
 import FloatingLines from '../../components/ui/FloatingLines';
 import PhoneUpdateModal from './dashboard/PhoneUpdateModal';
 import { Camera, Mail, MapPin, BellRing, Phone } from 'lucide-react';
+import { fetchApi } from '../../lib/config';
+import { useAuthStore } from '../../lib/store';
 
 export default function CustomerProfile() {
   const [profile, setProfile] = useState({
@@ -57,17 +59,43 @@ export default function CustomerProfile() {
     if (!auth.currentUser) return;
     setSaving(true);
     try {
+      const token = await auth.currentUser.getIdToken();
+      const res = await fetchApi('/api/user/profile', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          name: profile.name,
+          photoURL: profile.photoURL
+        })
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || (data && data.success === false)) {
+        throw new Error(data?.error || "Failed to update profile on server");
+      }
+
+      // Sync notification settings in Firestore
       const docRef = doc(db, 'users', auth.currentUser.uid);
       await updateDoc(docRef, {
-        name: profile.name,
         notifications: profile.notifications
-        // phone is updated securely via PhoneUpdateModal
-        // photoURL is updated separately
-      });
+      }).catch(() => {});
+
+      // Sync auth store
+      const currentUser = useAuthStore.getState().user;
+      if (currentUser) {
+        useAuthStore.getState().setUser({
+          ...currentUser,
+          name: profile.name,
+          photoURL: profile.photoURL
+        }, useAuthStore.getState().role || 'customer');
+      }
+
       toast.success("Profile updated successfully!");
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to update profile", err);
-      toast.error("Failed to update profile.");
+      toast.error(err.message || "Failed to update profile.");
     } finally {
       setSaving(false);
     }

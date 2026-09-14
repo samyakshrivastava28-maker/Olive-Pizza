@@ -240,6 +240,7 @@ function AppContent() {
                 <Route element={<CustomerGuard />}>
                   <Route element={<Suspense fallback={<PizzaLoader />}><OnboardingGuard /></Suspense>}>
                     <Route path="/dashboard" element={<CustomerDashboard />} />
+                    <Route path="/profile" element={<CustomerDashboard />} />
                   </Route>
                 </Route>
                 {/* Catch-all 404 Route */}
