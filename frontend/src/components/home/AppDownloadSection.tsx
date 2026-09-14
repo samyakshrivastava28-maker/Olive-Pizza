@@ -1,11 +1,25 @@
-import React, { useState, useEffect } from "react";
+﻿import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Download, QrCode, Smartphone, Zap, WifiOff, BellRing, Bot, Gift, CheckCircle2, Sparkles } from "lucide-react";
+import { Download, QrCode, Smartphone, Monitor, Zap, WifiOff, BellRing, Bot, Gift, Sparkles, CheckCircle2 } from "lucide-react";
 import { isCapacitorNative } from "../../lib/platform";
 
+interface PlatformTab {
+  id: "android" | "ios" | "windows" | "macos";
+  name: string;
+  badge: string;
+  tagline: string;
+  ext: string;
+  icon: typeof Smartphone;
+}
+
 export default function AppDownloadSection() {
-  const [apkUrl, setApkUrl] = useState<string>("https://github.com/samyakshrivastava28-maker/Olive-Pizza/releases/latest");
-  const [apkSize, setApkSize] = useState<string | null>(null);
+  const [selectedPlatform, setSelectedPlatform] = useState<"android" | "ios" | "windows" | "macos">("android");
+  const [platforms, setPlatforms] = useState<Record<string, { url: string; size: string | null }>>({
+    android: { url: "https://github.com/samyakshrivastava28-maker/Olive-Pizza/releases/latest", size: null },
+    ios: { url: "https://github.com/samyakshrivastava28-maker/Olive-Pizza/releases/latest", size: null },
+    windows: { url: "https://github.com/samyakshrivastava28-maker/Olive-Pizza/releases/latest", size: null },
+    macos: { url: "https://github.com/samyakshrivastava28-maker/Olive-Pizza/releases/latest", size: null },
+  });
   const [loading, setLoading] = useState<boolean>(true);
 
   // Hide section completely if running inside native Android/iOS shell
@@ -14,32 +28,53 @@ export default function AppDownloadSection() {
   }
 
   useEffect(() => {
-    // Fetch latest GitHub APK release link from backend endpoint
     const fetchLatestRelease = async () => {
       try {
-        const res = await fetch("/api/github/latest-release");
+        const res = await fetch("/api/github/latest-release?app=customer");
+        let releaseData: any = null;
         if (res.ok) {
-          const data = await res.json();
-          if (data?.apk?.download_url || data?.apk?.downloadUrl) {
-            setApkUrl(data.apk.download_url || data.apk.downloadUrl);
-          }
-          if (data?.apk?.size) {
-            setApkSize((data.apk.size / (1024 * 1024)).toFixed(1) + " MB");
-          }
+          releaseData = await res.json();
         } else {
           // Direct fallback to GitHub releases latest
           const ghRes = await fetch("https://api.github.com/repos/samyakshrivastava28-maker/Olive-Pizza/releases/latest");
           if (ghRes.ok) {
             const ghData = await ghRes.json();
-            const apkAsset = ghData.assets?.find((a: any) => a.name?.endsWith('.apk'));
-            if (apkAsset) {
-              setApkUrl(apkAsset.browser_download_url);
-              setApkSize((apkAsset.size / (1024 * 1024)).toFixed(1) + " MB");
-            }
+            const apk = ghData.assets?.find((a: any) => a.name?.endsWith(".apk"));
+            const ipa = ghData.assets?.find((a: any) => a.name?.endsWith(".ipa"));
+            const exe = ghData.assets?.find((a: any) => a.name?.endsWith(".exe"));
+            const dmg = ghData.assets?.find((a: any) => a.name?.endsWith(".dmg"));
+            releaseData = {
+              apk: apk ? { download_url: apk.browser_download_url, size: apk.size } : null,
+              ipa: ipa ? { download_url: ipa.browser_download_url, size: ipa.size } : null,
+              exe: exe ? { download_url: exe.browser_download_url, size: exe.size } : null,
+              dmg: dmg ? { download_url: dmg.browser_download_url, size: dmg.size } : null,
+            };
           }
         }
+
+        if (releaseData) {
+          const formatSize = (bytes?: number) => bytes ? (bytes / (1024 * 1024)).toFixed(1) + " MB" : null;
+          setPlatforms({
+            android: {
+              url: releaseData.apk?.download_url || releaseData.apk?.downloadUrl || "/api/github/download-apk?app=customer",
+              size: formatSize(releaseData.apk?.size)
+            },
+            ios: {
+              url: releaseData.ipa?.download_url || releaseData.ipa?.downloadUrl || "/api/github/download-ipa?app=customer",
+              size: formatSize(releaseData.ipa?.size)
+            },
+            windows: {
+              url: releaseData.exe?.download_url || releaseData.exe?.downloadUrl || "/api/github/download-exe?app=customer",
+              size: formatSize(releaseData.exe?.size)
+            },
+            macos: {
+              url: releaseData.dmg?.download_url || releaseData.dmg?.downloadUrl || "/api/github/download-dmg?app=customer",
+              size: formatSize(releaseData.dmg?.size)
+            },
+          });
+        }
       } catch (err) {
-        console.warn("Could not fetch latest release URL:", err);
+        console.warn("Could not fetch latest release URLs:", err);
       } finally {
         setLoading(false);
       }
@@ -47,8 +82,19 @@ export default function AppDownloadSection() {
     fetchLatestRelease();
   }, []);
 
-  // Generate QR Code image URL pointing to the APK URL
-  const qrCodeImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(apkUrl)}&color=f97316&bgcolor=000000`;
+  const platformTabs: PlatformTab[] = [
+    { id: "android", name: "Android", badge: "APK", tagline: "For all Android phones & tablets", ext: ".apk", icon: Smartphone },
+    { id: "ios", name: "iOS (Apple)", badge: "IPA", tagline: "For iPhone & iPad devices", ext: ".ipa", icon: Smartphone },
+    { id: "windows", name: "Windows", badge: "EXE", tagline: "Windows 10 / 11 Desktop", ext: ".exe", icon: Monitor },
+    { id: "macos", name: "macOS", badge: "DMG", tagline: "Apple Silicon & Intel Mac", ext: ".dmg", icon: Monitor },
+  ];
+
+  const currentPlatformInfo = platforms[selectedPlatform] || platforms.android;
+  const currentTab = platformTabs.find(t => t.id === selectedPlatform) || platformTabs[0];
+
+  // Generate QR Code image URL pointing to the selected mobile URL (or APK default)
+  const qrTargetUrl = selectedPlatform === "ios" ? platforms.ios.url : platforms.android.url;
+  const qrCodeImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(qrTargetUrl)}&color=f97316&bgcolor=000000`;
 
   const features = [
     { icon: Zap, title: "1-Tap Ultra Speed", desc: "Instant checkout with cached user preferences" },
@@ -65,20 +111,20 @@ export default function AppDownloadSection() {
       <div className="absolute top-1/2 right-1/4 -translate-y-1/2 w-96 h-96 bg-emerald-500/10 blur-[120px] pointer-events-none rounded-full" />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="relative rounded-3xl overflow-hidden border border-white/10 p-8 sm:p-14 backdrop-blur-2xl"
+        <div
+          className="relative rounded-3xl overflow-hidden border border-white/10 p-8 sm:p-14 backdrop-blur-2xl"
           style={{
             background: "linear-gradient(135deg, rgba(24, 24, 27, 0.95) 0%, rgba(9, 9, 11, 0.98) 100%)",
             boxShadow: "0 20px 60px rgba(0, 0, 0, 0.8)",
-          }}>
-
+          }}
+        >
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
-            
             {/* Left Content Column */}
             <div className="lg:col-span-7">
               <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-primary-500/10 border border-primary-500/20 text-primary-400 mb-4 backdrop-blur-md">
                 <Sparkles className="w-4 h-4 animate-spin" />
                 <span className="text-xs font-black uppercase tracking-wider">
-                  Native Android Experience
+                  Official Downloads — All Platforms
                 </span>
               </div>
 
@@ -86,12 +132,37 @@ export default function AppDownloadSection() {
                 Get The <span className="bg-gradient-to-r from-primary-400 via-amber-300 to-orange-500 bg-clip-text text-transparent">Olive Pizza App</span>
               </h2>
 
-              <p className="text-slate-300 text-sm sm:text-base font-medium mb-8 leading-relaxed max-w-xl">
-                Experience lightning-fast ordering, offline menu browsing, real-time live order tracking, and app-exclusive coupons directly on your phone.
+              <p className="text-slate-300 text-sm sm:text-base font-medium mb-6 leading-relaxed max-w-xl">
+                Experience lightning-fast ordering, offline menu browsing, real-time live order tracking, and app-exclusive coupons directly on your favorite device.
               </p>
 
+              {/* Platform Selector Pills */}
+              <div className="flex flex-wrap gap-2 mb-6">
+                {platformTabs.map((tab) => {
+                  const isSelected = selectedPlatform === tab.id;
+                  const hasSize = platforms[tab.id]?.size;
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => setSelectedPlatform(tab.id)}
+                      className={`px-4 py-2 rounded-xl text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer border ${
+                        isSelected
+                          ? "bg-primary-500 text-white border-primary-400 shadow-lg shadow-primary-500/30 scale-105"
+                          : "bg-white/5 hover:bg-white/10 text-slate-300 border-white/10 hover:border-white/20"
+                      }`}
+                    >
+                      <tab.icon className="w-3.5 h-3.5" />
+                      <span>{tab.name}</span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded font-black ${isSelected ? "bg-black/30 text-white" : "bg-white/10 text-slate-400"}`}>
+                        {tab.badge}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
               {/* App Features List */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-8">
                 {features.map((f, i) => (
                   <div key={i} className="flex items-start gap-3 p-3 rounded-2xl bg-white/5 border border-white/5">
                     <div className="p-2 rounded-xl bg-primary-500/10 text-primary-400 shrink-0">
@@ -108,31 +179,35 @@ export default function AppDownloadSection() {
               {/* Action Buttons & QR Code */}
               <div className="flex flex-col sm:flex-row items-center gap-6 pt-4 border-t border-white/10">
                 <a
-                  href={apkUrl}
+                  href={currentPlatformInfo.url}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-gradient-to-r from-primary-500 to-amber-500 hover:from-primary-600 hover:to-amber-600 text-white font-extrabold text-sm sm:text-base flex items-center justify-center gap-3 shadow-xl shadow-primary-500/30 transition-all hover:scale-105 active:scale-95"
                 >
                   <Download className="w-5 h-5 animate-bounce" />
-                  <span>Download APK {apkSize ? `(${apkSize})` : ""}</span>
+                  <span>
+                    Download {currentTab.name} ({currentTab.badge}) {currentPlatformInfo.size ? `— ${currentPlatformInfo.size}` : ""}
+                  </span>
                 </a>
 
-                {/* QR Code Container */}
-                <div className="flex items-center gap-3 bg-black/60 p-2.5 rounded-2xl border border-white/10">
-                  <img
-                    src={qrCodeImageUrl}
-                    alt="Scan to download Olive Pizza App"
-                    className="w-16 h-16 rounded-xl border border-white/10"
-                  />
-                  <div className="text-left pr-2">
-                    <p className="text-xs font-extrabold text-white flex items-center gap-1">
-                      <QrCode className="w-3.5 h-3.5 text-primary-400" /> Scan QR Code
-                    </p>
-                    <p className="text-[10px] text-slate-400 font-medium mt-0.5">
-                      Point phone camera to install
-                    </p>
+                {/* QR Code Container (shown for mobile apps) */}
+                {(selectedPlatform === "android" || selectedPlatform === "ios") && (
+                  <div className="flex items-center gap-3 bg-black/60 p-2.5 rounded-2xl border border-white/10">
+                    <img
+                      src={qrCodeImageUrl}
+                      alt="Scan to download Olive Pizza App"
+                      className="w-16 h-16 rounded-xl border border-white/10"
+                    />
+                    <div className="text-left pr-2">
+                      <p className="text-xs font-extrabold text-white flex items-center gap-1">
+                        <QrCode className="w-3.5 h-3.5 text-primary-400" /> Scan QR Code
+                      </p>
+                      <p className="text-[10px] text-slate-400 font-medium mt-0.5">
+                        Point phone camera to install
+                      </p>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             </div>
 
@@ -200,7 +275,6 @@ export default function AppDownloadSection() {
                 </div>
               </motion.div>
             </div>
-
           </div>
         </div>
       </div>
