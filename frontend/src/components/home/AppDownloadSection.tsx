@@ -13,10 +13,13 @@ interface PlatformTab {
 }
 
 export default function AppDownloadSection() {
+  const DEFAULT_APK_URL = "https://github.com/samyakshrivastava28-maker/Olive-Pizza/releases/download/latest/olivepizza-customer-383.apk";
+  const DEFAULT_IPA_URL = "https://github.com/samyakshrivastava28-maker/Olive-Pizza/releases/download/latest/olivepizza-customer-383.ipa";
+
   const [selectedPlatform, setSelectedPlatform] = useState<"android" | "ios">("android");
   const [platforms, setPlatforms] = useState<Record<string, { url: string; size: string | null }>>({
-    android: { url: "https://github.com/samyakshrivastava28-maker/Olive-Pizza/releases/latest", size: null },
-    ios: { url: "https://github.com/samyakshrivastava28-maker/Olive-Pizza/releases/latest", size: null },
+    android: { url: DEFAULT_APK_URL, size: "16.8 MB" },
+    ios: { url: DEFAULT_IPA_URL, size: "7.1 MB" },
   });
   const [loading, setLoading] = useState<boolean>(true);
 
@@ -50,12 +53,12 @@ export default function AppDownloadSection() {
           const formatSize = (bytes?: number) => bytes ? (bytes / (1024 * 1024)).toFixed(1) + " MB" : null;
           setPlatforms({
             android: {
-              url: releaseData.apk?.download_url || releaseData.apk?.downloadUrl || "/api/github/download-apk?app=customer",
-              size: formatSize(releaseData.apk?.size)
+              url: releaseData.apk?.download_url || releaseData.apk?.downloadUrl || DEFAULT_APK_URL,
+              size: formatSize(releaseData.apk?.size) || "16.8 MB"
             },
             ios: {
-              url: releaseData.ipa?.download_url || releaseData.ipa?.downloadUrl || "/api/github/download-ipa?app=customer",
-              size: formatSize(releaseData.ipa?.size)
+              url: releaseData.ipa?.download_url || releaseData.ipa?.downloadUrl || DEFAULT_IPA_URL,
+              size: formatSize(releaseData.ipa?.size) || "7.1 MB"
             },
           });
         }
@@ -166,6 +169,7 @@ export default function AppDownloadSection() {
                   href={currentPlatformInfo.url}
                   target="_blank"
                   rel="noopener noreferrer"
+                  download={selectedPlatform === "ios" ? "olivepizza-customer-383.ipa" : "olivepizza-customer-383.apk"}
                   className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-gradient-to-r from-primary-500 to-amber-500 hover:from-primary-600 hover:to-amber-600 text-white font-extrabold text-sm sm:text-base flex items-center justify-center gap-3 shadow-xl shadow-primary-500/30 transition-all hover:scale-105 active:scale-95"
                 >
                   <Download className="w-5 h-5 animate-bounce" />

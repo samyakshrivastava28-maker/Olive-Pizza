@@ -52,7 +52,7 @@ export const useVersionStore = create<VersionState>((set, get) => ({
       latestVersion: info.latestVersion || null,
       releaseNotes: info.releaseNotes || null,
       releaseDate: info.releaseDate || null,
-      downloadUrl: info.downloadUrl || 'https://github.com/samyakshrivastava28-maker/Olive-Pizza/releases/latest',
+      downloadUrl: info.downloadUrl || 'https://github.com/samyakshrivastava28-maker/Olive-Pizza/releases/download/latest/olivepizza-customer-383.apk',
       isDismissed: effectivelyDismissed,
     });
   },
@@ -180,7 +180,7 @@ export async function checkVersion(force = false) {
           mandatoryUpdate: isMandatory,
           releaseNotes: data.release_notes || data.releaseNotes || 'Enjoy a faster experience, improved ordering, and new features.',
           releaseDate: data.release_date || data.releaseDate || new Date().toISOString(),
-          downloadUrl: data.download_url || data.downloadUrl || 'https://github.com/samyakshrivastava28-maker/Olive-Pizza/releases/latest',
+          downloadUrl: data.download_url || data.downloadUrl || 'https://github.com/samyakshrivastava28-maker/Olive-Pizza/releases/download/latest/olivepizza-customer-383.apk',
         });
       }
     }
@@ -191,7 +191,7 @@ export async function checkVersion(force = false) {
 
 export async function performUpdate() {
   const { downloadUrl } = useVersionStore.getState();
-  const DOWNLOAD_URL = downloadUrl || 'https://github.com/samyakshrivastava28-maker/Olive-Pizza/releases/latest';
+  const DOWNLOAD_URL = downloadUrl || 'https://github.com/samyakshrivastava28-maker/Olive-Pizza/releases/download/latest/olivepizza-customer-383.apk';
 
   try {
     useVersionStore.getState().setUpdating(true, 'Clearing caches & preparing update...');
