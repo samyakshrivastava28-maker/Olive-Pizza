@@ -616,18 +616,6 @@ export default function Register() {
           Sign In
         </Link>
       </div>
-
-      <div className="mt-8 text-center text-[10px] font-medium text-slate-400 border-t border-slate-200 dark:border-slate-800 pt-4 relative z-10">
-        A Premium Website By{" "}
-        <a
-          href="https://28webhub.netlify.app"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-primary-500 hover:text-primary-600 hover:underline transition-colors"
-        >
-          S-Web Hub
-        </a>
-      </div>
     </div>
   );
 }

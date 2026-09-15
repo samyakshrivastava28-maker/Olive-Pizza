@@ -8,7 +8,8 @@ import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 export function translateError(error: any): string {
   if (!error) return "Something went wrong. Please try again.";
   
-  const msg = (error.message || error.code || String(error)).toLowerCase();
+  const rawMsg = typeof error === 'string' ? error : (error?.message || error?.code || String(error));
+  const msg = rawMsg.toLowerCase();
 
   // Network and Connectivity Errors
   if (msg.includes('network-request-failed') || msg.includes('failed to fetch') || msg.includes('net::err_internet_disconnected')) {
@@ -18,24 +19,43 @@ export function translateError(error: any): string {
     return "The request took too long. Please try again.";
   }
 
+  // Rate limits
+  if (msg.includes('too-many-requests') || msg.includes('rate_limited') || msg.includes('too many login attempts')) {
+    return "Too many login attempts. Please try again in a few minutes.";
+  }
+
   // Firebase Auth Errors
-  if (msg.includes('user-not-found') || msg.includes('wrong-password') || msg.includes('invalid-credential')) {
+  if (
+    msg.includes('user-not-found') || 
+    msg.includes('wrong-password') || 
+    msg.includes('invalid-credential') || 
+    msg.includes('invalid-login-credentials')
+  ) {
     return "Invalid email or password. Please try again.";
   }
   if (msg.includes('email-already-in-use')) {
     return "This email is already registered. Please sign in.";
   }
-  if (msg.includes('too-many-requests')) {
-    return "Too many attempts. Please try again later.";
-  }
-  if (msg.includes('popup-closed-by-user')) {
-    return "Sign-in was cancelled.";
+  if (msg.includes('weak-password')) {
+    return "Password should be at least 6 characters.";
   }
   if (msg.includes('invalid-email')) {
     return "Please enter a valid email address.";
   }
+  if (msg.includes('popup-closed-by-user') || msg.includes('cancelled-popup-request')) {
+    return "Sign-in was cancelled.";
+  }
+  if (msg.includes('invalid-verification-code') || msg.includes('invalid-code')) {
+    return "Invalid verification code. Please check and try again.";
+  }
+  if (msg.includes('code-expired')) {
+    return "Verification code has expired. Please request a new code.";
+  }
+  if (msg.includes('user-disabled')) {
+    return "This account has been disabled. Please contact support.";
+  }
   if (msg.includes('unauthorized-domain')) {
-    return "This login method is currently unavailable. Please use email and password.";
+    return "This domain is not authorized for sign-in in Firebase Console.";
   }
   if (msg.includes('session-expired') || msg.includes('auth/invalid-user-token')) {
     return "Your session has expired. Please sign in again.";
@@ -51,8 +71,23 @@ export function translateError(error: any): string {
     return "Security verification failed. Please try again.";
   }
 
-  // Fallback for everything else
-  // Do not return `msg` as it might contain technical details!
+  // Preserve meaningful, human-readable sentences from backend or forms
+  if (
+    typeof rawMsg === 'string' &&
+    !msg.includes('firebase:') &&
+    !msg.includes('stack') &&
+    !msg.includes('uncaught') &&
+    !msg.includes('syntaxerror') &&
+    !msg.includes('typeerror') &&
+    !msg.includes('referenceerror') &&
+    !msg.startsWith('auth/') &&
+    rawMsg.length >= 3 &&
+    rawMsg.length <= 200
+  ) {
+    return rawMsg;
+  }
+
+  // Fallback for technical stack traces
   return "Something went wrong. Please try again.";
 }
 
