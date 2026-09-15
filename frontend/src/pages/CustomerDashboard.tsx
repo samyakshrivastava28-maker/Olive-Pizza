@@ -38,7 +38,8 @@ import {
   RefreshCw,
   Send,
   Lock,
-  Camera
+  Camera,
+  Trash2
 } from "lucide-react";
 import OrderHistory from "../components/customer/dashboard/OrderHistory";
 import Wishlist from "../components/customer/dashboard/Wishlist";
@@ -47,7 +48,6 @@ import Wallet from "../components/customer/dashboard/Wallet";
 import AddressBook from "../components/customer/AddressBook";
 import MyDevices from "../components/customer/dashboard/MyDevices";
 import PhoneUpdateModal from "../components/customer/dashboard/PhoneUpdateModal";
-import FloatingLines from "../components/ui/FloatingLines";
 import SEO from "../components/SEO";
 import { fetchApi } from "../lib/config";
 import toast from "react-hot-toast";
@@ -367,8 +367,11 @@ export default function CustomerDashboard() {
   return (
     <>
       <SEO title="Customer Profile | Olive Pizza" noIndex={true} />
-      <PageTransition className="w-full relative min-h-[100dvh] text-slate-200 bg-dark-950 overflow-x-hidden pb-32 md:pb-16">
-        <FloatingLines />
+      <PageTransition className="w-full relative min-h-[100dvh] text-slate-200 bg-[#06070A] overflow-x-hidden pb-32 md:pb-16">
+        
+        {/* Spatial Depth Ambient Background Glows */}
+        <div className="absolute top-10 left-1/4 -translate-x-1/2 w-[550px] h-[550px] bg-orange-600/10 blur-[140px] pointer-events-none rounded-full" />
+        <div className="absolute top-96 right-10 w-[450px] h-[450px] bg-emerald-600/5 blur-[140px] pointer-events-none rounded-full" />
         
         <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 md:px-8 pt-4 md:pt-6">
           
@@ -376,7 +379,7 @@ export default function CustomerDashboard() {
           <div className="flex items-center justify-between py-2 mb-4">
             <Link 
               to="/" 
-              className="inline-flex items-center gap-2 text-xs font-bold text-slate-400 hover:text-primary-400 transition-colors bg-white/5 hover:bg-white/10 px-3.5 py-2 rounded-xl border border-white/5"
+              className="inline-flex items-center gap-2 text-xs font-bold text-slate-300 hover:text-orange-400 transition-colors bg-white/[0.04] hover:bg-white/[0.08] px-4 py-2.5 rounded-2xl border border-white/10 backdrop-blur-xl shadow-sm"
             >
               <ArrowLeft size={15} /> Back to Homepage
             </Link>
@@ -384,25 +387,32 @@ export default function CustomerDashboard() {
             <div className="flex items-center gap-2">
               <Link
                 to="/menu"
-                className="hidden sm:inline-flex items-center gap-1.5 text-xs font-bold text-primary-400 hover:text-primary-300 bg-primary-500/10 hover:bg-primary-500/20 px-3 py-2 rounded-xl border border-primary-500/20 transition-all"
+                className="hidden sm:inline-flex items-center gap-1.5 text-xs font-black text-orange-400 hover:text-orange-300 bg-orange-500/10 hover:bg-orange-500/20 px-4 py-2.5 rounded-2xl border border-orange-500/20 transition-all shadow-sm"
               >
                 <Sparkles size={14} /> Wood-Fired Menu
               </Link>
               <button
                 onClick={handleLogout}
-                className="inline-flex items-center gap-1.5 text-xs font-bold text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 px-3 py-2 rounded-xl border border-red-500/20 transition-all cursor-pointer"
+                className="inline-flex items-center gap-1.5 text-xs font-black text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 px-4 py-2.5 rounded-2xl border border-red-500/20 transition-all cursor-pointer shadow-sm"
               >
                 <LogOut size={14} /> Logout
               </button>
             </div>
           </div>
 
-          {/* ── Profile Header Section ─────────────────────────────────────── */}
-          <div className="mb-6 rounded-3xl p-5 md:p-6 bg-gradient-to-r from-dark-900/90 via-dark-900/70 to-dark-950/90 border border-white/10 backdrop-blur-2xl shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              {/* Avatar with Status Halo */}
+          {/* ── Weightless Glassmorphic Profile Identity Card ──────────────── */}
+          <motion.div 
+            initial={{ opacity: 0, y: -12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.45 }}
+            className="mb-6 rounded-3xl p-6 md:p-7 bg-gradient-to-br from-white/[0.05] via-white/[0.02] to-white/[0.04] border border-white/10 backdrop-blur-2xl shadow-[0_25px_60px_rgba(0,0,0,0.6)] flex flex-col sm:flex-row sm:items-center justify-between gap-5 relative overflow-hidden"
+          >
+            <div className="absolute top-0 right-0 w-64 h-64 bg-orange-500/10 blur-3xl pointer-events-none rounded-full" />
+
+            <div className="flex items-center gap-4 sm:gap-5 relative z-10">
+              {/* Avatar with Luminous Status Ring */}
               <div className="relative flex-shrink-0">
-                <div className="w-16 h-16 rounded-2xl overflow-hidden border-2 border-primary-500/40 bg-dark-950 flex items-center justify-center shadow-lg shadow-primary-500/15">
+                <div className="w-18 h-18 sm:w-20 sm:h-20 rounded-3xl overflow-hidden border-2 border-orange-500/50 bg-black/60 flex items-center justify-center shadow-xl shadow-orange-500/20">
                   {user?.photoURL || user?.photoUrl ? (
                     <img 
                       src={user.photoURL || user.photoUrl} 
@@ -410,81 +420,98 @@ export default function CustomerDashboard() {
                       className="w-full h-full object-cover" 
                     />
                   ) : (
-                    <span className="text-2xl font-black text-primary-400 select-none">
+                    <span className="text-3xl font-black text-orange-400 select-none">
                       {user?.name ? user.name.charAt(0).toUpperCase() : "🍕"}
                     </span>
                   )}
                 </div>
-                <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-emerald-500 border-2 border-dark-900 shadow" title="Online" />
+                <span className="absolute -bottom-1 -right-1 w-4.5 h-4.5 rounded-full bg-emerald-500 border-2 border-[#0A0B10] shadow-md shadow-emerald-500/50" title="Online & Connected" />
               </div>
 
               <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h1 className="text-lg md:text-xl font-black text-white truncate">
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight truncate">
                     {user?.name || "Add your name"}
                   </h1>
                   {user?.name ? (
-                    <span className="inline-flex items-center gap-1 text-[11px] text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
-                      <ShieldCheck size={12} /> Verified Member
+                    <span className="inline-flex items-center gap-1 text-[11px] text-emerald-400 font-bold bg-emerald-500/15 px-2.5 py-0.5 rounded-full border border-emerald-500/30 shadow-sm">
+                      <ShieldCheck size={13} /> Verified Member
                     </span>
                   ) : (
                     <button
                       onClick={() => setActiveTab("profile")}
-                      className="text-[11px] text-primary-400 underline font-bold"
+                      className="text-xs text-orange-400 underline font-black hover:text-orange-300 cursor-pointer"
                     >
                       Set name
                     </button>
                   )}
                 </div>
 
-                <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 text-xs text-slate-400 mt-1">
-                  <span className="flex items-center gap-1">
-                    <Phone size={12} className="text-slate-500" />
+                <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-4 text-xs text-slate-400 mt-1.5">
+                  {/* Phone with Verification Badge / Update Trigger */}
+                  <div className="flex items-center gap-1.5">
+                    <Phone size={13} className="text-orange-400" />
                     {user?.phone ? (
-                      <strong className="text-slate-300 font-mono">{user.phone}</strong>
+                      <span className="text-slate-200 font-mono font-bold flex items-center gap-1">
+                        {user.phone}
+                        <CheckCircle2 size={12} className="text-emerald-400 inline" />
+                      </span>
                     ) : (
-                      <span className="text-amber-400">Phone not verified</span>
+                      <button 
+                        onClick={() => setIsPhoneModalOpen(true)}
+                        className="text-amber-400 hover:text-amber-300 font-bold underline flex items-center gap-1 cursor-pointer"
+                      >
+                        Verify Phone <ChevronRight size={12} />
+                      </button>
                     )}
-                  </span>
-                  <span className="hidden sm:inline text-slate-600">•</span>
-                  <span className="flex items-center gap-1 truncate">
-                    <Mail size={12} className="text-slate-500" />
+                  </div>
+
+                  <span className="hidden sm:inline text-white/20">•</span>
+
+                  {/* Email with Verification Badge / Resend Action */}
+                  <div className="flex items-center gap-1.5 truncate">
+                    <Mail size={13} className="text-orange-400 shrink-0" />
                     {user?.email ? (
-                      <span className="truncate">{user.email}</span>
+                      <span className="truncate text-slate-300 font-medium">
+                        {user.email}
+                      </span>
                     ) : (
                       <span className="text-slate-500 italic">Email not added</span>
                     )}
-                  </span>
+                  </div>
                 </div>
               </div>
             </div>
 
             {/* Badges & Authoritative Loyalty Points Summary */}
-            <div className="flex items-center gap-3 self-start sm:self-auto flex-wrap">
-              <div className={`px-3 py-1.5 rounded-xl border text-xs font-black flex items-center gap-1.5 ${tierColor}`}>
-                <Award size={15} /> {loyaltyTier} Club
+            <div className="flex items-center gap-3 self-start sm:self-auto flex-wrap relative z-10">
+              <div className={`px-4 py-2 rounded-2xl border text-xs font-black flex items-center gap-2 shadow-sm ${tierColor}`}>
+                <Award size={16} /> {loyaltyTier} Club
               </div>
-              <div className="px-3 py-1.5 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-400 text-xs font-black flex items-center gap-1.5">
-                <Sparkles size={14} /> {points} Pts
+              <div className="px-4 py-2 rounded-2xl border border-amber-500/30 bg-amber-500/10 text-amber-400 text-xs font-black flex items-center gap-2 shadow-sm">
+                <Sparkles size={15} /> 
+                <span>{points} Pts</span>
+                <span className="text-[10px] text-amber-300/80 font-semibold">(₹{(points * 0.5).toFixed(0)})</span>
               </div>
             </div>
-          </div>
+          </motion.div>
 
-          {/* ── Active Order Live Banner ───────────────────────────────────── */}
+          {/* ── Active Order Radar Banner ───────────────────────────────────── */}
           {activeOrder && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="mb-6 p-4 md:p-5 rounded-3xl bg-gradient-to-r from-orange-500/20 via-amber-500/10 to-dark-900 border border-orange-500/40 shadow-xl backdrop-blur-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+              className="mb-6 p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-orange-500/20 via-amber-500/10 to-[#12151E] border border-orange-500/40 shadow-[0_15px_40px_rgba(255,107,0,0.15)] backdrop-blur-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative overflow-hidden"
             >
-              <div className="flex items-center gap-3.5">
-                <div className="w-12 h-12 rounded-2xl bg-orange-500/20 border border-orange-500/40 flex items-center justify-center text-orange-400 shrink-0 shadow-lg shadow-orange-500/20">
-                  <Truck className="w-6 h-6 animate-pulse" />
+              <div className="flex items-center gap-4 relative z-10">
+                <div className="relative w-12 h-12 rounded-2xl bg-orange-500/20 border border-orange-500/40 flex items-center justify-center text-orange-400 shrink-0 shadow-lg shadow-orange-500/20">
+                  <span className="absolute inset-0 rounded-2xl bg-orange-500/20 animate-ping opacity-50 pointer-events-none" />
+                  <Truck className="w-6 h-6 animate-bounce" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-black uppercase tracking-wider text-orange-400">
-                      Active Order in Progress
+                      Live Delivery in Progress
                     </span>
                     <span className="text-xs font-mono font-bold text-white bg-white/10 px-2 py-0.5 rounded-lg">
                       {activeOrder.dailyOrderNumber || `#${activeOrder.id.slice(-6).toUpperCase()}`}
@@ -497,10 +524,10 @@ export default function CustomerDashboard() {
               </div>
               <button
                 onClick={() => navigate(`/order-tracking/${activeOrder.id}`)}
-                className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-black text-xs shadow-lg shadow-orange-500/25 active:scale-95 transition-all cursor-pointer"
+                className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-gradient-to-r from-[#FF6B00] via-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-orange-500/30 hover:scale-105 active:scale-95 transition-all cursor-pointer relative z-10"
               >
                 <Navigation className="w-4 h-4" />
-                <span>Track Delivery Live</span>
+                <span>Track Live on Map</span>
                 <ChevronRight className="w-4 h-4" />
               </button>
             </motion.div>
@@ -521,16 +548,16 @@ export default function CustomerDashboard() {
                       <button
                         key={tab.id}
                         onClick={() => setActiveTab(tab.id)}
-                        className={`relative flex items-center gap-2 px-4 py-2.5 rounded-2xl font-bold text-xs transition-all whitespace-nowrap border ${
+                        className={`relative flex items-center gap-2 px-4 py-2.5 rounded-2xl font-bold text-xs transition-all whitespace-nowrap border cursor-pointer ${
                           isActive
-                            ? "bg-gradient-to-r from-primary-500 to-amber-500 text-white border-transparent shadow-lg shadow-primary-500/25 scale-[1.02]"
-                            : "bg-dark-900/70 text-slate-400 hover:text-white border-white/5 hover:border-white/10"
+                            ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white border-transparent shadow-lg shadow-orange-500/30 scale-[1.02]"
+                            : "bg-white/[0.03] text-slate-400 hover:text-white border-white/5 hover:border-white/10"
                         }`}
                       >
                         <Icon size={16} className={isActive ? "text-white" : "text-slate-400"} />
                         <span>{tab.label}</span>
                         {tab.badge && (
-                          <span className="w-5 h-5 rounded-full bg-emerald-500 text-dark-950 text-[10px] font-black flex items-center justify-center">
+                          <span className="w-5 h-5 rounded-full bg-emerald-500 text-black text-[10px] font-black flex items-center justify-center">
                             {tab.badge}
                           </span>
                         )}
@@ -546,9 +573,9 @@ export default function CustomerDashboard() {
               </div>
 
               {/* Desktop Luxury Glassmorphic Sidebar */}
-              <div className="hidden lg:flex flex-col gap-1.5 p-3 rounded-3xl bg-dark-900/60 border border-white/10 backdrop-blur-xl shadow-xl w-full sticky top-6">
+              <div className="hidden lg:flex flex-col gap-1.5 p-3 rounded-3xl bg-white/[0.03] border border-white/10 backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] w-full sticky top-6">
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 px-3 py-2">
-                  Customer Profile
+                  Account Menu
                 </p>
                 {TABS.map((tab) => {
                   const isActive = activeTab === tab.id;
@@ -557,10 +584,10 @@ export default function CustomerDashboard() {
                     <button
                       key={tab.id}
                       onClick={() => setActiveTab(tab.id)}
-                      className={`flex items-center justify-between px-4 py-3 rounded-2xl font-bold text-xs transition-all text-left ${
+                      className={`flex items-center justify-between px-4 py-3 rounded-2xl font-bold text-xs transition-all text-left relative cursor-pointer ${
                         isActive
-                          ? "bg-gradient-to-r from-primary-500 to-amber-500 text-white shadow-lg shadow-primary-500/20"
-                          : "text-slate-400 hover:text-white hover:bg-white/5"
+                          ? "bg-gradient-to-r from-[#FF6B00] via-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/30"
+                          : "text-slate-300 hover:text-white hover:bg-white/[0.05]"
                       }`}
                     >
                       <div className="flex items-center gap-3">
@@ -570,7 +597,7 @@ export default function CustomerDashboard() {
 
                       <div className="flex items-center gap-1.5">
                         {tab.badge && (
-                          <span className="w-5 h-5 rounded-full bg-emerald-500 text-dark-950 text-[10px] font-black flex items-center justify-center">
+                          <span className="w-5 h-5 rounded-full bg-emerald-500 text-black text-[10px] font-black flex items-center justify-center">
                             {tab.badge}
                           </span>
                         )}
@@ -611,11 +638,11 @@ export default function CustomerDashboard() {
                   {activeTab === "profile" && (
                     <div className="space-y-6">
                       {/* Personal Details Form */}
-                      <div className="rounded-3xl bg-[#12151E] border border-white/10 p-6 md:p-8 shadow-xl">
+                      <div className="rounded-3xl bg-gradient-to-br from-white/[0.04] via-white/[0.02] to-white/[0.03] border border-white/10 p-6 md:p-8 backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
                         <div className="flex items-center justify-between mb-6">
                           <div>
-                            <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                              <User className="text-primary-400" size={20} /> Personal Details
+                            <h3 className="text-xl font-bold text-white flex items-center gap-2.5">
+                              <User className="text-orange-400" size={20} /> Personal Details
                             </h3>
                             <p className="text-xs text-slate-400 mt-1">
                               Your profile information used for order receipts and delivery coordination.
@@ -626,45 +653,45 @@ export default function CustomerDashboard() {
                         <form onSubmit={handleSaveProfile} className="space-y-4">
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
-                              <label className="text-xs font-bold text-slate-400 block mb-1.5">Full Name</label>
+                              <label className="text-xs font-bold text-slate-300 block mb-2">Full Name</label>
                               <input
                                 type="text"
                                 value={nameInput}
                                 onChange={(e) => setNameInput(e.target.value)}
                                 placeholder="Your Full Name"
-                                className="w-full bg-dark-900 border border-white/10 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-primary-500 transition-colors"
+                                className="w-full bg-black/40 border border-white/10 focus:border-orange-500/60 rounded-2xl p-3.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 backdrop-blur-md transition-all shadow-inner"
                               />
                             </div>
                             <div>
-                              <label className="text-xs font-bold text-slate-400 block mb-1.5">Email Address</label>
+                              <label className="text-xs font-bold text-slate-300 block mb-2">Email Address</label>
                               <input
                                 type="email"
                                 value={emailInput}
                                 onChange={(e) => setEmailInput(e.target.value)}
                                 placeholder="name@example.com"
-                                className="w-full bg-dark-900 border border-white/10 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-primary-500 transition-colors"
+                                className="w-full bg-black/40 border border-white/10 focus:border-orange-500/60 rounded-2xl p-3.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 backdrop-blur-md transition-all shadow-inner"
                               />
                             </div>
                           </div>
 
                           <div>
-                            <label className="text-xs font-bold text-slate-400 block mb-1.5">Avatar / Photo URL</label>
+                            <label className="text-xs font-bold text-slate-300 block mb-2">Avatar / Photo URL</label>
                             <div className="flex gap-2">
                               <input
                                 type="url"
                                 value={photoURLInput}
                                 onChange={(e) => setPhotoURLInput(e.target.value)}
                                 placeholder="https://example.com/avatar.jpg"
-                                className="w-full bg-dark-900 border border-white/10 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-primary-500 transition-colors"
+                                className="w-full bg-black/40 border border-white/10 focus:border-orange-500/60 rounded-2xl p-3.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 backdrop-blur-md transition-all shadow-inner"
                               />
                             </div>
                           </div>
 
-                          <div className="flex justify-end pt-2">
+                          <div className="flex justify-end pt-3">
                             <button
                               type="submit"
                               disabled={savingProfile}
-                              className="px-6 py-3 rounded-xl bg-gradient-to-r from-primary-500 to-amber-500 hover:from-primary-600 hover:to-amber-600 text-white text-xs font-bold shadow-lg shadow-primary-500/20 active:scale-95 transition-all disabled:opacity-50 cursor-pointer"
+                              className="px-6 py-3 rounded-2xl bg-gradient-to-r from-[#FF6B00] via-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-xs font-black uppercase tracking-wider shadow-lg shadow-orange-500/25 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 cursor-pointer"
                             >
                               {savingProfile ? "Saving Details..." : "Save Profile Changes"}
                             </button>
@@ -673,22 +700,22 @@ export default function CustomerDashboard() {
                       </div>
 
                       {/* Phone & Verification Card */}
-                      <div className="rounded-3xl bg-[#12151E] border border-white/10 p-6 md:p-8 shadow-xl">
-                        <h3 className="text-xl font-bold text-white flex items-center gap-2 mb-2">
+                      <div className="rounded-3xl bg-gradient-to-br from-white/[0.04] via-white/[0.02] to-white/[0.03] border border-white/10 p-6 md:p-8 backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
+                        <h3 className="text-xl font-bold text-white flex items-center gap-2.5 mb-2">
                           <Phone className="text-emerald-400" size={20} /> Verified Phone & Sign-In
                         </h3>
                         <p className="text-xs text-slate-400 mb-6">
                           Your verified phone number enables instant Truecaller and SMS OTP sign-in.
                         </p>
 
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-2xl bg-dark-900 border border-white/5 gap-4">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
-                              <ShieldCheck size={20} />
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4.5 rounded-2xl bg-black/30 border border-white/5 backdrop-blur-md gap-4">
+                          <div className="flex items-center gap-3.5">
+                            <div className="w-11 h-11 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0 shadow-md shadow-emerald-500/10">
+                              <ShieldCheck size={22} />
                             </div>
                             <div>
-                              <p className="text-xs font-bold text-slate-400">Mobile Number</p>
-                              <p className="text-base font-bold text-white font-mono">
+                              <p className="text-[11px] font-black uppercase tracking-wider text-slate-400">Mobile Number</p>
+                              <p className="text-base font-bold text-white font-mono mt-0.5">
                                 {user?.phone || "No phone linked"}
                               </p>
                             </div>
@@ -697,7 +724,7 @@ export default function CustomerDashboard() {
                           <button
                             type="button"
                             onClick={() => setIsPhoneModalOpen(true)}
-                            className="px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white text-xs font-bold border border-white/10 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                            className="px-4 py-2.5 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] text-white text-xs font-bold border border-white/10 hover:border-white/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
                           >
                             <Edit2 size={13} /> Update Phone Number
                           </button>
@@ -705,28 +732,28 @@ export default function CustomerDashboard() {
                       </div>
 
                       {/* Email Verification Status Card */}
-                      <div className="rounded-3xl bg-[#12151E] border border-white/10 p-6 md:p-8 shadow-xl">
-                        <h3 className="text-xl font-bold text-white flex items-center gap-2 mb-2">
+                      <div className="rounded-3xl bg-gradient-to-br from-white/[0.04] via-white/[0.02] to-white/[0.03] border border-white/10 p-6 md:p-8 backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
+                        <h3 className="text-xl font-bold text-white flex items-center gap-2.5 mb-2">
                           <Mail className="text-blue-400" size={20} /> Email Verification
                         </h3>
                         <p className="text-xs text-slate-400 mb-6">
                           Used for receiving bills, invoices, and password resets.
                         </p>
 
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-2xl bg-dark-900 border border-white/5 gap-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4.5 rounded-2xl bg-black/30 border border-white/5 backdrop-blur-md gap-4">
                           <div>
-                            <p className="text-xs font-bold text-slate-400">Registered Email</p>
+                            <p className="text-[11px] font-black uppercase tracking-wider text-slate-400">Registered Email</p>
                             <p className="text-sm font-bold text-white mt-0.5">
                               {user?.email || "No email address on file"}
                             </p>
-                            <div className="mt-1 flex items-center gap-1.5 text-xs font-semibold">
+                            <div className="mt-1.5 flex items-center gap-1.5 text-xs font-semibold">
                               {auth.currentUser?.emailVerified ? (
-                                <span className="text-emerald-400 flex items-center gap-1">
-                                  <CheckCircle2 size={12} /> Email Verified
+                                <span className="text-emerald-400 flex items-center gap-1 font-bold">
+                                  <CheckCircle2 size={13} /> Email Verified
                                 </span>
                               ) : (
-                                <span className="text-amber-400 flex items-center gap-1">
-                                  <AlertCircle size={12} /> Pending Verification
+                                <span className="text-amber-400 flex items-center gap-1 font-bold">
+                                  <AlertCircle size={13} /> Pending Verification
                                 </span>
                               )}
                             </div>
@@ -737,7 +764,7 @@ export default function CustomerDashboard() {
                               type="button"
                               onClick={handleSendEmailVerification}
                               disabled={sendingEmailVerification}
-                              className="px-4 py-2.5 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                              className="px-4 py-2.5 rounded-xl bg-blue-500/15 hover:bg-blue-500/25 text-blue-300 border border-blue-500/30 text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-sm"
                             >
                               <Send size={13} /> {sendingEmailVerification ? "Sending..." : "Send Verification Email"}
                             </button>
@@ -759,9 +786,9 @@ export default function CustomerDashboard() {
 
                   {/* 4. ADDRESSES TAB */}
                   {activeTab === "addresses" && (
-                    <div className="rounded-3xl bg-[#12151E] border border-white/10 p-6 md:p-8 shadow-xl">
+                    <div className="rounded-3xl bg-gradient-to-br from-white/[0.04] via-white/[0.02] to-white/[0.03] border border-white/10 p-6 md:p-8 backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
                       <div className="mb-6">
-                        <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                        <h3 className="text-xl font-bold text-white flex items-center gap-2.5">
                           <MapPin className="text-orange-400" size={20} /> Saved Delivery Locations
                         </h3>
                         <p className="text-xs text-slate-400 mt-1">
@@ -776,9 +803,9 @@ export default function CustomerDashboard() {
                   {activeTab === "support" && (
                     <div className="space-y-6">
                       {/* Direct Contact Channels Card */}
-                      <div className="rounded-3xl bg-[#12151E] border border-white/10 p-6 md:p-8 shadow-xl">
-                        <h3 className="text-xl font-bold text-white flex items-center gap-2 mb-2">
-                          <Headphones className="text-primary-400" size={20} /> Contact Olive Pizza
+                      <div className="rounded-3xl bg-gradient-to-br from-white/[0.04] via-white/[0.02] to-white/[0.03] border border-white/10 p-6 md:p-8 backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
+                        <h3 className="text-xl font-bold text-white flex items-center gap-2.5 mb-2">
+                          <Headphones className="text-orange-400" size={20} /> Contact Olive Pizza
                         </h3>
                         <p className="text-xs text-slate-400 mb-6">
                           Need instant assistance with an ongoing order? Our team is live and ready to help.
@@ -789,44 +816,52 @@ export default function CustomerDashboard() {
                             href="https://wa.me/919174145455?text=Hello%20Olive%20Pizza%20Support"
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 hover:bg-emerald-500/20 text-emerald-400 transition-all flex flex-col items-center text-center gap-2"
+                            className="p-5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 hover:border-emerald-500/50 hover:bg-emerald-500/15 text-emerald-400 transition-all flex flex-col items-center text-center gap-2.5 group shadow-sm hover:scale-[1.02]"
                           >
-                            <MessageSquare size={24} />
-                            <span className="text-xs font-bold">WhatsApp Support</span>
-                            <span className="text-[10px] text-slate-400">+91 91741 45455</span>
+                            <div className="w-12 h-12 rounded-2xl bg-emerald-500/15 flex items-center justify-center group-hover:scale-110 transition-transform">
+                              <MessageSquare size={24} />
+                            </div>
+                            <span className="text-xs font-bold text-white">WhatsApp Support</span>
+                            <span className="text-[11px] text-emerald-300/80 font-mono">+91 91741 45455</span>
                           </a>
 
                           <a
                             href="tel:+919174145455"
-                            className="p-4 rounded-2xl bg-orange-500/10 border border-orange-500/30 hover:bg-orange-500/20 text-orange-400 transition-all flex flex-col items-center text-center gap-2"
+                            className="p-5 rounded-2xl bg-orange-500/10 border border-orange-500/30 hover:border-orange-500/50 hover:bg-orange-500/15 text-orange-400 transition-all flex flex-col items-center text-center gap-2.5 group shadow-sm hover:scale-[1.02]"
                           >
-                            <Phone size={24} />
-                            <span className="text-xs font-bold">Kitchen Hotline</span>
-                            <span className="text-[10px] text-slate-400">Call Directly</span>
+                            <div className="w-12 h-12 rounded-2xl bg-orange-500/15 flex items-center justify-center group-hover:scale-110 transition-transform">
+                              <Phone size={24} />
+                            </div>
+                            <span className="text-xs font-bold text-white">Kitchen Hotline</span>
+                            <span className="text-[11px] text-orange-300/80 font-medium">Instant Call</span>
                           </a>
 
                           <a
                             href="mailto:olivepizzarjn@gmail.com"
-                            className="p-4 rounded-2xl bg-blue-500/10 border border-blue-500/30 hover:bg-blue-500/20 text-blue-400 transition-all flex flex-col items-center text-center gap-2"
+                            className="p-5 rounded-2xl bg-blue-500/10 border border-blue-500/30 hover:border-blue-500/50 hover:bg-blue-500/15 text-blue-400 transition-all flex flex-col items-center text-center gap-2.5 group shadow-sm hover:scale-[1.02]"
                           >
-                            <Mail size={24} />
-                            <span className="text-xs font-bold">Email Support</span>
-                            <span className="text-[10px] text-slate-400">olivepizzarjn@gmail.com</span>
+                            <div className="w-12 h-12 rounded-2xl bg-blue-500/15 flex items-center justify-center group-hover:scale-110 transition-transform">
+                              <Mail size={24} />
+                            </div>
+                            <span className="text-xs font-bold text-white">Email Support</span>
+                            <span className="text-[11px] text-blue-300/80 truncate max-w-full">olivepizzarjn@gmail.com</span>
                           </a>
                         </div>
 
-                        <div className="mt-6 pt-4 border-t border-white/5 flex items-start gap-3">
-                          <MapPin size={18} className="text-primary-400 shrink-0 mt-0.5" />
+                        <div className="mt-6 pt-5 border-t border-white/5 flex items-start gap-3.5">
+                          <div className="w-9 h-9 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-orange-400 shrink-0">
+                            <MapPin size={18} />
+                          </div>
                           <div className="text-xs text-slate-400">
-                            <strong className="text-white block mb-0.5">Olive Pizza Kitchen Hub</strong>
+                            <strong className="text-white block mb-0.5 font-bold">Olive Pizza Kitchen Hub</strong>
                             Dongargaon Rd, near Saraswati School, Gokul Nagar, Rajnandgaon, Chhattisgarh 491441
                           </div>
                         </div>
                       </div>
 
                       {/* Report an Issue Form */}
-                      <div className="rounded-3xl bg-[#12151E] border border-white/10 p-6 md:p-8 shadow-xl">
-                        <h3 className="text-xl font-bold text-white flex items-center gap-2 mb-2">
+                      <div className="rounded-3xl bg-gradient-to-br from-white/[0.04] via-white/[0.02] to-white/[0.03] border border-white/10 p-6 md:p-8 backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
+                        <h3 className="text-xl font-bold text-white flex items-center gap-2.5 mb-2">
                           <AlertCircle className="text-amber-400" size={20} /> Report an Issue or Feedback
                         </h3>
                         <p className="text-xs text-slate-400 mb-6">
@@ -836,11 +871,11 @@ export default function CustomerDashboard() {
                         <form onSubmit={handleSubmitSupport} className="space-y-4">
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
-                              <label className="text-xs font-bold text-slate-400 block mb-1.5">Category</label>
+                              <label className="text-xs font-bold text-slate-300 block mb-2">Category</label>
                               <select
                                 value={supportCategory}
                                 onChange={(e) => setSupportCategory(e.target.value)}
-                                className="w-full bg-dark-900 border border-white/10 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-primary-500"
+                                className="w-full bg-black/40 border border-white/10 focus:border-orange-500/60 rounded-2xl p-3.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 backdrop-blur-md transition-all shadow-inner"
                               >
                                 <option value="Order Issue">Order Issue</option>
                                 <option value="Late Delivery">Late Delivery</option>
@@ -852,11 +887,11 @@ export default function CustomerDashboard() {
                             </div>
 
                             <div>
-                              <label className="text-xs font-bold text-slate-400 block mb-1.5">Related Order (Optional)</label>
+                              <label className="text-xs font-bold text-slate-300 block mb-2">Related Order (Optional)</label>
                               <select
                                 value={supportOrderId}
                                 onChange={(e) => setSupportOrderId(e.target.value)}
-                                className="w-full bg-dark-900 border border-white/10 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-primary-500"
+                                className="w-full bg-black/40 border border-white/10 focus:border-orange-500/60 rounded-2xl p-3.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 backdrop-blur-md transition-all shadow-inner"
                               >
                                 <option value="">Select an order or leave blank</option>
                                 {orders.slice(0, 5).map((o) => (
@@ -869,22 +904,22 @@ export default function CustomerDashboard() {
                           </div>
 
                           <div>
-                            <label className="text-xs font-bold text-slate-400 block mb-1.5">Message / Details</label>
+                            <label className="text-xs font-bold text-slate-300 block mb-2">Message / Details</label>
                             <textarea
                               required
                               rows={4}
                               value={supportMessage}
                               onChange={(e) => setSupportMessage(e.target.value)}
                               placeholder="Please describe how we can help you..."
-                              className="w-full bg-dark-900 border border-white/10 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-primary-500 resize-none"
+                              className="w-full bg-black/40 border border-white/10 focus:border-orange-500/60 rounded-2xl p-3.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 backdrop-blur-md transition-all resize-none shadow-inner"
                             />
                           </div>
 
-                          <div className="flex justify-end">
+                          <div className="flex justify-end pt-2">
                             <button
                               type="submit"
                               disabled={supportSubmitting}
-                              className="px-6 py-3 rounded-xl bg-gradient-to-r from-primary-500 to-amber-500 hover:from-primary-600 hover:to-amber-600 text-white text-xs font-bold shadow-lg shadow-primary-500/20 active:scale-95 transition-all disabled:opacity-50 cursor-pointer"
+                              className="px-6 py-3 rounded-2xl bg-gradient-to-r from-[#FF6B00] via-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-xs font-black uppercase tracking-wider shadow-lg shadow-orange-500/25 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 cursor-pointer"
                             >
                               {supportSubmitting ? "Submitting..." : "Submit Support Ticket"}
                             </button>
@@ -893,8 +928,8 @@ export default function CustomerDashboard() {
                       </div>
 
                       {/* Frequently Asked Questions */}
-                      <div className="rounded-3xl bg-[#12151E] border border-white/10 p-6 md:p-8 shadow-xl">
-                        <h3 className="text-xl font-bold text-white flex items-center gap-2 mb-2">
+                      <div className="rounded-3xl bg-gradient-to-br from-white/[0.04] via-white/[0.02] to-white/[0.03] border border-white/10 p-6 md:p-8 backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
+                        <h3 className="text-xl font-bold text-white flex items-center gap-2.5 mb-2">
                           <HelpCircle className="text-blue-400" size={20} /> Frequently Asked Questions
                         </h3>
                         <p className="text-xs text-slate-400 mb-6">
@@ -907,21 +942,21 @@ export default function CustomerDashboard() {
                             return (
                               <div
                                 key={idx}
-                                className="rounded-2xl bg-dark-900/60 border border-white/5 overflow-hidden transition-all"
+                                className="rounded-2xl bg-black/30 border border-white/5 overflow-hidden transition-all backdrop-blur-md"
                               >
                                 <button
                                   type="button"
                                   onClick={() => setActiveFaqIndex(isOpen ? null : idx)}
-                                  className="w-full p-4 flex items-center justify-between text-left gap-3 text-sm font-bold text-white hover:text-primary-400 transition-colors cursor-pointer"
+                                  className="w-full p-4.5 flex items-center justify-between text-left gap-3 text-sm font-bold text-white hover:text-orange-400 transition-colors cursor-pointer"
                                 >
                                   <span>{faq.q}</span>
                                   <ChevronDown
                                     size={16}
-                                    className={`shrink-0 transition-transform ${isOpen ? "rotate-180 text-primary-400" : "text-slate-500"}`}
+                                    className={`shrink-0 transition-transform duration-300 ${isOpen ? "rotate-180 text-orange-400" : "text-slate-500"}`}
                                   />
                                 </button>
                                 {isOpen && (
-                                  <div className="px-4 pb-4 text-xs text-slate-300 leading-relaxed border-t border-white/5 pt-3">
+                                  <div className="px-4.5 pb-4.5 text-xs text-slate-300 leading-relaxed border-t border-white/5 pt-3">
                                     {faq.a}
                                   </div>
                                 )}
@@ -936,9 +971,9 @@ export default function CustomerDashboard() {
                   {/* 6. LEGAL TAB */}
                   {activeTab === "legal" && (
                     <div className="space-y-6">
-                      <div className="rounded-3xl bg-[#12151E] border border-white/10 p-6 md:p-8 shadow-xl">
-                        <h3 className="text-xl font-bold text-white flex items-center gap-2 mb-2">
-                          <ShieldCheck className="text-primary-400" size={20} /> Legal Policies & Terms
+                      <div className="rounded-3xl bg-gradient-to-br from-white/[0.04] via-white/[0.02] to-white/[0.03] border border-white/10 p-6 md:p-8 backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
+                        <h3 className="text-xl font-bold text-white flex items-center gap-2.5 mb-2">
+                          <ShieldCheck className="text-orange-400" size={20} /> Legal Policies & Terms
                         </h3>
                         <p className="text-xs text-slate-400 mb-6">
                           Transparency is core to our kitchen. Review our policies regarding orders, refunds, cancellations, and privacy.
@@ -986,16 +1021,16 @@ export default function CustomerDashboard() {
                             <Link
                               key={idx}
                               to={item.href}
-                              className="p-5 rounded-2xl bg-dark-900/80 border border-white/5 hover:border-primary-500/40 hover:bg-dark-800 transition-all flex flex-col justify-between gap-3 group"
+                              className="p-5 rounded-2xl bg-black/30 border border-white/5 hover:border-orange-500/40 hover:bg-white/[0.04] transition-all flex flex-col justify-between gap-3 group shadow-sm hover:scale-[1.01]"
                             >
                               <div className="flex items-start justify-between gap-3">
-                                <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-primary-400 group-hover:scale-105 transition-transform">
+                                <div className="w-10 h-10 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-orange-400 group-hover:scale-110 transition-transform">
                                   <item.icon size={18} />
                                 </div>
-                                <ExternalLink size={14} className="text-slate-500 group-hover:text-primary-400 transition-colors" />
+                                <ExternalLink size={14} className="text-slate-500 group-hover:text-orange-400 transition-colors" />
                               </div>
                               <div>
-                                <h4 className="text-sm font-bold text-white group-hover:text-primary-400 transition-colors">
+                                <h4 className="text-sm font-bold text-white group-hover:text-orange-300 transition-colors">
                                   {item.title}
                                 </h4>
                                 <p className="text-xs text-slate-400 mt-1 leading-relaxed">
@@ -1013,15 +1048,15 @@ export default function CustomerDashboard() {
                   {activeTab === "account" && (
                     <div className="space-y-6">
                       {/* Notifications Preferences */}
-                      <div className="rounded-3xl bg-[#12151E] border border-white/10 p-6 md:p-8 shadow-xl">
-                        <h3 className="text-xl font-bold text-white flex items-center gap-2 mb-2">
-                          <Settings className="text-primary-400" size={20} /> Notification Preferences
+                      <div className="rounded-3xl bg-gradient-to-br from-white/[0.04] via-white/[0.02] to-white/[0.03] border border-white/10 p-6 md:p-8 backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
+                        <h3 className="text-xl font-bold text-white flex items-center gap-2.5 mb-2">
+                          <Settings className="text-orange-400" size={20} /> Notification Preferences
                         </h3>
                         <p className="text-xs text-slate-400 mb-6">
                           Control which updates you receive regarding order status and special offers.
                         </p>
 
-                        <div className="space-y-4">
+                        <div className="space-y-3.5">
                           {[
                             {
                               id: "orderUpdates",
@@ -1043,7 +1078,7 @@ export default function CustomerDashboard() {
                             return (
                               <div
                                 key={pref.id}
-                                className="flex items-center justify-between p-4 rounded-2xl bg-dark-900 border border-white/5 gap-4"
+                                className="flex items-center justify-between p-4.5 rounded-2xl bg-black/30 border border-white/5 gap-4 backdrop-blur-md"
                               >
                                 <div>
                                   <h4 className="text-sm font-bold text-white">{pref.title}</h4>
@@ -1062,7 +1097,7 @@ export default function CustomerDashboard() {
                                     }
                                     toast.success("Notification setting saved.");
                                   }}
-                                  className="w-5 h-5 accent-primary-500 rounded cursor-pointer"
+                                  className="w-5 h-5 accent-orange-500 rounded cursor-pointer"
                                 />
                               </div>
                             );
@@ -1071,10 +1106,10 @@ export default function CustomerDashboard() {
                       </div>
 
                       {/* Connected Devices */}
-                      <div className="rounded-3xl bg-[#12151E] border border-white/10 p-6 md:p-8 shadow-xl">
+                      <div className="rounded-3xl bg-gradient-to-br from-white/[0.04] via-white/[0.02] to-white/[0.03] border border-white/10 p-6 md:p-8 backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
                           <div>
-                            <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                            <h3 className="text-xl font-bold text-white flex items-center gap-2.5">
                               <Laptop className="text-blue-400" size={20} /> Active Sessions & Devices
                             </h3>
                             <p className="text-xs text-slate-400 mt-1">
@@ -1085,7 +1120,7 @@ export default function CustomerDashboard() {
                             type="button"
                             onClick={handleRevokeAllSessions}
                             disabled={revokingSessions}
-                            className="px-4 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                            className="px-4 py-2.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-sm"
                           >
                             <LogOut size={13} /> {revokingSessions ? "Revoking..." : "Revoke All Other Sessions"}
                           </button>
@@ -1094,7 +1129,7 @@ export default function CustomerDashboard() {
                       </div>
 
                       {/* App Version & Updates */}
-                      <div className="rounded-3xl bg-[#12151E] border border-white/10 p-6 md:p-8 shadow-xl">
+                      <div className="rounded-3xl bg-gradient-to-br from-white/[0.04] via-white/[0.02] to-white/[0.03] border border-white/10 p-6 md:p-8 backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                           <div>
                             <h3 className="text-base font-bold text-white">App Version</h3>
@@ -1107,7 +1142,7 @@ export default function CustomerDashboard() {
                           </div>
                           <button 
                             onClick={() => checkVersion()}
-                            className="px-4 py-2.5 bg-white/5 hover:bg-white/10 text-white rounded-xl text-xs font-bold flex items-center gap-2 transition-colors border border-white/10 cursor-pointer"
+                            className="px-4 py-2.5 bg-white/5 hover:bg-white/10 text-white rounded-xl text-xs font-bold flex items-center gap-2 transition-colors border border-white/10 cursor-pointer shadow-sm"
                           >
                             <RefreshCw className="w-4 h-4" /> Check For Updates
                           </button>
@@ -1115,7 +1150,7 @@ export default function CustomerDashboard() {
                       </div>
 
                       {/* Danger Zone */}
-                      <div className="rounded-3xl bg-red-950/20 border border-red-500/30 p-6 md:p-8 shadow-xl">
+                      <div className="rounded-3xl bg-gradient-to-br from-red-950/30 via-red-950/15 to-transparent border border-red-500/30 p-6 md:p-8 backdrop-blur-2xl shadow-xl">
                         <h3 className="text-base font-bold text-red-400 flex items-center gap-2 mb-1">
                           <AlertCircle size={18} /> Danger Zone
                         </h3>
