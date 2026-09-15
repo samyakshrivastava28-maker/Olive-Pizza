@@ -10,7 +10,7 @@ import ProcessingOverlay, { CheckoutStep } from '../components/checkout/Processi
 export default function ProcessingOrder() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { clearCart } = useCartStore();
+  const { clearCart, franchiseId: cartFranchiseId } = useCartStore();
   const { items, address, location: orderLocation, addressDetails, deliveryType, paymentMethod, finalTotal, discountAmount, couponCode, appliedPromo } = location.state || {};
   
   const [step, setStep] = useState<CheckoutStep>('preparing');
@@ -125,6 +125,7 @@ export default function ProcessingOrder() {
             location: orderLocation,
             contactPhone: customerPhone,
             orderSource: 'ONLINE',
+            franchiseId: cartFranchiseId || undefined,
             // Send couponCode so server can independently verify and compute discount.
             // Client-side discountAmount is intentionally NOT sent � server recalculates it.
             couponCode: couponCode || (appliedPromo?.code || null)

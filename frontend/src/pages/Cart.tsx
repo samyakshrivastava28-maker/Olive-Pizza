@@ -10,8 +10,9 @@ import { useStoreStatus } from "../lib/useStoreStatus";
 import { calculateDistance } from "../lib/utils";
 import { 
   Minus, Plus, Trash2, ArrowRight, Sparkles, Tag, 
-  MapPin, Clock, ShoppingBag, Flame
+  MapPin, Clock, ShoppingBag, Flame, AlertTriangle, AlertCircle
 } from "lucide-react";
+import { OrderingContextService } from "../lib/orderingContext";
 import { db } from "../lib/firebase";
 import { collection, getDocs, query, limit } from "firebase/firestore";
 import { MenuItem } from "../types/models";
@@ -19,12 +20,14 @@ import toast from "react-hot-toast";
 import SEO from "../components/SEO";
 
 export default function Cart() {
-  const { items, total, addItem, removeItem, updateQuantity, clearCart } = useCartStore();
+  const { items, total, addItem, removeItem, updateQuantity, clearCart, franchiseId: cartFranchiseId, setFranchiseId } = useCartStore();
   const { user } = useAuthStore();
   const storeStatus = useStoreStatus();
   const navigate = useNavigate();
 
   const [isOutsideDeliveryZone, setIsOutsideDeliveryZone] = useState(false);
+  const [showFranchiseMismatch, setShowFranchiseMismatch] = useState(false);
+  const [resolvedFranchiseInfo, setResolvedFranchiseInfo] = useState<{ id: string; name: string } | null>(null);
   const [recommendations, setRecommendations] = useState<MenuItem[]>([]);
   const [couponCode, setCouponCode] = useState("BEST50");
   const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discount: number } | null>({ code: "BEST50", discount: 50 });
@@ -32,22 +35,41 @@ export default function Cart() {
   const [deliveryInstruction, setDeliveryInstruction] = useState("Please ring the bell");
 
   useEffect(() => {
-    if (!storeStatus.isLoading) {
-      LocationManager.getCurrentLocation({ forcePrompt: false })
-        .then((location) => {
-          const distance = calculateDistance(
-            RESTAURANT_LOCATION.lat,
-            RESTAURANT_LOCATION.lng,
-            location.lat,
-            location.lng,
-          );
-          if (distance > storeStatus.deliveryRadiusKm) {
-            setIsOutsideDeliveryZone(true);
-          }
-        })
-        .catch((error) => console.log("Geolocation error", error));
-    }
+    const verifyCartLocationAndFranchise = async () => {
+      const lat = (user as any)?.lat;
+      const lng = (user as any)?.lng;
 
+      if (lat != null && lng != null && !isNaN(Number(lat)) && !isNaN(Number(lng))) {
+        const res = await OrderingContextService.resolveContext({
+          lat: Number(lat),
+          lng: Number(lng),
+          customerId: user?.uid
+        });
+
+        if (!res.isServiceable || !res.context) {
+          setIsOutsideDeliveryZone(true);
+        } else {
+          setIsOutsideDeliveryZone(false);
+          const currentFranchiseId = res.context.franchiseId;
+
+          // Check if cart has items belonging to another franchise (Section 3c)
+          if (items.length > 0 && cartFranchiseId && cartFranchiseId !== currentFranchiseId) {
+            setResolvedFranchiseInfo({
+              id: currentFranchiseId,
+              name: res.context.branchName || 'Olive Pizza'
+            });
+            setShowFranchiseMismatch(true);
+          } else if (!cartFranchiseId && currentFranchiseId) {
+            setFranchiseId(currentFranchiseId);
+          }
+        }
+      }
+    };
+
+    verifyCartLocationAndFranchise();
+  }, [user?.lat, user?.lng, items.length, cartFranchiseId]);
+
+  useEffect(() => {
     const fetchRecommendations = async () => {
       try {
         const { products: storeProducts } = useDataStore.getState();
@@ -131,6 +153,14 @@ export default function Cart() {
   const finalTotal = Math.max(0, subtotal - couponDiscount) + deliveryFee + taxes;
 
   const handleProceed = () => {
+    if (isOutsideDeliveryZone) {
+      toast.error("We currently don't deliver to this location.");
+      return;
+    }
+    if (showFranchiseMismatch) {
+      toast.error("Your cart has items from another location. Please resolve to proceed.");
+      return;
+    }
     navigate("/checkout");
   };
 
@@ -509,6 +539,53 @@ export default function Cart() {
           </button>
         </div>
       </div>
+
+      {/* ── Cross-Franchise Cart Mismatch Modal (Section 3c) ── */}
+      <AnimatePresence>
+        {showFranchiseMismatch && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/75 backdrop-blur-md">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-dark-900 border border-amber-500/30 rounded-3xl p-6 max-w-md w-full text-center space-y-4 shadow-2xl"
+            >
+              <div className="w-14 h-14 mx-auto rounded-full bg-amber-500/20 flex items-center justify-center text-amber-400">
+                <AlertTriangle className="w-7 h-7" />
+              </div>
+              <h3 className="text-lg font-black text-white">Different Store Location</h3>
+              <p className="text-sm text-slate-300 leading-relaxed">
+                Your cart contains items from a different Olive Pizza location. Would you like to start a new cart for your current location?
+              </p>
+              <div className="pt-2 flex flex-col gap-2">
+                <button
+                  onClick={() => {
+                    clearCart();
+                    if (resolvedFranchiseInfo) {
+                      setFranchiseId(resolvedFranchiseInfo.id);
+                    }
+                    setShowFranchiseMismatch(false);
+                    toast.success('Started a fresh cart for your location');
+                    navigate('/menu');
+                  }}
+                  className="w-full py-3 rounded-2xl bg-amber-500 hover:bg-amber-600 text-dark-950 font-black text-sm transition-all shadow-lg active:scale-95"
+                >
+                  Start New Cart
+                </button>
+                <button
+                  onClick={() => {
+                    setShowFranchiseMismatch(false);
+                    navigate('/onboarding/location');
+                  }}
+                  className="w-full py-3 rounded-2xl bg-white/10 hover:bg-white/15 text-white font-bold text-sm transition-all"
+                >
+                  Keep Previous Location
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </PageTransition>
     </>
   );

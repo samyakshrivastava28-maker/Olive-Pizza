@@ -5,6 +5,7 @@ import { useNavigate } from "react-router";
 import { useAuthStore } from "../../lib/store";
 import { LocationManager } from "../../lib/permissions";
 import { fetchApi } from "../../lib/config";
+import { OrderingContextService } from "../../lib/orderingContext";
 import {
   MapContainer,
   TileLayer,
@@ -124,6 +125,20 @@ export default function SetupLocation() {
       const finalState = state.trim() ? state : "Chhattisgarh";
       const finalPincode = pincode.trim() ? pincode : "491441";
 
+      // 1. Validate delivery radius before saving (Enforcement Point 1)
+      const resolution = await OrderingContextService.resolveContext({
+        lat: markerPos.lat,
+        lng: markerPos.lng,
+        addressLine: finalAddress,
+        customerId: auth.currentUser.uid
+      });
+
+      if (!resolution.isServiceable) {
+        setError(resolution.error || "We currently don't deliver to this location.");
+        setLoading(false);
+        return;
+      }
+
       await updateDoc(doc(db, "users", auth.currentUser.uid), {
         fullAddress: finalAddress,
         full_address: finalAddress,
@@ -136,9 +151,9 @@ export default function SetupLocation() {
         location_setup_completed: true,
       }).catch(err => console.warn('[SetupLocation] Firestore client write warning:', err));
 
-      // Call backend route as backup
+      // 2. Call backend route to sync location & store authoritative ordering context
       const token = await auth.currentUser.getIdToken();
-      fetchApi('/api/users/location', {
+      const locRes = await fetchApi('/api/users/location', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -152,7 +167,14 @@ export default function SetupLocation() {
           lat: markerPos.lat,
           lng: markerPos.lng
         })
-      }).catch(err => console.warn('[SetupLocation] Backend sync warning:', err));
+      });
+
+      const locData = await locRes.json().catch(() => ({}));
+      if (!locRes.ok || locData.isServiceable === false) {
+        setError(locData.error || "We currently don't deliver to this location.");
+        setLoading(false);
+        return;
+      }
 
       const currentUser = useAuthStore.getState().user;
       const currentRole = useAuthStore.getState().role;
@@ -170,7 +192,7 @@ export default function SetupLocation() {
       navigate("/");
     } catch (err: any) {
       console.error(err);
-      navigate("/");
+      setError(err.message || "Failed to confirm delivery location.");
     } finally {
       setLoading(false);
     }

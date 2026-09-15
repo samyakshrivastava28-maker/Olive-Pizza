@@ -14,6 +14,7 @@ import PageTransition from '../components/PageTransition';
 import LocationPicker3D from '../components/map/LocationPicker3D';
 import { fetchRoute } from '../services/navigationRouting.service';
 import { RESTAURANT_LOCATION, MAX_DELIVERY_RADIUS_KM, fetchApi } from '../lib/config';
+import { OrderingContextService } from '../lib/orderingContext';
 import { calculateDistance } from '../lib/utils';
 import { useDataStore } from '../lib/dataStore';
 import SEO from '../components/SEO';
@@ -62,6 +63,33 @@ export default function Checkout() {
     lat: (user as any)?.lat || RESTAURANT_LOCATION.lat,
     lng: (user as any)?.lng || RESTAURANT_LOCATION.lng
   });
+
+  const [isServiceableLocation, setIsServiceableLocation] = useState<boolean>(true);
+  const [serviceAreaNotice, setServiceAreaNotice] = useState<string>('');
+
+  // Validate delivery radius whenever mapCenter changes (Enforcement Point 3)
+  useEffect(() => {
+    let active = true;
+    const verifyRadius = async () => {
+      if (!mapCenter.lat || !mapCenter.lng) return;
+      const res = await OrderingContextService.resolveContext({
+        lat: mapCenter.lat,
+        lng: mapCenter.lng,
+        addressLine: address,
+        customerId: user?.uid
+      });
+      if (!active) return;
+      if (!res.isServiceable) {
+        setIsServiceableLocation(false);
+        setServiceAreaNotice(res.error || "We currently don't deliver to this location.");
+      } else {
+        setIsServiceableLocation(true);
+        setServiceAreaNotice('');
+      }
+    };
+    verifyRadius();
+    return () => { active = false; };
+  }, [mapCenter.lat, mapCenter.lng, address, user?.uid]);
 
   // Auto-sync customer onboarding location or fetch GPS if address empty
   useEffect(() => {
@@ -243,42 +271,17 @@ export default function Checkout() {
     }
 
     if (deliveryType === 'delivery') {
-      try {
-        const route = await fetchRoute(
-          { lat: RESTAURANT_LOCATION.lat, lng: RESTAURANT_LOCATION.lng },
-          { lat: mapCenter.lat, lng: mapCenter.lng }
-        );
-        if (route && route.distanceMetres > 0) {
-          const maxDistMetres = MAX_DELIVERY_RADIUS_KM * 1000;
-          if (route.distanceMetres > maxDistMetres) {
-            toast.error(`Delivery unavailable! Distance is ${(route.distanceMetres/1000).toFixed(1)} km (Max ${MAX_DELIVERY_RADIUS_KM} km)`);
-            return;
-          }
-        } else {
-          // Haversine geometric fallback if road routing API is temporarily unavailable
-          const haversineDistKm = calculateDistance(
-            RESTAURANT_LOCATION.lat,
-            RESTAURANT_LOCATION.lng,
-            mapCenter.lat,
-            mapCenter.lng
-          );
-          if (haversineDistKm > MAX_DELIVERY_RADIUS_KM) {
-            toast.error(`Delivery unavailable! Distance is ${haversineDistKm.toFixed(1)} km (Max ${MAX_DELIVERY_RADIUS_KM} km)`);
-            return;
-          }
-        }
-      } catch (err) {
-        // Haversine geometric fallback
-        const haversineDistKm = calculateDistance(
-          RESTAURANT_LOCATION.lat,
-          RESTAURANT_LOCATION.lng,
-          mapCenter.lat,
-          mapCenter.lng
-        );
-        if (haversineDistKm > MAX_DELIVERY_RADIUS_KM) {
-          toast.error(`Delivery unavailable! Distance is ${haversineDistKm.toFixed(1)} km (Max ${MAX_DELIVERY_RADIUS_KM} km)`);
-          return;
-        }
+      // Enforcement Point 3: Cart / checkout start (re-verify)
+      const checkoutVal = await OrderingContextService.validateCheckout({
+        lat: mapCenter.lat,
+        lng: mapCenter.lng,
+        address,
+        items
+      });
+
+      if (!checkoutVal.serviceable) {
+        toast.error(checkoutVal.error || "We currently don't deliver to this location.");
+        return;
       }
     }
 
@@ -409,6 +412,23 @@ export default function Checkout() {
             </div>
           </motion.div>
         ) : null}
+
+        {/* ── Delivery Radius Block Banner (Enforcement Point 3) ── */}
+        {deliveryType === 'delivery' && !isServiceableLocation && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-red-500/10 border border-red-500/30 rounded-3xl p-4 flex items-start gap-3 text-red-200"
+          >
+            <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+            <div>
+              <h4 className="font-bold text-sm text-red-300">Delivery Unavailable</h4>
+              <p className="text-xs text-red-200/80 mt-0.5">
+                We currently don't deliver to this location.
+              </p>
+            </div>
+          </motion.div>
+        )}
 
         {/* ── Order Mode Selector (Delivery vs Store Pickup) ── */}
         <div className="bg-white/[0.02] border border-white/5 rounded-3xl p-4 flex gap-3">

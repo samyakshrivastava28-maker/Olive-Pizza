@@ -97,7 +97,9 @@ import toast from 'react-hot-toast';
 interface CartState {
   items: CartItem[];
   total: number;
-  addItem: (item: CartItem) => void;
+  franchiseId?: string | null;
+  setFranchiseId: (franchiseId: string | null) => void;
+  addItem: (item: CartItem, franchiseId?: string) => void;
   removeItem: (id: string) => void;
   updateQuantity: (id: string, quantity: number) => void;
   clearCart: () => void;
@@ -106,7 +108,9 @@ interface CartState {
 export const useCartStore = create<CartState>((set) => ({
   items: [],
   total: 0,
-  addItem: (item) => set((state) => {
+  franchiseId: null,
+  setFranchiseId: (franchiseId) => set({ franchiseId }),
+  addItem: (item, franchiseId) => set((state) => {
     if (useAppStore.getState().updateAvailable) {
       toast.error(
         (t) => (
@@ -137,19 +141,19 @@ export const useCartStore = create<CartState>((set) => ({
       newItems = [...state.items, item];
     }
     const total = newItems.reduce((acc, curr) => acc + (curr.price * curr.quantity), 0);
-    return { items: newItems, total };
+    return { items: newItems, total, franchiseId: franchiseId || state.franchiseId || (item as any).franchiseId || null };
   }),
   removeItem: (id) => set((state) => {
     const newItems = state.items.filter(i => i.id !== id);
     const total = newItems.reduce((acc, curr) => acc + (curr.price * curr.quantity), 0);
-    return { items: newItems, total };
+    return { items: newItems, total, franchiseId: newItems.length === 0 ? null : state.franchiseId };
   }),
   updateQuantity: (id, quantity) => set((state) => {
     const newItems = state.items.map(i => i.id === id ? { ...i, quantity } : i);
     const total = newItems.reduce((acc, curr) => acc + (curr.price * curr.quantity), 0);
     return { items: newItems, total };
   }),
-  clearCart: () => set({ items: [], total: 0 }),
+  clearCart: () => set({ items: [], total: 0, franchiseId: null }),
 }));
 
 // Owner POS Alert Settings Store

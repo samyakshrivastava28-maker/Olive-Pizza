@@ -10,8 +10,9 @@ import PageTransition from "../components/PageTransition";
 import ProductCard from "../components/ProductCard";
 import ProductCustomizationModal from "../components/menu/ProductCustomizationModal";
 import { isStoreOpen } from "../lib/utils";
-import { Search, MapPin, Bell, User, Sparkles, SlidersHorizontal, Flame, Star, Award, Heart } from "lucide-react";
+import { Search, MapPin, Bell, User, Sparkles, SlidersHorizontal, Flame, Star, Award, Heart, AlertCircle } from "lucide-react";
 import { useLocation, useNavigate } from "react-router";
+import { OrderingContextService } from "../lib/orderingContext";
 import SEO from "../components/SEO";
 
 function MenuSkeleton() {
@@ -84,6 +85,29 @@ export default function Menu() {
   useEffect(() => {
     initialize();
   }, [initialize]);
+
+  // Enforcement Point 2: Delivery radius re-verification before accessing menu
+  const [isOutsideDeliveryZone, setIsOutsideDeliveryZone] = useState(false);
+
+  useEffect(() => {
+    const checkRadius = async () => {
+      const lat = (user as any)?.lat;
+      const lng = (user as any)?.lng;
+      if (lat != null && lng != null && !isNaN(Number(lat)) && !isNaN(Number(lng))) {
+        const res = await OrderingContextService.resolveContext({
+          lat: Number(lat),
+          lng: Number(lng),
+          customerId: user?.uid
+        });
+        if (!res.isServiceable) {
+          setIsOutsideDeliveryZone(true);
+        } else {
+          setIsOutsideDeliveryZone(false);
+        }
+      }
+    };
+    checkRadius();
+  }, [user]);
 
   const allItems: MenuItem[] = useMemo(() => {
     const parsedProducts = products
@@ -298,7 +322,23 @@ export default function Menu() {
             </div>
 
             {/* ── Production Mobile/Tablet Product Grid ── */}
-            {!isInitialized ? (
+            {isOutsideDeliveryZone ? (
+              <div className="text-center py-12 bg-red-500/10 rounded-3xl border border-red-500/20 p-8 space-y-4 my-6">
+                <div className="w-16 h-16 mx-auto rounded-full bg-red-500/20 flex items-center justify-center">
+                  <AlertCircle className="w-8 h-8 text-red-400" />
+                </div>
+                <h2 className="text-xl font-black text-white">We currently don't deliver to this location.</h2>
+                <p className="text-xs sm:text-sm text-slate-300 max-w-md mx-auto">
+                  Your delivery address is outside the delivery radius of Olive Pizza branches. Please update your location to view the active menu and place orders.
+                </p>
+                <button 
+                  onClick={() => navigate('/onboarding/location')}
+                  className="px-6 py-3 rounded-full bg-amber-500 hover:bg-amber-600 text-dark-950 font-black text-xs shadow-lg transition-transform active:scale-95"
+                >
+                  Change Delivery Location
+                </button>
+              </div>
+            ) : !isInitialized ? (
               <MenuSkeleton />
             ) : filteredItems.length === 0 ? (
               <div className="text-center text-slate-400 py-16 bg-dark-900/40 rounded-3xl border border-white/5 p-8">
