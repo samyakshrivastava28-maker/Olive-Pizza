@@ -32,6 +32,19 @@
 				<string>com.googleusercontent.apps.1017239455106-jbqeeai0fh38shnpdfk813lhj1trc9ic</string>
 			</array>
 		</dict>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>olivepizza</string>
+			</array>
+		</dict>
+	</array>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>truecaller</string>
+		<string>truesdk</string>
 	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>

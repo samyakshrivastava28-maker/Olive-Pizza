@@ -1,4 +1,4 @@
-import {
+import React, {
   useEffect,
   useState,
   useRef,
@@ -52,6 +52,37 @@ import TrackingMap from "../components/tracking/TrackingMap";
 import { fetchRoute } from "../services/navigationRouting.service";
 import SEO from "../components/SEO";
 import { useLiveOrderTracking } from "../hooks/useLiveOrderTracking";
+
+class MapErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(error: any) {
+    console.warn('[OrderTracking] Map render error caught gracefully:', error);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="w-full h-full flex flex-col items-center justify-center bg-dark-900/90 text-center p-4 rounded-2xl border border-white/10">
+          <Navigation className="w-8 h-8 text-amber-400 mb-2 animate-pulse" />
+          <p className="text-white font-bold text-xs mb-1">Live Map Telemetry Active</p>
+          <p className="text-slate-400 text-[11px] max-w-xs">Our kitchen is preparing your order with live dispatch telemetry.</p>
+          <button 
+            onClick={() => this.setState({ hasError: false })}
+            className="mt-3 px-3 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/40 rounded-lg text-[10px] font-bold"
+          >
+            Retry Map
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 // ─── Constants ───────────────────────────────────────────────────────
 const TRACKABLE_STATUSES = new Set([
@@ -441,7 +472,7 @@ export default function OrderTracking() {
           step: getStageIndex(order.status) + 1,
           itemsSummary,
           totalAmount: Number(order.totalAmount || 0),
-          etaMinutes: eta || null,
+          etaMinutes: eta ?? undefined,
           riderName: partnerDetails?.name || order.deliveryPartnerName || '',
           riderPhone: partnerDetails?.phone || order.deliveryPartnerPhone || '',
           restaurantName: 'Olive Pizza',
@@ -1254,27 +1285,29 @@ export default function OrderTracking() {
                   <span className="text-[11px] text-slate-400 font-mono">OpenStreetMap</span>
                 </div>
                 <div className="relative w-full h-[260px] rounded-2xl overflow-hidden bg-[#0A0D14]">
-                  <TrackingMap
-                    restaurantLat={RESTAURANT_LOCATION.lat}
-                    restaurantLng={RESTAURANT_LOCATION.lng}
-                    customerLat={order?.deliveryAddress?.lat ? Number(order.deliveryAddress.lat) : undefined}
-                    customerLng={order?.deliveryAddress?.lng ? Number(order.deliveryAddress.lng) : undefined}
-                    partnerLat={partnerLocation?.lat}
-                    partnerLng={partnerLocation?.lng}
-                    partnerHeading={partnerHeading}
-                    partnerName={partnerDetails?.name}
-                    status={order.status}
-                    lastTelemetryAt={order?.driverLocation?.updatedAt || order?.updatedAt}
-                    onRouteChange={({ distanceKm, durationMinutes, routeStatus }) => {
-                      if (routeStatus === 'available') {
-                        if (distanceKm !== null) setDistance(distanceKm);
-                        if (durationMinutes !== null) setEta(durationMinutes);
-                      } else {
-                        setDistance(null);
-                        setEta(null);
-                      }
-                    }}
-                  />
+                  <MapErrorBoundary>
+                    <TrackingMap
+                      restaurantLat={RESTAURANT_LOCATION.lat}
+                      restaurantLng={RESTAURANT_LOCATION.lng}
+                      customerLat={order?.deliveryAddress?.lat ? Number(order.deliveryAddress.lat) : undefined}
+                      customerLng={order?.deliveryAddress?.lng ? Number(order.deliveryAddress.lng) : undefined}
+                      partnerLat={partnerLocation?.lat}
+                      partnerLng={partnerLocation?.lng}
+                      partnerHeading={partnerHeading}
+                      partnerName={partnerDetails?.name}
+                      status={order.status}
+                      lastTelemetryAt={order?.driverLocation?.updatedAt || order?.updatedAt}
+                      onRouteChange={({ distanceKm, durationMinutes, routeStatus }) => {
+                        if (routeStatus === 'available') {
+                          if (distanceKm !== null) setDistance(distanceKm);
+                          if (durationMinutes !== null) setEta(durationMinutes);
+                        } else {
+                          setDistance(null);
+                          setEta(null);
+                        }
+                      }}
+                    />
+                  </MapErrorBoundary>
                 </div>
               </div>
 
@@ -1472,27 +1505,29 @@ export default function OrderTracking() {
                 </div>
 
                 <div className="relative w-full h-[520px] rounded-2xl overflow-hidden bg-[#0A0D14]">
-                  <TrackingMap
-                    restaurantLat={RESTAURANT_LOCATION.lat}
-                    restaurantLng={RESTAURANT_LOCATION.lng}
-                    customerLat={order?.deliveryAddress?.lat ? Number(order.deliveryAddress.lat) : undefined}
-                    customerLng={order?.deliveryAddress?.lng ? Number(order.deliveryAddress.lng) : undefined}
-                    partnerLat={partnerLocation?.lat}
-                    partnerLng={partnerLocation?.lng}
-                    partnerHeading={partnerHeading}
-                    partnerName={partnerDetails?.name}
-                    status={order.status}
-                    lastTelemetryAt={order?.driverLocation?.updatedAt || order?.updatedAt}
-                    onRouteChange={({ distanceKm, durationMinutes, routeStatus }) => {
-                      if (routeStatus === 'available') {
-                        if (distanceKm !== null) setDistance(distanceKm);
-                        if (durationMinutes !== null) setEta(durationMinutes);
-                      } else {
-                        setDistance(null);
-                        setEta(null);
-                      }
-                    }}
-                  />
+                  <MapErrorBoundary>
+                    <TrackingMap
+                      restaurantLat={RESTAURANT_LOCATION.lat}
+                      restaurantLng={RESTAURANT_LOCATION.lng}
+                      customerLat={order?.deliveryAddress?.lat ? Number(order.deliveryAddress.lat) : undefined}
+                      customerLng={order?.deliveryAddress?.lng ? Number(order.deliveryAddress.lng) : undefined}
+                      partnerLat={partnerLocation?.lat}
+                      partnerLng={partnerLocation?.lng}
+                      partnerHeading={partnerHeading}
+                      partnerName={partnerDetails?.name}
+                      status={order.status}
+                      lastTelemetryAt={order?.driverLocation?.updatedAt || order?.updatedAt}
+                      onRouteChange={({ distanceKm, durationMinutes, routeStatus }) => {
+                        if (routeStatus === 'available') {
+                          if (distanceKm !== null) setDistance(distanceKm);
+                          if (durationMinutes !== null) setEta(durationMinutes);
+                        } else {
+                          setDistance(null);
+                          setEta(null);
+                        }
+                      }}
+                    />
+                  </MapErrorBoundary>
                 </div>
               </div>
             </div>

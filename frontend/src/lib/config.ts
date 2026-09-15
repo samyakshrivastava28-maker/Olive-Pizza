@@ -63,8 +63,11 @@ export const fetchApi = async (endpoint: string, init?: RequestInit): Promise<Re
   
   try {
     const res = await fetch(primaryUrl, mergedInit);
-    if (res.ok || !primaryUrl.startsWith('/')) return res;
-    // If relative fetch failed with 404/502/504, try direct production Render backend
+    // If the response is OK, or not a relative proxy URL, or a valid HTTP client status (400, 401, 403, 429), return it directly
+    if (res.ok || !primaryUrl.startsWith('/') || (res.status < 500 && res.status !== 404)) {
+      return res;
+    }
+    // If relative fetch failed with gateway errors (502/503/504) or missing route (404), try direct production Render backend
     const directUrl = `${PRODUCTION_BACKEND_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
     return await fetch(directUrl, mergedInit);
   } catch (err) {

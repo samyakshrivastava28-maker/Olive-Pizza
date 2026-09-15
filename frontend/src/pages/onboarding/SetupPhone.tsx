@@ -170,9 +170,16 @@ export default function SetupPhone() {
       }
     } catch (err: any) {
       console.error('[SetupPhone] Truecaller error:', err);
-      const msg = err.message || "Truecaller verification was cancelled or unavailable.";
-      setError(msg);
-      toast.error(msg);
+      let userFriendlyMsg = "Truecaller is temporarily unavailable. Please verify via SMS.";
+      if (err.code === 'TRUECALLER_CONFIG_MISSING') {
+        userFriendlyMsg = "Truecaller verification is not configured for this environment. Please verify via SMS.";
+      } else if (err.code === 'RATE_LIMIT_EXCEEDED') {
+        userFriendlyMsg = "Too many verification attempts. Please wait a few minutes or verify via SMS.";
+      } else if (err.message && !err.message.includes('object Object')) {
+        userFriendlyMsg = err.message;
+      }
+      setError(userFriendlyMsg);
+      toast.error(userFriendlyMsg);
     } finally {
       setLoading(false);
     }
@@ -366,11 +373,25 @@ export default function SetupPhone() {
             )}
           </div>
 
-          {/* Error Message */}
+          {/* Error Message with direct SMS fallback */}
           {error && (
-            <div className="mb-6 flex items-start gap-2 p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-xl text-xs text-red-600 dark:text-red-400">
-              <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-              <span>{error}</span>
+            <div className="mb-6 p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-xl space-y-2">
+              <div className="flex items-start gap-2 text-xs text-red-600 dark:text-red-400">
+                <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                <span className="flex-1">{error}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setError("");
+                  handleSendOtp();
+                }}
+                disabled={loading}
+                className="w-full flex items-center justify-center gap-1.5 py-2 px-3 text-xs font-semibold text-white bg-amber-600 hover:bg-amber-700 rounded-lg shadow-sm transition-colors"
+              >
+                <MessageSquare className="w-3.5 h-3.5" />
+                <span>Verify by SMS instead</span>
+              </button>
             </div>
           )}
 
@@ -532,6 +553,21 @@ export default function SetupPhone() {
           requestId={webSession.requestId}
           onSuccess={handleQRSuccess}
           onError={handleQRError}
+          onSwitchToSms={() => {
+            setQrModalOpen(false);
+            setStep('otp_input');
+            handleSendOtp();
+          }}
+          onRefreshSession={async () => {
+            try {
+              const targetFormatted = normalizePhone(phone);
+              const token = auth.currentUser ? await auth.currentUser.getIdToken() : undefined;
+              const sessionRes = await TruecallerService.createWebSession(targetFormatted, token);
+              setWebSession({ deepLink: sessionRes.deepLink, requestId: sessionRes.requestId });
+            } catch {
+              toast.error("Failed to refresh Truecaller session.");
+            }
+          }}
         />
       )}
     </div>

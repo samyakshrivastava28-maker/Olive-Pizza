@@ -1,337 +1,267 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
-  signInWithEmailAndPassword,
   signInWithPopup,
-  getRedirectResult,
   GoogleAuthProvider,
-  signInWithCredential,
-  signOut,
-  RecaptchaVerifier,
-  signInWithPhoneNumber,
-  signInWithCustomToken
+  signInWithCustomToken,
 } from "firebase/auth";
 import { Capacitor } from '@capacitor/core';
 import { auth, db } from "../lib/firebase";
 import { doc, getDoc, setDoc } from "firebase/firestore";
-import { useNavigate, Link } from "react-router";
+import { useNavigate, useSearchParams, Link } from "react-router";
 import toast from 'react-hot-toast';
 import { useAuthStore } from "../lib/store";
 import PizzaLoader from "../components/ui/PizzaLoader";
-import { withAuthRetry } from "../lib/authRetry";
-import { translateError, logDetailedError } from "../lib/errorTranslator";
-import { Mail, Lock, EyeOff, Eye, AlertCircle, ArrowRight, User, Phone, CheckCircle2, ShieldCheck, Zap, Smartphone } from "lucide-react";
+import { Mail, Phone, CheckCircle2, ArrowRight, RefreshCw, Smartphone, QrCode } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { fetchApi } from "../lib/config";
-import { TruecallerService } from "../plugins/Truecaller";
+import { TruecallerService, TruecallerSessionStatusResponse } from "../plugins/Truecaller";
 import TruecallerQRModal from "../components/auth/TruecallerQRModal";
 
 export default function Login() {
-  const [authMethod, setAuthMethod] = useState<'email' | 'phone'>('email');
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [phone, setPhone] = useState("");
-  const [phoneOtp, setPhoneOtp] = useState("");
-  const [confirmationResult, setConfirmationResult] = useState<any>(null);
-  const [otpSent, setOtpSent] = useState(false);
-  const [phoneLoading, setPhoneLoading] = useState(false);
-  const [pinId, setPinId] = useState<string | null>(null);
-  const [phoneOtpMode, setPhoneOtpMode] = useState<'infobip' | 'firebase'>('infobip');
-  const [qrModalOpen, setQrModalOpen] = useState(false);
-  const [webSession, setWebSession] = useState<{ deepLink: string; requestId: string } | null>(null);
-  const [truecallerLoading, setTruecallerLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [searchParams] = useSearchParams();
+  const redirectUrl = searchParams.get('redirect') || '/';
   const navigate = useNavigate();
 
-  // Authorize customer app access via canonical backend
-  const verifyCustomerAccess = async (userCredential: any) => {
+  // Primary Tab: 'email' | 'phone'
+  const [authMethod, setAuthMethod] = useState<'email' | 'phone'>('email');
+
+  // Email OTP state
+  const [email, setEmail] = useState("");
+  const [emailStep, setEmailStep] = useState<'enter_email' | 'enter_code'>('enter_email');
+  const [emailCode, setEmailCode] = useState(["", "", "", ""]);
+  const [emailCooldown, setEmailCooldown] = useState(0);
+  const emailInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  // Phone OTP & Truecaller state
+  const [phone, setPhone] = useState("");
+  const [phoneStep, setPhoneStep] = useState<'enter_phone' | 'enter_otp'>('enter_phone');
+  const [phoneOtp, setPhoneOtp] = useState("");
+  const [pinId, setPinId] = useState<string | null>(null);
+  const [phoneCooldown, setPhoneCooldown] = useState(0);
+  const [isTruecallerNative, setIsTruecallerNative] = useState(false);
+  const [qrModalOpen, setQrModalOpen] = useState(false);
+  const [webSession, setWebSession] = useState<{ deepLink: string; requestId: string } | null>(null);
+
+  // Common UI state
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  // Check Truecaller native availability
+  useEffect(() => {
+    TruecallerService.isNativeSupported().then(setIsTruecallerNative).catch(() => setIsTruecallerNative(false));
+  }, []);
+
+  // Cooldown countdowns
+  useEffect(() => {
+    if (emailCooldown > 0) {
+      const t = setTimeout(() => setEmailCooldown(emailCooldown - 1), 1000);
+      return () => clearTimeout(t);
+    }
+  }, [emailCooldown]);
+
+  useEffect(() => {
+    if (phoneCooldown > 0) {
+      const t = setTimeout(() => setPhoneCooldown(phoneCooldown - 1), 1000);
+      return () => clearTimeout(t);
+    }
+  }, [phoneCooldown]);
+
+  // ─────────────────────────────────────────────────────────────
+  // 1. EMAIL OTP AUTHENTICATION
+  // ─────────────────────────────────────────────────────────────
+  const handleSendEmailCode = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes("@")) {
+      setError("Please enter a valid email address.");
+      return;
+    }
+
+    setError("");
+    setLoading(true);
+
     try {
-      const idToken = await userCredential.user.getIdToken();
-      const res = await fetchApi('/api/auth/authorize-app', {
+      const res = await fetchApi('/api/auth/email/send-code', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${idToken}`
-        },
-        body: JSON.stringify({ targetApp: 'CUSTOMER' })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: cleanEmail })
       });
 
       const data = await res.json().catch(() => null);
 
-      if (res.status === 429) {
-        await signOut(auth);
-        throw new Error("Too many login attempts. Please try again later.");
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.message || "Failed to send verification code. Please try again.");
       }
 
-      if (res.status === 403 || !res.ok || !data?.authorized) {
-        await signOut(auth);
-        throw new Error(data?.reason || "This account is not authorized to access the customer application.");
-      }
-
-      return data;
+      setEmailStep('enter_code');
+      setEmailCooldown(60);
+      toast.success("4-digit code sent to your email!");
+      setTimeout(() => emailInputRefs.current[0]?.focus(), 100);
     } catch (err: any) {
-      throw err;
-    }
-  };
-
-  // Handle redirect result on mount
-  useEffect(() => {
-    const checkRedirect = async () => {
-      try {
-        const result = await getRedirectResult(auth);
-        if (result && result.user) {
-          try {
-            await verifyCustomerAccess(result);
-
-            const userRef = doc(db, "users", result.user.uid);
-            const userDoc = await getDoc(userRef);
-
-            const userEmail = result.user.email?.toLowerCase() || "";
-            let finalRole = "customer";
-
-            if (!userDoc.exists()) {
-              await setDoc(userRef, {
-                email: userEmail,
-                name: result.user.displayName || "",
-                role: "customer",
-                createdAt: new Date().toISOString(),
-              });
-            } else {
-              const data = userDoc.data();
-              finalRole = data?.role || "customer";
-              
-              useAuthStore.getState().setUser({
-                uid: result.user.uid,
-                email: result.user.email,
-                name: data?.name,
-                phone: data?.phone,
-                photoURL: result.user.photoURL || data?.photoUrl,
-                phoneVerified: data?.phoneVerified ?? false,
-                phoneSetupCompleted: data?.phoneVerified ? (data?.phoneSetupCompleted ?? true) : false,
-                locationSetupCompleted: data?.locationSetupCompleted ?? !!data?.fullAddress,
-                lat: data?.lat,
-                lng: data?.lng,
-                fullAddress: data?.fullAddress,
-                emailVerified: result.user.emailVerified,
-                status: data?.status,
-              }, finalRole as any);
-            }
-
-            navigate("/");
-          } catch (err: any) {
-            logDetailedError(err, { context: "Redirect Result Sync" });
-            toast.error(err?.message || "Failed to authorize customer access.");
-          }
-        }
-      } catch (err: any) {
-        logDetailedError(err, { context: "Redirect Sign-In Error" });
-        toast.error(translateError(err));
-      }
-    };
-    checkRedirect();
-  }, [navigate]);
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
-    try {
-      const userCredential = await withAuthRetry(() => signInWithEmailAndPassword(
-        auth,
-        email.trim(),
-        password,
-      ), "Email Login");
-
-      // Verify customer authorization and enforce rate limits
-      await verifyCustomerAccess(userCredential);
-      
-      let data: any = null;
-      try {
-        const userDoc = await getDoc(doc(db, "users", userCredential.user.uid));
-        if (userDoc.exists()) {
-          data = userDoc.data();
-        }
-      } catch (docErr) {
-        console.warn("User doc fetch notice:", docErr);
-      }
-
-      const userRole = data?.role || "customer";
-
-      useAuthStore.getState().setUser({
-        uid: userCredential.user.uid,
-        email: userCredential.user.email,
-        name: data?.name || userCredential.user.displayName || userCredential.user.email?.split('@')[0] || "Customer",
-        phone: data?.phone || userCredential.user.phoneNumber,
-        photoURL: userCredential.user.photoURL || data?.photoUrl,
-        phoneVerified: data?.phoneVerified ?? false,
-        phoneSetupCompleted: data?.phoneVerified ? (data?.phoneSetupCompleted ?? true) : false,
-        locationSetupCompleted: data?.locationSetupCompleted ?? !!data?.fullAddress,
-        lat: data?.lat,
-        lng: data?.lng,
-        fullAddress: data?.fullAddress,
-        emailVerified: userCredential.user.emailVerified,
-        approvalStatus: data?.approvalStatus,
-        status: data?.status,
-        photoUrl: data?.photoUrl,
-      }, userRole as any);
-
-      toast.success("Welcome back!");
-      navigate("/");
-    } catch (err: any) {
-      setError(err.message || translateError(err));
+      setError(err.message || "Failed to send code. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
-  // 1. Send SMS OTP via Infobip with fallback to Firebase
-  const handleSendInfobipOtp = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    setError("");
+  const handleEmailCodeChange = (index: number, val: string) => {
+    const digit = val.replace(/\D/g, '').slice(-1);
+    const newCode = [...emailCode];
+    newCode[index] = digit;
+    setEmailCode(newCode);
 
-    const cleanPhone = phone.trim().replace(/\D/g, '');
-    if (cleanPhone.length < 10) {
+    if (digit && index < 3) {
+      emailInputRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleEmailKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace' && !emailCode[index] && index > 0) {
+      emailInputRefs.current[index - 1]?.focus();
+    }
+  };
+
+  const handleVerifyEmailCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const fullCode = emailCode.join('');
+    if (fullCode.length !== 4) {
+      setError("Please enter the complete 4-digit code.");
+      return;
+    }
+
+    setError("");
+    setLoading(true);
+
+    try {
+      const res = await fetchApi('/api/auth/email/signin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: email.trim().toLowerCase(),
+          code: fullCode
+        })
+      });
+
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok || !data?.success || !data?.customToken) {
+        throw new Error(data?.message || "Invalid or expired verification code.");
+      }
+
+      // Establish Firebase session with the issued custom token
+      const userCredential = await signInWithCustomToken(auth, data.customToken);
+
+      // Hydrate state
+      useAuthStore.getState().setUser({
+        uid: userCredential.user.uid,
+        email: data.user?.email || email.trim().toLowerCase(),
+        name: data.user?.name || "Customer",
+        phone: data.user?.phone || null,
+        phoneVerified: Boolean(data.user?.phoneVerified),
+        phoneSetupCompleted: Boolean(data.user?.phoneVerified),
+        locationSetupCompleted: true,
+        emailVerified: true,
+      }, 'customer');
+
+      toast.success("Welcome back to Olive Pizza! 🍕");
+      navigate(redirectUrl, { replace: true });
+    } catch (err: any) {
+      setError(err.message || "Failed to sign in. Please check your code.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ─────────────────────────────────────────────────────────────
+  // 2. PHONE OTP (INFOBIP SMS) AUTHENTICATION
+  // ─────────────────────────────────────────────────────────────
+  const formatPhoneNumber = (raw: string) => {
+    const digits = raw.replace(/\D/g, '');
+    if (digits.startsWith('91') && digits.length === 12) {
+      return `+${digits}`;
+    }
+    return `+91${digits.slice(-10)}`;
+  };
+
+  const handleSendPhoneOtp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const cleanDigits = phone.replace(/\D/g, '');
+    if (cleanDigits.length < 10) {
       setError("Please enter a valid 10-digit mobile number.");
       return;
     }
 
-    const formattedPhone = cleanPhone.startsWith('91') && cleanPhone.length === 12
-      ? `+${cleanPhone}`
-      : `+91${cleanPhone.slice(-10)}`;
-
-    setPhoneLoading(true);
+    const formatted = formatPhoneNumber(phone);
+    setError("");
+    setLoading(true);
 
     try {
       const res = await fetchApi('/api/phone/send-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phoneNumber: formattedPhone })
+        body: JSON.stringify({ phoneNumber: formatted })
       });
 
       const data = await res.json().catch(() => null);
 
-      if (res.ok && data?.success) {
-        if (data.pinId) setPinId(data.pinId);
-        setPhoneOtpMode('infobip');
-        setOtpSent(true);
-        toast.success(data.message || "SMS verification code sent!");
-        return;
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.error || "Failed to dispatch SMS OTP. Please try again.");
       }
 
-      // If backend reports rate limit or specific issue, fall back to Firebase Recaptcha
-      console.warn("[Login] Infobip SMS notice, attempting Firebase fallback:", data?.error);
-      setPhoneOtpMode('firebase');
-      await sendFirebasePhoneOtp(formattedPhone);
+      if (data.pinId) setPinId(data.pinId);
+      setPhoneStep('enter_otp');
+      setPhoneCooldown(60);
+      toast.success(data.message || "SMS OTP sent to your phone!");
     } catch (err: any) {
-      console.warn("[Login] Send OTP network issue, falling back to Firebase:", err);
-      setPhoneOtpMode('firebase');
-      try {
-        await sendFirebasePhoneOtp(formattedPhone);
-      } catch (fallbackErr: any) {
-        setError(translateError(fallbackErr) || "Failed to send SMS code. Please try again.");
-      }
+      setError(err.message || "Could not send SMS code. Please try again.");
     } finally {
-      setPhoneLoading(false);
+      setLoading(false);
     }
   };
 
-  const sendFirebasePhoneOtp = async (formattedPhone: string) => {
-    if (!(window as any).recaptchaCustomerVerifier) {
-      (window as any).recaptchaCustomerVerifier = new RecaptchaVerifier(auth, 'recaptcha-customer-login', {
-        size: 'invisible',
-        callback: () => {}
-      });
-    }
-
-    const appVerifier = (window as any).recaptchaCustomerVerifier;
-    const confirmation = await signInWithPhoneNumber(auth, formattedPhone, appVerifier);
-    setConfirmationResult(confirmation);
-    setOtpSent(true);
-    toast.success("Verification code sent to your phone!");
-  };
-
-  // 2. Verify SMS OTP (Infobip signin or Firebase confirm)
   const handleVerifyPhoneOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!phoneOtp || phoneOtp.length < 4) return;
+    if (!phoneOtp || phoneOtp.length < 4) {
+      setError("Please enter the verification code sent to your phone.");
+      return;
+    }
 
+    const formatted = formatPhoneNumber(phone);
     setError("");
     setLoading(true);
 
-    const cleanPhone = phone.trim().replace(/\D/g, '');
-    const formattedPhone = cleanPhone.startsWith('91') && cleanPhone.length === 12
-      ? `+${cleanPhone}`
-      : `+91${cleanPhone.slice(-10)}`;
-
     try {
-      if (phoneOtpMode === 'infobip') {
-        const res = await fetchApi('/api/phone/signin', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            method: 'sms',
-            phoneNumber: formattedPhone,
-            otp: phoneOtp.trim(),
-            pinId: pinId || undefined
-          })
-        });
+      const res = await fetchApi('/api/phone/signin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          method: 'sms',
+          phoneNumber: formatted,
+          otp: phoneOtp.trim(),
+          pinId: pinId || undefined
+        })
+      });
 
-        const data = await res.json().catch(() => null);
+      const data = await res.json().catch(() => null);
 
-        if (!res.ok || !data?.success || !data?.customToken) {
-          throw new Error(data?.error || "Invalid OTP code. Please try again.");
-        }
-
-        const userCredential = await signInWithCustomToken(auth, data.customToken);
-        await verifyCustomerAccess(userCredential);
-
-        useAuthStore.getState().setUser({
-          uid: userCredential.user.uid,
-          email: data.user?.email || null,
-          name: data.user?.name || "Customer",
-          phone: data.user?.phone || formattedPhone,
-          phoneVerified: true,
-          phoneSetupCompleted: true,
-          locationSetupCompleted: true,
-        }, 'customer');
-
-        toast.success("Welcome back!");
-        navigate("/");
-      } else {
-        // Firebase confirmation fallback
-        if (!confirmationResult) throw new Error("Verification session expired. Please resend code.");
-        const userCredential = await confirmationResult.confirm(phoneOtp.trim());
-        await verifyCustomerAccess(userCredential);
-
-        const userDoc = await getDoc(doc(db, "users", userCredential.user.uid));
-        let userData: any = null;
-        if (userDoc.exists()) {
-          userData = userDoc.data();
-        } else {
-          await setDoc(doc(db, "users", userCredential.user.uid), {
-            phone: userCredential.user.phoneNumber,
-            phoneVerified: true,
-            phoneSetupCompleted: true,
-            role: 'customer',
-            createdAt: new Date().toISOString()
-          }, { merge: true });
-        }
-
-        useAuthStore.getState().setUser({
-          uid: userCredential.user.uid,
-          email: userCredential.user.email || userData?.email,
-          name: userData?.name || "Customer",
-          phone: userCredential.user.phoneNumber,
-          phoneVerified: true,
-          phoneSetupCompleted: true,
-          locationSetupCompleted: userData?.locationSetupCompleted ?? false,
-          emailVerified: userCredential.user.emailVerified,
-        }, 'customer');
-
-        toast.success("Welcome back!");
-        navigate("/");
+      if (!res.ok || !data?.success || !data?.customToken) {
+        throw new Error(data?.error || "Invalid OTP code. Please try again.");
       }
+
+      const userCredential = await signInWithCustomToken(auth, data.customToken);
+
+      useAuthStore.getState().setUser({
+        uid: userCredential.user.uid,
+        email: data.user?.email || null,
+        name: data.user?.name || "Customer",
+        phone: data.user?.phone || formatted,
+        phoneVerified: true,
+        phoneSetupCompleted: true,
+        locationSetupCompleted: true,
+      }, 'customer');
+
+      toast.success("Welcome back to Olive Pizza! 🍕");
+      navigate(redirectUrl, { replace: true });
     } catch (err: any) {
       setError(err.message || "Invalid OTP code. Please try again.");
     } finally {
@@ -339,24 +269,17 @@ export default function Login() {
     }
   };
 
-  // 3. Truecaller 1-Tap & Web QR Login
-  const handleTruecallerSignIn = async () => {
+  // ─────────────────────────────────────────────────────────────
+  // 3. TRUECALLER 1-TAP (NATIVE) & WEB QR
+  // ─────────────────────────────────────────────────────────────
+  const handleTruecallerAuth = async () => {
     setError("");
-    setTruecallerLoading(true);
-
-    const cleanPhone = phone.trim().replace(/\D/g, '');
-    const formattedPhone = cleanPhone.length === 10 ? `+91${cleanPhone}` : (cleanPhone.startsWith('91') ? `+${cleanPhone}` : undefined);
+    setLoading(true);
 
     try {
-      if (TruecallerService.isNative()) {
-        const isSupported = await TruecallerService.isNativeSupported();
-        if (!isSupported) {
-          toast("Truecaller 1-Tap is available on devices with Truecaller app installed. Switching to fast SMS OTP.", { icon: '⚡' });
-          return;
-        }
-
+      if (isTruecallerNative) {
+        // Native 1-Tap bottom sheet
         const nativeResult = await TruecallerService.verifyNative();
-        
         const res = await fetchApi('/api/phone/signin', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -364,191 +287,133 @@ export default function Login() {
             method: 'truecaller',
             payload: nativeResult.payload,
             signature: nativeResult.signature,
-            signatureAlgorithm: (nativeResult as any).signatureAlgorithm
+            signatureAlgorithm: nativeResult.signatureAlgorithm
           })
         });
 
-        const data = await res.json();
-        if (!res.ok || !data.success || !data.customToken) {
-          throw new Error(data.error || "Truecaller authentication rejected.");
+        const data = await res.json().catch(() => null);
+
+        if (!res.ok || !data?.success || !data?.customToken) {
+          throw new Error(data?.error || "Truecaller verification failed on server.");
         }
 
         const userCredential = await signInWithCustomToken(auth, data.customToken);
-        await verifyCustomerAccess(userCredential);
 
         useAuthStore.getState().setUser({
           uid: userCredential.user.uid,
           email: data.user?.email || null,
           name: data.user?.name || "Customer",
-          phone: data.user?.phone,
+          phone: data.user?.phone || null,
           phoneVerified: true,
           phoneSetupCompleted: true,
           locationSetupCompleted: true,
         }, 'customer');
 
-        toast.success("Welcome back! Verified via Truecaller ✓");
-        navigate("/");
+        toast.success("Verified via Truecaller! Welcome!");
+        navigate(redirectUrl, { replace: true });
       } else {
-        const sessionRes = await TruecallerService.createWebSession(formattedPhone);
-        const isMobileBrowser = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-
-        if (isMobileBrowser) {
-          setWebSession({ deepLink: sessionRes.deepLink, requestId: sessionRes.requestId });
-          setQrModalOpen(true);
-          window.location.href = sessionRes.deepLink;
-        } else {
-          setWebSession({ deepLink: sessionRes.deepLink, requestId: sessionRes.requestId });
-          setQrModalOpen(true);
-        }
+        // Web / Desktop QR Modal
+        const session = await TruecallerService.createWebSession();
+        setWebSession(session);
+        setQrModalOpen(true);
       }
     } catch (err: any) {
-      console.error("[Login] Truecaller error:", err);
-      const msg = err.message || "Truecaller verification was cancelled or unavailable.";
+      let msg = "Truecaller is temporarily unavailable. Please verify via SMS.";
+      if (err.code === 'TRUECALLER_CONFIG_MISSING') {
+        msg = "Truecaller verification is not configured for this environment. Please verify via SMS.";
+      } else if (err.code === 'RATE_LIMIT_EXCEEDED') {
+        msg = "Too many verification attempts. Please wait a few minutes or verify via SMS.";
+      } else if (err.message && !err.message.includes('object Object')) {
+        msg = err.message;
+      }
       setError(msg);
       toast.error(msg);
     } finally {
-      setTruecallerLoading(false);
+      setLoading(false);
     }
   };
 
-  const handleTruecallerQRSuccess = async (result: any) => {
+  const handleQrVerified = async (qrStatus: TruecallerSessionStatusResponse) => {
     setQrModalOpen(false);
+    if (!qrStatus.phone) return;
+
     setLoading(true);
     try {
-      if (!webSession?.requestId) throw new Error("Session expired");
-
       const res = await fetchApi('/api/phone/signin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           method: 'truecaller',
-          requestId: webSession.requestId
+          requestId: webSession?.requestId,
+          phoneNumber: qrStatus.phone
         })
       });
 
-      const data = await res.json();
-      if (!res.ok || !data.success || !data.customToken) {
-        throw new Error(data.error || "Failed to sign in with Truecaller.");
+      const data = await res.json().catch(() => null);
+
+      if (res.ok && data?.customToken) {
+        const userCredential = await signInWithCustomToken(auth, data.customToken);
+        useAuthStore.getState().setUser({
+          uid: userCredential.user.uid,
+          email: data.user?.email || null,
+          name: qrStatus.name || data.user?.name || "Customer",
+          phone: qrStatus.phone,
+          phoneVerified: true,
+          phoneSetupCompleted: true,
+          locationSetupCompleted: true,
+        }, 'customer');
+        toast.success("Verified via Truecaller! Welcome!");
+        navigate(redirectUrl, { replace: true });
+      } else {
+        throw new Error(data?.error || "Failed to finalize session after QR scan.");
       }
-
-      const userCredential = await signInWithCustomToken(auth, data.customToken);
-      await verifyCustomerAccess(userCredential);
-
-      useAuthStore.getState().setUser({
-        uid: userCredential.user.uid,
-        email: data.user?.email || null,
-        name: data.user?.name || "Customer",
-        phone: data.user?.phone || result.phone,
-        phoneVerified: true,
-        phoneSetupCompleted: true,
-        locationSetupCompleted: true,
-      }, 'customer');
-
-      toast.success("Welcome back! Verified via Truecaller ✓");
-      navigate("/");
     } catch (err: any) {
-      setError(err.message || "Truecaller sign-in failed.");
-      toast.error(err.message || "Truecaller sign-in failed.");
+      setError(err.message || "Failed to finalize session after QR scan.");
+      toast.error(err.message || "Failed to finalize session after QR scan.");
     } finally {
       setLoading(false);
     }
   };
 
+  // ─────────────────────────────────────────────────────────────
+  // 4. GOOGLE SIGN-IN
+  // ─────────────────────────────────────────────────────────────
   const handleGoogleSignIn = async () => {
     setError("");
     setLoading(true);
-    
-    const isLocalNetworkIP = window.location.hostname.match(/^(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/);
-    if (isLocalNetworkIP && !Capacitor.isNativePlatform()) {
-      toast.error("Google Login blocks local network IPs (e.g., 192.168.x.x). Please test using 'localhost' or your Vercel deployment.");
-      setLoading(false);
-      return;
-    }
-
     try {
       const provider = new GoogleAuthProvider();
-      let result;
-      if (Capacitor.isNativePlatform()) {
-        const { FirebaseAuthentication } = await import('@capacitor-firebase/authentication');
-        const nativeResult = await FirebaseAuthentication.signInWithGoogle();
-        if (nativeResult.credential?.idToken) {
-          const credential = GoogleAuthProvider.credential(nativeResult.credential.idToken);
-          result = await signInWithCredential(auth, credential);
-        } else {
-          throw new Error("Google Sign-In failed on device.");
-        }
-      } else {
-        result = await signInWithPopup(auth, provider);
-      }
+      provider.setCustomParameters({ prompt: 'select_account' });
+      const result = await signInWithPopup(auth, provider);
       
-      if (result && result.user) {
-        // Enforce customer app authorization (blocks owners)
-        await verifyCustomerAccess(result);
+      const userRef = doc(db, "users", result.user.uid);
+      const userDoc = await getDoc(userRef);
 
-        const userRef = doc(db, "users", result.user.uid);
-        let userDoc: any = null;
-        try {
-          userDoc = await getDoc(userRef);
-        } catch (fsErr) {
-          console.warn("User doc fetch notice:", fsErr);
-        }
-
-        const userEmail = result.user.email?.toLowerCase() || "";
-
-        if (!userDoc?.exists()) {
-          await setDoc(userRef, {
-            email: userEmail,
-            name: result.user.displayName || "",
-            role: "customer",
-            createdAt: new Date().toISOString(),
-          }, { merge: true }).catch(() => {});
-
-          fetchApi("/api/email/auth/welcome", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              name: result.user.displayName || "", 
-              email: userEmail,
-              isReturning: false
-            }),
-          }).catch((e) => console.error("Email trigger failed:", e));
-
-          useAuthStore.getState().setUser({
-            uid: result.user.uid,
-            email: result.user.email,
-            name: result.user.displayName || "",
-            photoURL: result.user.photoURL,
-            emailVerified: result.user.emailVerified,
-            onboardingComplete: false,
-            phoneSetupCompleted: false,
-            locationSetupCompleted: false,
-          }, "customer");
-        } else {
-          const data = userDoc.data();
-          
-          useAuthStore.getState().setUser({
-            uid: result.user.uid,
-            email: result.user.email,
-            name: data?.name,
-            phone: data?.phone,
-            photoURL: result.user.photoURL || data?.photoUrl,
-            phoneVerified: data?.phoneVerified ?? false,
-            phoneSetupCompleted: data?.phoneVerified ? (data?.phoneSetupCompleted ?? true) : false,
-            locationSetupCompleted: data?.locationSetupCompleted ?? !!data?.fullAddress,
-            lat: data?.lat,
-            lng: data?.lng,
-            fullAddress: data?.fullAddress,
-            emailVerified: result.user.emailVerified,
-            status: data?.status,
-          }, "customer");
-        }
-
-        toast.success("Welcome!");
-        navigate("/");
+      if (!userDoc.exists()) {
+        await setDoc(userRef, {
+          email: result.user.email?.toLowerCase(),
+          name: result.user.displayName || "Customer",
+          role: "customer",
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          emailVerified: true
+        });
       }
+
+      useAuthStore.getState().setUser({
+        uid: result.user.uid,
+        email: result.user.email,
+        name: result.user.displayName || "Customer",
+        photoURL: result.user.photoURL,
+        emailVerified: true,
+        phoneVerified: false,
+      }, 'customer');
+
+      toast.success("Welcome to Olive Pizza!");
+      navigate(redirectUrl, { replace: true });
     } catch (err: any) {
-      if (err.code !== 'auth/popup-closed-by-user' && !err.message?.includes('closed-by-user')) {
-        setError(err.message || translateError(err));
+      if (err.code !== 'auth/popup-closed-by-user') {
+        setError("Google sign-in failed. Please try with Email or Phone.");
       }
     } finally {
       setLoading(false);
@@ -556,293 +421,395 @@ export default function Login() {
   };
 
   return (
-    <div className="relative max-w-md mx-auto my-6 sm:my-12 p-5 sm:p-8 glass-card overflow-hidden w-full">
-      <div id="recaptcha-customer-login"></div>
-
-      <AnimatePresence>
-        {loading && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="absolute inset-0 z-50 rounded-2xl"
-          >
-            <PizzaLoader 
-              text="Authenticating..." 
-              overlayClassName="absolute inset-0 z-50 bg-[#020617]/90 backdrop-blur-sm rounded-2xl" 
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <div className="flex flex-col items-center mb-6 relative z-10">
-        <img
-          src="/logo-transparent.png"
-          alt="Olive Pizza Logo"
-          className="h-16 w-auto object-contain mb-3 bg-transparent drop-shadow-lg"
-        />
-        <h1 className="text-2xl sm:text-3xl font-extrabold text-center text-primary-500 tracking-tight">
-          Welcome Back
-        </h1>
-        <p className="text-xs text-slate-400 mt-1">Sign in to your Olive Pizza account</p>
+    <div className="min-h-screen bg-[#FAF7F2] text-slate-900 flex flex-col justify-center items-center px-4 py-8 relative selection:bg-rose-500 selection:text-white">
+      {/* Background Ambience: Warm pizza-kitchen glows */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute -top-32 -left-32 w-96 h-96 bg-orange-200/40 rounded-full blur-3xl" />
+        <div className="absolute top-1/2 -right-32 w-96 h-96 bg-red-200/30 rounded-full blur-3xl" />
+        <div className="absolute -bottom-32 left-1/3 w-80 h-80 bg-amber-100/50 rounded-full blur-3xl" />
       </div>
 
-      {error && (
-        <div className="bg-red-100 dark:bg-red-950/50 border border-red-200 dark:border-red-900/50 text-red-700 dark:text-red-300 p-3 rounded-lg mb-4 text-sm font-medium relative z-10 flex items-start gap-2">
-          <AlertCircle size={18} className="shrink-0 mt-0.5" />
-          <span>{error}</span>
+      <motion.div
+        initial={{ opacity: 0, y: 15 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, ease: "easeOut" }}
+        className="w-full max-w-md relative z-10"
+      >
+        {/* Brand Header */}
+        <div className="text-center mb-6">
+          <Link to="/" className="inline-flex items-center gap-2 group mb-3">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-red-600 via-rose-500 to-orange-500 flex items-center justify-center shadow-lg shadow-red-500/20 group-hover:scale-105 transition-transform">
+              <span className="text-2xl">🍕</span>
+            </div>
+          </Link>
+          <h1 className="text-2xl font-black tracking-tight text-slate-900">
+            Welcome to Olive Pizza
+          </h1>
+          <p className="text-sm text-slate-500 mt-1 font-medium">
+            Fast, wood-fired pizzas delivered piping hot to your door
+          </p>
         </div>
-      )}
 
-      {/* Credential Selection Prompt */}
-      <div className="mb-5 relative z-10">
-        <label className="text-xs font-bold text-slate-400 block text-center mb-2">
-          How would you like to log in?
-        </label>
-        <div className="grid grid-cols-2 gap-2 bg-slate-100 dark:bg-slate-900 p-1.5 rounded-2xl border border-slate-200 dark:border-slate-800">
-          <button
-            type="button"
-            onClick={() => {
-              setAuthMethod('email');
-              setError('');
-            }}
-            className={`min-h-[44px] py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 ${
-              authMethod === 'email'
-                ? 'bg-primary-500 text-white shadow-md shadow-primary-500/20'
-                : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
-            }`}
-          >
-            <Mail size={14} /> Email
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setAuthMethod('phone');
-              setError('');
-            }}
-            className={`min-h-[44px] py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 ${
-              authMethod === 'phone'
-                ? 'bg-primary-500 text-white shadow-md shadow-primary-500/20'
-                : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
-            }`}
-          >
-            <Phone size={14} /> Phone Number
-          </button>
-        </div>
-      </div>
-
-      {/* Email Login Form */}
-      {authMethod === 'email' && (
-        <form onSubmit={handleLogin} className="flex flex-col gap-4 relative z-10">
-          <input
-            type="email"
-            placeholder="Email Address"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="min-h-[44px] p-3 border border-slate-200 dark:border-slate-700 rounded-lg bg-white/50 dark:bg-slate-900/50 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all text-base sm:text-sm"
-            required
-          />
-          <div className="relative">
-            <input
-              type={showPassword ? "text" : "password"}
-              placeholder="Password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full min-h-[44px] p-3 border border-slate-200 dark:border-slate-700 rounded-lg bg-white/50 dark:bg-slate-900/50 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all pr-12 text-base sm:text-sm"
-              required
-            />
+        {/* Main Card */}
+        <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-[0_20px_50px_rgba(249,115,22,0.08)] border border-orange-100/80">
+          {/* Method Switcher Tabs */}
+          <div className="flex bg-orange-50/70 p-1.5 rounded-2xl mb-6 border border-orange-100/60">
             <button
               type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 font-medium text-sm p-1 min-h-[44px] flex items-center"
+              onClick={() => {
+                setAuthMethod('email');
+                setError("");
+              }}
+              className={`flex-1 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all ${
+                authMethod === 'email'
+                  ? 'bg-white text-slate-900 shadow-sm shadow-orange-950/5'
+                  : 'text-slate-500 hover:text-slate-900'
+              }`}
             >
-              {showPassword ? "Hide" : "Show"}
+              <Mail className="w-4 h-4 text-rose-500" />
+              Email OTP
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setAuthMethod('phone');
+                setError("");
+              }}
+              className={`flex-1 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all ${
+                authMethod === 'phone'
+                  ? 'bg-white text-slate-900 shadow-sm shadow-orange-950/5'
+                  : 'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              <Phone className="w-4 h-4 text-emerald-600" />
+              Phone / Truecaller
             </button>
           </div>
-          <div className="text-right">
-            <Link
-              to="/forgot-password"
-              className="text-sm text-primary-600 hover:underline inline-block py-1"
+
+          {/* Error Banner */}
+          {error && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="p-3.5 mb-5 rounded-2xl bg-red-50 border border-red-200/80 text-red-700 text-xs font-semibold flex items-center gap-2"
             >
-              Forgot password?
-            </Link>
-          </div>
-          <button
-            type="submit"
-            disabled={loading}
-            className="min-h-[48px] bg-primary-500 hover:bg-primary-600 active:scale-[0.98] text-white p-3 rounded-lg font-bold mt-2 transition-all disabled:opacity-50 flex items-center justify-center"
-          >
-            {loading ? "Signing in..." : "Sign In"}
-          </button>
-        </form>
-      )}
+              <span className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0" />
+              <span>{error}</span>
+            </motion.div>
+          )}
 
-      {/* Phone Login Form */}
-      {authMethod === 'phone' && (
-        <div className="space-y-4 relative z-10">
-          {!otpSent ? (
-            <form onSubmit={handleSendInfobipOtp} className="space-y-4">
-              <div>
-                <label className="text-xs font-bold text-slate-400 block mb-1">
-                  Mobile Number (India)
-                </label>
-                <div className="flex rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-white/50 dark:bg-slate-900/50 focus-within:ring-2 focus-within:ring-primary-500 min-h-[44px]">
-                  <span className="bg-slate-100 dark:bg-slate-800 px-3.5 py-3 text-xs font-bold text-slate-500 flex items-center border-r border-slate-200 dark:border-slate-700">
-                    +91
-                  </span>
-                  <input
-                    type="tel"
-                    inputMode="tel"
-                    required
-                    placeholder="9876543210"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                    className="w-full p-3 bg-transparent text-base sm:text-sm focus:outline-none"
-                  />
-                </div>
-              </div>
+          {/* TAB 1: EMAIL OTP */}
+          {authMethod === 'email' && (
+            <div>
+              {emailStep === 'enter_email' ? (
+                <form onSubmit={handleSendEmailCode} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                      Email Address
+                    </label>
+                    <div className="relative">
+                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <input
+                        type="email"
+                        required
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="you@example.com"
+                        className="w-full pl-11 pr-4 py-3.5 bg-slate-50/70 border border-slate-200 focus:border-red-500 focus:bg-white rounded-2xl text-slate-900 text-sm font-medium focus:outline-none transition-all"
+                      />
+                    </div>
+                  </div>
 
-              {/* Truecaller 1-Tap Login */}
+                  <button
+                    type="submit"
+                    disabled={loading || !email.trim()}
+                    className="w-full py-3.5 bg-gradient-to-r from-red-600 via-rose-600 to-orange-500 hover:from-red-700 hover:to-orange-600 disabled:opacity-50 text-white font-black text-sm rounded-2xl shadow-md shadow-red-500/25 flex items-center justify-center gap-2 transition-all active:scale-[0.99] cursor-pointer"
+                  >
+                    {loading ? (
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <>
+                        <span>Send 4-Digit Code</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </>
+                    )}
+                  </button>
+                </form>
+              ) : (
+                <form onSubmit={handleVerifyEmailCode} className="space-y-5">
+                  <div className="text-center">
+                    <p className="text-xs text-slate-500">
+                      Code sent to <span className="font-bold text-slate-800">{email}</span>
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setEmailStep('enter_email')}
+                      className="text-xs text-red-600 font-bold hover:underline mt-1 cursor-pointer"
+                    >
+                      Change email
+                    </button>
+                  </div>
+
+                  {/* 4-Digit Input Boxes */}
+                  <div className="flex justify-center gap-3">
+                    {emailCode.map((digit, index) => (
+                      <input
+                        key={index}
+                        ref={(el) => (emailInputRefs.current[index] = el)}
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={1}
+                        value={digit}
+                        onChange={(e) => handleEmailCodeChange(index, e.target.value)}
+                        onKeyDown={(e) => handleEmailKeyDown(index, e)}
+                        className="w-14 h-16 text-center text-2xl font-black bg-slate-50 border-2 border-slate-200 focus:border-red-500 focus:bg-white rounded-2xl text-slate-900 focus:outline-none transition-all"
+                      />
+                    ))}
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={loading || emailCode.join('').length !== 4}
+                    className="w-full py-3.5 bg-gradient-to-r from-red-600 via-rose-600 to-orange-500 hover:from-red-700 hover:to-orange-600 disabled:opacity-50 text-white font-black text-sm rounded-2xl shadow-md shadow-red-500/25 flex items-center justify-center gap-2 transition-all active:scale-[0.99] cursor-pointer"
+                  >
+                    {loading ? (
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <>
+                        <CheckCircle2 className="w-4 h-4" />
+                        <span>Verify & Sign In</span>
+                      </>
+                    )}
+                  </button>
+
+                  <div className="text-center">
+                    {emailCooldown > 0 ? (
+                      <p className="text-xs text-slate-400 font-medium">
+                        Resend code in <span className="font-bold text-slate-600">{emailCooldown}s</span>
+                      </p>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleSendEmailCode()}
+                        disabled={loading}
+                        className="text-xs text-red-600 font-bold hover:underline cursor-pointer"
+                      >
+                        Resend 4-digit code
+                      </button>
+                    )}
+                  </div>
+                </form>
+              )}
+            </div>
+          )}
+
+          {/* TAB 2: PHONE / TRUECALLER */}
+          {authMethod === 'phone' && (
+            <div className="space-y-4">
+              {/* Truecaller 1-Tap Trigger */}
               <button
                 type="button"
-                onClick={handleTruecallerSignIn}
-                disabled={truecallerLoading || phoneLoading}
-                className="w-full min-h-[48px] bg-[#0087FF] hover:bg-[#0077E6] active:scale-[0.98] text-white p-3 rounded-lg font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm cursor-pointer"
+                onClick={handleTruecallerAuth}
+                disabled={loading}
+                className="w-full py-3.5 bg-[#0087FF] hover:bg-[#0074db] disabled:opacity-50 text-white font-black text-sm rounded-2xl shadow-md shadow-blue-500/20 flex items-center justify-center gap-2 transition-all active:scale-[0.99] cursor-pointer"
               >
-                {truecallerLoading ? (
-                  <span className="flex items-center gap-2">
-                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Connecting Truecaller...
-                  </span>
+                {isTruecallerNative ? (
+                  <>
+                    <Smartphone className="w-4 h-4" />
+                    <span>Instant 1-Tap Truecaller</span>
+                  </>
                 ) : (
                   <>
-                    <Zap size={18} className="text-yellow-300 fill-yellow-300" />
-                    1-Tap Login with Truecaller
+                    <QrCode className="w-4 h-4" />
+                    <span>Scan Truecaller QR Code</span>
                   </>
                 )}
               </button>
 
-              <div className="flex items-center gap-2 my-1">
-                <div className="flex-grow border-t border-slate-200 dark:border-slate-800"></div>
-                <span className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">Or with OTP</span>
-                <div className="flex-grow border-t border-slate-200 dark:border-slate-800"></div>
+              <div className="relative flex items-center justify-center my-3">
+                <div className="border-t border-slate-200 w-full" />
+                <span className="bg-white px-3 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                  or via SMS OTP
+                </span>
+                <div className="border-t border-slate-200 w-full" />
               </div>
 
-              <button
-                type="submit"
-                disabled={phoneLoading || phone.length < 10}
-                className="w-full min-h-[48px] bg-primary-500 hover:bg-primary-600 active:scale-[0.98] text-white p-3 rounded-lg font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
-              >
-                {phoneLoading ? (
-                  <span className="flex items-center gap-2">
-                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Sending SMS...
-                  </span>
-                ) : (
-                  <>
-                    <Phone size={16} />
-                    Continue with SMS OTP
-                  </>
-                )}
-              </button>
-            </form>
-          ) : (
-            <form onSubmit={handleVerifyPhoneOtp} className="space-y-4">
-              <div className="text-center">
-                <p className="text-xs text-slate-400">
-                  Enter the 6-digit code sent to <strong className="text-slate-200">+91 {phone}</strong>
-                </p>
-              </div>
+              {phoneStep === 'enter_phone' ? (
+                <form onSubmit={handleSendPhoneOtp} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                      Mobile Number
+                    </label>
+                    <div className="relative flex items-center">
+                      <span className="absolute left-4 text-sm font-bold text-slate-500">
+                        +91
+                      </span>
+                      <input
+                        type="tel"
+                        required
+                        maxLength={10}
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                        placeholder="98765 43210"
+                        className="w-full pl-14 pr-4 py-3.5 bg-slate-50/70 border border-slate-200 focus:border-red-500 focus:bg-white rounded-2xl text-slate-900 text-sm font-medium focus:outline-none transition-all"
+                      />
+                    </div>
+                  </div>
 
-              <input
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                autoComplete="one-time-code"
-                required
-                maxLength={6}
-                placeholder="123456"
-                value={phoneOtp}
-                onChange={(e) => setPhoneOtp(e.target.value.replace(/\D/g, ''))}
-                className="w-full min-h-[48px] text-center tracking-widest text-xl font-bold p-3 border border-slate-200 dark:border-slate-700 rounded-lg bg-white/50 dark:bg-slate-900/50 focus:outline-none focus:ring-2 focus:ring-primary-500"
-              />
+                  <button
+                    type="submit"
+                    disabled={loading || phone.replace(/\D/g, '').length < 10}
+                    className="w-full py-3.5 bg-gradient-to-r from-red-600 via-rose-600 to-orange-500 hover:from-red-700 hover:to-orange-600 disabled:opacity-50 text-white font-black text-sm rounded-2xl shadow-md shadow-red-500/25 flex items-center justify-center gap-2 transition-all active:scale-[0.99] cursor-pointer"
+                  >
+                    {loading ? (
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <>
+                        <span>Send SMS Code</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </>
+                    )}
+                  </button>
+                </form>
+              ) : (
+                <form onSubmit={handleVerifyPhoneOtp} className="space-y-4">
+                  <div>
+                    <div className="flex justify-between items-center mb-2">
+                      <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                        Enter SMS OTP
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setPhoneStep('enter_phone')}
+                        className="text-xs text-red-600 font-bold hover:underline cursor-pointer"
+                      >
+                        Change
+                      </button>
+                    </div>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      required
+                      value={phoneOtp}
+                      onChange={(e) => setPhoneOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      placeholder="6-digit code"
+                      className="w-full px-4 py-3.5 bg-slate-50/70 border border-slate-200 focus:border-red-500 focus:bg-white rounded-2xl text-center text-xl font-black tracking-widest text-slate-900 focus:outline-none transition-all"
+                    />
+                  </div>
 
-              <button
-                type="submit"
-                disabled={loading || phoneOtp.length < 4}
-                className="w-full min-h-[48px] bg-primary-500 hover:bg-primary-600 active:scale-[0.98] text-white p-3 rounded-lg font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
-              >
-                {loading ? "Verifying..." : "Verify & Sign In"}
-              </button>
+                  <button
+                    type="submit"
+                    disabled={loading || phoneOtp.length < 4}
+                    className="w-full py-3.5 bg-gradient-to-r from-red-600 via-rose-600 to-orange-500 hover:from-red-700 hover:to-orange-600 disabled:opacity-50 text-white font-black text-sm rounded-2xl shadow-md shadow-red-500/25 flex items-center justify-center gap-2 transition-all active:scale-[0.99] cursor-pointer"
+                  >
+                    {loading ? (
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <>
+                        <CheckCircle2 className="w-4 h-4" />
+                        <span>Verify & Continue</span>
+                      </>
+                    )}
+                  </button>
 
-              <div className="flex items-center justify-between text-xs pt-1">
-                <button
-                  type="button"
-                  disabled={phoneLoading}
-                  onClick={() => handleSendInfobipOtp()}
-                  className="text-primary-500 hover:underline font-semibold disabled:opacity-50 cursor-pointer"
-                >
-                  {phoneLoading ? "Resending..." : "Resend Code"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOtpSent(false);
-                    setPhoneOtp('');
-                    setPinId(null);
-                  }}
-                  className="text-slate-400 hover:text-slate-200 py-1 cursor-pointer"
-                >
-                  Change Number
-                </button>
-              </div>
-            </form>
+                  <div className="text-center">
+                    {phoneCooldown > 0 ? (
+                      <p className="text-xs text-slate-400 font-medium">
+                        Resend SMS in <span className="font-bold text-slate-600">{phoneCooldown}s</span>
+                      </p>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleSendPhoneOtp()}
+                        disabled={loading}
+                        className="text-xs text-red-600 font-bold hover:underline cursor-pointer"
+                      >
+                        Resend SMS OTP
+                      </button>
+                    )}
+                  </div>
+                </form>
+              )}
+            </div>
           )}
+
+          {/* Divider */}
+          <div className="relative flex items-center justify-center my-6">
+            <div className="border-t border-slate-200 w-full" />
+            <span className="bg-white px-3 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+              or
+            </span>
+            <div className="border-t border-slate-200 w-full" />
+          </div>
+
+          {/* Social Google Sign-in */}
+          <button
+            type="button"
+            onClick={handleGoogleSignIn}
+            disabled={loading}
+            className="w-full py-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 font-bold text-xs sm:text-sm rounded-2xl flex items-center justify-center gap-2.5 transition-all cursor-pointer"
+          >
+            <svg className="w-4 h-4" viewBox="0 0 24 24">
+              <path
+                fill="#4285F4"
+                d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+              />
+              <path
+                fill="#34A853"
+                d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+              />
+              <path
+                fill="#FBBC05"
+                d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+              />
+              <path
+                fill="#EA4335"
+                d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+              />
+            </svg>
+            <span>Continue with Google</span>
+          </button>
         </div>
-      )}
 
-      {/* Social Divider */}
-      <div className="relative flex py-2 items-center z-10">
-        <div className="flex-grow border-t border-slate-300 dark:border-slate-600"></div>
-        <span className="flex-shrink-0 mx-4 text-slate-400 text-sm">or</span>
-        <div className="flex-grow border-t border-slate-300 dark:border-slate-600"></div>
-      </div>
+        {/* Footer Navigation */}
+        <div className="text-center mt-6">
+          <p className="text-xs text-slate-500">
+            Don't have an account?{" "}
+            <Link
+              to={`/register?redirect=${encodeURIComponent(redirectUrl)}`}
+              className="text-red-600 font-bold hover:underline"
+            >
+              Sign up now
+            </Link>
+          </p>
+        </div>
+      </motion.div>
 
-      {/* Google Sign-In */}
-      <button
-        type="button"
-        onClick={handleGoogleSignIn}
-        disabled={loading}
-        className="w-full min-h-[48px] flex items-center justify-center gap-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 active:scale-[0.98] text-slate-700 dark:text-white p-3 rounded-lg font-bold transition-all disabled:opacity-50 relative z-10"
-      >
-        <img
-          src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
-          alt="Google"
-          className="w-5 h-5"
-        />
-        Continue with Google
-      </button>
-
-      <div className="mt-6 text-center text-slate-500 dark:text-slate-400 text-sm relative z-10">
-        Don't have an account?{" "}
-        <Link
-          to="/register"
-          className="text-primary-600 font-bold hover:underline inline-block p-1"
-        >
-          Create Account
-        </Link>
-      </div>
-
-      {/* Truecaller QR Modal for Desktop */}
-      {qrModalOpen && webSession && (
+      {/* Truecaller Web QR Modal */}
+      {webSession && (
         <TruecallerQRModal
+          isOpen={qrModalOpen}
+          onClose={() => setQrModalOpen(false)}
           deepLink={webSession.deepLink}
           requestId={webSession.requestId}
-          onSuccess={handleTruecallerQRSuccess}
-          onClose={() => setQrModalOpen(false)}
+          onSuccess={handleQrVerified}
+          onError={(err) => {
+            setError(err);
+          }}
+          onSwitchToSms={() => {
+            setQrModalOpen(false);
+            setAuthMethod('phone');
+          }}
+          onRefreshSession={async () => {
+            try {
+              const session = await TruecallerService.createWebSession();
+              setWebSession(session);
+            } catch {
+              setError("Failed to refresh Truecaller session.");
+            }
+          }}
         />
       )}
     </div>
   );
 }
-

@@ -27,14 +27,6 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
               
               if (userDoc.exists()) {
                 const data = userDoc.data();
-                const staffRoles = ['owner', 'platform_owner', 'restaurant_manager', 'delivery_partner', 'delivery', 'pos_operator', 'cashier', 'kitchen_staff', 'franchise_manager', 'franchise_owner', 'admin', 'developer'];
-                if (isCanonicalOwner || (data.role && staffRoles.includes(data.role))) {
-                  console.warn('[AuthProvider] Staff or Owner account detected on customer app. Enforcing operational boundary.');
-                  await signOut(auth);
-                  logout();
-                  setLoading(false);
-                  return;
-                }
                 setUser(
                   {
                     uid: firebaseUser.uid,

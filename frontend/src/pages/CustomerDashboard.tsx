@@ -1,93 +1,71 @@
-import { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { auth, db } from "../lib/firebase";
-import { collection, query, where, getDocs, addDoc, doc, updateDoc } from "firebase/firestore";
+import { collection, query, where, getDocs, doc, updateDoc } from "firebase/firestore";
 import { Order } from "../types/models";
 import { motion, AnimatePresence } from "framer-motion";
 import PageTransition from "../components/PageTransition";
-import { useAuthStore, useCartStore } from "../lib/store";
+import { useAuthStore } from "../lib/store";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { 
-  ShoppingCart, 
+  User, 
+  MapPin, 
   History, 
-  Heart, 
   Award, 
-  Wallet as WalletIcon, 
+  HelpCircle, 
   Settings, 
   LogOut, 
-  MapPin, 
-  Laptop, 
-  ChevronRight, 
-  ChevronDown,
-  Sparkles, 
-  User, 
+  Phone, 
+  Mail, 
+  CheckCircle2, 
+  AlertCircle, 
+  Navigation, 
+  Flame, 
+  ExternalLink, 
+  RefreshCw, 
+  ChevronDown, 
+  ChevronRight,
+  MessageCircle,
+  PhoneCall,
   ShieldCheck,
-  ArrowLeft,
-  Phone,
-  Mail,
-  HelpCircle,
-  MessageSquare,
-  FileText,
-  Navigation,
-  Truck,
-  CheckCircle2,
-  AlertCircle,
-  ExternalLink,
-  Edit2,
-  Headphones,
-  Check,
-  RefreshCw,
-  Send,
-  Lock,
-  Camera,
-  Trash2
+  Package
 } from "lucide-react";
 import OrderHistory from "../components/customer/dashboard/OrderHistory";
-import Wishlist from "../components/customer/dashboard/Wishlist";
 import LoyaltyRewards from "../components/customer/dashboard/LoyaltyRewards";
-import Wallet from "../components/customer/dashboard/Wallet";
 import AddressBook from "../components/customer/AddressBook";
-import MyDevices from "../components/customer/dashboard/MyDevices";
 import PhoneUpdateModal from "../components/customer/dashboard/PhoneUpdateModal";
 import SEO from "../components/SEO";
 import { fetchApi } from "../lib/config";
 import toast from "react-hot-toast";
-import { APP_VERSION, checkVersion, useVersionStore } from "../lib/versionManager";
-import { sendEmailVerification } from "firebase/auth";
 
-// ── Skeleton Loader ────────────────────────────────────────────────────────
-function DashboardSkeleton() {
-  return (
-    <div className="w-full relative z-10 max-w-7xl mx-auto p-4 md:p-8 pt-8 animate-pulse space-y-6">
-      <div className="h-28 w-full bg-dark-800/80 rounded-3xl border border-white/5" />
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        <div className="h-72 bg-dark-800/80 rounded-3xl border border-white/5" />
-        <div className="lg:col-span-3 h-96 bg-dark-800/80 rounded-3xl border border-white/5" />
-      </div>
-    </div>
-  );
-}
+const TRACKABLE_STATUSES = new Set([
+  "accepted",
+  "preparing",
+  "ready",
+  "partner_assigned",
+  "picked_up",
+  "out_for_delivery",
+]);
 
-// ── FAQ Items for Support ──────────────────────────────────────────────────
 const SUPPORT_FAQS = [
   {
-    q: "How can I track my active order in real time?",
-    a: "Every active order features live GPS tracking. Once your pizza leaves our wood-fired oven and is collected by our delivery partner, you can follow their real-time route right on OpenStreetMap with live OSRM telemetry."
+    q: "How does live GPS order tracking work?",
+    a: "Every active order features real-time tracking. Once your pizza leaves our wood-fired oven and is picked up by the delivery rider, you can track their route live on OpenStreetMap with real-time telemetry."
   },
   {
-    q: "What is your delivery coverage in Rajnandgaon?",
-    a: "We deliver piping hot, hand-stretched wood-fired pizzas throughout Rajnandgaon (within our 5 km coverage radius from our kitchen hub near Reliance Trends, Gokul Nagar)."
+    q: "What is the delivery coverage in Rajnandgaon?",
+    a: "We deliver piping hot, hand-stretched pizzas throughout Rajnandgaon within a 5 km radius from our central kitchen hub near Reliance Trends, Gokul Nagar."
   },
   {
     q: "How do loyalty reward points work?",
-    a: "You earn 1 reward point for every ₹10 spent. Points automatically accumulate in your account, unlock higher membership tiers (Bronze, Silver, Gold, Platinum), and can be redeemed at checkout (₹0.50 per point)."
+    a: "You earn 1 reward point for every ₹10 spent. Points automatically accumulate, unlocking higher tiers (Bronze, Silver, Gold, Platinum) and can be redeemed at checkout (₹0.50 per point)."
   },
   {
     q: "What payment methods are supported?",
-    a: "We accept online payments (UPI, Google Pay, PhonePe, Paytm, Credit/Debit Cards, Net Banking) and Cash on Delivery (COD)."
+    a: "We accept online payments (UPI, Google Pay, PhonePe, Paytm, Cards, Net Banking) as well as Cash on Delivery (COD)."
   },
   {
-    q: "Can I cancel or modify an order after placing it?",
-    a: "Because our wood-fired pizzas are prepared fresh immediately upon confirmation, orders can be cancelled during the initial accepted phase directly from the tracking page before oven baking begins."
+    q: "Can I modify or cancel an order?",
+    a: "Because our pizzas are prepared fresh immediately upon confirmation, orders can only be cancelled during the initial accepted phase directly from the live tracking page."
   }
 ];
 
@@ -103,1108 +81,532 @@ export default function CustomerDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState(initialTab);
   const navigate = useNavigate();
-  const { user, setUser, logout, role } = useAuthStore();
-  const { items } = useCartStore();
-  const { latestVersion, isUpdateAvailable } = useVersionStore();
+  const { user, setUser, logout } = useAuthStore();
 
-  // Profile Edit Form State
+  // Profile Edit State
   const [nameInput, setNameInput] = useState(user?.name || "");
-  const [emailInput, setEmailInput] = useState(user?.email || "");
-  const [photoURLInput, setPhotoURLInput] = useState(user?.photoURL || user?.photoUrl || "");
   const [savingProfile, setSavingProfile] = useState(false);
   const [isPhoneModalOpen, setIsPhoneModalOpen] = useState(false);
-  const [sendingEmailVerification, setSendingEmailVerification] = useState(false);
+  const [faqOpenIndex, setFaqOpenIndex] = useState<number | null>(null);
 
-  // Support Form State
-  const [supportCategory, setSupportCategory] = useState("Order Issue");
-  const [supportOrderId, setSupportOrderId] = useState("");
-  const [supportMessage, setSupportMessage] = useState("");
-  const [supportSubmitting, setSupportSubmitting] = useState(false);
-  const [activeFaqIndex, setActiveFaqIndex] = useState<number | null>(null);
-
-  // Account Preferences State
-  const [notifications, setNotifications] = useState({
-    orderUpdates: true,
-    promotions: false,
-    whatsappAlerts: true
-  });
-  const [revokingSessions, setRevokingSessions] = useState(false);
-
-  // Sync inputs with auth user
+  // Fetch customer orders and loyalty data
   useEffect(() => {
-    if (user) {
-      setNameInput(user.name || "");
-      setEmailInput(user.email || "");
-      setPhotoURLInput(user.photoURL || user.photoUrl || "");
-    }
-  }, [user]);
+    let isMounted = true;
 
-  // Fetch Authoritative Orders from Firestore
-  useEffect(() => {
-    if (!auth.currentUser) return;
-    
-    const fetchOrders = async () => {
-      try {
-        const q = query(collection(db, "orders"), where("userId", "==", auth.currentUser!.uid));
-        const snapshot = await getDocs(q);
-        const fetchedOrders = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as any);
-        fetchedOrders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        setOrders(fetchedOrders);
-        sessionStorage.setItem("customer_orders", JSON.stringify(fetchedOrders));
-      } catch (e) {
-        console.error("Failed to fetch orders from Firestore", e);
-      } finally {
+    const fetchCustomerData = async () => {
+      if (!auth.currentUser) {
         setIsLoading(false);
+        return;
       }
-    };
-    fetchOrders();
-  }, []);
 
-  // Fetch Authoritative Loyalty Points from Backend
-  useEffect(() => {
-    if (!auth.currentUser) return;
-
-    const fetchLoyalty = async () => {
       try {
-        const token = await auth.currentUser!.getIdToken();
-        const res = await fetchApi('/api/user/loyalty', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.success) {
-            setLoyaltyData(data);
-          }
+        const uid = auth.currentUser.uid;
+        const phone = user?.phone;
+
+        // 1. Query orders by customer UID or phone
+        const ordersRef = collection(db, "orders");
+        let qOrders = query(ordersRef, where("customerId", "==", uid));
+        let snap = await getDocs(qOrders);
+
+        if (snap.empty && phone) {
+          qOrders = query(ordersRef, where("customerPhone", "==", phone));
+          snap = await getDocs(qOrders);
         }
-      } catch (e) {
-        console.warn("[CustomerDashboard] Loyalty fetch notice:", e);
+
+        const loadedOrders: Order[] = snap.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as Order[];
+
+        // Sort descending by date
+        loadedOrders.sort((a: any, b: any) => {
+          const dateA = new Date(a.createdAt || 0).getTime();
+          const dateB = new Date(b.createdAt || 0).getTime();
+          return dateB - dateA;
+        });
+
+        if (isMounted) {
+          setOrders(loadedOrders);
+          sessionStorage.setItem("customer_orders", JSON.stringify(loadedOrders));
+        }
+
+        // 2. Fetch loyalty data
+        try {
+          const token = await auth.currentUser.getIdToken();
+          const loyRes = await fetchApi('/api/user/loyalty', {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (loyRes.ok) {
+            const loyJson = await loyRes.json();
+            if (isMounted && loyJson.success) {
+              setLoyaltyData(loyJson);
+            }
+          }
+        } catch {
+          // Non-critical loyalty error
+        }
+      } catch (err) {
+        console.warn("[CustomerProfile] Failed fetching user orders:", err);
+      } finally {
+        if (isMounted) setIsLoading(false);
       }
     };
-    fetchLoyalty();
-  }, []);
 
-  const handleLogout = async () => {
-    try {
-      await auth.signOut();
-      logout();
-      navigate("/");
-    } catch (e) {
-      console.error("Logout failed", e);
-    }
-  };
+    fetchCustomerData();
 
-  const cartItemCount = items.reduce((sum, item) => sum + item.quantity, 0);
-
-  // Authoritative Stats Calculation
-  const stats = useMemo(() => {
-    let spent = 0;
-    const itemCounts: Record<string, number> = {};
-    orders.forEach((o) => {
-      if (o.status !== "cancelled") spent += o.totalAmount;
-      o.items?.forEach((i) => {
-        itemCounts[i.name] = (itemCounts[i.name] || 0) + i.quantity;
-      });
-    });
-
-    return {
-      totalOrders: orders.filter((o) => o.status !== "cancelled").length,
-      activeOrdersCount: orders.filter((o) => !["delivered", "cancelled"].includes(o.status)).length,
-      totalSpent: spent,
-      rewardPoints: loyaltyData?.balance !== undefined ? loyaltyData.balance : Math.floor(spent * 0.1),
+    return () => {
+      isMounted = false;
     };
-  }, [orders, loyaltyData]);
+  }, [user?.phone]);
 
-  // Active in-flight order for live banner
+  // Active in-flight order (if any)
   const activeOrder = useMemo(() => {
-    return orders.find((o) => !["delivered", "cancelled"].includes(o.status));
+    return orders.find(o => TRACKABLE_STATUSES.has(o.status));
   }, [orders]);
 
-  // Authoritative Loyalty Tier
-  const points = stats.rewardPoints;
-  const rawTier = loyaltyData?.tier || (points >= 1000 ? "Platinum" : points >= 500 ? "Gold" : points >= 200 ? "Silver" : "Bronze");
-  const loyaltyTier = rawTier.charAt(0).toUpperCase() + rawTier.slice(1).toLowerCase();
-  const tierColor = 
-    loyaltyTier === "Platinum" ? "text-emerald-300 border-emerald-500/40 bg-emerald-500/10" :
-    loyaltyTier === "Gold" ? "text-yellow-300 border-yellow-500/40 bg-yellow-500/10" :
-    loyaltyTier === "Silver" ? "text-slate-300 border-slate-400/40 bg-slate-500/10" :
-    "text-amber-400 border-amber-500/40 bg-amber-500/10";
-
-  // Handle Save Personal Details via Backend PUT /api/user/profile
+  // Save profile name
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!auth.currentUser) return;
-    setSavingProfile(true);
+    if (!nameInput.trim() || !auth.currentUser) return;
 
+    setSavingProfile(true);
     try {
-      const token = await auth.currentUser.getIdToken();
-      const res = await fetchApi('/api/user/profile', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          name: nameInput.trim(),
-          email: emailInput.trim(),
-          photoURL: photoURLInput.trim()
-        })
+      await updateDoc(doc(db, "users", auth.currentUser.uid), {
+        name: nameInput.trim(),
+        updatedAt: new Date().toISOString()
       });
 
-      const data = await res.json().catch(() => null);
-      if (!res.ok || (data && data.success === false)) {
-        throw new Error(data?.error || "Failed to update profile");
-      }
-
       if (user) {
-        setUser({
-          ...user,
-          name: nameInput.trim(),
-          email: emailInput.trim() || user.email,
-          photoURL: photoURLInput.trim() || user.photoURL
-        }, role || 'customer');
+        setUser({ ...user, name: nameInput.trim() }, 'customer');
       }
-
-      toast.success("Profile details updated successfully!");
-    } catch (err: any) {
-      console.error("Save profile error:", err);
-      toast.error(err.message || "Failed to update profile.");
+      toast.success("Profile updated successfully!");
+    } catch (err) {
+      toast.error("Failed to update profile name.");
     } finally {
       setSavingProfile(false);
     }
   };
 
-  // Handle Resend Email Verification
-  const handleSendEmailVerification = async () => {
-    if (!auth.currentUser) return;
-    setSendingEmailVerification(true);
+  const handleLogout = async () => {
     try {
-      await sendEmailVerification(auth.currentUser);
-      toast.success("Verification email sent! Check your inbox.");
-    } catch (err: any) {
-      toast.error(err.message || "Failed to send verification email.");
-    } finally {
-      setSendingEmailVerification(false);
+      await auth.signOut();
+      logout();
+      toast.success("Signed out safely.");
+      navigate("/");
+    } catch {
+      logout();
+      navigate("/");
     }
   };
-
-  // Handle Revoke All Sessions
-  const handleRevokeAllSessions = async () => {
-    if (!confirm("Are you sure you want to log out of all other devices? You will stay logged in here.")) return;
-    setRevokingSessions(true);
-    try {
-      const token = await auth.currentUser?.getIdToken();
-      const res = await fetchApi('/api/user/revoke-all-sessions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        toast.success("All other active sessions have been safely terminated.");
-      } else {
-        throw new Error(data.error || "Failed to revoke sessions.");
-      }
-    } catch (err: any) {
-      toast.error(err.message || "Failed to revoke sessions.");
-    } finally {
-      setRevokingSessions(false);
-    }
-  };
-
-  // Handle Support Form Submission
-  const handleSubmitSupport = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!supportMessage.trim()) {
-      toast.error("Please describe your issue or query.");
-      return;
-    }
-    setSupportSubmitting(true);
-    try {
-      await addDoc(collection(db, "customer_feedback"), {
-        userId: auth.currentUser?.uid || user?.uid || "anonymous",
-        userName: user?.name || "Customer",
-        userEmail: user?.email || "",
-        userPhone: user?.phone || "",
-        category: supportCategory,
-        orderId: supportOrderId || null,
-        message: supportMessage.trim(),
-        status: "open",
-        createdAt: new Date().toISOString()
-      });
-      toast.success("Thank you! Our support team has received your ticket.");
-      setSupportMessage("");
-      setSupportOrderId("");
-    } catch (err) {
-      toast.error("Failed to submit ticket. Please reach out via WhatsApp.");
-    } finally {
-      setSupportSubmitting(false);
-    }
-  };
-
-  if (isLoading && orders.length === 0) {
-    return (
-      <PageTransition className="w-full relative min-h-[100dvh] text-slate-200 bg-dark-950">
-        <DashboardSkeleton />
-      </PageTransition>
-    );
-  }
-
-  // 6 Primary Navigation Sections
-  const TABS = [
-    { id: "profile", label: "Profile", icon: User },
-    { id: "loyalty", label: "Loyalty", icon: Award, badgeText: `${points} pts` },
-    { id: "orders", label: "Orders", icon: History, badge: stats.activeOrdersCount > 0 ? stats.activeOrdersCount : undefined },
-    { id: "addresses", label: "Addresses", icon: MapPin },
-    { id: "support", label: "Support", icon: Headphones },
-    { id: "legal", label: "Legal", icon: ShieldCheck },
-    { id: "account", label: "Account", icon: Settings },
-    { id: "wishlist", label: "Wishlist", icon: Heart },
-    { id: "wallet", label: "Wallet", icon: WalletIcon },
-  ];
 
   return (
-    <>
-      <SEO title="Customer Profile | Olive Pizza" noIndex={true} />
-      <PageTransition className="w-full relative min-h-[100dvh] text-slate-200 bg-[#06070A] overflow-x-hidden pb-32 md:pb-16">
-        
-        {/* Spatial Depth Ambient Background Glows */}
-        <div className="absolute top-10 left-1/4 -translate-x-1/2 w-[550px] h-[550px] bg-orange-600/10 blur-[140px] pointer-events-none rounded-full" />
-        <div className="absolute top-96 right-10 w-[450px] h-[450px] bg-emerald-600/5 blur-[140px] pointer-events-none rounded-full" />
-        
-        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 md:px-8 pt-4 md:pt-6">
-          
-          {/* ── Top Navigation Bar ─────────────────────────────────────────── */}
-          <div className="flex items-center justify-between py-2 mb-4">
-            <Link 
-              to="/" 
-              className="inline-flex items-center gap-2 text-xs font-bold text-slate-300 hover:text-orange-400 transition-colors bg-white/[0.04] hover:bg-white/[0.08] px-4 py-2.5 rounded-2xl border border-white/10 backdrop-blur-xl shadow-sm"
-            >
-              <ArrowLeft size={15} /> Back to Homepage
-            </Link>
-            
-            <div className="flex items-center gap-2">
-              <Link
-                to="/menu"
-                className="hidden sm:inline-flex items-center gap-1.5 text-xs font-black text-orange-400 hover:text-orange-300 bg-orange-500/10 hover:bg-orange-500/20 px-4 py-2.5 rounded-2xl border border-orange-500/20 transition-all shadow-sm"
-              >
-                <Sparkles size={14} /> Wood-Fired Menu
-              </Link>
-              <button
-                onClick={handleLogout}
-                className="inline-flex items-center gap-1.5 text-xs font-black text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 px-4 py-2.5 rounded-2xl border border-red-500/20 transition-all cursor-pointer shadow-sm"
-              >
-                <LogOut size={14} /> Logout
-              </button>
-            </div>
-          </div>
+    <PageTransition className="min-h-screen bg-[#FAF7F2] text-slate-900 pt-20 md:pt-24 pb-16 selection:bg-rose-500 selection:text-white">
+      <SEO title="My Profile | Olive Pizza" />
 
-          {/* ── Weightless Glassmorphic Profile Identity Card ──────────────── */}
-          <motion.div 
-            initial={{ opacity: 0, y: -12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.45 }}
-            className="mb-6 rounded-3xl p-6 md:p-7 bg-gradient-to-br from-white/[0.05] via-white/[0.02] to-white/[0.04] border border-white/10 backdrop-blur-2xl shadow-[0_25px_60px_rgba(0,0,0,0.6)] flex flex-col sm:flex-row sm:items-center justify-between gap-5 relative overflow-hidden"
-          >
-            <div className="absolute top-0 right-0 w-64 h-64 bg-orange-500/10 blur-3xl pointer-events-none rounded-full" />
+      {/* Ambient background glows */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute top-10 left-1/4 -translate-x-1/2 w-96 h-96 bg-orange-200/40 rounded-full blur-3xl" />
+        <div className="absolute top-1/2 right-10 w-96 h-96 bg-red-200/30 rounded-full blur-3xl" />
+      </div>
 
-            <div className="flex items-center gap-4 sm:gap-5 relative z-10">
-              {/* Avatar with Luminous Status Ring */}
-              <div className="relative flex-shrink-0">
-                <div className="w-18 h-18 sm:w-20 sm:h-20 rounded-3xl overflow-hidden border-2 border-orange-500/50 bg-black/60 flex items-center justify-center shadow-xl shadow-orange-500/20">
-                  {user?.photoURL || user?.photoUrl ? (
-                    <img 
-                      src={user.photoURL || user.photoUrl} 
-                      alt="Profile" 
-                      className="w-full h-full object-cover" 
-                    />
-                  ) : (
-                    <span className="text-3xl font-black text-orange-400 select-none">
-                      {user?.name ? user.name.charAt(0).toUpperCase() : "🍕"}
-                    </span>
-                  )}
-                </div>
-                <span className="absolute -bottom-1 -right-1 w-4.5 h-4.5 rounded-full bg-emerald-500 border-2 border-[#0A0B10] shadow-md shadow-emerald-500/50" title="Online & Connected" />
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 relative z-10 space-y-6">
+        
+        {/* ── 1. Profile Header Identity Card ──────────────────────────────── */}
+        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-orange-100/90 shadow-[0_15px_40px_rgba(249,115,22,0.06)]">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
+            <div className="flex items-center gap-4">
+              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-tr from-red-600 via-rose-500 to-orange-500 flex items-center justify-center text-white text-2xl font-black shadow-lg shadow-red-500/20 shrink-0">
+                {user?.photoURL ? (
+                  <img src={user.photoURL} alt="Profile" className="w-full h-full object-cover rounded-2xl" />
+                ) : (
+                  <span>{(user?.name || "Customer").charAt(0).toUpperCase()}</span>
+                )}
               </div>
 
-              <div className="min-w-0">
-                <div className="flex items-center gap-2.5 flex-wrap">
-                  <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight truncate">
-                    {user?.name || "Add your name"}
-                  </h1>
-                  {user?.name ? (
-                    <span className="inline-flex items-center gap-1 text-[11px] text-emerald-400 font-bold bg-emerald-500/15 px-2.5 py-0.5 rounded-full border border-emerald-500/30 shadow-sm">
-                      <ShieldCheck size={13} /> Verified Member
+              <div>
+                <h1 className="text-xl sm:text-2xl font-black text-slate-900">
+                  {user?.name || "Customer"}
+                </h1>
+
+                <div className="flex flex-wrap items-center gap-2 mt-1.5 text-xs">
+                  {user?.email && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 font-medium">
+                      <Mail className="w-3 h-3 text-slate-400" />
+                      <span>{user.email}</span>
+                      {user.emailVerified && <CheckCircle2 className="w-3 h-3 text-emerald-600" />}
+                    </span>
+                  )}
+
+                  {user?.phone ? (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 font-medium">
+                      <Phone className="w-3 h-3 text-slate-400" />
+                      <span>{user.phone}</span>
+                      {user.phoneVerified && <CheckCircle2 className="w-3 h-3 text-emerald-600" />}
                     </span>
                   ) : (
                     <button
-                      onClick={() => setActiveTab("profile")}
-                      className="text-xs text-orange-400 underline font-black hover:text-orange-300 cursor-pointer"
+                      onClick={() => setIsPhoneModalOpen(true)}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 font-bold hover:bg-amber-200 transition-colors cursor-pointer"
                     >
-                      Set name
+                      <AlertCircle className="w-3 h-3 text-amber-600" />
+                      <span>Add Phone</span>
                     </button>
                   )}
                 </div>
-
-                <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-4 text-xs text-slate-400 mt-1.5">
-                  {/* Phone with Verification Badge / Update Trigger */}
-                  <div className="flex items-center gap-1.5">
-                    <Phone size={13} className="text-orange-400" />
-                    {user?.phone ? (
-                      <span className="text-slate-200 font-mono font-bold flex items-center gap-1">
-                        {user.phone}
-                        <CheckCircle2 size={12} className="text-emerald-400 inline" />
-                      </span>
-                    ) : (
-                      <button 
-                        onClick={() => setIsPhoneModalOpen(true)}
-                        className="text-amber-400 hover:text-amber-300 font-bold underline flex items-center gap-1 cursor-pointer"
-                      >
-                        Verify Phone <ChevronRight size={12} />
-                      </button>
-                    )}
-                  </div>
-
-                  <span className="hidden sm:inline text-white/20">•</span>
-
-                  {/* Email with Verification Badge / Resend Action */}
-                  <div className="flex items-center gap-1.5 truncate">
-                    <Mail size={13} className="text-orange-400 shrink-0" />
-                    {user?.email ? (
-                      <span className="truncate text-slate-300 font-medium">
-                        {user.email}
-                      </span>
-                    ) : (
-                      <span className="text-slate-500 italic">Email not added</span>
-                    )}
-                  </div>
-                </div>
               </div>
             </div>
 
-            {/* Badges & Authoritative Loyalty Points Summary */}
-            <div className="flex items-center gap-3 self-start sm:self-auto flex-wrap relative z-10">
-              <div className={`px-4 py-2 rounded-2xl border text-xs font-black flex items-center gap-2 shadow-sm ${tierColor}`}>
-                <Award size={16} /> {loyaltyTier} Club
-              </div>
-              <div className="px-4 py-2 rounded-2xl border border-amber-500/30 bg-amber-500/10 text-amber-400 text-xs font-black flex items-center gap-2 shadow-sm">
-                <Sparkles size={15} /> 
-                <span>{points} Pts</span>
-                <span className="text-[10px] text-amber-300/80 font-semibold">(₹{(points * 0.5).toFixed(0)})</span>
-              </div>
-            </div>
-          </motion.div>
-
-          {/* ── Active Order Radar Banner ───────────────────────────────────── */}
-          {activeOrder && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="mb-6 p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-orange-500/20 via-amber-500/10 to-[#12151E] border border-orange-500/40 shadow-[0_15px_40px_rgba(255,107,0,0.15)] backdrop-blur-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative overflow-hidden"
-            >
-              <div className="flex items-center gap-4 relative z-10">
-                <div className="relative w-12 h-12 rounded-2xl bg-orange-500/20 border border-orange-500/40 flex items-center justify-center text-orange-400 shrink-0 shadow-lg shadow-orange-500/20">
-                  <span className="absolute inset-0 rounded-2xl bg-orange-500/20 animate-ping opacity-50 pointer-events-none" />
-                  <Truck className="w-6 h-6 animate-bounce" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-black uppercase tracking-wider text-orange-400">
-                      Live Delivery in Progress
-                    </span>
-                    <span className="text-xs font-mono font-bold text-white bg-white/10 px-2 py-0.5 rounded-lg">
-                      {activeOrder.dailyOrderNumber || `#${activeOrder.id.slice(-6).toUpperCase()}`}
-                    </span>
-                  </div>
-                  <p className="text-sm font-bold text-white mt-0.5 capitalize">
-                    Status: {activeOrder.status.replace(/_/g, ' ')}
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => navigate(`/order-tracking/${activeOrder.id}`)}
-                className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-gradient-to-r from-[#FF6B00] via-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-orange-500/30 hover:scale-105 active:scale-95 transition-all cursor-pointer relative z-10"
-              >
-                <Navigation className="w-4 h-4" />
-                <span>Track Live on Map</span>
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </motion.div>
-          )}
-
-          {/* ── Layout: Sidebar on Desktop + Horizontal Segment on Mobile ── */}
-          <div className="flex flex-col lg:flex-row gap-6 md:gap-8 items-start">
-            
-            {/* Navigation Selector */}
-            <div className="w-full lg:w-64 flex-shrink-0">
-              {/* Mobile Horizontal Pill Selector */}
-              <div className="lg:hidden w-full overflow-x-auto scrollbar-hide py-1 -mx-4 px-4 sm:mx-0 sm:px-0">
-                <div className="flex gap-2 min-w-max pb-2">
-                  {TABS.map((tab) => {
-                    const isActive = activeTab === tab.id;
-                    const Icon = tab.icon;
-                    return (
-                      <button
-                        key={tab.id}
-                        onClick={() => setActiveTab(tab.id)}
-                        className={`relative flex items-center gap-2 px-4 py-2.5 rounded-2xl font-bold text-xs transition-all whitespace-nowrap border cursor-pointer ${
-                          isActive
-                            ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white border-transparent shadow-lg shadow-orange-500/30 scale-[1.02]"
-                            : "bg-white/[0.03] text-slate-400 hover:text-white border-white/5 hover:border-white/10"
-                        }`}
-                      >
-                        <Icon size={16} className={isActive ? "text-white" : "text-slate-400"} />
-                        <span>{tab.label}</span>
-                        {tab.badge && (
-                          <span className="w-5 h-5 rounded-full bg-emerald-500 text-black text-[10px] font-black flex items-center justify-center">
-                            {tab.badge}
-                          </span>
-                        )}
-                        {tab.badgeText && (
-                          <span className="px-1.5 py-0.5 rounded-md bg-amber-500/20 text-amber-300 text-[9px] font-black border border-amber-500/30">
-                            {tab.badgeText}
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Desktop Luxury Glassmorphic Sidebar */}
-              <div className="hidden lg:flex flex-col gap-1.5 p-3 rounded-3xl bg-white/[0.03] border border-white/10 backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] w-full sticky top-6">
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 px-3 py-2">
-                  Account Menu
-                </p>
-                {TABS.map((tab) => {
-                  const isActive = activeTab === tab.id;
-                  const Icon = tab.icon;
-                  return (
-                    <button
-                      key={tab.id}
-                      onClick={() => setActiveTab(tab.id)}
-                      className={`flex items-center justify-between px-4 py-3 rounded-2xl font-bold text-xs transition-all text-left relative cursor-pointer ${
-                        isActive
-                          ? "bg-gradient-to-r from-[#FF6B00] via-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/30"
-                          : "text-slate-300 hover:text-white hover:bg-white/[0.05]"
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <Icon size={17} className={isActive ? "text-white" : "text-slate-400"} />
-                        <span>{tab.label}</span>
-                      </div>
-
-                      <div className="flex items-center gap-1.5">
-                        {tab.badge && (
-                          <span className="w-5 h-5 rounded-full bg-emerald-500 text-black text-[10px] font-black flex items-center justify-center">
-                            {tab.badge}
-                          </span>
-                        )}
-                        {tab.badgeText && (
-                          <span className="px-2 py-0.5 rounded-lg bg-amber-500/20 text-amber-300 text-[10px] font-bold border border-amber-500/30">
-                            {tab.badgeText}
-                          </span>
-                        )}
-                        <ChevronRight size={14} className={`opacity-40 ${isActive ? "opacity-100 text-white" : ""}`} />
-                      </div>
-                    </button>
-                  );
-                })}
-
-                <div className="w-full h-px bg-white/10 my-2" />
-
-                <button
-                  onClick={handleLogout}
-                  className="flex items-center gap-3 px-4 py-3 rounded-2xl font-bold text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-all text-left cursor-pointer"
-                >
-                  <LogOut size={17} />
-                  <span>Logout</span>
-                </button>
-              </div>
-            </div>
-
-            {/* ── Main Tab Content ─────────────────────────────────────────── */}
-            <div className="flex-grow min-w-0 w-full">
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={activeTab}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-                >
-                  {/* 1. PROFILE TAB */}
-                  {activeTab === "profile" && (
-                    <div className="space-y-6">
-                      {/* Personal Details Form */}
-                      <div className="rounded-3xl bg-gradient-to-br from-white/[0.04] via-white/[0.02] to-white/[0.03] border border-white/10 p-6 md:p-8 backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
-                        <div className="flex items-center justify-between mb-6">
-                          <div>
-                            <h3 className="text-xl font-bold text-white flex items-center gap-2.5">
-                              <User className="text-orange-400" size={20} /> Personal Details
-                            </h3>
-                            <p className="text-xs text-slate-400 mt-1">
-                              Your profile information used for order receipts and delivery coordination.
-                            </p>
-                          </div>
-                        </div>
-
-                        <form onSubmit={handleSaveProfile} className="space-y-4">
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div>
-                              <label className="text-xs font-bold text-slate-300 block mb-2">Full Name</label>
-                              <input
-                                type="text"
-                                value={nameInput}
-                                onChange={(e) => setNameInput(e.target.value)}
-                                placeholder="Your Full Name"
-                                className="w-full bg-black/40 border border-white/10 focus:border-orange-500/60 rounded-2xl p-3.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 backdrop-blur-md transition-all shadow-inner"
-                              />
-                            </div>
-                            <div>
-                              <label className="text-xs font-bold text-slate-300 block mb-2">Email Address</label>
-                              <input
-                                type="email"
-                                value={emailInput}
-                                onChange={(e) => setEmailInput(e.target.value)}
-                                placeholder="name@example.com"
-                                className="w-full bg-black/40 border border-white/10 focus:border-orange-500/60 rounded-2xl p-3.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 backdrop-blur-md transition-all shadow-inner"
-                              />
-                            </div>
-                          </div>
-
-                          <div>
-                            <label className="text-xs font-bold text-slate-300 block mb-2">Avatar / Photo URL</label>
-                            <div className="flex gap-2">
-                              <input
-                                type="url"
-                                value={photoURLInput}
-                                onChange={(e) => setPhotoURLInput(e.target.value)}
-                                placeholder="https://example.com/avatar.jpg"
-                                className="w-full bg-black/40 border border-white/10 focus:border-orange-500/60 rounded-2xl p-3.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 backdrop-blur-md transition-all shadow-inner"
-                              />
-                            </div>
-                          </div>
-
-                          <div className="flex justify-end pt-3">
-                            <button
-                              type="submit"
-                              disabled={savingProfile}
-                              className="px-6 py-3 rounded-2xl bg-gradient-to-r from-[#FF6B00] via-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-xs font-black uppercase tracking-wider shadow-lg shadow-orange-500/25 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 cursor-pointer"
-                            >
-                              {savingProfile ? "Saving Details..." : "Save Profile Changes"}
-                            </button>
-                          </div>
-                        </form>
-                      </div>
-
-                      {/* Phone & Verification Card */}
-                      <div className="rounded-3xl bg-gradient-to-br from-white/[0.04] via-white/[0.02] to-white/[0.03] border border-white/10 p-6 md:p-8 backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
-                        <h3 className="text-xl font-bold text-white flex items-center gap-2.5 mb-2">
-                          <Phone className="text-emerald-400" size={20} /> Verified Phone & Sign-In
-                        </h3>
-                        <p className="text-xs text-slate-400 mb-6">
-                          Your verified phone number enables instant Truecaller and SMS OTP sign-in.
-                        </p>
-
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4.5 rounded-2xl bg-black/30 border border-white/5 backdrop-blur-md gap-4">
-                          <div className="flex items-center gap-3.5">
-                            <div className="w-11 h-11 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0 shadow-md shadow-emerald-500/10">
-                              <ShieldCheck size={22} />
-                            </div>
-                            <div>
-                              <p className="text-[11px] font-black uppercase tracking-wider text-slate-400">Mobile Number</p>
-                              <p className="text-base font-bold text-white font-mono mt-0.5">
-                                {user?.phone || "No phone linked"}
-                              </p>
-                            </div>
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={() => setIsPhoneModalOpen(true)}
-                            className="px-4 py-2.5 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] text-white text-xs font-bold border border-white/10 hover:border-white/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
-                          >
-                            <Edit2 size={13} /> Update Phone Number
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Email Verification Status Card */}
-                      <div className="rounded-3xl bg-gradient-to-br from-white/[0.04] via-white/[0.02] to-white/[0.03] border border-white/10 p-6 md:p-8 backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
-                        <h3 className="text-xl font-bold text-white flex items-center gap-2.5 mb-2">
-                          <Mail className="text-blue-400" size={20} /> Email Verification
-                        </h3>
-                        <p className="text-xs text-slate-400 mb-6">
-                          Used for receiving bills, invoices, and password resets.
-                        </p>
-
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4.5 rounded-2xl bg-black/30 border border-white/5 backdrop-blur-md gap-4">
-                          <div>
-                            <p className="text-[11px] font-black uppercase tracking-wider text-slate-400">Registered Email</p>
-                            <p className="text-sm font-bold text-white mt-0.5">
-                              {user?.email || "No email address on file"}
-                            </p>
-                            <div className="mt-1.5 flex items-center gap-1.5 text-xs font-semibold">
-                              {auth.currentUser?.emailVerified ? (
-                                <span className="text-emerald-400 flex items-center gap-1 font-bold">
-                                  <CheckCircle2 size={13} /> Email Verified
-                                </span>
-                              ) : (
-                                <span className="text-amber-400 flex items-center gap-1 font-bold">
-                                  <AlertCircle size={13} /> Pending Verification
-                                </span>
-                              )}
-                            </div>
-                          </div>
-
-                          {auth.currentUser && !auth.currentUser.emailVerified && user?.email && (
-                            <button
-                              type="button"
-                              onClick={handleSendEmailVerification}
-                              disabled={sendingEmailVerification}
-                              className="px-4 py-2.5 rounded-xl bg-blue-500/15 hover:bg-blue-500/25 text-blue-300 border border-blue-500/30 text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-sm"
-                            >
-                              <Send size={13} /> {sendingEmailVerification ? "Sending..." : "Send Verification Email"}
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* 2. LOYALTY TAB */}
-                  {activeTab === "loyalty" && (
-                    <LoyaltyRewards stats={stats} loyaltyData={loyaltyData} />
-                  )}
-
-                  {/* 3. ORDERS TAB */}
-                  {activeTab === "orders" && (
-                    <OrderHistory orders={orders} />
-                  )}
-
-                  {/* 4. ADDRESSES TAB */}
-                  {activeTab === "addresses" && (
-                    <div className="rounded-3xl bg-gradient-to-br from-white/[0.04] via-white/[0.02] to-white/[0.03] border border-white/10 p-6 md:p-8 backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
-                      <div className="mb-6">
-                        <h3 className="text-xl font-bold text-white flex items-center gap-2.5">
-                          <MapPin className="text-orange-400" size={20} /> Saved Delivery Locations
-                        </h3>
-                        <p className="text-xs text-slate-400 mt-1">
-                          Manage your home, office, and preferred addresses for lightning-fast checkout.
-                        </p>
-                      </div>
-                      <AddressBook />
-                    </div>
-                  )}
-
-                  {/* 5. SUPPORT TAB */}
-                  {activeTab === "support" && (
-                    <div className="space-y-6">
-                      {/* Direct Contact Channels Card */}
-                      <div className="rounded-3xl bg-gradient-to-br from-white/[0.04] via-white/[0.02] to-white/[0.03] border border-white/10 p-6 md:p-8 backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
-                        <h3 className="text-xl font-bold text-white flex items-center gap-2.5 mb-2">
-                          <Headphones className="text-orange-400" size={20} /> Contact Olive Pizza
-                        </h3>
-                        <p className="text-xs text-slate-400 mb-6">
-                          Need instant assistance with an ongoing order? Our team is live and ready to help.
-                        </p>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                          <a
-                            href="https://wa.me/919174145455?text=Hello%20Olive%20Pizza%20Support"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="p-5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 hover:border-emerald-500/50 hover:bg-emerald-500/15 text-emerald-400 transition-all flex flex-col items-center text-center gap-2.5 group shadow-sm hover:scale-[1.02]"
-                          >
-                            <div className="w-12 h-12 rounded-2xl bg-emerald-500/15 flex items-center justify-center group-hover:scale-110 transition-transform">
-                              <MessageSquare size={24} />
-                            </div>
-                            <span className="text-xs font-bold text-white">WhatsApp Support</span>
-                            <span className="text-[11px] text-emerald-300/80 font-mono">+91 91741 45455</span>
-                          </a>
-
-                          <a
-                            href="tel:+919174145455"
-                            className="p-5 rounded-2xl bg-orange-500/10 border border-orange-500/30 hover:border-orange-500/50 hover:bg-orange-500/15 text-orange-400 transition-all flex flex-col items-center text-center gap-2.5 group shadow-sm hover:scale-[1.02]"
-                          >
-                            <div className="w-12 h-12 rounded-2xl bg-orange-500/15 flex items-center justify-center group-hover:scale-110 transition-transform">
-                              <Phone size={24} />
-                            </div>
-                            <span className="text-xs font-bold text-white">Kitchen Hotline</span>
-                            <span className="text-[11px] text-orange-300/80 font-medium">Instant Call</span>
-                          </a>
-
-                          <a
-                            href="mailto:olivepizzarjn@gmail.com"
-                            className="p-5 rounded-2xl bg-blue-500/10 border border-blue-500/30 hover:border-blue-500/50 hover:bg-blue-500/15 text-blue-400 transition-all flex flex-col items-center text-center gap-2.5 group shadow-sm hover:scale-[1.02]"
-                          >
-                            <div className="w-12 h-12 rounded-2xl bg-blue-500/15 flex items-center justify-center group-hover:scale-110 transition-transform">
-                              <Mail size={24} />
-                            </div>
-                            <span className="text-xs font-bold text-white">Email Support</span>
-                            <span className="text-[11px] text-blue-300/80 truncate max-w-full">olivepizzarjn@gmail.com</span>
-                          </a>
-                        </div>
-
-                        <div className="mt-6 pt-5 border-t border-white/5 flex items-start gap-3.5">
-                          <div className="w-9 h-9 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-orange-400 shrink-0">
-                            <MapPin size={18} />
-                          </div>
-                          <div className="text-xs text-slate-400">
-                            <strong className="text-white block mb-0.5 font-bold">Olive Pizza Kitchen Hub</strong>
-                            Dongargaon Rd, near Saraswati School, Gokul Nagar, Rajnandgaon, Chhattisgarh 491441
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Report an Issue Form */}
-                      <div className="rounded-3xl bg-gradient-to-br from-white/[0.04] via-white/[0.02] to-white/[0.03] border border-white/10 p-6 md:p-8 backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
-                        <h3 className="text-xl font-bold text-white flex items-center gap-2.5 mb-2">
-                          <AlertCircle className="text-amber-400" size={20} /> Report an Issue or Feedback
-                        </h3>
-                        <p className="text-xs text-slate-400 mb-6">
-                          Send us feedback about a delivery, taste, packaging, or the app experience.
-                        </p>
-
-                        <form onSubmit={handleSubmitSupport} className="space-y-4">
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div>
-                              <label className="text-xs font-bold text-slate-300 block mb-2">Category</label>
-                              <select
-                                value={supportCategory}
-                                onChange={(e) => setSupportCategory(e.target.value)}
-                                className="w-full bg-black/40 border border-white/10 focus:border-orange-500/60 rounded-2xl p-3.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 backdrop-blur-md transition-all shadow-inner"
-                              >
-                                <option value="Order Issue">Order Issue</option>
-                                <option value="Late Delivery">Late Delivery</option>
-                                <option value="Food Quality">Food Quality / Packaging</option>
-                                <option value="Missing Items">Missing Items</option>
-                                <option value="App or Payment">App / Payment Issue</option>
-                                <option value="General Feedback">General Feedback</option>
-                              </select>
-                            </div>
-
-                            <div>
-                              <label className="text-xs font-bold text-slate-300 block mb-2">Related Order (Optional)</label>
-                              <select
-                                value={supportOrderId}
-                                onChange={(e) => setSupportOrderId(e.target.value)}
-                                className="w-full bg-black/40 border border-white/10 focus:border-orange-500/60 rounded-2xl p-3.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 backdrop-blur-md transition-all shadow-inner"
-                              >
-                                <option value="">Select an order or leave blank</option>
-                                {orders.slice(0, 5).map((o) => (
-                                  <option key={o.id} value={o.id}>
-                                    #{o.dailyOrderNumber || o.id.slice(-6).toUpperCase()} — ₹{o.totalAmount}
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
-                          </div>
-
-                          <div>
-                            <label className="text-xs font-bold text-slate-300 block mb-2">Message / Details</label>
-                            <textarea
-                              required
-                              rows={4}
-                              value={supportMessage}
-                              onChange={(e) => setSupportMessage(e.target.value)}
-                              placeholder="Please describe how we can help you..."
-                              className="w-full bg-black/40 border border-white/10 focus:border-orange-500/60 rounded-2xl p-3.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 backdrop-blur-md transition-all resize-none shadow-inner"
-                            />
-                          </div>
-
-                          <div className="flex justify-end pt-2">
-                            <button
-                              type="submit"
-                              disabled={supportSubmitting}
-                              className="px-6 py-3 rounded-2xl bg-gradient-to-r from-[#FF6B00] via-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-xs font-black uppercase tracking-wider shadow-lg shadow-orange-500/25 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 cursor-pointer"
-                            >
-                              {supportSubmitting ? "Submitting..." : "Submit Support Ticket"}
-                            </button>
-                          </div>
-                        </form>
-                      </div>
-
-                      {/* Frequently Asked Questions */}
-                      <div className="rounded-3xl bg-gradient-to-br from-white/[0.04] via-white/[0.02] to-white/[0.03] border border-white/10 p-6 md:p-8 backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
-                        <h3 className="text-xl font-bold text-white flex items-center gap-2.5 mb-2">
-                          <HelpCircle className="text-blue-400" size={20} /> Frequently Asked Questions
-                        </h3>
-                        <p className="text-xs text-slate-400 mb-6">
-                          Quick answers to common questions about our food, ordering, and delivery.
-                        </p>
-
-                        <div className="space-y-3">
-                          {SUPPORT_FAQS.map((faq, idx) => {
-                            const isOpen = activeFaqIndex === idx;
-                            return (
-                              <div
-                                key={idx}
-                                className="rounded-2xl bg-black/30 border border-white/5 overflow-hidden transition-all backdrop-blur-md"
-                              >
-                                <button
-                                  type="button"
-                                  onClick={() => setActiveFaqIndex(isOpen ? null : idx)}
-                                  className="w-full p-4.5 flex items-center justify-between text-left gap-3 text-sm font-bold text-white hover:text-orange-400 transition-colors cursor-pointer"
-                                >
-                                  <span>{faq.q}</span>
-                                  <ChevronDown
-                                    size={16}
-                                    className={`shrink-0 transition-transform duration-300 ${isOpen ? "rotate-180 text-orange-400" : "text-slate-500"}`}
-                                  />
-                                </button>
-                                {isOpen && (
-                                  <div className="px-4.5 pb-4.5 text-xs text-slate-300 leading-relaxed border-t border-white/5 pt-3">
-                                    {faq.a}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* 6. LEGAL TAB */}
-                  {activeTab === "legal" && (
-                    <div className="space-y-6">
-                      <div className="rounded-3xl bg-gradient-to-br from-white/[0.04] via-white/[0.02] to-white/[0.03] border border-white/10 p-6 md:p-8 backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
-                        <h3 className="text-xl font-bold text-white flex items-center gap-2.5 mb-2">
-                          <ShieldCheck className="text-orange-400" size={20} /> Legal Policies & Terms
-                        </h3>
-                        <p className="text-xs text-slate-400 mb-6">
-                          Transparency is core to our kitchen. Review our policies regarding orders, refunds, cancellations, and privacy.
-                        </p>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {[
-                            {
-                              title: "Terms of Service",
-                              desc: "Read our general customer terms, service conditions, and platform rules.",
-                              href: "/terms",
-                              icon: FileText
-                            },
-                            {
-                              title: "Privacy Policy",
-                              desc: "Learn how we protect your personal information, phone number, and location data.",
-                              href: "/privacy",
-                              icon: Lock
-                            },
-                            {
-                              title: "Refund Policy",
-                              desc: "Guidelines on order refunds, failed payments, and quality resolution.",
-                              href: "/refund-policy",
-                              icon: ShieldCheck
-                            },
-                            {
-                              title: "Cancellation Policy",
-                              desc: "Detailed rules regarding order cancellation timing and kitchen preparation windows.",
-                              href: "/cancellation-policy",
-                              icon: AlertCircle
-                            },
-                            {
-                              title: "Delivery Policy",
-                              desc: "Coverage radius, estimated delivery windows, and rider safety guidelines.",
-                              href: "/delivery-policy",
-                              icon: Truck
-                            },
-                            {
-                              title: "Cookie Policy",
-                              desc: "Details on session cookies, security tokens, and local cache management.",
-                              href: "/cookie-policy",
-                              icon: HelpCircle
-                            },
-                          ].map((item, idx) => (
-                            <Link
-                              key={idx}
-                              to={item.href}
-                              className="p-5 rounded-2xl bg-black/30 border border-white/5 hover:border-orange-500/40 hover:bg-white/[0.04] transition-all flex flex-col justify-between gap-3 group shadow-sm hover:scale-[1.01]"
-                            >
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="w-10 h-10 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-orange-400 group-hover:scale-110 transition-transform">
-                                  <item.icon size={18} />
-                                </div>
-                                <ExternalLink size={14} className="text-slate-500 group-hover:text-orange-400 transition-colors" />
-                              </div>
-                              <div>
-                                <h4 className="text-sm font-bold text-white group-hover:text-orange-300 transition-colors">
-                                  {item.title}
-                                </h4>
-                                <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                                  {item.desc}
-                                </p>
-                              </div>
-                            </Link>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* 7. ACCOUNT TAB */}
-                  {activeTab === "account" && (
-                    <div className="space-y-6">
-                      {/* Notifications Preferences */}
-                      <div className="rounded-3xl bg-gradient-to-br from-white/[0.04] via-white/[0.02] to-white/[0.03] border border-white/10 p-6 md:p-8 backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
-                        <h3 className="text-xl font-bold text-white flex items-center gap-2.5 mb-2">
-                          <Settings className="text-orange-400" size={20} /> Notification Preferences
-                        </h3>
-                        <p className="text-xs text-slate-400 mb-6">
-                          Control which updates you receive regarding order status and special offers.
-                        </p>
-
-                        <div className="space-y-3.5">
-                          {[
-                            {
-                              id: "orderUpdates",
-                              title: "Live Order Status Alerts",
-                              desc: "Push notifications and alerts when your pizza is baking, packed, or out for delivery."
-                            },
-                            {
-                              id: "whatsappAlerts",
-                              title: "WhatsApp Order Updates",
-                              desc: "Receive real-time tracking links and bill receipts directly on WhatsApp."
-                            },
-                            {
-                              id: "promotions",
-                              title: "Exclusive Member Offers",
-                              desc: "Special promotional discounts, festive menu drops, and secret coupon codes."
-                            }
-                          ].map((pref) => {
-                            const isChecked = (notifications as any)[pref.id];
-                            return (
-                              <div
-                                key={pref.id}
-                                className="flex items-center justify-between p-4.5 rounded-2xl bg-black/30 border border-white/5 gap-4 backdrop-blur-md"
-                              >
-                                <div>
-                                  <h4 className="text-sm font-bold text-white">{pref.title}</h4>
-                                  <p className="text-xs text-slate-400 mt-0.5">{pref.desc}</p>
-                                </div>
-                                <input
-                                  type="checkbox"
-                                  checked={isChecked}
-                                  onChange={(e) => {
-                                    const updated = { ...notifications, [pref.id]: e.target.checked };
-                                    setNotifications(updated);
-                                    if (auth.currentUser) {
-                                      updateDoc(doc(db, "users", auth.currentUser.uid), {
-                                        notifications: updated
-                                      }).catch(() => {});
-                                    }
-                                    toast.success("Notification setting saved.");
-                                  }}
-                                  className="w-5 h-5 accent-orange-500 rounded cursor-pointer"
-                                />
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      {/* Connected Devices */}
-                      <div className="rounded-3xl bg-gradient-to-br from-white/[0.04] via-white/[0.02] to-white/[0.03] border border-white/10 p-6 md:p-8 backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-                          <div>
-                            <h3 className="text-xl font-bold text-white flex items-center gap-2.5">
-                              <Laptop className="text-blue-400" size={20} /> Active Sessions & Devices
-                            </h3>
-                            <p className="text-xs text-slate-400 mt-1">
-                              Review devices currently logged into your Olive Pizza account.
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={handleRevokeAllSessions}
-                            disabled={revokingSessions}
-                            className="px-4 py-2.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-sm"
-                          >
-                            <LogOut size={13} /> {revokingSessions ? "Revoking..." : "Revoke All Other Sessions"}
-                          </button>
-                        </div>
-                        <MyDevices />
-                      </div>
-
-                      {/* App Version & Updates */}
-                      <div className="rounded-3xl bg-gradient-to-br from-white/[0.04] via-white/[0.02] to-white/[0.03] border border-white/10 p-6 md:p-8 backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
-                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                          <div>
-                            <h3 className="text-base font-bold text-white">App Version</h3>
-                            <p className="text-white font-mono font-bold text-xs mt-1">v{APP_VERSION}</p>
-                            {isUpdateAvailable && latestVersion && (
-                              <p className="text-orange-400 text-xs mt-1 flex items-center gap-1">
-                                Update v{latestVersion} available!
-                              </p>
-                            )}
-                          </div>
-                          <button 
-                            onClick={() => checkVersion()}
-                            className="px-4 py-2.5 bg-white/5 hover:bg-white/10 text-white rounded-xl text-xs font-bold flex items-center gap-2 transition-colors border border-white/10 cursor-pointer shadow-sm"
-                          >
-                            <RefreshCw className="w-4 h-4" /> Check For Updates
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Danger Zone */}
-                      <div className="rounded-3xl bg-gradient-to-br from-red-950/30 via-red-950/15 to-transparent border border-red-500/30 p-6 md:p-8 backdrop-blur-2xl shadow-xl">
-                        <h3 className="text-base font-bold text-red-400 flex items-center gap-2 mb-1">
-                          <AlertCircle size={18} /> Danger Zone
-                        </h3>
-                        <p className="text-xs text-slate-400 mb-4">
-                          Permanently delete your Olive Pizza profile, saved addresses, and loyalty points.
-                        </p>
-                        <Link
-                          to="/delete-account"
-                          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-bold transition-all"
-                        >
-                          <Trash2 size={14} /> Request Account Deletion
-                        </Link>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* 8. WISHLIST TAB */}
-                  {activeTab === "wishlist" && <Wishlist />}
-
-                  {/* 9. WALLET TAB */}
-                  {activeTab === "wallet" && <Wallet />}
-                </motion.div>
-              </AnimatePresence>
+            {/* Loyalty Pill */}
+            <div className="flex sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto pt-3 sm:pt-0 border-t sm:border-t-0 border-slate-100">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs font-black uppercase tracking-wider shadow-sm">
+                <Award className="w-3.5 h-3.5" />
+                <span>{loyaltyData?.tier || "Bronze"} Tier</span>
+              </span>
+              <p className="text-sm font-bold text-slate-700 mt-1">
+                <span className="text-red-600 font-black text-lg">{loyaltyData?.points || 0}</span> Points
+                <span className="text-xs text-slate-400 ml-1">(₹{((loyaltyData?.points || 0) * 0.5).toFixed(0)} value)</span>
+              </p>
             </div>
           </div>
         </div>
 
-        {/* Floating Cart Button (Safely Positioned) */}
-        {cartItemCount > 0 && (
-          <Link
-            to="/cart"
-            className="fixed bottom-24 md:bottom-8 right-6 z-50 bg-[#FF6B00] text-white p-4 rounded-full shadow-[0_10px_40px_rgba(255,107,0,0.45)] hover:scale-110 active:scale-95 transition-all flex items-center justify-center border-2 border-white/20"
+        {/* ── 2. Active Order Radar Alert (if any order is in-flight) ───────── */}
+        {activeOrder && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="p-5 rounded-3xl bg-gradient-to-r from-red-600 via-rose-600 to-orange-500 text-white shadow-xl shadow-red-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
           >
-            <ShoppingCart size={24} />
-            <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-black w-6 h-6 flex items-center justify-center rounded-full border-2 border-dark-900">
-              {cartItemCount}
-            </span>
-          </Link>
+            <div className="flex items-center gap-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center shrink-0">
+                <Flame className="w-6 h-6 text-white animate-pulse" />
+              </div>
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-widest text-orange-200 block">
+                  Active Live Order #{activeOrder.dailyOrderNumber || activeOrder.id?.slice(-4).toUpperCase() || 'LIVE'}
+                </span>
+                <p className="text-base font-black text-white capitalize mt-0.5">
+                  {activeOrder.status.replace(/_/g, ' ')}
+                </p>
+                <p className="text-xs text-rose-100">
+                  {activeOrder.items?.length || 1} items • ₹{activeOrder.totalAmount}
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => navigate(`/order-tracking/${activeOrder.id || ''}`)}
+              className="w-full sm:w-auto px-5 py-3 rounded-2xl bg-white text-red-600 hover:bg-orange-50 font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-md transition-all active:scale-95 cursor-pointer"
+            >
+              <Navigation className="w-4 h-4 text-red-600" />
+              <span>Track Live GPS Route</span>
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </motion.div>
         )}
 
-        {/* Phone Update Modal */}
+        {/* ── 3. Segmented Navigation Tabs ─────────────────────────────────── */}
+        <div className="flex bg-orange-100/70 p-1.5 rounded-2xl border border-orange-200/60 overflow-x-auto scrollbar-none">
+          {[
+            { id: "profile", label: "Profile & Addresses", icon: User },
+            { id: "orders", label: "My Orders", icon: History },
+            { id: "loyalty", label: "Rewards & Points", icon: Award },
+            { id: "support", label: "Help & Support", icon: HelpCircle },
+            { id: "account", label: "Account Settings", icon: Settings },
+          ].map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex-1 min-w-[120px] py-2.5 px-3 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
+                  isActive
+                    ? "bg-white text-slate-900 shadow-sm"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                <Icon className={`w-4 h-4 ${isActive ? "text-red-600" : "text-slate-400"}`} />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* ── 4. Tab Content Modules ───────────────────────────────────────── */}
+        <AnimatePresence mode="wait">
+          {/* TAB: PROFILE & ADDRESSES */}
+          {activeTab === "profile" && (
+            <motion.div
+              key="profile"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.25 }}
+              className="space-y-6"
+            >
+              {/* Edit Details Card */}
+              <div className="bg-white rounded-3xl p-6 sm:p-8 border border-orange-100/90 shadow-sm">
+                <h3 className="text-lg font-black text-slate-900 mb-4">
+                  Personal Information
+                </h3>
+
+                <form onSubmit={handleSaveProfile} className="space-y-4 max-w-lg">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                      Full Name
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={nameInput}
+                      onChange={(e) => setNameInput(e.target.value)}
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 focus:border-red-500 focus:bg-white rounded-2xl text-slate-900 text-sm font-medium focus:outline-none transition-all"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                        Email Address
+                      </label>
+                      <input
+                        type="email"
+                        disabled
+                        value={user?.email || "Not linked"}
+                        className="w-full px-4 py-3 bg-slate-100 border border-slate-200 text-slate-500 rounded-2xl text-sm font-medium cursor-not-allowed"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                        Mobile Number
+                      </label>
+                      <div className="relative flex items-center">
+                        <input
+                          type="tel"
+                          disabled
+                          value={user?.phone || "Not linked"}
+                          className="w-full px-4 py-3 bg-slate-100 border border-slate-200 text-slate-500 rounded-2xl text-sm font-medium cursor-not-allowed"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setIsPhoneModalOpen(true)}
+                          className="absolute right-2 px-3 py-1.5 bg-white border border-slate-200 text-red-600 font-bold text-xs rounded-xl hover:bg-red-50 transition-colors cursor-pointer"
+                        >
+                          Change
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={savingProfile || !nameInput.trim()}
+                    className="px-6 py-3 bg-gradient-to-r from-red-600 to-orange-500 text-white font-black text-xs uppercase tracking-wider rounded-2xl shadow-md shadow-red-500/20 hover:scale-105 active:scale-95 disabled:opacity-50 transition-all cursor-pointer"
+                  >
+                    {savingProfile ? "Saving..." : "Save Changes"}
+                  </button>
+                </form>
+              </div>
+
+              {/* Saved Delivery Addresses */}
+              <div className="bg-white rounded-3xl p-6 sm:p-8 border border-orange-100/90 shadow-sm">
+                <AddressBook />
+              </div>
+            </motion.div>
+          )}
+
+          {/* TAB: ORDERS */}
+          {activeTab === "orders" && (
+            <motion.div
+              key="orders"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.25 }}
+              className="bg-white rounded-3xl p-6 sm:p-8 border border-orange-100/90 shadow-sm"
+            >
+              <OrderHistory orders={orders} />
+            </motion.div>
+          )}
+
+          {/* TAB: LOYALTY */}
+          {activeTab === "loyalty" && (
+            <motion.div
+              key="loyalty"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.25 }}
+              className="bg-white rounded-3xl p-6 sm:p-8 border border-orange-100/90 shadow-sm"
+            >
+              <LoyaltyRewards loyaltyData={loyaltyData} />
+            </motion.div>
+          )}
+
+          {/* TAB: HELP & SUPPORT */}
+          {activeTab === "support" && (
+            <motion.div
+              key="support"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.25 }}
+              className="space-y-6"
+            >
+              {/* Quick Contact Capsules */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <a
+                  href="https://wa.me/918305500767?text=Hi%20Olive%20Pizza%20Team,%20I%20need%20assistance"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="p-5 rounded-3xl bg-emerald-50 hover:bg-emerald-100/80 border border-emerald-200 transition-all flex items-center gap-4 group cursor-pointer"
+                >
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow-md shadow-emerald-500/25">
+                    <MessageCircle className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-black text-emerald-950 group-hover:text-emerald-800">
+                      WhatsApp Live Support
+                    </h4>
+                    <p className="text-xs text-emerald-700 mt-0.5">
+                      Chat directly with our support team
+                    </p>
+                  </div>
+                </a>
+
+                <a
+                  href="tel:+918305500767"
+                  className="p-5 rounded-3xl bg-orange-50 hover:bg-orange-100/80 border border-orange-200 transition-all flex items-center gap-4 group cursor-pointer"
+                >
+                  <div className="w-12 h-12 rounded-2xl bg-orange-500 text-white flex items-center justify-center shrink-0 shadow-md shadow-orange-500/25">
+                    <PhoneCall className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-black text-orange-950 group-hover:text-orange-800">
+                      Call Kitchen Hotline
+                    </h4>
+                    <p className="text-xs text-orange-700 mt-0.5">
+                      +91 83055 00767 (11 AM – 11 PM)
+                    </p>
+                  </div>
+                </a>
+              </div>
+
+              {/* FAQs Accordion */}
+              <div className="bg-white rounded-3xl p-6 sm:p-8 border border-orange-100/90 shadow-sm">
+                <h3 className="text-lg font-black text-slate-900 mb-4">
+                  Frequently Asked Questions
+                </h3>
+
+                <div className="space-y-3">
+                  {SUPPORT_FAQS.map((faq, idx) => {
+                    const isOpen = faqOpenIndex === idx;
+                    return (
+                      <div
+                        key={idx}
+                        className="rounded-2xl border border-slate-200/80 overflow-hidden"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setFaqOpenIndex(isOpen ? null : idx)}
+                          className="w-full p-4 text-left flex items-center justify-between gap-4 font-bold text-sm text-slate-900 hover:bg-slate-50 transition-colors cursor-pointer"
+                        >
+                          <span>{faq.q}</span>
+                          <ChevronDown
+                            className={`w-4 h-4 text-slate-400 transition-transform ${
+                              isOpen ? "rotate-180 text-red-600" : ""
+                            }`}
+                          />
+                        </button>
+                        {isOpen && (
+                          <div className="px-4 pb-4 pt-1 text-xs text-slate-600 leading-relaxed bg-slate-50/50 border-t border-slate-100">
+                            {faq.a}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* TAB: ACCOUNT & SECURITY */}
+          {activeTab === "account" && (
+            <motion.div
+              key="account"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.25 }}
+              className="bg-white rounded-3xl p-6 sm:p-8 border border-orange-100/90 shadow-sm space-y-6"
+            >
+              <div>
+                <h3 className="text-lg font-black text-slate-900">
+                  Account Settings
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Manage session credentials and security
+                </p>
+              </div>
+
+              <div className="pt-4 border-t border-slate-100 space-y-4">
+                <div className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-200/70">
+                  <div>
+                    <h5 className="text-sm font-bold text-slate-800">
+                      Sign Out
+                    </h5>
+                    <p className="text-xs text-slate-500">
+                      Safely log out of your session on this device
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleLogout}
+                    className="px-4 py-2 bg-white border border-red-200 text-red-600 hover:bg-red-50 font-bold text-xs rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>Sign Out</span>
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-200/70">
+                  <div>
+                    <h5 className="text-sm font-bold text-slate-800">
+                      Delete Account Data
+                    </h5>
+                    <p className="text-xs text-slate-500">
+                      Permanently request removal of your account
+                    </p>
+                  </div>
+                  <Link
+                    to="/delete-account"
+                    className="px-4 py-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 font-bold text-xs rounded-xl transition-colors"
+                  >
+                    Manage
+                  </Link>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+      </div>
+
+      {/* Phone Update Modal */}
+      {isPhoneModalOpen && (
         <PhoneUpdateModal
           isOpen={isPhoneModalOpen}
           onClose={() => setIsPhoneModalOpen(false)}
           currentPhone={user?.phone || ""}
-          onSuccess={(newPhone) => {
-            setIsPhoneModalOpen(false);
+          onSuccess={(newPhone: string) => {
             if (user) {
-              setUser({ ...user, phone: newPhone, phoneVerified: true, phoneSetupCompleted: true }, role || 'customer');
+              setUser({ ...user, phone: newPhone, phoneVerified: true }, 'customer');
             }
-            toast.success("Phone updated and verified! ✓");
           }}
         />
-      </PageTransition>
-    </>
+      )}
+    </PageTransition>
   );
 }

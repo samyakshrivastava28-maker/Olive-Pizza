@@ -105,8 +105,16 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="preconnect" href="https://res.cloudinary.com" />
     <link rel="dns-prefetch" href="https://res.cloudinary.com" />
-    
-    <script src="https://www.google.com/recaptcha/enterprise.js?render=6LdqyDctAAAAABn8isXOdDe-0roVqILKuAdIl_x-"></script>
+    <script>
+      // Load Google reCAPTCHA Enterprise on authorized production domains only (prevents 'Invalid site key' badge on localhost)
+      if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+        const rcScript = document.createElement('script');
+        rcScript.src = 'https://www.google.com/recaptcha/enterprise.js?render=6LdqyDctAAAAABn8isXOdDe-0roVqILKuAdIl_x-';
+        rcScript.async = true;
+        rcScript.defer = true;
+        document.head.appendChild(rcScript);
+      }
+    </script>
     <!-- Cloudflare Turnstile Bot Protection Engine -->
     <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
     <script>

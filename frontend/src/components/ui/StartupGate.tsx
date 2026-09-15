@@ -20,6 +20,13 @@ export default function StartupGate({ children }: StartupGateProps) {
   const [showVideo, setShowVideo] = useState(() => {
     if (typeof window === 'undefined') return false;
 
+    // 0. Never play intro on deep-links, tracking pages, checkout, or internal routes
+    const pathname = window.location.pathname;
+    if (pathname !== '/' && pathname !== '') {
+      window.__OP_APP_STARTUP_INTRO_PLAYED__ = true;
+      return false;
+    }
+
     // 1. Process-level global singleton guard (prevents replay on any route change or remount)
     if (window.__OP_APP_STARTUP_INTRO_PLAYED__) {
       return false;
@@ -27,23 +34,24 @@ export default function StartupGate({ children }: StartupGateProps) {
 
     // 2. Check if running on native mobile app (Android/iOS Capacitor)
     if (Capacitor.isNativePlatform()) {
-      if (nativeIntroShownInProcess) {
+      if (nativeIntroShownInProcess || localStorage.getItem('hasSeenIntro') === 'true') {
         window.__OP_APP_STARTUP_INTRO_PLAYED__ = true;
         return false;
       }
       nativeIntroShownInProcess = true;
       window.__OP_APP_STARTUP_INTRO_PLAYED__ = true;
+      localStorage.setItem('hasSeenIntro', 'true');
       return true;
     }
 
-    // 3. Web / PWA: sessionStorage survives browser refresh (F5) and SPA route changes,
-    // but resets when the user closes the browser/tab completely and opens again.
-    const hasSeenIntro = sessionStorage.getItem('hasSeenIntro');
+    // 3. Web / PWA: Check sessionStorage & localStorage
+    const hasSeenIntro = sessionStorage.getItem('hasSeenIntro') || localStorage.getItem('hasSeenIntro');
     if (hasSeenIntro === 'true') {
       window.__OP_APP_STARTUP_INTRO_PLAYED__ = true;
       return false;
     }
     sessionStorage.setItem('hasSeenIntro', 'true');
+    localStorage.setItem('hasSeenIntro', 'true');
     window.__OP_APP_STARTUP_INTRO_PLAYED__ = true;
     return true;
   });

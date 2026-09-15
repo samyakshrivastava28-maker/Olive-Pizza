@@ -67,18 +67,41 @@ export const TruecallerService = {
       headers,
       body: JSON.stringify({ expectedPhone })
     });
-    if (!res.ok) {
-      throw new Error('Failed to initiate Truecaller web session.');
+
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data?.success) {
+      const code = data?.code || (res.status === 429 ? 'RATE_LIMIT_EXCEEDED' : 'TRUECALLER_SESSION_CREATE_FAILED');
+      let msg = data?.error;
+      if (!msg) {
+        if (res.status === 429) {
+          msg = 'Too many verification attempts. Please verify via SMS or wait a few minutes.';
+        } else if (code === 'TRUECALLER_CONFIG_MISSING') {
+          msg = 'Truecaller verification is not configured for this environment. Please verify via SMS.';
+        } else {
+          msg = 'Truecaller verification is temporarily unavailable. Please verify via SMS.';
+        }
+      }
+      const error: any = new Error(msg);
+      error.code = code;
+      throw error;
     }
-    return res.json();
+    return data;
   },
 
   pollWebSession: async (requestId: string): Promise<TruecallerSessionStatusResponse> => {
     const res = await fetchApi(`/api/phone/truecaller/session/${requestId}`);
-    if (!res.ok) {
-      throw new Error('Failed to query Truecaller session status.');
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data) {
+      if (res.status === 404 || data?.code === 'TRUECALLER_SESSION_EXPIRED') {
+        return {
+          success: false,
+          status: 'FAILED',
+          error: 'Verification session expired. Please try again.'
+        };
+      }
+      throw new Error(data?.error || 'Failed to query Truecaller session status.');
     }
-    return res.json();
+    return data;
   },
 
   verifyOnBackend: async (payload: any, token?: string, expectedPhone?: string): Promise<any> => {

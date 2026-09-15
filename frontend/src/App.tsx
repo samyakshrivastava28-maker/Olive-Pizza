@@ -162,7 +162,7 @@ function AppContent() {
     }
   }, [isAuthenticated, location.pathname, navigate]);
 
-  // Global Onboarding Enforcer: Make phone and location setup strictly compulsory for customers
+  // Protected onboarding enforcer (applies to checkout and protected sections without disrupting public browsing)
   useEffect(() => {
     if (
       !isAuthenticated || 
@@ -170,14 +170,20 @@ function AppContent() {
       location.pathname.startsWith('/onboarding') || 
       location.pathname.startsWith('/login') || 
       location.pathname.startsWith('/register') ||
-      location.pathname.startsWith('/auth')
+      location.pathname.startsWith('/auth') ||
+      location.pathname === '/' ||
+      location.pathname === '/menu' ||
+      location.pathname.startsWith('/product') ||
+      location.pathname === '/cart' ||
+      location.pathname.startsWith('/order-tracking') ||
+      location.pathname.startsWith('/tracking')
     ) {
       return;
     }
 
-    if (!user.phoneVerified) {
+    if (!user.phoneVerified && !user.phone) {
       navigate('/onboarding/phone', { replace: true });
-    } else if (!user.locationSetupCompleted && !user.lat) {
+    } else if (!user.locationSetupCompleted && !user.lat && location.pathname === '/checkout') {
       navigate('/onboarding/location', { replace: true });
     }
   }, [isAuthenticated, user, location.pathname, navigate]);
