@@ -393,7 +393,6 @@ export default function Login() {
         await setDoc(userRef, {
           email: result.user.email?.toLowerCase(),
           name: result.user.displayName || "Customer",
-          role: "customer",
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
           emailVerified: true

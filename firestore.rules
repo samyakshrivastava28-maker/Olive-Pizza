@@ -60,12 +60,30 @@ service cloud.firestore {
     
     match /users/{userId} {
       allow read: if isOwner(userId) || hasFullAccess();
-      allow write: if hasFullAccess() || isOwner(userId);
+      // Only admins can change role, franchiseId, branchId, terminalId, or administrative flags
+      // Non-admins can only write customer fields (name, phone, address, photoURL) and CANNOT self-promote
+      allow create: if hasFullAccess() || (
+        isOwner(userId) &&
+        (!('role' in request.resource.data) || request.resource.data.role == 'customer') &&
+        (!('franchiseId' in request.resource.data)) &&
+        (!('branchId' in request.resource.data)) &&
+        (!('terminalId' in request.resource.data)) &&
+        (!('isOwner' in request.resource.data) || request.resource.data.isOwner == false) &&
+        (!('isAdmin' in request.resource.data) || request.resource.data.isAdmin == false)
+      );
+      allow update: if hasFullAccess() || (
+        isOwner(userId) &&
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'role', 'franchiseId', 'branchId', 'terminalId', 'isOwner', 'isAdmin', 'customClaims', 'emailVerified'
+        ]))
+      );
+      allow delete: if hasFullAccess();
     }
 
     match /customer_identities/{phone} {
-      allow read: if true;
-      allow create, update: if isSignedIn() || hasFullAccess();
+      allow read: if hasFullAccess() || (isSignedIn() && resource.data.uid == request.auth.uid);
+      allow create, update: if hasFullAccess() || (isSignedIn() && request.resource.data.uid == request.auth.uid);
+      allow delete: if hasFullAccess();
     }
 
     match /security_logs/{logId} {
@@ -132,7 +150,15 @@ service cloud.firestore {
 
     match /delivery_partners/{partnerId} {
       allow read: if hasFullAccess() || (request.auth != null && request.auth.uid == partnerId);
-      allow write: if hasFullAccess() || (request.auth != null && request.auth.uid == partnerId);
+      // Riders can only update their own telemetry/status fields, not administrative status or assigned branch
+      allow create: if hasFullAccess();
+      allow update: if hasFullAccess() || (
+        request.auth != null && request.auth.uid == partnerId &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'isApproved', 'status', 'commissionRate', 'assignedBranchId', 'franchiseId', 'role'
+        ])
+      );
+      allow delete: if hasFullAccess();
     }
 
     match /reviews/{reviewId} {

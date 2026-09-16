@@ -149,7 +149,6 @@ export default function Register() {
       await setDoc(doc(db, "users", userCredential.user.uid), {
         phone: formattedPhone,
         name: name.trim(),
-        role: 'customer',
         updatedAt: new Date().toISOString()
       }, { merge: true });
 
@@ -189,7 +188,6 @@ export default function Register() {
         await setDoc(userRef, {
           email: result.user.email?.toLowerCase(),
           name: result.user.displayName || "Customer",
-          role: "customer",
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
           emailVerified: true

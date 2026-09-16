@@ -81,9 +81,7 @@ export default function VerifyEmail() {
         throw new Error(data.message || "Invalid verification code");
       }
 
-      if (auth.currentUser) {
-        await setDoc(doc(db, "users", auth.currentUser.uid), { emailVerified: true }, { merge: true });
-      }
+      // Backend verify-code endpoint already authoritatively updates emailVerified in Firestore
 
       setUser({
         ...user,
