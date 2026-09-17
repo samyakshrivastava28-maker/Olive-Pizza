@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
   signInWithPopup,
+  signInWithCredential,
   GoogleAuthProvider,
   signInWithCustomToken,
 } from "firebase/auth";
@@ -376,43 +377,96 @@ export default function Login() {
   };
 
   // ─────────────────────────────────────────────────────────────
-  // 4. GOOGLE SIGN-IN
+  // 4. GOOGLE SIGN-IN (Cross-platform Web & Capacitor Native)
   // ─────────────────────────────────────────────────────────────
   const handleGoogleSignIn = async () => {
     setError("");
     setLoading(true);
     try {
-      const provider = new GoogleAuthProvider();
-      provider.setCustomParameters({ prompt: 'select_account' });
-      const result = await signInWithPopup(auth, provider);
-      
-      const userRef = doc(db, "users", result.user.uid);
-      const userDoc = await getDoc(userRef);
+      let firebaseUser: any = null;
 
-      if (!userDoc.exists()) {
-        await setDoc(userRef, {
-          email: result.user.email?.toLowerCase(),
-          name: result.user.displayName || "Customer",
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          emailVerified: true
+      if (Capacitor.isNativePlatform()) {
+        const { FirebaseAuthentication } = await import('@capacitor-firebase/authentication');
+        const nativeResult = await FirebaseAuthentication.signInWithGoogle();
+        const idToken = nativeResult.credential?.idToken;
+        if (!idToken) {
+          throw new Error('Google Sign-In failed on mobile device.');
+        }
+        const credential = GoogleAuthProvider.credential(idToken);
+        const cred = await signInWithCredential(auth, credential);
+        firebaseUser = cred.user;
+      } else {
+        const provider = new GoogleAuthProvider();
+        provider.setCustomParameters({ prompt: 'select_account' });
+        const result = await signInWithPopup(auth, provider);
+        firebaseUser = result.user;
+      }
+
+      if (!firebaseUser) {
+        throw new Error('Could not complete Google authentication.');
+      }
+
+      // Canonical Backend Authorization & User Profile Resolution
+      let serverUser: any = null;
+      try {
+        const token = await firebaseUser.getIdToken();
+        const authRes = await fetchApi('/api/auth/authorize-app', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ targetApp: 'CUSTOMER' })
         });
+        if (authRes.ok) {
+          const authData = await authRes.json();
+          if (authData.authorized) {
+            serverUser = authData.user;
+          }
+        }
+      } catch (authErr) {
+        console.warn('[Login] Backend authorize-app notice:', authErr);
+      }
+
+      // Non-blocking client record sync for customer fields
+      try {
+        const userRef = doc(db, "users", firebaseUser.uid);
+        const userDoc = await getDoc(userRef);
+        if (!userDoc.exists()) {
+          await setDoc(userRef, {
+            email: firebaseUser.email?.toLowerCase(),
+            name: serverUser?.name || firebaseUser.displayName || "Customer",
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          }, { merge: true });
+        }
+      } catch (docErr) {
+        console.warn('[Login] Client Firestore user doc sync notice:', docErr);
       }
 
       useAuthStore.getState().setUser({
-        uid: result.user.uid,
-        email: result.user.email,
-        name: result.user.displayName || "Customer",
-        photoURL: result.user.photoURL,
+        uid: firebaseUser.uid,
+        email: firebaseUser.email,
+        name: serverUser?.name || firebaseUser.displayName || "Customer",
+        photoURL: firebaseUser.photoURL,
         emailVerified: true,
-        phoneVerified: false,
+        phoneVerified: !!serverUser?.phone,
       }, 'customer');
 
       toast.success("Welcome to Olive Pizza!");
       navigate(redirectUrl, { replace: true });
     } catch (err: any) {
       if (err.code !== 'auth/popup-closed-by-user') {
-        setError("Google sign-in failed. Please try with Email or Phone.");
+        let msg = "Google sign-in could not be completed.";
+        if (err.code === 'auth/popup-blocked') {
+          msg = "Popup was blocked by your browser. Please allow popups for Olive Pizza or try with Email/Phone.";
+        } else if (err.code === 'auth/unauthorized-domain') {
+          msg = "This domain is not authorized for Google sign-in in Firebase Console.";
+        } else if (err.message) {
+          msg = err.message;
+        }
+        setError(msg);
+        toast.error(msg);
       }
     } finally {
       setLoading(false);
