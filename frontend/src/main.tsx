@@ -19,12 +19,15 @@ if (import.meta.env.PROD) {
   console.warn = () => {}; // optionally keep warn or silence it; typically we silence warn too unless debugging.
 }
 
+import { Capacitor } from '@capacitor/core';
+
 // 1.5. Patch global fetch to route /api/ to the backend on Capacitor/Native apps
 const originalFetch = window.fetch;
 window.fetch = async (...args) => {
   let [resource, config] = args;
   if (typeof resource === 'string' && resource.startsWith('/api/')) {
     const isNative = typeof window !== 'undefined' && (
+      Capacitor.isNativePlatform() ||
       (window as any).Capacitor?.isNativePlatform?.() ||
       window.location.protocol === 'capacitor:' ||
       window.location.protocol === 'ionic:'

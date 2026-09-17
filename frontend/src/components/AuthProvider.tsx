@@ -12,72 +12,101 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   useEffect(() => {
     let unsubscribe: (() => void) | null = null;
     let mounted = true;
+    let authResolved = false;
+    let failsafeTimer: ReturnType<typeof setTimeout> | null = null;
+
+    // Safety Watchdog: Guarantee that initial loading state is NEVER held beyond 1200ms
+    // even if Firebase Auth persistence resolution is slow or IndexedDB is locked on cold start
+    failsafeTimer = setTimeout(() => {
+      if (!authResolved && mounted) {
+        console.warn('[AuthProvider] Watchdog safety timeout triggered: clearing initial auth loading state');
+        authResolved = true;
+        setLoading(false);
+      }
+    }, 1200);
 
     const setupAuth = () => {
       try {
-        unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+        unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
           if (!mounted) return;
-          if (firebaseUser) {
-            try {
-              const emailLower = (firebaseUser.email || '').toLowerCase().trim();
-              const isCanonicalOwner = emailLower === 'olivepizzarjn@gmail.com' || emailLower === 'webhub2811@gmail.com';
+          authResolved = true;
+          if (failsafeTimer) {
+            clearTimeout(failsafeTimer);
+            failsafeTimer = null;
+          }
 
-              const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
-              if (!mounted) return;
-              
-              if (userDoc.exists()) {
-                const data = userDoc.data();
-                setUser(
-                  {
-                    uid: firebaseUser.uid,
-                    email: firebaseUser.email,
-                    name: data.name,
-                    phone: data.phone,
-                    photoURL: firebaseUser.photoURL || data.photoUrl,
-                    phoneVerified: data.phoneVerified ?? false,
-                    phoneSetupCompleted: data.phoneVerified ? (data.phoneSetupCompleted ?? true) : false,
-                    locationSetupCompleted: data.locationSetupCompleted ?? !!data.fullAddress,
-                    lat: data.lat,
-                    lng: data.lng,
-                    fullAddress: data.fullAddress,
-                    emailVerified: firebaseUser.emailVerified,
-                    approvalStatus: data.approvalStatus,
-                    status: data.status,
-                    photoUrl: data.photoUrl,
-                    vehicleType: data.vehicleType,
-                    vehicleNumber: data.vehicleNumber,
-                    vehicleImage: data.vehicleImage,
-                    earnings: data.earnings,
-                    metrics: data.metrics,
-                  },
-                  (data.role === 'delivery' ? 'delivery_partner' : (data.role || (['olivepizzarjn@gmail.com', 'webhub2811@gmail.com'].includes(firebaseUser.email?.toLowerCase() || '') ? 'owner' : 'customer')))
-                );
+          if (firebaseUser) {
+            const emailLower = (firebaseUser.email || '').toLowerCase().trim();
+            const fallbackRole = ['olivepizzarjn@gmail.com', 'webhub2811@gmail.com'].includes(emailLower) ? 'owner' : 'customer';
+            const existingUser = useAuthStore.getState().user;
+
+            // 1. Immediately set basic user state & unlock UI without waiting for remote Firestore I/O
+            setUser(
+              {
+                uid: firebaseUser.uid,
+                email: firebaseUser.email,
+                name: existingUser?.name || firebaseUser.displayName || undefined,
+                photoURL: existingUser?.photoURL || firebaseUser.photoURL || undefined,
+                emailVerified: firebaseUser.emailVerified,
+                phoneVerified: existingUser?.phoneVerified ?? false,
+                phoneSetupCompleted: existingUser?.phoneSetupCompleted ?? false,
+                locationSetupCompleted: existingUser?.locationSetupCompleted ?? false,
+                lat: existingUser?.lat,
+                lng: existingUser?.lng,
+                fullAddress: existingUser?.fullAddress,
+                ...existingUser,
+              },
+              (existingUser?.role || fallbackRole)
+            );
+            setLoading(false);
+
+            // 2. Asynchronously fetch full Firestore profile in background without blocking app render
+            getDoc(doc(db, 'users', firebaseUser.uid))
+              .then((userDoc) => {
+                if (!mounted) return;
+                if (userDoc.exists()) {
+                  const data = userDoc.data();
+                  setUser(
+                    {
+                      uid: firebaseUser.uid,
+                      email: firebaseUser.email,
+                      name: data.name || firebaseUser.displayName,
+                      phone: data.phone,
+                      photoURL: firebaseUser.photoURL || data.photoUrl,
+                      phoneVerified: data.phoneVerified ?? false,
+                      phoneSetupCompleted: data.phoneVerified ? (data.phoneSetupCompleted ?? true) : false,
+                      locationSetupCompleted: data.locationSetupCompleted ?? !!data.fullAddress,
+                      lat: data.lat,
+                      lng: data.lng,
+                      fullAddress: data.fullAddress,
+                      emailVerified: firebaseUser.emailVerified,
+                      approvalStatus: data.approvalStatus,
+                      status: data.status,
+                      photoUrl: data.photoUrl,
+                      vehicleType: data.vehicleType,
+                      vehicleNumber: data.vehicleNumber,
+                      vehicleImage: data.vehicleImage,
+                      earnings: data.earnings,
+                      metrics: data.metrics,
+                    },
+                    (data.role === 'delivery' ? 'delivery_partner' : (data.role || fallbackRole))
+                  );
 
                   // Silently verify / sync push tokens for already-granted sessions
                   verifyAndRefreshTokens(firebaseUser.uid).catch(() => {});
-              } else {
-                const fallbackRole = ['olivepizzarjn@gmail.com', 'webhub2811@gmail.com'].includes(firebaseUser.email?.toLowerCase() || '') ? 'owner' : 'customer';
-                setUser({ uid: firebaseUser.uid, email: firebaseUser.email, onboardingComplete: false, emailVerified: firebaseUser.emailVerified }, fallbackRole);
-              }
-            } catch (error: any) {
-              console.warn('[AuthProvider] Firestore read failed:', error?.code || error?.message);
-              // auth/network-request-failed — user is logged in but network is unavailable
-              // Still set user with cached data so app doesn't lock out
-              const fallbackRole = ['olivepizzarjn@gmail.com', 'webhub2811@gmail.com'].includes(firebaseUser.email?.toLowerCase() || '') ? 'owner' : 'customer';
-              setUser({ uid: firebaseUser.uid, email: firebaseUser.email, onboardingComplete: false, emailVerified: firebaseUser.emailVerified }, fallbackRole);
-              
-              // Retry Firestore read after 5 seconds
-              if (error?.code === 'unavailable' || error?.code === 'auth/network-request-failed') {
-                retryTimer.current = setTimeout(() => { if (mounted) setupAuth(); }, 5000);
-              }
-            }
+                }
+              })
+              .catch((error: any) => {
+                console.warn('[AuthProvider] Background Firestore profile fetch error:', error?.code || error?.message);
+              });
           } else {
             logout();
+            setLoading(false);
           }
-          setLoading(false);
         }, (error: any) => {
           // onAuthStateChanged error callback (e.g., network issue)
           console.warn('[AuthProvider] Auth state error:', error?.code || error?.message);
+          authResolved = true;
           setLoading(false);
           // Retry auth setup after 5 seconds
           if (mounted) {
@@ -86,6 +115,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
         });
       } catch (err: any) {
         console.error('[AuthProvider] Fatal auth init error:', err?.message);
+        authResolved = true;
         setLoading(false);
       }
     };
@@ -94,6 +124,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
 
     return () => {
       mounted = false;
+      if (failsafeTimer) clearTimeout(failsafeTimer);
       if (unsubscribe) unsubscribe();
       if (retryTimer.current) clearTimeout(retryTimer.current);
     };

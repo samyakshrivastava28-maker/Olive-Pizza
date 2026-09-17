@@ -2,7 +2,7 @@ import { Routes, Route, useLocation, useNavigate, Navigate } from 'react-router'
 import { HelmetProvider } from 'react-helmet-async';
 import { AnimatePresence, MotionConfig } from 'framer-motion';
 import { Toaster } from 'react-hot-toast';
-import { lazy, Suspense, ComponentType, useEffect, useRef } from 'react';
+import { lazy, Suspense, ComponentType, useEffect, useRef, useState } from 'react';
 import { useAuthStore } from './lib/store';
 import { UpdateBanner, ForceUpdateScreen } from './components/VersionUpdateScreens';
 import { useDeviceSession } from './hooks/useDeviceSession';
@@ -189,10 +189,22 @@ function AppContent() {
   }, [isAuthenticated, user, location.pathname, navigate]);
 
 
+  // Startup Safety Timeout: Guarantee that the initial session blocker can NEVER stall UI beyond 1500ms
+  const [initTimeoutReached, setInitTimeoutReached] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setInitTimeoutReached(true);
+      if (useAuthStore.getState().isLoading) {
+        useAuthStore.getState().setLoading(false);
+      }
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, []);
+
   // Global Session Initializer Blocker
   // This completely stops the app from rendering while we restore the persisted session.
   // This eliminates the "login flash" the user sees on startup.
-  if (isLoading && !isAuthenticated) {
+  if (isLoading && !isAuthenticated && !initTimeoutReached) {
     return <PizzaLoader />;
   }
 
