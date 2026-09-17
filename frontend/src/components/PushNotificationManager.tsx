@@ -245,9 +245,9 @@ export default function PushNotificationManager() {
         body: JSON.stringify({
           token,
           deviceName: Capacitor.isNativePlatform()
-            ? `Android Native (${navigator.userAgent.match(/; (.+?)\)/)?.[1] || 'Device'})`
+            ? `${Capacitor.getPlatform().toUpperCase()} Native (${navigator.userAgent.match(/; (.+?)\)/)?.[1] || 'Device'})`
             : navigator.userAgent.slice(0, 100),
-          platform: Capacitor.isNativePlatform() ? 'android' : navigator.platform,
+          platform: Capacitor.isNativePlatform() ? Capacitor.getPlatform() : (navigator.platform || 'web'),
           browser: Capacitor.isNativePlatform() ? 'capacitor' : getBrowserName(),
           appVersion: import.meta.env.VITE_APP_VERSION || '1.0',
           appName: 'customer',

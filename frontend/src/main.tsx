@@ -24,7 +24,14 @@ const originalFetch = window.fetch;
 window.fetch = async (...args) => {
   let [resource, config] = args;
   if (typeof resource === 'string' && resource.startsWith('/api/')) {
-    const backendUrl = import.meta.env.VITE_BACKEND_URL || (import.meta.env.DEV ? 'http://localhost:5000' : 'https://olivepizza-owner.onrender.com');
+    const isNative = typeof window !== 'undefined' && (
+      (window as any).Capacitor?.isNativePlatform?.() ||
+      window.location.protocol === 'capacitor:' ||
+      window.location.protocol === 'ionic:'
+    );
+    const backendUrl = isNative
+      ? 'https://olivepizza-owner.onrender.com'
+      : (import.meta.env.VITE_BACKEND_URL || (import.meta.env.DEV ? 'http://localhost:5000' : 'https://olivepizza-owner.onrender.com'));
     resource = `${backendUrl}${resource}`;
   }
   return originalFetch(resource, config);
