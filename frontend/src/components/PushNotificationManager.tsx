@@ -142,7 +142,7 @@ export default function PushNotificationManager() {
 
   // â”€â”€â”€ Create Android Notification Channels â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const createNativeChannels = useCallback(async () => {
-    if (!Capacitor.isNativePlatform()) return;
+    if (Capacitor.getPlatform() !== 'android') return;
     for (const channel of NOTIFICATION_CHANNELS) {
       try {
         await PushNotifications.createChannel(channel);

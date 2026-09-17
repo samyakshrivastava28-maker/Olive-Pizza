@@ -96,48 +96,31 @@ export class GlobalErrorBoundary extends Component<Props, State> {
 
   public render() {
     if (this.state.hasError) {
-      // If still within auto-retry window, show nothing (blank is better than error)
-      if (this.state.retryCount < MAX_AUTO_RETRIES) {
-        return null;
-      }
-
       return (
-        <div className="min-h-[100dvh] w-full flex items-center justify-center bg-[#020617] text-slate-200 p-6 z-[9999] relative">
-          <div className="max-w-2xl w-full bg-[#0f172a] border border-red-500/30 rounded-3xl p-8 shadow-2xl flex flex-col items-center text-center">
-            <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mb-6">
-              <RefreshCcw className="w-8 h-8 text-red-500" />
+        <div className="min-h-[100dvh] w-full flex items-center justify-center bg-[#0B0F14] text-slate-200 p-6 z-[9999] relative">
+          <div className="max-w-md w-full bg-[#131922] border border-amber-500/20 rounded-3xl p-8 shadow-2xl flex flex-col items-center text-center">
+            <div className="w-16 h-16 bg-amber-500/10 rounded-full flex items-center justify-center mb-6">
+              <RefreshCcw className="w-8 h-8 text-amber-500" />
             </div>
-            <h1 className="text-2xl font-black text-red-500 mb-3">
-              Application Crashed
+            <h1 className="text-2xl font-bold text-white mb-2">
+              Unable to start Olive Pizza
             </h1>
             <p className="text-slate-400 mb-6 text-sm leading-relaxed">
-              We encountered a critical error while rendering this part of the application.
+              Please check your connection and try again.
             </p>
-            
-            <div className="w-full text-center bg-black/40 p-6 rounded-2xl border border-slate-800 mb-8">
-              <p className="text-slate-300 text-sm font-medium mb-3">
-                {this.state.error?.message && !this.state.error.message.includes('at ') && !this.state.error.message.includes('node_modules')
-                  ? "We encountered a temporary interface issue. Please refresh or return home."
-                  : "An unexpected error occurred. Please try reloading."}
-              </p>
-              <div className="inline-block bg-slate-900/80 px-3.5 py-1.5 rounded-lg border border-slate-700 text-xs font-mono text-slate-400">
-                Incident Reference: <span className="text-amber-400 font-bold font-mono">OP-{Math.abs((this.state.error?.message || '').split('').reduce((a, b) => ((a << 5) - a) + b.charCodeAt(0), 0)).toString(16).toUpperCase().padStart(6, '0').slice(-6)}</span>
-              </div>
-            </div>
-
             <div className="flex flex-col sm:flex-row w-full gap-3">
               <button
                 onClick={this.handleReload}
-                className="flex-1 bg-red-600 hover:bg-red-500 text-white font-bold py-3.5 px-6 rounded-xl transition-all shadow-md active:scale-[0.98]"
+                className="flex-1 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold py-3.5 px-6 rounded-xl transition-all shadow-md active:scale-[0.98]"
               >
-                Clear Cache & Reload
+                Retry
               </button>
               <button
                 onClick={this.handleGoHome}
-                className="flex-1 bg-transparent hover:bg-white/5 border border-slate-700 text-slate-300 font-bold py-3.5 px-6 rounded-xl transition-all flex items-center justify-center gap-2"
+                className="flex-1 bg-white/5 hover:bg-white/10 border border-slate-700 text-slate-200 font-bold py-3.5 px-6 rounded-xl transition-all flex items-center justify-center gap-2"
               >
                 <Home className="w-4 h-4" />
-                Go to Homepage
+                Home
               </button>
             </div>
           </div>

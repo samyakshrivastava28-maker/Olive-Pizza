@@ -122,23 +122,22 @@ export default function StartupGate({ children }: StartupGateProps) {
   useEffect(() => {
     if (!showVideo) return;
 
-    logDiagnostic('Initializing intro video sequence (first 5s optimized)');
-
-    // Fast Failsafe: if video fails to load or buffer within 2.5s, skip directly to app
+    // Fast Failsafe: if video fails to load or buffer within 1.2s (or 2.5s on desktop), skip directly to app
+    const failsafeMs = Capacitor.isNativePlatform() ? 1200 : 2500;
     initialFailsafeTimerRef.current = setTimeout(() => {
       if (!endedRef.current) {
-        logDiagnostic('Startup video buffering threshold reached (2.5s), transitioning directly to app');
+        logDiagnostic('Startup video buffering threshold reached, transitioning directly to app');
         handleVideoEnd();
       }
-    }, 2500);
+    }, failsafeMs);
 
-    // Hard ceiling: Guarantee video NEVER exceeds 5 seconds under any network or platform conditions
+    // Hard ceiling: Guarantee video NEVER exceeds 4 seconds under any network or platform conditions
     maxDurationTimerRef.current = setTimeout(() => {
       if (!endedRef.current) {
-        logDiagnostic('Reached strict 5-second maximum duration ceiling');
+        logDiagnostic('Reached strict 4-second maximum duration ceiling');
         handleVideoEnd();
       }
-    }, 5000);
+    }, 4000);
 
     const videoEl = videoRef.current;
     if (videoEl) {

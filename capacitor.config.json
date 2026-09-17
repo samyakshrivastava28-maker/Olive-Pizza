@@ -1,36 +1,48 @@
 {
-  "appId": "com.olivepizza.app",
-  "appName": "Olive Pizza",
-  "webDir": "dist/client",
-  "server": {
-    "androidScheme": "https",
-    "iosScheme": "https",
-    "allowNavigation": ["*.firebaseapp.com", "*.googleapis.com", "*.onrender.com"]
-  },
-  "ios": {
-    "contentInset": "always"
-  },
-  "android": {
-    "allowMixedContent": false,
-    "captureInput": true,
-    "webContentsDebuggingEnabled": false,
-    "backgroundColor": "#0B0F14",
-    "overrideUserAgent": "Mozilla/5.0 (Linux; Android 13; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36"
-  },
-  "plugins": {
-    "SplashScreen": {
-      "launchShowDuration": 0
-    },
-    "FirebaseAuthentication": {
-      "skipNativeAuth": false,
-      "providers": ["google.com"],
-      "googleClientId": "1017239455106-i8vrpdq1v51pkg0308k7btu1o4img597.apps.googleusercontent.com"
-    },
-    "PushNotifications": {
-      "presentationOptions": ["badge", "sound", "alert"]
-    },
-    "Geolocation": {
-      "requestPermissions": true
-    }
-  }
+	"appId": "com.olivepizza.app",
+	"appName": "Olive Pizza",
+	"webDir": "dist/client",
+	"server": {
+		"androidScheme": "https",
+		"iosScheme": "https",
+		"allowNavigation": [
+			"*.firebaseapp.com",
+			"*.googleapis.com",
+			"*.onrender.com",
+			"*.cloudinary.com",
+			"res.cloudinary.com"
+		]
+	},
+	"ios": {
+		"contentInset": "always"
+	},
+	"android": {
+		"allowMixedContent": false,
+		"captureInput": true,
+		"webContentsDebuggingEnabled": false,
+		"backgroundColor": "#0B0F14",
+		"overrideUserAgent": "Mozilla/5.0 (Linux; Android 13; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36"
+	},
+	"plugins": {
+		"SplashScreen": {
+			"launchShowDuration": 0
+		},
+		"FirebaseAuthentication": {
+			"skipNativeAuth": false,
+			"providers": [
+				"google.com"
+			],
+			"googleClientId": "1017239455106-i8vrpdq1v51pkg0308k7btu1o4img597.apps.googleusercontent.com"
+		},
+		"PushNotifications": {
+			"presentationOptions": [
+				"badge",
+				"sound",
+				"alert"
+			]
+		},
+		"Geolocation": {
+			"requestPermissions": true
+		}
+	}
 }
