@@ -48,6 +48,13 @@ Part of the **Olive Pizza Multi-App Ecosystem**. For full platform architecture,
 ### 🛡️ 5. Startup Deadlock Prevention
 * **Decoupled Auth Resolution**: Eliminates cold-start freezing on the splash screen by resolving auth tokens asynchronously with a strict 1500ms safety watchdog ceiling.
 
+### 🔒 6. Idempotency & Order Deduplication
+* **Multi-Click Protection**: Seamlessly generates and attaches unique client idempotency keys, preventing accidental double-ordering or dual charges during checkout.
+
+### 📜 7. Indian DPDP Act 2023 Data Privacy Rights
+* **Full Transparency & Rights**: Built-in mechanisms for Right to Access (sanitized data export), Right to Correction, formal Grievance Redressal (`GRV-...`), and Account Erasure with a 30-day cooling period.
+* **PII Protection**: Raw phone numbers are completely masked/scrubbed from FCM push notification data payloads.
+
 ---
 
 ## 🏗️ System Architecture & Connectivity

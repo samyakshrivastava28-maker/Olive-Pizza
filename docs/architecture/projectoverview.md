@@ -252,7 +252,7 @@ When a kitchen or POS terminal loses Wi-Fi and reconnects:
 
 ---
 
-## 6. Build, Verification, & Local Development Guide
+# 6. Build, Verification, & Local Development Guide
 
 All projects compile cleanly with **0 errors**:
 
@@ -292,3 +292,93 @@ cd C:\Users\RYZEN\Downloads\olive-pizza-pos
 npm run build
 npm run dev
 ```
+
+---
+
+## 7. Perpetual Transactional Billing System (`#1, #2, #3...`)
+
+The billing system guarantees unbroken, monotonic, and permanent invoice numbering across both physical POS terminals and online customer orders:
+
+1. **Monotonic Permanent Bill Number**:
+   - Initialized at `#1`, advances sequentially forever (`#1, #2, #3...`).
+   - Never resets, never contains dates, and is never reused.
+   - Handled via atomic Firestore transactions on `counters/permanent_billing` via `FirestoreBillingRepository` (`billing.repository.ts`).
+   - Concurrency tested: 100 simultaneous allocations verified with zero duplicate sequence numbers.
+2. **Daily Order Number (IST Midnight Reset)**:
+   - Resets to `#1` each calendar day at midnight Indian Standard Time (IST) on `counters/dailyOrders`.
+   - Operates independently from the permanent bill number.
+3. **Source Separation**:
+   - Every bill and order document explicitly specifies `source: 'ONLINE' | 'POS'` alongside granular channel descriptors (`orderSource: 'ONLINE' | 'POS_DINE_IN' | 'POS_TAKEAWAY' | 'POS_DELIVERY'`).
+
+---
+
+## 8. In-Memory Domain Event Bus (`AppEventBus.ts`)
+
+To prevent monolithic spaghetti code without introducing heavy microservice or Kafka dependencies, an in-memory typed event bus decouples domain state changes from side-effects:
+
+### 12 Canonical Domain Events:
+| Event Constant | Event Name | Trigger Source | Primary Consumers |
+| :--- | :--- | :--- | :--- |
+| `ORDER_CREATED` | `order.created` | Customer Checkout / POS Order | Push notifications, KDS alert audio loop, WebSockets |
+| `ORDER_ACCEPTED` | `order.accepted` | Kitchen Manager Accept | Customer notification, estimated prep time timer |
+| `ORDER_PREPARING` | `order.preparing` | Kitchen KDS Stage Transition | Customer live timeline, live KDS queue |
+| `ORDER_READY` | `order.ready` | Kitchen Expeditor Stage Transition | Rider dispatch queue, customer pickup ready alert |
+| `ORDER_PARTNER_ASSIGNED` | `order.partner_assigned` | Dispatch Engine / Manual Rider Assign | Rider assignment modal, customer rider card |
+| `ORDER_PICKED_UP` | `order.picked_up` | Rider Departure Confirmation | Customer 3D live map tracking, GPS breadcrumb watcher |
+| `ORDER_OUT_FOR_DELIVERY` | `order.out_for_delivery` | Rider En Route Status | Customer ETA tracker, geofence trigger |
+| `ORDER_DELIVERED` | `order.delivered` | Rider Geofence Handover | Celebratory tone, customer rating prompt, shift ledger |
+| `ORDER_REJECTED` | `order.rejected` | Store Manager Refusal | Customer cancellation alert, auto-refund worker |
+| `ORDER_CANCELLED` | `order.cancelled` | Customer / Staff Cancellation | KDS ticket cancellation, inventory rollback |
+| `PAYMENT_RECEIVED` | `payment.received` | Online Gateway Webhook / POS Cashier | Financial ledger, Google Sheets sync queue |
+| `BILL_GENERATED` | `bill.generated` | Canonical Order Finalization | Permanent bill repository, ESC/POS thermal printer |
+
+---
+
+## 9. Redis In-Memory Acceleration & Resilient Fallback Layer
+
+The system includes a dedicated `RedisService` (`services/redis/RedisService.ts`) powered by `ioredis`:
+
+- **Role**: Strictly an ephemeral acceleration and distributed locking layer. It is never the authoritative source of truth.
+- **Cached Objects**:
+  - Store menus (`cache:menu:${branchId}`, TTL: 300s)
+  - Store operational status (`cache:store_status:${branchId}`, TTL: 60s)
+  - Franchise metadata (`cache:franchise:${franchiseId}`, TTL: 600s)
+- **Distributed Locking**: `acquireLock(key, ttl)` prevents double-allocation race conditions under peak traffic.
+- **Resilient Fallback**: If Redis is unreachable, offline, or disconnected, the service automatically and transparently falls back to Firestore with zero customer-facing errors.
+
+---
+
+## 10. Idempotency & Offline POS Queue Synchronization
+
+- **Idempotency Engine (`idempotency.middleware.ts`)**:
+  - Protects `POST /api/orders` and `POST /api/pos/orders` against rapid multi-clicks.
+  - Returns `409 Conflict` if a request with the same `Idempotency-Key` is currently in-flight.
+  - Caches finalized responses in Firestore `idempotency_keys` (24-hour TTL); repeated requests return `X-Idempotent-Replay: true`.
+- **Offline POS Queue Sync**:
+  - If a restaurant loses internet connectivity, bills are queued locally in `OfflineBillingQueueService`.
+  - Upon network restoration, bills are synchronized via `POST /api/pos/bills/sync-offline`, where permanent bill numbers are allocated and committed to `billingRepository`.
+
+---
+
+## 11. Digital Personal Data Protection (DPDP) Act 2023 Technical Compliance
+
+The canonical backend enforces Indian DPDP Act 2023 data governance rules via `PrivacyService.ts` and `privacy.routes.ts`:
+
+1. **Active Privacy Notice & Versioning**: Complete transparency regarding Data Fiduciary identity, processing purposes, and Grievance Officer contacts.
+2. **Tamper-Resistant Consent Management**: Granular logging of consent grants and withdrawals for promotional messaging.
+3. **Right to Correction**: Profile amendment validations protecting core identity integrity while permitting contact corrections.
+4. **Right to Access / Sanitized Data Export**: Machine-readable JSON archives with passwords, session tokens, and internal security claims stripped.
+5. **Grievance Redressal Mechanism**: Automated ticket dispatch (`GRV-...`) enforcing statutory 30-day resolution tracking.
+6. **Data Retention & Processor Registry**: Formal registration of third-party processors (Firebase, Supabase, Fast2SMS, Razorpay).
+7. **Right to Erasure (Account Deletion)**: Deletion requests logged with a mandatory statutory 30-day cooling-off grace period.
+8. **PII Sanitization in Notifications**: Customer phone numbers are strictly scrubbed from push notification FCM `data` payloads.
+
+---
+
+## 12. Active Persistence Architecture Status
+
+In strict accordance with the master engineering standard:
+- **Firestore**: `ACTIVE TRANSACTIONAL SOURCE OF TRUTH` — All active orders, permanent bill numbers, daily counters, menus, user records, and SDUI configurations reside here.
+- **Supabase PostgreSQL & Realtime**: `EXISTING — PRESERVED` — High-frequency rider GPS telemetry, 3D breadcrumb auto-following, and live turn-by-turn navigation.
+- **Operational PostgreSQL**: `FUTURE — NOT IMPLEMENTED` — Structured SQL schemas and migrations exist as secondary future sync targets; all active operations use Firestore repository abstractions.
+
