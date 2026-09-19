@@ -1,220 +1,152 @@
-# 🍕 Olive Pizza — Enterprise Multi-Platform Order & Delivery System
+# 🍕 Olive Pizza Customer — Mobile-First Food Ordering Platform
 
 [![React](https://img.shields.io/badge/React-19.0-61DAFB?logo=react&logoColor=black)](https://react.dev/)
 [![Vite](https://img.shields.io/badge/Vite-6.0-646CFF?logo=vite&logoColor=white)](https://vitejs.dev/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-v4.0-38B2AC?logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
 [![Capacitor](https://img.shields.io/badge/Capacitor-8.0-119EFF?logo=capacitor&logoColor=white)](https://capacitorjs.com/)
-[![Firebase](https://img.shields.io/badge/Firebase-Firestore%20%26%20FCM-FFCA28?logo=firebase&logoColor=black)](https://firebase.google.com/)
-[![Supabase](https://img.shields.io/badge/Supabase-Realtime%20GPS-3ECF8E?logo=supabase&logoColor=white)](https://supabase.com/)
+[![Firebase](https://img.shields.io/badge/Firebase-Auth%20%26%20Firestore-FFCA28?logo=firebase&logoColor=black)](https://firebase.google.com/)
+[![MapLibre](https://img.shields.io/badge/MapLibre-3D%20Maps-396BFF?logo=maplibre&logoColor=white)](https://maplibre.org/)
 [![License](https://img.shields.io/badge/License-Proprietary-red.svg)]()
 
-> Olive Pizza is a full-stack, enterprise-grade multi-platform food ordering, POS management, and delivery navigation platform built for **Rajnandgaon, Chhattisgarh, India**. Features real-time Firestore synchronization, native Android background alarm notifications (which trigger even when the Android app is killed/closed), Supabase GPS live tracking with 3D MapLibre navigation, and automated Google Drive report backups.
+> **Olive Pizza Customer App** is an enterprise-grade, mobile-first food ordering experience built for **Olive Pizza**, Rajnandgaon, Chhattisgarh, India. Available as a responsive Mobile Web app, native Android APK (Capacitor), and native iOS app (Capacitor).
+
+Part of the **Olive Pizza Multi-App Ecosystem**. For full platform architecture, see [`docs/architecture/projectoverview.md`](./docs/architecture/projectoverview.md).
 
 ---
 
-## 🌟 Key Features
+## 🌟 Core UX & Feature Highlights
 
-### 🛒 Customer App & Mobile Web (PWA)
-- **Truecaller 1-Tap & Web QR Phone Verification**: Seamless 1-tap phone verification on Android native (`TruecallerPlugin.java` SDK 2.7.0) with desktop QR code modal (`TruecallerQRModal.tsx`) and mobile web deep links. Validated via backend RSA signature verification against official Truecaller public keys.
-- **Ultra-Fast 5-Second Intro Video Experience**: Dedicated CDN-trimmed 5s H.264 video asset (~880KB) with instant 5KB poster frame, non-blocking parallel app shell rendering, 2.5s buffering failsafe, and GPU decoder cleanup on exit.
-- **3D Interactive Menu & Cart**: Smooth micro-animations powered by Framer Motion, HSL color tokens, and a 5-step sequenced add-to-cart animation (3D box drop → item flight → lid closure → cart bounce).
-- **Live Order Tracking**: Dynamic `/order-tracking/:orderId` page featuring real-time Firestore status updates (`pending` → `accepted` → `preparing` → `ready` → `out_for_delivery` → `delivered`) and live rider GPS location on a 3D map.
-- **Location-Aware Checkout**: Auto-detects customer onboarding location, supports interactive map pin dragging, reverse-geocodes street addresses via OpenStreetMap Nominatim, and passes exact coordinates to delivery partners.
+### 📱 1. Mobile-First Design & Native App Feel
+* **Mobile-First Priority**: Designed with a strict mobile-first policy:
+  1. Mobile Website
+  2. Android / iOS Native App (Capacitor)
+  3. Desktop Website
+* **Premium Aesthetics**: Smooth micro-interactions, glassmorphic floating cards, tactile touch targets, and branded Olive Pizza color palettes.
 
-### 🏢 Owner Control Center & POS Panel (`/owner`)
-- **Multi-Device Live Orders Board**: Real-time `onSnapshot` order dashboard that synchronizes instantly across multiple logged-in owner devices without page refreshes.
-- **Native High-Priority Alarm System**: Triggers full wake-lock continuous alarm audio and full-screen activity popups on new orders—proven to wake devices even when completely closed/killed.
-- **Fleet Control View**: Interactive `OwnerLiveMapModal` with real-time 3D rider location updates via Supabase Realtime.
-- **Automated Reporting & Backup**: Weekly business metric reports compiled to PDF (`jspdf-autotable`), backed up to Google Drive API v3, and emailed to the owner via SMTP (`nodemailer`).
+### 🍕 2. Interactive 3D Visual Menu & Cart Experience
+* **Customization Engine**: Category capsules, pizza size selectors (8", 10", 12"), crust options (*Hand-Tossed*, *Thin & Crispy*, *Cheese Burst*), and dynamic paid add-ons.
+* **Sequenced 5-Step Add-to-Cart Motion**:
+  1. 3D pizza delivery box drops into the viewport.
+  2. The selected food item smoothly flies into the box.
+  3. The box lid snaps securely shut.
+  4. The sealed box flies dynamically to the floating cart.
+  5. The floating cart bounces with spring physics and haptic particle burst.
+* **Alive Floating Cart**:
+  - Ambient soft breathing motion while idle.
+  - Spring-loaded drawer opening animation with live badge count updates.
 
-### 🛵 Delivery Partner Navigation (`/delivery`)
-- **Dual-Mode Camera Map**: Tilted 45° 3D navigation view with direction-of-travel heading map rotation during active auto-follow; automatically drops to a 0° top-down view when touched or dragged.
-- **Turn-by-Turn Guidance & Offline Voice**: Turn maneuvers rendered in an instruction HUD accompanied by on-device Text-to-Speech (TTS) voice announcements.
-- **Offline Polyline Pre-Caching**: OSRM routes and turn steps pre-cache to `localStorage` upon order acceptance. Position updates queue locally while offline and flush to Supabase once network reconnects.
-- **Proof of Delivery**: Supports instant photo proof capture (environment camera) and Cloudinary upload upon order completion.
+### 🛵 3. Live 3D Order Tracking (`OrderTracking.tsx`)
+* **60fps Smooth Telemetry**: MapLibre GL JS 3D vector map with dynamic camera auto-following.
+* **Real-Time Rider Radar**: Interpolated rider coordinates streamed in real-time from the backend WebSocket server (`/ws`) and Supabase PostgreSQL.
+* **Lifecycle Timeline**: Live status updates across all order stages (`pending` ➔ `accepted` ➔ `preparing` ➔ `ready` ➔ `out_for_delivery` ➔ `delivered`).
+
+### 💳 4. Multi-Gateway Checkout & Instant Phone Verification
+* **Payment Gateways**: Cashfree, PhonePe, Razorpay, UPI QR, and Cash on Delivery with strict backend validation.
+* **Fast OTP & 1-Tap Auth**: Fast2SMS OTP integration, Truecaller 1-tap phone verification, and Firebase Authentication.
+* **Location Pinning**: Interactive map pin dragging with OpenStreetMap Nominatim reverse-geocoding.
+
+### 🛡️ 5. Startup Deadlock Prevention
+* **Decoupled Auth Resolution**: Eliminates cold-start freezing on the splash screen by resolving auth tokens asynchronously with a strict 1500ms safety watchdog ceiling.
 
 ---
 
-## 🏗️ Architecture Overview
+## 🏗️ System Architecture & Connectivity
 
-```mermaid
-flowchart TD
-    subgraph Clients["Multi-Platform Clients"]
-        Customer["Customer PWA / Mobile"]
-        Owner["Owner POS Panel"]
-        Rider["Delivery Rider App (Android Native)"]
-    end
+The Customer App is one of six client applications connecting to the **Canonical Central Backend**:
 
-    subgraph Backend["Node.js / Express Server"]
-        API["Express REST API"]
-        FSListener["Firestore Listener Service"]
-        ReportJob["Weekly Report Service (Cron)"]
-    end
-
-    subgraph Databases["Cloud Infrastructure"]
-        Firestore[("Firebase Firestore (Business State)")]
-        Postgres[("PostgreSQL (FCM Tokens & Logs)")]
-        Supabase[("Supabase Realtime (Rider GPS)")]
-        FCM["Firebase Cloud Messaging (Direct Push)"]
-        GDrive["Google Drive API v3 (PDF Vault)"]
-    end
-
-    Customer -->|Place Order| Firestore
-    Firestore -->|onSnapshot Trigger| FSListener
-    FSListener -->|Direct Push / Alarm| FCM
-    FCM -->|Native Wake Lock / Push| Owner
-    FCM -->|Status Push| Customer
-    
-    Rider -->|GPS Position (Every 3s)| Supabase
-    Supabase -->|Realtime Channel| Customer
-    Supabase -->|Realtime Channel| Owner
-
-    ReportJob -->|Upload PDF| GDrive
 ```
+ [Customer App (Port 3000)] ───► [Canonical Central Backend (Port 5000)]
+                                           │
+          ┌────────────────────────────────┼────────────────────────────────┐
+          ▼                                ▼                                ▼
+     [Firestore]                  [Supabase Postgres]             [Operational Postgres]
+(Orders, Menu, Auth)             (Live GPS Telemetry)             (Payments, System State)
+```
+
+For full ecosystem documentation, please inspect:
+- 📖 [Comprehensive Project Overview](./docs/architecture/projectoverview.md)
 
 ---
 
 ## 🛠️ Technology Stack
 
-### **Frontend & UI**
-- **Core**: React 19, TypeScript, Vite 6, Tailwind CSS v4
+- **Framework**: React 19, TypeScript
+- **Bundler & Tooling**: Vite 6, Tailwind CSS v4
+- **Mobile Runtime**: Capacitor 8 (iOS & Android)
 - **State Management**: Zustand
 - **Animations**: Framer Motion 12
-- **3D Maps & GIS**: MapLibre GL JS 6, React Leaflet, OSRM Routing Machine
-
-### **Native Android Layer**
-- **Framework**: Capacitor 8
-- **Native Java Code**:
-  - `OliveMessagingService.java`: FCM Receiver with `FULL_WAKE_LOCK`, `ACQUIRE_CAUSES_WAKEUP`, and canonical `IMPORTANCE_MAX` channels.
-  - `AlarmActivity.java`: Physical screen wake flags (`FLAG_SHOW_WHEN_LOCKED`, `FLAG_TURN_SCREEN_ON`) and `USAGE_ALARM` audio stream routing.
-  - `DeliveryPlugin.java`: Native high-accuracy background geolocation watcher.
-
-### **Backend Infrastructure**
-- **Runtime**: Node.js, Express, TypeScript (`tsx` execution)
-- **Databases**: Firebase Firestore & Auth, PostgreSQL (`pg`), Supabase Realtime
-- **Push Engine**: Firebase Admin SDK 13 (FCM Multicast Direct)
-- **Document Services**: Google Drive API v3 (`googleapis`), Nodemailer, jsPDF
-
----
-
-## 📂 Project Structure
-
-```text
-olive-pizza/
-├── android/                        # Android Native Project (Capacitor)
-│   └── app/src/main/java/com/olivepizza/app/
-│       ├── OliveMessagingService.java  # Native FCM & WakeLock Handler
-│       ├── AlarmActivity.java          # Full-screen Lockscreen Alarm Activity
-│       └── DeliveryPlugin.java         # Native Background GPS Plugin
-├── backend/                        # Node.js Express Backend
-│   ├── credentials/                # Service Account JSON Keys
-│   ├── src/
-│   │   ├── config/                 # Postgres & Firebase Configuration
-│   │   ├── listeners/              # Firestore Realtime Event Listeners
-│   │   ├── routes/                 # Express API Endpoint Routes
-│   │   └── services/               # Google Drive, FCM, & PDF Services
-│   └── server.ts                   # Backend Entry Point
-├── frontend/                       # React 19 Frontend Web Application
-│   └── src/
-│       ├── components/             # Reusable UI & Map Components
-│       │   ├── map/
-│       │   │   └── UniversalMap3D.tsx # MapLibre GL JS 3D Engine
-│       │   └── owner/              # Owner POS & Live Orders Table
-│       ├── lib/                    # Config, Firebase, & Supabase SDKs
-│       ├── pages/                  # Customer, Owner, & Delivery Pages
-│       └── services/               # Navigation, Routing, & TTS Services
-├── .agents/                        # Standing Regression Checklist & Specs
-├── vite.config.ts                  # Vite Build Configuration & Chunk Splitting
-└── package.json                    # Root Workspace Dependencies
-```
+- **3D Maps**: MapLibre GL JS, React Leaflet, OSRM
 
 ---
 
 ## ⚡ Getting Started
 
 ### 1. Prerequisites
-- **Node.js**: v18.x or higher
-- **npm**: v9.x or higher
-- **Android Studio**: (For native APK builds)
-- **Databases**: Firebase Account, PostgreSQL Instance, Supabase Project
+- Node.js `v20+` or `v22+`
+- Central Backend running on `http://localhost:5000` (or configured production backend)
 
-### 2. Environment Setup
+### 2. Installation
+```bash
+# Clone or navigate to the directory
+cd olive-pizza
 
-Create `.env` files in both project root and `backend/`:
+# Install dependencies
+npm install
+```
 
-#### Root `.env` (Frontend):
+### 3. Environment Variables
+Create a `.env` file in the root directory:
 ```env
+VITE_API_URL=http://localhost:5000
+VITE_WS_URL=ws://localhost:5000/ws
 VITE_FIREBASE_API_KEY=your_firebase_api_key
 VITE_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
-VITE_FIREBASE_PROJECT_ID=your_project_id
-VITE_FIREBASE_STORAGE_BUCKET=your_project.appspot.com
+VITE_FIREBASE_PROJECT_ID=olive-pizza-08
+VITE_FIREBASE_STORAGE_BUCKET=olive-pizza-08.appspot.com
 VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
 VITE_FIREBASE_APP_ID=your_app_id
 VITE_SUPABASE_URL=https://your-supabase-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
 
-#### `backend/.env` (Backend):
-```env
-PORT=5000
-DATABASE_URL=postgres://user:password@localhost:5432/olive_pizza
-FIREBASE_SERVICE_ACCOUNT_BASE64=your_base64_service_account
-GOOGLE_DRIVE_SERVICE_ACCOUNT_PATH=credentials/google-drive-service-account.json
-GOOGLE_DRIVE_FOLDER_ID=your_google_drive_folder_id
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USER=your_email@gmail.com
-SMTP_PASS=your_app_password
-```
-
-### 3. Installation & Local Development
-
+### 4. Running Locally
 ```bash
-# Clone the repository
-git clone https://github.com/your-org/olive-pizza.git
-cd olive-pizza
-
-# Install root & frontend dependencies
-npm install
-
-# Install backend dependencies
-cd backend && npm install && cd ..
-
-# Start Full-Stack Development Server (Frontend + Backend concurrently)
+# Start Vite development server on port 3000
 npm run dev
 ```
 
-The application will run at `http://localhost:5173`.
+### 5. Building for Production
+```bash
+# Run TypeScript compilation and Vite production build
+npm run build
+```
 
 ---
 
-## 📱 Android Build & Deployment
+## 📱 Mobile App Compilation (Capacitor)
 
+### Android
 ```bash
-# Build production bundle
+# Build web assets and sync to native Android container
 npm run build
-
-# Sync web assets to Capacitor Android project
 npx cap sync android
 
-# Open project in Android Studio
+# Open in Android Studio to build debug/release APK
 npx cap open android
 ```
 
-From Android Studio, choose **Build → Build Bundle(s) / APK(s) → Build APK(s)** to generate production APK binaries.
+### iOS
+```bash
+# Build web assets and sync to native iOS container
+npm run build
+npx cap sync ios
+
+# Open in Xcode to build archive/IPA
+npx cap open ios
+```
 
 ---
 
-## 🛡️ Infrastructure Reliability & Quality Assurance
-
-Olive Pizza includes a standing regression checklist in [.agents/standing_regression_checklist.md](file:///.agents/standing_regression_checklist.md).
-
-### Verification Steps before release:
-1. **Google Drive Sync Health**: Run `npx tsx -e "import('./src/services/googleDrive.service.ts').then(m => m.googleDriveService.getHealthStatus().then(console.log))"`.
-2. **Two-Client Realtime Sync**: Run automated concurrent snapshot event tests to verify zero-latency multi-device updates.
-3. **Lighthouse Performance Gate**: Verify main landing page score ≥ 95/100 and LCP ≤ 1.4s.
-
----
-
-## 📄 License
+## 📄 License & Proprietary Notice
 
 Proprietary Software — All rights reserved by **Olive Pizza**, Rajnandgaon, Chhattisgarh, India.
