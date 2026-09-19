@@ -259,6 +259,8 @@ function AppContent() {
                   <Route element={<Suspense fallback={<PizzaLoader />}><OnboardingGuard /></Suspense>}>
                     <Route path="/dashboard" element={<CustomerDashboard />} />
                     <Route path="/profile" element={<CustomerDashboard />} />
+                    <Route path="/privacy-center" element={<Navigate to="/profile?tab=privacy" replace />} />
+                    <Route path="/privacy" element={<Navigate to="/profile?tab=privacy" replace />} />
                   </Route>
                 </Route>
                 {/* Catch-all 404 Route */}

@@ -33,6 +33,7 @@ import OrderHistory from "../components/customer/dashboard/OrderHistory";
 import LoyaltyRewards from "../components/customer/dashboard/LoyaltyRewards";
 import AddressBook from "../components/customer/AddressBook";
 import PhoneUpdateModal from "../components/customer/dashboard/PhoneUpdateModal";
+import PrivacyCenter from "../components/customer/privacy/PrivacyCenter";
 import SEO from "../components/SEO";
 import { fetchApi } from "../lib/config";
 import toast from "react-hot-toast";
@@ -311,6 +312,7 @@ export default function CustomerDashboard() {
             { id: "profile", label: "Profile & Addresses", icon: User },
             { id: "orders", label: "My Orders", icon: History },
             { id: "loyalty", label: "Rewards & Points", icon: Award },
+            { id: "privacy", label: "Privacy & Data", icon: ShieldCheck },
             { id: "support", label: "Help & Support", icon: HelpCircle },
             { id: "account", label: "Account Settings", icon: Settings },
           ].map((tab) => {
@@ -530,6 +532,19 @@ export default function CustomerDashboard() {
                   })}
                 </div>
               </div>
+            </motion.div>
+          )}
+
+          {/* TAB: PRIVACY & DATA RIGHTS */}
+          {activeTab === "privacy" && (
+            <motion.div
+              key="privacy"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.25 }}
+            >
+              <PrivacyCenter />
             </motion.div>
           )}
 
