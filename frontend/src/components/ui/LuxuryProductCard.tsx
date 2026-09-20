@@ -96,6 +96,8 @@ export default function LuxuryProductCard({ product, wishlistIds, index }: Luxur
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.05, duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+      data-product-card="true"
+      id={`luxury-card-${product.id}`}
       className="relative group cursor-pointer"
     >
       <Link to={`/product/${product.id}`} className="block">
@@ -103,6 +105,7 @@ export default function LuxuryProductCard({ product, wishlistIds, index }: Luxur
           {/* ── Image Container ────────────────────────────────────────── */}
           <div className="relative aspect-square overflow-hidden bg-stone-100">
             <img
+              data-product-img="true"
               src={getOptimizedImageUrl(imageUrl, { width: 500 })}
               alt={product.productName || product.name}
               loading="lazy"

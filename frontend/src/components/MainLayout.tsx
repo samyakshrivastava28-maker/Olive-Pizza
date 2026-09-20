@@ -184,6 +184,7 @@ export default function MainLayout() {
               {/* Cart */}
               <Link
                 to="/cart"
+                id="desktop-cart-btn"
                 onMouseEnter={() => prefetchRoute('/cart')}
                 className="relative p-2.5 rounded-xl hover:bg-white/8 transition-all duration-200 ml-1"
                 style={{ color: "rgba(226,232,240,0.85)" }}

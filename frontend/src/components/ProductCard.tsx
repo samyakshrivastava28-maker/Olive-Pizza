@@ -121,6 +121,8 @@ export default memo(function ProductCard({
       whileHover={{ y: -4 }}
       transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
       onClick={handleCardClick}
+      data-product-card="true"
+      id={`product-card-${item.id}`}
       className={`rounded-2xl md:rounded-3xl bg-white border border-stone-200/90 shadow-[0_4px_20px_-2px_rgba(28,25,23,0.06)] hover:shadow-[0_12px_32px_-4px_rgba(28,25,23,0.12)] overflow-hidden flex flex-col relative transition-all duration-300 group cursor-pointer ${
         !item.isAvailable ? 'opacity-65 grayscale cursor-not-allowed' : ''
       }`}
@@ -128,6 +130,7 @@ export default memo(function ProductCard({
       {/* ── Top Visual / Food Image Area ───────────────────────────── */}
       <div className="relative w-full aspect-[4/3] overflow-hidden bg-stone-100">
         <img
+          data-product-img="true"
           src={optimizedImage}
           alt={item.name}
           loading="lazy"
@@ -268,6 +271,7 @@ export default memo(function ProductCard({
             ) : (
               <motion.button
                 type="button"
+                data-add-btn="true"
                 whileTap={{ scale: 0.94 }}
                 disabled={!item.isAvailable}
                 onClick={handleAdd}
