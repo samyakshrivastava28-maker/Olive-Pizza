@@ -22,7 +22,8 @@ export default function StartupGate({ children }: StartupGateProps) {
 
     // 0. Never play intro on deep-links, tracking pages, checkout, or internal routes
     const pathname = window.location.pathname;
-    if (pathname !== '/' && pathname !== '') {
+    const search = window.location.search || '';
+    if ((pathname !== '/' && pathname !== '') || search.includes('skipIntro=1')) {
       window.__OP_APP_STARTUP_INTRO_PLAYED__ = true;
       return false;
     }

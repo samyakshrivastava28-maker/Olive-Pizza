@@ -1,8 +1,8 @@
-import { memo, useState } from 'react';
+import React, { memo, useCallback } from 'react';
 import { useNavigate } from 'react-router';
 import { motion } from 'framer-motion';
 import { MenuItem } from '../types/models';
-import { Plus, Star, Clock, Flame, Sparkles, SlidersHorizontal } from 'lucide-react';
+import { Plus, Minus, Star, Clock, SlidersHorizontal } from 'lucide-react';
 import WishlistButton from './ui/WishlistButton';
 import { useCartStore } from '../lib/store';
 import { useCartAnimation } from './ui/CartAnimationProvider';
@@ -15,14 +15,27 @@ interface ProductCardProps {
   onOpenCustomization?: (item: MenuItem) => void;
 }
 
-export default memo(function ProductCard({ item, discount = 0, wishlistIds = [], onOpenCustomization }: ProductCardProps) {
+export default memo(function ProductCard({
+  item,
+  discount = 0,
+  wishlistIds = [],
+  onOpenCustomization,
+}: ProductCardProps) {
   const navigate = useNavigate();
-  const addItem = useCartStore((state) => state.addItem);
+  const { items, addItem, updateQuantity, removeItem } = useCartStore();
   const { triggerAnimation } = useCartAnimation();
 
+  // Find if item is already added to cart
+  const inCartItem = items.find((i) => i.id === item.id || i.menuItemId === item.id);
+  const cartQuantity = inCartItem?.quantity || 0;
+
   const appliedDiscount = item.discountPercentage || discount;
-  const finalPrice = item.pricingMode === 'offer' && item.offerPrice ? item.offerPrice : 
-                     appliedDiscount > 0 ? Math.round(item.basePrice * (1 - appliedDiscount / 100)) : item.basePrice;
+  const finalPrice =
+    item.pricingMode === 'offer' && item.offerPrice
+      ? item.offerPrice
+      : appliedDiscount > 0
+      ? Math.round(item.basePrice * (1 - appliedDiscount / 100))
+      : item.basePrice;
 
   const handleCardClick = () => {
     if (item.isAvailable) {
@@ -34,176 +47,236 @@ export default memo(function ProductCard({ item, discount = 0, wishlistIds = [],
     }
   };
 
-  const handleQuickAdd = (e: React.MouseEvent) => {
+  const handleAdd = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!item.isAvailable) return;
 
-    triggerAnimation(e, item.image, () => {
+    const imageUrl = item.image || '/images/pizza-placeholder.webp';
+
+    // Zero-latency state commitment + physical flight animation
+    triggerAnimation(e, imageUrl, () => {
       addItem({
         id: item.id || '',
         menuItemId: item.id || '',
         name: item.name,
         price: finalPrice,
         quantity: 1,
-        image: item.image,
+        image: imageUrl,
         isVegetarian: item.isVegetarian,
         crust: 'Classic Crust',
-        size: 'Medium'
+        size: 'Medium',
       });
 
-      toast.success(`Added ${item.name} to cart! 🍕`, {
-        style: { background: '#1e1e1e', color: '#fff', border: '1px solid rgba(255,255,255,0.1)' }
+      toast.success(`Added ${item.name}! 🍕`, {
+        duration: 1800,
+        style: {
+          background: '#1C1917',
+          color: '#FFFFFF',
+          borderRadius: '14px',
+          fontWeight: 600,
+          fontSize: '13px',
+        },
       });
     });
   };
 
+  const handleIncrease = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!inCartItem) {
+      handleAdd(e);
+      return;
+    }
+    const imageUrl = item.image || '/images/pizza-placeholder.webp';
+    triggerAnimation(e, imageUrl, () => {
+      updateQuantity(inCartItem.id, inCartItem.quantity + 1);
+    });
+  };
+
+  const handleDecrease = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!inCartItem) return;
+    if (inCartItem.quantity <= 1) {
+      removeItem(inCartItem.id);
+      toast.success(`Removed ${item.name}`, { duration: 1500 });
+    } else {
+      updateQuantity(inCartItem.id, inCartItem.quantity - 1);
+    }
+  };
+
   const isPizza = item.category === 'pizza' || item.name.toLowerCase().includes('pizza');
-  const realRating = typeof (item as any).rating === 'number' && (item as any).rating > 0 ? (item as any).rating.toFixed(1) : null;
+  const ratingValue =
+    typeof (item as any).rating === 'number' && (item as any).rating > 0
+      ? (item as any).rating.toFixed(1)
+      : null;
+
+  const optimizedImage = item.image?.includes('cloudinary')
+    ? item.image.replace('/upload/', '/upload/f_auto,q_auto:good,w_500/')
+    : item.image || '/images/pizza-placeholder.webp';
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      whileHover={{ 
-        y: -8, 
-        scale: 1.02,
-        boxShadow: "0 20px 40px rgba(0,0,0,0.6), 0 0 25px rgba(85,119,90,0.25)" 
-      }}
-      whileTap={{ scale: 0.98 }}
-      transition={{ type: 'spring', stiffness: 350, damping: 24 }}
+      initial={{ opacity: 0, y: 16 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: '-20px' }}
+      whileHover={{ y: -4 }}
+      transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
       onClick={handleCardClick}
-      className={`bg-dark-900/90 border border-white/12 rounded-2xl md:rounded-3xl overflow-hidden flex flex-col relative transition-all duration-300 shadow-xl group ${
-        item.isAvailable ? 'cursor-pointer hover:border-primary-500/50' : 'opacity-60 grayscale cursor-not-allowed'
+      className={`rounded-2xl md:rounded-3xl bg-white border border-stone-200/90 shadow-[0_4px_20px_-2px_rgba(28,25,23,0.06)] hover:shadow-[0_12px_32px_-4px_rgba(28,25,23,0.12)] overflow-hidden flex flex-col relative transition-all duration-300 group cursor-pointer ${
+        !item.isAvailable ? 'opacity-65 grayscale cursor-not-allowed' : ''
       }`}
     >
-      {/* Glow highlight effect on card hover */}
-      <motion.div 
-        className="absolute inset-0 bg-gradient-to-tr from-primary-500/10 via-transparent to-amber-500/10 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-500 z-0"
-      />
-
-      {/* Top Left Badge: Real Rating or Pure Veg / Special Badge */}
-      {realRating ? (
-        <motion.div 
-          animate={{ scale: [1, 1.05, 1] }}
-          transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
-          className="absolute top-3 left-3 bg-dark-950/85 backdrop-blur-md border border-amber-400/40 text-amber-400 text-xs font-black px-2.5 py-1 rounded-full flex items-center gap-1 z-10 shadow-lg"
-        >
-          <Star className="w-3.5 h-3.5 fill-amber-400 animate-pulse" />
-          <span>{realRating}</span>
-        </motion.div>
-      ) : item.isVegetarian ? (
-        <div className="absolute top-3 left-3 bg-emerald-950/85 backdrop-blur-md border border-emerald-500/40 text-emerald-400 text-[10px] font-black px-2.5 py-1 rounded-full flex items-center gap-1 z-10 shadow-lg">
-          <span>100% Veg 🌿</span>
-        </div>
-      ) : null}
-
-      {/* Top Right: Wishlist Heart Button */}
-      <div className="absolute top-3 right-3 z-10" onClick={(e) => e.stopPropagation()}>
-        <WishlistButton productId={item.id || ''} wishlistIds={wishlistIds} size="sm" />
-      </div>
-
-      {/* Discount Badge */}
-      {appliedDiscount > 0 && item.isAvailable && (
-        <motion.div 
-          animate={{ x: [0, 2, 0] }}
-          transition={{ duration: 2, repeat: Infinity }}
-          className="absolute top-11 left-3 bg-gradient-to-r from-accent-500 to-amber-400 text-dark-950 text-[10px] font-black px-2.5 py-0.5 rounded-full shadow-lg z-10 border border-white/20"
-        >
-          {appliedDiscount}% OFF
-        </motion.div>
-      )}
-
-      {/* Large Steaming Food Image Container */}
-      <div className="w-full aspect-[4/3] relative overflow-hidden bg-dark-950/60 border-b border-white/5">
-        <motion.img 
-          src={item.image.includes('cloudinary') ? item.image.replace("/upload/", "/upload/f_auto,q_auto,w_400/") : item.image} 
-          alt={item.name} 
+      {/* ── Top Visual / Food Image Area ───────────────────────────── */}
+      <div className="relative w-full aspect-[4/3] overflow-hidden bg-stone-100">
+        <img
+          src={optimizedImage}
+          alt={item.name}
           loading="lazy"
-          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
-          animate={{ y: [0, -3, 0] }}
-          transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+          decoding="async"
+          className="w-full h-full object-cover object-center group-hover:scale-106 transition-transform duration-500 ease-out"
+          onError={(e) => {
+            (e.target as HTMLImageElement).src =
+              'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=500';
+          }}
         />
-        
-        {/* Steam overlay gradient */}
-        <div className="absolute inset-0 bg-gradient-to-t from-dark-900 via-dark-900/20 to-transparent opacity-90" />
 
+        {/* Subtle Bottom Shade for Photo Depth */}
+        <div className="absolute inset-0 bg-gradient-to-t from-stone-900/40 via-transparent to-transparent pointer-events-none" />
+
+        {/* Top Badges Row */}
+        <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between z-10">
+          <div className="flex items-center gap-1.5">
+            {/* Statutory FSSAI Veg / Non-Veg Indicator */}
+            <div
+              className={`w-4 h-4 rounded-sm border-2 bg-white/95 backdrop-blur-sm flex items-center justify-center shadow-sm ${
+                item.isVegetarian ? 'border-emerald-600' : 'border-rose-600'
+              }`}
+            >
+              <div
+                className={`w-2 h-2 rounded-full ${
+                  item.isVegetarian ? 'bg-emerald-600' : 'bg-rose-600'
+                }`}
+              />
+            </div>
+
+            {/* Discount Badge */}
+            {appliedDiscount > 0 && item.isAvailable && (
+              <span className="px-2 py-0.5 rounded-full bg-red-600 text-white text-[10px] font-black uppercase tracking-wider shadow-sm">
+                {appliedDiscount}% OFF
+              </span>
+            )}
+          </div>
+
+          {/* Wishlist Button */}
+          <div onClick={(e) => e.stopPropagation()}>
+            <WishlistButton productId={item.id || ''} wishlistIds={wishlistIds} size="sm" />
+          </div>
+        </div>
+
+        {/* Bottom Floating Metadata on Image */}
+        <div className="absolute bottom-2 left-2.5 right-2.5 flex items-center justify-between z-10 pointer-events-none">
+          {ratingValue ? (
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/95 backdrop-blur-md text-stone-900 text-[11px] font-extrabold shadow-sm">
+              <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
+              <span>{ratingValue}</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1 text-[11px] text-white/90 font-medium drop-shadow-md">
+              <Clock className="w-3 h-3 text-amber-400" />
+              <span>15–20m</span>
+            </div>
+          )}
+        </div>
+
+        {/* Sold Out Overlay */}
         {!item.isAvailable && (
-          <div className="absolute inset-0 bg-dark-950/80 backdrop-blur-sm flex items-center justify-center z-10">
-            <span className="bg-dark-900 border border-white/10 text-slate-300 text-xs font-bold px-3.5 py-1.5 rounded-full uppercase tracking-wider shadow-lg">
+          <div className="absolute inset-0 bg-stone-900/70 backdrop-blur-xs flex items-center justify-center z-20">
+            <span className="px-3.5 py-1 rounded-full bg-stone-900 text-stone-200 text-xs font-bold uppercase tracking-wider border border-stone-700">
               Sold Out
             </span>
           </div>
         )}
       </div>
 
-      {/* Product Body Information */}
-      <div className="p-3.5 sm:p-4 md:p-5 flex flex-col flex-1 relative z-10">
-        
+      {/* ── Product Content Body ───────────────────────────────────── */}
+      <div className="p-3.5 sm:p-4 flex flex-col flex-1 bg-white">
         {/* Title */}
-        <h3 className="text-sm sm:text-base md:text-lg font-bold text-white leading-tight mb-1 truncate group-hover:text-amber-200 transition-colors">
+        <h3 className="font-extrabold text-stone-900 text-sm sm:text-base leading-snug line-clamp-1 group-hover:text-red-600 transition-colors">
           {item.name}
         </h3>
 
-        {/* Prep Time & Subtext */}
-        <div className="flex items-center gap-2 text-[11px] text-slate-400 mb-2">
-          <span className="flex items-center gap-1"><Clock size={12} className="text-accent-400" /> 15-20 min</span>
-          <span>•</span>
-          <span className={`font-bold ${item.isVegetarian ? 'text-emerald-400' : 'text-rose-400'}`}>
-            {item.isVegetarian ? 'Veg 🌿' : 'Non-veg 🍖'}
-          </span>
-          <span>•</span>
-          <span className="text-amber-400 font-bold flex items-center gap-0.5"><Flame size={10} /> Popular</span>
-        </div>
-
-        <p className="text-xs text-slate-400 line-clamp-2 mb-4 font-normal leading-relaxed">
-          {item.description}
+        {/* Description */}
+        <p className="text-stone-500 text-xs line-clamp-2 mt-1 min-h-[2rem] leading-relaxed">
+          {item.description || 'Authentic hand-stretched dough with San Marzano sauce and melted mozzarella.'}
         </p>
 
-        {/* Footer: Price & Add Button */}
-        <div className="mt-auto flex items-center justify-between gap-2 pt-2 border-t border-white/8">
-          <div className="flex flex-col">
-            {appliedDiscount > 0 ? (
-              <>
-                <span className="text-[10px] text-slate-500 line-through font-medium">₹{item.basePrice}</span>
-                <span className="text-base sm:text-lg font-black text-amber-400 drop-shadow-[0_2px_10px_rgba(245,158,11,0.3)]">
-                  ₹{finalPrice}
-                </span>
-              </>
-            ) : (
-              <span className="text-base sm:text-lg font-black text-white">₹{finalPrice}</span>
+        {/* ── Card Footer: Pricing & Action ──────────────────────────── */}
+        <div className="mt-3 pt-3 border-t border-stone-100 flex items-center justify-between gap-2">
+          {/* Price Stack */}
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-base sm:text-lg font-black text-stone-900">
+              ₹{finalPrice}
+            </span>
+            {appliedDiscount > 0 && (
+              <span className="text-xs text-stone-400 line-through font-medium">
+                ₹{item.basePrice}
+              </span>
             )}
           </div>
 
+          {/* Action: Customizer & Add / Quantity Stepper */}
           <div className="flex items-center gap-1.5">
             {isPizza && onOpenCustomization && (
-              <motion.button
-                whileHover={{ scale: 1.08 }}
-                whileTap={{ scale: 0.9 }}
+              <button
+                type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   onOpenCustomization(item);
                 }}
-                className="p-2.5 rounded-xl bg-dark-800 hover:bg-dark-700 text-slate-300 transition-colors border border-white/10 min-touch-target shadow-md"
-                title="Customize Crust & Cheese"
+                className="w-8 h-8 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-600 flex items-center justify-center transition-colors border border-stone-200/80 active:scale-90"
+                title="Customize Crust & Toppings"
               >
-                <SlidersHorizontal size={14} />
-              </motion.button>
+                <SlidersHorizontal className="w-3.5 h-3.5" />
+              </button>
             )}
 
-            <motion.button 
-              whileHover={{ scale: 1.06, boxShadow: "0 0 15px rgba(85,119,90,0.5)" }}
-              whileTap={{ scale: 0.92 }}
-              disabled={!item.isAvailable}
-              onClick={handleQuickAdd}
-              className={`min-touch-target px-4 py-2.5 rounded-full font-bold text-xs sm:text-sm flex items-center gap-1.5 transition-all shadow-lg ${
-                item.isAvailable 
-                  ? 'bg-gradient-to-r from-[#354a3a] to-[#425e47] hover:from-[#425e47] hover:to-[#55775a] text-white border border-emerald-400/40' 
-                  : 'bg-dark-800 border border-dark-700 text-slate-500'
-              }`}
-            >
-              <Plus className="w-4 h-4" />
-              Add
-            </motion.button>
+            {/* If item is in cart: show Stepper; otherwise show ADD */}
+            {cartQuantity > 0 ? (
+              <div
+                onClick={(e) => e.stopPropagation()}
+                className="flex items-center gap-2 px-2 py-1 rounded-xl bg-red-50 border border-red-200 text-red-700 shadow-xs"
+              >
+                <button
+                  type="button"
+                  onClick={handleDecrease}
+                  className="w-6 h-6 rounded-lg bg-white text-red-600 hover:bg-red-600 hover:text-white flex items-center justify-center font-black text-xs transition-colors shadow-xs active:scale-90 cursor-pointer"
+                  aria-label="Decrease quantity"
+                >
+                  <Minus className="w-3 h-3" />
+                </button>
+                <span className="font-black text-xs sm:text-sm min-w-[14px] text-center">
+                  {cartQuantity}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleIncrease}
+                  className="w-6 h-6 rounded-lg bg-red-600 text-white hover:bg-red-700 flex items-center justify-center font-black text-xs transition-colors shadow-xs active:scale-90 cursor-pointer"
+                  aria-label="Increase quantity"
+                >
+                  <Plus className="w-3 h-3" />
+                </button>
+              </div>
+            ) : (
+              <motion.button
+                type="button"
+                whileTap={{ scale: 0.94 }}
+                disabled={!item.isAvailable}
+                onClick={handleAdd}
+                className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-black text-xs uppercase tracking-wider flex items-center gap-1.5 shadow-sm shadow-red-500/20 transition-all cursor-pointer min-h-[36px]"
+              >
+                <span>Add</span>
+                <Plus className="w-3.5 h-3.5" />
+              </motion.button>
+            )}
           </div>
         </div>
       </div>

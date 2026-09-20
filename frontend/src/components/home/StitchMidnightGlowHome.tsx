@@ -2,9 +2,9 @@ import React, { useState, useMemo, useCallback } from "react";
 import { motion, useMotionValue, useTransform, useSpring } from "framer-motion";
 import { Link, useNavigate } from "react-router";
 import { 
-  Flame, Leaf, MapPin, ChevronRight, Plus, 
+  Flame, Leaf, MapPin, ChevronRight, Plus, Minus,
   ArrowRight, Star, Award, ShieldCheck, Gift,
-  Search, Utensils, Sparkles, Clock, Compass
+  Search, Utensils, Sparkles, Clock, Check
 } from "lucide-react";
 import { useDataStore } from "../../lib/dataStore";
 import { useStoreStatus } from "../../lib/useStoreStatus";
@@ -20,27 +20,28 @@ import CategoryDiscoveryRail from "./CategoryDiscoveryRail";
 import PersonalizedProductDiscovery from "./PersonalizedProductDiscovery";
 import toast from "react-hot-toast";
 
-// ── 3D Tilt Card Container for Spotlight Product ──────────────────────────────
+// ── Subtle 3D Spatial Tilt Card for Spotlight Product ─────────────────────────
 function SpatialTiltCard({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   const x = useMotionValue(0);
   const y = useMotionValue(0);
 
-  const mouseXSpring = useSpring(x, { stiffness: 300, damping: 20 });
-  const mouseYSpring = useSpring(y, { stiffness: 300, damping: 20 });
+  const mouseXSpring = useSpring(x, { stiffness: 260, damping: 24 });
+  const mouseYSpring = useSpring(y, { stiffness: 260, damping: 24 });
 
-  const rotateX = useTransform(mouseYSpring, [-0.5, 0.5], ["5deg", "-5deg"]);
-  const rotateY = useTransform(mouseXSpring, [-0.5, 0.5], ["-5deg", "5deg"]);
+  const rotateX = useTransform(mouseYSpring, [-0.5, 0.5], ["3deg", "-3deg"]);
+  const rotateY = useTransform(mouseXSpring, [-0.5, 0.5], ["-3deg", "3deg"]);
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (typeof window !== "undefined" && window.matchMedia && !window.matchMedia("(hover: hover)").matches) {
+      return;
+    }
     const rect = e.currentTarget.getBoundingClientRect();
     const width = rect.width;
     const height = rect.height;
     const mouseX = e.clientX - rect.left;
     const mouseY = e.clientY - rect.top;
-    const xPct = mouseX / width - 0.5;
-    const yPct = mouseY / height - 0.5;
-    x.set(xPct);
-    y.set(yPct);
+    x.set(mouseX / width - 0.5);
+    y.set(mouseY / height - 0.5);
   };
 
   const handleMouseLeave = () => {
@@ -57,7 +58,7 @@ function SpatialTiltCard({ children, className = "" }: { children: React.ReactNo
         rotateY,
         transformStyle: "preserve-3d",
       }}
-      className={`transition-shadow duration-500 will-change-transform ${className}`}
+      className={`transition-shadow duration-300 will-change-transform ${className}`}
     >
       {children}
     </motion.div>
@@ -67,7 +68,7 @@ function SpatialTiltCard({ children, className = "" }: { children: React.ReactNo
 export default function StitchMidnightGlowHome() {
   const storeStatus = useStoreStatus();
   const { products, combos } = useDataStore();
-  const { addItem } = useCartStore();
+  const { items, addItem, updateQuantity, removeItem } = useCartStore();
   const { user, isAuthenticated } = useAuthStore();
   const { triggerAnimation } = useCartAnimation();
   const navigate = useNavigate();
@@ -101,9 +102,9 @@ export default function StitchMidnightGlowHome() {
   // Dynamic status text
   const statusMessage = useMemo(() => {
     if (storeStatus.isLoading) return "Checking Kitchen...";
-    if (!storeStatus.isRestaurantOpen) return "Store Closed — Opens Tomorrow";
-    if (!storeStatus.isWithinBusinessHours) return "Closed — Next Slot 11:00 AM";
-    return "Wood-Fired Ovens Fired Up • 25-35m Delivery";
+    if (!storeStatus.isRestaurantOpen) return "Store Closed • Opens Tomorrow";
+    if (!storeStatus.isWithinBusinessHours) return "Closed • Next Slot 11:00 AM";
+    return "Fired Up • 25–35m Delivery";
   }, [storeStatus]);
 
   // Featured / Spotlight Hero Product: Pick Daily Chef Special or best-selling pizza
@@ -114,7 +115,13 @@ export default function StitchMidnightGlowHome() {
            products[0];
   }, [products]);
 
-  // Safe 5-Step Add to Cart handler with sound and animation trigger
+  // Hero product in-cart state
+  const inCartHero = heroProduct
+    ? items.find((i) => i.id === heroProduct.id || i.menuItemId === heroProduct.id)
+    : null;
+  const heroQty = inCartHero?.quantity || 0;
+
+  // Safe Add to Cart handler with zero-latency state commitment + physical flight
   const handleAddToCart = useCallback((e: React.MouseEvent, product: any) => {
     e.stopPropagation();
     
@@ -157,12 +164,14 @@ export default function StitchMidnightGlowHome() {
         size: "Medium"
       });
 
-      toast.success(`Added ${itemName} to cart! 🍕`, {
+      toast.success(`Added ${itemName}! 🍕`, {
+        duration: 1800,
         style: {
-          background: "#1E293B",
-          color: "#fff",
-          borderRadius: "16px",
-          border: "1px solid rgba(249, 115, 22, 0.4)",
+          background: "#1C1917",
+          color: "#FFFFFF",
+          borderRadius: "14px",
+          fontWeight: 600,
+          fontSize: "13px",
         },
       });
     });
@@ -185,184 +194,197 @@ export default function StitchMidnightGlowHome() {
   }, []);
 
   return (
-    <div className="w-full text-slate-900 antialiased bg-[#FAF7F2] min-h-screen pt-20 md:pt-24 relative overflow-hidden selection:bg-rose-500 selection:text-white">
+    <div className="w-full text-stone-900 antialiased bg-[#FDFBF7] min-h-screen pt-20 md:pt-24 relative selection:bg-red-600 selection:text-white">
       
-      {/* ── Warm Food Delivery Ambient Backdrops ────────────────────── */}
-      <div className="absolute top-10 left-1/4 -translate-x-1/2 w-[550px] h-[550px] bg-orange-200/40 blur-[130px] pointer-events-none rounded-full" />
-      <div className="absolute top-80 right-10 w-[450px] h-[450px] bg-red-200/30 blur-[130px] pointer-events-none rounded-full" />
-
-      {/* ── 1. Food-App Native Header: Floating Location & Kitchen Status Pill ──────── */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-8 pt-2 pb-4 relative z-20">
+      {/* ── 1. Top Delivery & Kitchen Status Header Bar ─────────────── */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-8 pt-2 pb-3 relative z-20">
         <motion.div 
-          initial={{ opacity: 0, y: -10 }}
+          initial={{ opacity: 0, y: -8 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35, ease: "easeOut" }}
-          className="flex flex-wrap items-center justify-between gap-3 p-2 sm:p-2.5 rounded-3xl bg-white/90 border border-orange-100/80 backdrop-blur-xl shadow-[0_10px_30px_rgba(249,115,22,0.06)]"
+          transition={{ duration: 0.3 }}
+          className="flex items-center justify-between gap-2 p-2 sm:p-2.5 rounded-2xl bg-white border border-stone-200/90 shadow-[0_4px_16px_-2px_rgba(28,25,23,0.05)]"
         >
-          {/* Deliver To Location with Click-to-Change */}
+          {/* Deliver To Location */}
           <Link
             to={isAuthenticated ? "/profile" : "/login"}
-            className="inline-flex items-center gap-2.5 px-4 py-2 rounded-2xl bg-orange-50/70 hover:bg-orange-100/70 border border-orange-100 backdrop-blur-md transition-all group active:scale-95"
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl hover:bg-stone-50 transition-colors group active:scale-98 min-w-0"
           >
-            <div className="w-6 h-6 rounded-xl bg-orange-500/15 border border-orange-500/30 flex items-center justify-center text-orange-600 group-hover:scale-110 transition-transform">
-              <MapPin className="w-3.5 h-3.5" />
+            <div className="w-7 h-7 rounded-lg bg-red-50 border border-red-200/80 flex items-center justify-center text-red-600 shrink-0">
+              <MapPin className="w-4 h-4" />
             </div>
-            <div className="flex flex-col text-left">
-              <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider leading-none">Deliver To</span>
-              <span className="font-extrabold text-xs text-slate-800 truncate max-w-[130px] sm:max-w-[220px] group-hover:text-orange-600 transition-colors mt-0.5">
+            <div className="flex flex-col text-left min-w-0">
+              <span className="text-[10px] uppercase font-black text-stone-400 tracking-wider leading-none">Deliver To</span>
+              <span className="font-extrabold text-xs sm:text-sm text-stone-900 truncate max-w-[150px] sm:max-w-[260px] group-hover:text-red-600 transition-colors mt-0.5">
                 {userLocationText}
               </span>
             </div>
-            <ChevronRight className="w-3.5 h-3.5 text-slate-400 group-hover:translate-x-0.5 group-hover:text-slate-800 transition-all ml-1" />
+            <ChevronRight className="w-3.5 h-3.5 text-stone-400 group-hover:translate-x-0.5 group-hover:text-stone-700 transition-all shrink-0 ml-0.5" />
           </Link>
 
-          {/* Kitchen Live Status & Speed Pill */}
-          <div className="inline-flex items-center gap-2.5 px-4 py-2 rounded-2xl bg-orange-50/50 border border-orange-100/60">
-            <span className="relative flex h-2.5 w-2.5 shrink-0">
+          {/* Kitchen Live Status Badge */}
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-stone-50 border border-stone-200/80 shrink-0">
+            <span className="relative flex h-2 w-2 shrink-0">
               <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
-                isStoreOpen ? "bg-emerald-400" : "bg-amber-400"
-              }`} />
-              <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${
                 isStoreOpen ? "bg-emerald-500" : "bg-amber-500"
               }`} />
+              <span className={`relative inline-flex rounded-full h-2 w-2 ${
+                isStoreOpen ? "bg-emerald-600" : "bg-amber-600"
+              }`} />
             </span>
-            <span className="text-xs text-slate-700 font-bold tracking-tight">
+            <span className="text-xs font-bold text-stone-800 tracking-tight">
               {statusMessage}
             </span>
-            <span className="h-3.5 w-px bg-slate-200 hidden sm:inline-block" />
-            <span className="text-[11px] text-orange-600 font-bold hidden sm:inline-flex items-center gap-1.5">
-              <Flame className="w-3.5 h-3.5 text-orange-500 animate-pulse" />
+            <span className="h-3 w-px bg-stone-300 hidden sm:inline-block" />
+            <span className="text-[11px] text-red-700 font-bold hidden sm:inline-flex items-center gap-1">
+              <Flame className="w-3 h-3 text-red-600" />
               <span>Wood-Fired Hub</span>
             </span>
           </div>
         </motion.div>
       </div>
 
-      {/* ── 2. Ethereal Search Bar & Quick Category Shortcut Chips ────────── */}
+      {/* ── 2. High-Precision Search Bar & Shortcut Pills ───────────── */}
       <section className="max-w-7xl mx-auto px-4 sm:px-8 pb-5 relative z-20">
-        {/* Floating Glass Search Input */}
-        <motion.form 
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35, delay: 0.05 }}
+        <form 
           onSubmit={handleSearchSubmit} 
           className="relative mb-3 group"
         >
-          <div className="absolute inset-0 bg-gradient-to-r from-orange-400/20 via-red-400/10 to-amber-400/20 rounded-2xl blur-lg opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity pointer-events-none" />
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-red-500 transition-colors pointer-events-none" />
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400 group-focus-within:text-red-600 transition-colors pointer-events-none" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search wood-fired pizzas, cheesy garlic breads, drinks, desserts..."
-            className="w-full h-13 pl-11 pr-28 rounded-2xl bg-white border border-orange-200/80 text-slate-900 placeholder-slate-400 text-sm focus:outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20 transition-all shadow-[0_10px_25px_rgba(249,115,22,0.06)]"
+            placeholder="Search artisan pizzas, cheesy garlic breads, drinks, desserts..."
+            className="w-full h-12 pl-11 pr-24 sm:pr-28 rounded-2xl bg-white border border-stone-200 text-stone-900 placeholder-stone-400 text-xs sm:text-sm focus:outline-none focus:border-red-600 focus:ring-2 focus:ring-red-500/15 transition-all shadow-[0_4px_16px_-2px_rgba(28,25,23,0.05)]"
           />
           <button
             type="submit"
-            className="absolute right-1.5 top-1/2 -translate-y-1/2 px-5 py-2 rounded-xl bg-gradient-to-r from-red-600 via-rose-600 to-orange-500 hover:from-red-700 hover:to-orange-600 text-white font-black text-xs uppercase tracking-wider transition-all shadow-md shadow-red-500/25 hover:scale-105 active:scale-95 flex items-center gap-1.5 cursor-pointer"
+            className="absolute right-1.5 top-1/2 -translate-y-1/2 px-3.5 sm:px-5 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-black text-xs uppercase tracking-wider transition-all shadow-sm active:scale-95 flex items-center gap-1 cursor-pointer"
           >
             <span>Search</span>
             <ChevronRight className="w-3 h-3" />
           </button>
-        </motion.form>
+        </form>
 
-        {/* Quick Shortcut Chips */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1.5 scrollbar-none">
+        {/* Category Shortcut Pills */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
           {[
             { label: "All Pizzas", icon: "🍕", link: "/menu?category=pizza" },
-            { label: "Signature Special", icon: "🧀", link: "/menu?category=special" },
+            { label: "Signature Specials", icon: "🧀", link: "/menu?category=special" },
             { label: "Sides & Breads", icon: "🥖", link: "/menu?category=sides" },
             { label: "Cold Beverages", icon: "🥤", link: "/menu?category=beverages" },
             { label: "Sweet Desserts", icon: "🍰", link: "/menu?category=dessert" },
             { label: "Value Combos", icon: "🎁", link: "/menu?category=combo" },
             { label: "100% Veg Only", icon: "🌿", link: "/menu?veg=1" },
           ].map((chip, index) => (
-            <motion.div
+            <Link
               key={chip.label}
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.3, delay: 0.04 * index }}
+              to={chip.link}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-white hover:bg-stone-50 border border-stone-200 text-xs font-bold text-stone-700 hover:text-red-600 transition-all whitespace-nowrap active:scale-95 shadow-xs shrink-0"
             >
-              <Link
-                to={chip.link}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-2xl bg-white hover:bg-red-50 hover:border-red-300 border border-orange-100 text-xs font-bold text-slate-700 hover:text-red-600 transition-all whitespace-nowrap active:scale-95 shadow-sm shrink-0"
-              >
-                <span className="text-sm">{chip.icon}</span>
-                <span>{chip.label}</span>
-              </Link>
-            </motion.div>
+              <span className="text-sm">{chip.icon}</span>
+              <span>{chip.label}</span>
+            </Link>
           ))}
         </div>
       </section>
 
-      {/* ── 3. 3D Spatial Kitchen Spotlight Card ──────────────────────── */}
+      {/* ── 3. Kitchen Spotlight Hero Card ──────────────────────────── */}
       {heroProduct && (
         <section className="max-w-7xl mx-auto px-4 sm:px-8 pb-6 relative z-10">
-          <SpatialTiltCard className="relative rounded-3xl overflow-hidden bg-gradient-to-br from-white via-[#FFFDF9] to-[#FFF7EE] border-2 border-orange-100 p-5 sm:p-7 shadow-[0_20px_50px_rgba(249,115,22,0.08)] group">
-            {/* Ambient Internal Backlight */}
-            <div className="absolute top-0 right-1/4 w-80 h-80 bg-gradient-to-br from-orange-200/40 via-red-100/30 to-transparent blur-[60px] pointer-events-none rounded-full" />
-
-            <div className="relative z-10 flex flex-col-reverse sm:flex-row items-center justify-between gap-6 sm:gap-8">
+          <SpatialTiltCard className="relative rounded-3xl overflow-hidden bg-white border border-stone-200/90 p-5 sm:p-7 shadow-[0_8px_30px_-4px_rgba(28,25,23,0.08)] group">
+            <div className="relative z-10 flex flex-col-reverse md:flex-row items-center justify-between gap-6 sm:gap-8">
               {/* Product Info & Actions */}
-              <div className="flex-1 min-w-0 text-left w-full sm:w-auto">
-                <div className="flex flex-wrap items-center gap-2 mb-2">
-                  <motion.span 
-                    animate={{ y: [0, -3, 0] }}
-                    transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-100/80 border border-red-200 text-red-700 text-[10px] font-black uppercase tracking-wider shadow-sm"
-                  >
+              <div className="flex-1 min-w-0 text-left w-full md:w-auto">
+                <div className="flex flex-wrap items-center gap-2 mb-2.5">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-100 text-red-700 text-[10px] font-black uppercase tracking-wider">
                     <Flame className="w-3.5 h-3.5 text-red-600" />
                     Kitchen Spotlight
-                  </motion.span>
+                  </span>
 
                   {(heroProduct.isVegetarian || heroProduct.isVeg) && (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-100/80 border border-emerald-200 text-emerald-800 text-[10px] font-bold">
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
                       <Leaf className="w-3 h-3 text-emerald-600" />
                       100% Veg
                     </span>
                   )}
 
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-orange-100/80 border border-orange-200 text-orange-800 text-[10px] font-bold">
-                    <Sparkles className="w-3 h-3 text-orange-500" />
-                    Fresh Wood-Fired
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-100 text-amber-900 text-[10px] font-bold">
+                    <Sparkles className="w-3 h-3 text-amber-600" />
+                    Wood-Fired
                   </span>
                 </div>
 
-                <h3 className="text-2xl sm:text-4xl font-black text-slate-900 tracking-tight leading-tight group-hover:text-red-600 transition-colors">
+                <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black text-stone-900 tracking-tight leading-tight group-hover:text-red-600 transition-colors">
                   {heroProduct.productName || heroProduct.name}
-                </h3>
+                </h2>
 
                 {heroProduct.description && (
-                  <p className="text-xs sm:text-sm text-slate-600 line-clamp-2 mt-1.5 max-w-xl font-normal leading-relaxed">
+                  <p className="text-xs sm:text-sm text-stone-600 line-clamp-2 mt-2 max-w-xl font-normal leading-relaxed">
                     {heroProduct.description}
                   </p>
                 )}
 
-                {/* Price, Savings & Sequenced Cart CTA */}
-                <div className="flex flex-wrap items-center gap-5 mt-4 pt-3 border-t border-orange-100/80">
+                {/* Price & Action Row */}
+                <div className="flex flex-wrap items-center gap-4 mt-5 pt-3 border-t border-stone-100">
                   <div className="flex items-baseline gap-2">
-                    <span className="text-2xl sm:text-3xl font-black text-red-600">
+                    <span className="text-2xl sm:text-3xl font-black text-stone-900">
                       ₹{heroProduct.offerPrice && Number(heroProduct.offerPrice) > 0 ? heroProduct.offerPrice : (heroProduct.basePrice || heroProduct.price || 0)}
                     </span>
                     {Number(heroProduct.offerPrice) > 0 && Number(heroProduct.offerPrice) < Number(heroProduct.basePrice || heroProduct.price) && (
-                      <span className="text-xs text-slate-400 line-through font-medium">
+                      <span className="text-xs text-stone-400 line-through font-medium">
                         ₹{heroProduct.basePrice || heroProduct.price}
                       </span>
                     )}
                   </div>
 
-                  <div className="flex items-center gap-2.5">
-                    <button
-                      onClick={(e) => handleAddToCart(e, heroProduct)}
-                      className="px-6 py-3 rounded-2xl bg-gradient-to-r from-red-600 via-rose-600 to-orange-500 hover:from-red-700 hover:to-orange-600 text-white font-black text-xs uppercase tracking-wider flex items-center gap-2 shadow-md shadow-red-500/25 hover:scale-105 active:scale-95 transition-all min-h-[44px] cursor-pointer"
-                    >
-                      <span>Add to Cart</span>
-                      <Plus className="w-4 h-4" />
-                    </button>
+                  <div className="flex items-center gap-2">
+                    {heroQty > 0 ? (
+                      <div
+                        onClick={(e) => e.stopPropagation()}
+                        className="flex items-center gap-2.5 px-3 py-1.5 rounded-2xl bg-red-50 border border-red-200 text-red-700 shadow-xs"
+                      >
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (heroQty <= 1) {
+                              removeItem(heroProduct.id);
+                            } else {
+                              updateQuantity(heroProduct.id, heroQty - 1);
+                            }
+                          }}
+                          className="w-8 h-8 rounded-xl bg-white text-red-600 hover:bg-red-600 hover:text-white flex items-center justify-center font-black text-xs transition-colors shadow-xs active:scale-90"
+                        >
+                          <Minus className="w-4 h-4" />
+                        </button>
+                        <span className="font-black text-sm min-w-[16px] text-center">{heroQty}</span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            triggerAnimation(e, heroProduct.imageUrl || heroProduct.image || "", () => {
+                              updateQuantity(heroProduct.id, heroQty + 1);
+                            });
+                          }}
+                          className="w-8 h-8 rounded-xl bg-red-600 text-white hover:bg-red-700 flex items-center justify-center font-black text-xs transition-colors shadow-xs active:scale-90"
+                        >
+                          <Plus className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={(e) => handleAddToCart(e, heroProduct)}
+                        className="px-6 py-3 rounded-2xl bg-red-600 hover:bg-red-700 text-white font-black text-xs uppercase tracking-wider flex items-center gap-2 shadow-sm shadow-red-500/20 active:scale-95 transition-all min-h-[44px] cursor-pointer"
+                      >
+                        <span>Add to Cart</span>
+                        <Plus className="w-4 h-4" />
+                      </button>
+                    )}
 
                     <Link
                       to={`/product/${heroProduct.id}`}
-                      className="px-4 py-3 rounded-2xl bg-white hover:bg-orange-50 text-slate-700 border border-slate-200 font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 transition-all hover:scale-105 active:scale-95 min-h-[44px]"
+                      className="px-4 py-3 rounded-2xl bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 transition-all active:scale-95 min-h-[44px]"
                     >
                       <span>View</span>
                       <ChevronRight className="w-3.5 h-3.5" />
@@ -371,54 +393,54 @@ export default function StitchMidnightGlowHome() {
                 </div>
               </div>
 
-              {/* Elevated Floating Product Imagery */}
-              <motion.div 
-                whileHover={{ scale: 1.04, rotate: 1 }}
-                transition={{ type: "spring", stiffness: 300, damping: 20 }}
-                className="relative w-full sm:w-56 sm:h-48 h-44 rounded-3xl overflow-hidden bg-slate-100 shrink-0 border border-orange-100 shadow-[0_15px_35px_rgba(249,115,22,0.12)] group-hover:border-red-300 transition-all"
-              >
+              {/* Elevated Product Imagery with Real Food Photography */}
+              <div className="relative w-full md:w-64 md:h-52 h-48 rounded-2xl overflow-hidden bg-stone-100 shrink-0 border border-stone-200 shadow-md group-hover:border-red-300 transition-all">
                 <img
                   src={heroProduct.imageUrl || heroProduct.image || "/images/pizza-placeholder.webp"}
                   alt={heroProduct.productName || heroProduct.name}
-                  className="w-full h-full object-cover object-center group-hover:scale-110 transition-transform duration-700"
+                  className="w-full h-full object-cover object-center group-hover:scale-106 transition-transform duration-500"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src =
+                      "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=500";
+                  }}
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent pointer-events-none" />
+                <div className="absolute inset-0 bg-gradient-to-t from-stone-900/40 via-transparent to-transparent pointer-events-none" />
                 
                 {typeof heroProduct.rating === "number" && heroProduct.rating > 0 && (
-                  <div className="absolute top-3 left-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/90 backdrop-blur-md border border-slate-100 text-slate-900 text-[11px] font-black shadow-md">
+                  <div className="absolute top-3 left-3 flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/95 backdrop-blur-md border border-stone-100 text-stone-900 text-[11px] font-black shadow-md">
                     <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
                     <span>{heroProduct.rating.toFixed(1)}</span>
                   </div>
                 )}
-              </motion.div>
+              </div>
             </div>
           </SpatialTiltCard>
         </section>
       )}
 
-      {/* ── 4. Category Discovery Rail ──────────────────────────────────── */}
+      {/* ── 4. Category Discovery Rail ──────────────────────────────── */}
       <CategoryDiscoveryRail />
 
-      {/* ── 5. Smart Personalized Product Discovery ───────────────────────── */}
+      {/* ── 5. Smart Personalized Product Discovery Grid ────────────── */}
       <PersonalizedProductDiscovery onCustomize={openCustomizer} />
 
-      {/* ── 6. Value Combos ──────────────────────────────────────────────── */}
+      {/* ── 6. Value Combos ─────────────────────────────────────────── */}
       {combos && combos.length > 0 && (
-        <section className="max-w-7xl mx-auto px-4 sm:px-8 py-8 border-t border-orange-100/60">
+        <section className="max-w-7xl mx-auto px-4 sm:px-8 py-8 border-t border-stone-200/80">
           <div className="flex items-end justify-between mb-6">
             <div>
               <div className="inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-red-600 mb-1">
                 <Gift className="w-3.5 h-3.5 text-red-600" />
                 <span>Pair & Save More</span>
               </div>
-              <h3 className="text-2xl sm:text-3xl font-serif font-black text-slate-900">
+              <h3 className="text-2xl sm:text-3xl font-serif font-black text-stone-900">
                 Curated Value Combos
               </h3>
-              <p className="text-xs text-slate-500 mt-0.5">Special pairings designed for feasts & parties</p>
+              <p className="text-xs text-stone-500 mt-0.5">Special pairings designed for feasts & parties</p>
             </div>
             <Link
               to="/menu?category=combo"
-              className="text-xs font-bold text-red-600 hover:text-red-700 flex items-center gap-1 hover:translate-x-0.5 transition-transform"
+              className="text-xs font-bold text-red-600 hover:text-red-700 flex items-center gap-1"
             >
               <span>View All</span>
               <ChevronRight className="w-3.5 h-3.5" />
@@ -432,114 +454,145 @@ export default function StitchMidnightGlowHome() {
               const hasComboDiscount = originalPrice > comboPrice;
               const savings = hasComboDiscount ? originalPrice - comboPrice : 0;
 
+              const inCartCombo = items.find((item) => item.id === combo.id);
+              const comboQty = inCartCombo?.quantity || 0;
+
               return (
-                <motion.div 
+                <div 
                   key={combo.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 0.35, delay: 0.05 * i }}
-                  whileHover={{ y: -3 }}
-                  className="p-5 rounded-3xl bg-white border border-orange-100 hover:border-red-200 transition-all flex flex-col sm:flex-row items-center justify-between gap-5 shadow-[0_10px_30px_rgba(249,115,22,0.06)] group relative overflow-hidden"
+                  className="p-5 rounded-3xl bg-white border border-stone-200/90 shadow-[0_4px_20px_-2px_rgba(28,25,23,0.06)] hover:shadow-md transition-all flex flex-col sm:flex-row items-center justify-between gap-5 group relative overflow-hidden"
                 >
                   {hasComboDiscount && (
-                    <div className="absolute top-0 right-0 bg-gradient-to-l from-red-600 to-rose-600 text-white text-[10px] font-black uppercase tracking-wider px-3.5 py-1 rounded-bl-2xl shadow-sm">
+                    <div className="absolute top-0 right-0 bg-red-600 text-white text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-bl-2xl shadow-xs">
                       SAVE ₹{savings}
                     </div>
                   )}
 
                   <div className="flex items-center gap-4 w-full sm:w-auto">
-                    <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden bg-slate-100 shrink-0 border border-orange-100 shadow-sm">
+                    <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden bg-stone-100 shrink-0 border border-stone-200">
                       <img
                         src={combo.imageUrl || combo.image || "/images/pizza-placeholder.webp"}
                         alt={combo.name}
-                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                        className="w-full h-full object-cover group-hover:scale-106 transition-transform duration-500"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src =
+                            "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=500";
+                        }}
                       />
                     </div>
                     <div className="flex-1 min-w-0 pr-12 sm:pr-0">
-                      <h5 className="text-base font-bold text-slate-900 group-hover:text-red-600 transition-colors truncate">
+                      <h5 className="text-base font-bold text-stone-900 group-hover:text-red-600 transition-colors truncate">
                         {combo.name}
                       </h5>
                       {combo.description && (
-                        <p className="text-xs text-slate-500 line-clamp-1 mt-0.5">{combo.description}</p>
+                        <p className="text-xs text-stone-500 line-clamp-1 mt-0.5">{combo.description}</p>
                       )}
                       
                       <div className="flex items-baseline gap-2 mt-2">
-                        <span className="text-xl font-black text-red-600">₹{comboPrice}</span>
+                        <span className="text-lg sm:text-xl font-black text-stone-900">₹{comboPrice}</span>
                         {hasComboDiscount && (
-                          <span className="text-xs text-slate-400 line-through">₹{originalPrice}</span>
+                          <span className="text-xs text-stone-400 line-through font-medium">₹{originalPrice}</span>
                         )}
                       </div>
                     </div>
                   </div>
 
-                  <button
-                    onClick={(e) => handleAddToCart(e, combo)}
-                    className="w-full sm:w-auto px-6 py-3 rounded-2xl bg-gradient-to-r from-red-600 via-rose-600 to-orange-500 hover:from-red-700 hover:to-orange-600 text-white font-black text-xs uppercase tracking-wider transition-all shrink-0 hover:scale-105 active:scale-95 shadow-md shadow-red-500/20 min-h-[44px] flex items-center justify-center gap-1.5 cursor-pointer"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>Add Combo</span>
-                  </button>
-                </motion.div>
+                  {comboQty > 0 ? (
+                    <div
+                      onClick={(e) => e.stopPropagation()}
+                      className="flex items-center gap-2 px-2 py-1 rounded-xl bg-red-50 border border-red-200 text-red-700 shadow-xs shrink-0"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (comboQty <= 1) {
+                            removeItem(combo.id);
+                          } else {
+                            updateQuantity(combo.id, comboQty - 1);
+                          }
+                        }}
+                        className="w-6 h-6 rounded-lg bg-white text-red-600 hover:bg-red-600 hover:text-white flex items-center justify-center font-black text-xs transition-colors shadow-xs active:scale-90"
+                      >
+                        <Minus className="w-3 h-3" />
+                      </button>
+                      <span className="font-black text-xs min-w-[14px] text-center">{comboQty}</span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          triggerAnimation(e, combo.imageUrl || combo.image || "", () => {
+                            updateQuantity(combo.id, comboQty + 1);
+                          });
+                        }}
+                        className="w-6 h-6 rounded-lg bg-red-600 text-white hover:bg-red-700 flex items-center justify-center font-black text-xs transition-colors shadow-xs active:scale-90"
+                      >
+                        <Plus className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={(e) => handleAddToCart(e, combo)}
+                      className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-black text-xs uppercase tracking-wider transition-all shrink-0 active:scale-95 shadow-xs flex items-center justify-center gap-1.5 cursor-pointer min-h-[38px]"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add Combo</span>
+                    </button>
+                  )}
+                </div>
               );
             })}
           </div>
         </section>
       )}
 
-      {/* ── 7. Explore Full Menu Callout Banner ──────────────────────────── */}
+      {/* ── 7. Explore Full Menu Callout Banner ──────────────────────── */}
       <section className="max-w-7xl mx-auto px-4 sm:px-8 py-6">
-        <motion.div 
-          whileHover={{ scale: 1.01 }}
-          transition={{ duration: 0.3 }}
-          className="relative rounded-3xl overflow-hidden p-6 sm:p-9 bg-gradient-to-r from-red-600 via-rose-600 to-orange-500 text-white shadow-[0_20px_50px_rgba(225,29,72,0.25)] flex flex-col sm:flex-row items-center justify-between gap-6"
-        >
+        <div className="relative rounded-3xl overflow-hidden p-6 sm:p-8 bg-stone-900 text-white shadow-xl flex flex-col sm:flex-row items-center justify-between gap-6 border border-stone-800">
           <div className="flex items-center gap-5">
-            <div className="w-16 h-16 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center shrink-0 shadow-lg">
-              <Utensils className="w-8 h-8 text-white" />
+            <div className="w-14 h-14 rounded-2xl bg-red-600 flex items-center justify-center shrink-0 shadow-lg text-white">
+              <Utensils className="w-7 h-7" />
             </div>
             <div>
-              <span className="text-xs font-black uppercase tracking-wider text-orange-200 block mb-1">
+              <span className="text-xs font-black uppercase tracking-wider text-amber-400 block mb-1">
                 Handcrafted Stone-Oven Menu
               </span>
-              <h4 className="text-xl sm:text-3xl font-black text-white tracking-tight">
+              <h4 className="text-xl sm:text-2xl font-black text-white tracking-tight">
                 Craving your exact pizza style?
               </h4>
-              <p className="text-xs sm:text-sm text-rose-100 mt-1 max-w-xl font-normal leading-relaxed">
-                Explore our full line-up of fresh dough pizzas, gourmet stuffed crusts, sizzling appetizers, and decadent desserts.
+              <p className="text-xs sm:text-sm text-stone-300 mt-1 max-w-xl font-normal leading-relaxed">
+                Explore our full line-up of fresh sourdough pizzas, gourmet stuffed crusts, sizzling appetizers, and desserts.
               </p>
             </div>
           </div>
           <Link
             to="/menu"
-            className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-white text-red-600 hover:bg-orange-50 font-black text-xs sm:text-sm uppercase tracking-wider shadow-lg flex items-center justify-center gap-2 hover:scale-105 active:scale-95 transition-all shrink-0 min-h-[48px] cursor-pointer"
+            className="w-full sm:w-auto px-6 py-3.5 rounded-2xl bg-red-600 hover:bg-red-700 text-white font-black text-xs sm:text-sm uppercase tracking-wider shadow-md flex items-center justify-center gap-2 active:scale-95 transition-all shrink-0 min-h-[44px] cursor-pointer"
           >
             <span>Explore Full Menu</span>
             <ArrowRight className="w-4 h-4" />
           </Link>
-        </motion.div>
+        </div>
       </section>
 
-      {/* ── 8. Active Promo Coupons ─────────────────────────────────────── */}
+      {/* ── 8. Active Promo Coupons ─────────────────────────────────── */}
       <LiveCoupons />
 
-      {/* ── 9. Live Advertisements ──────────────────────────────────────── */}
+      {/* ── 9. Live Advertisements ──────────────────────────────────── */}
       <LiveAdvertisements />
 
-      {/* ── 10. Verified Customer Reviews ────────────────────────────────── */}
+      {/* ── 10. Verified Customer Reviews ────────────────────────────── */}
       <TestimonialsCarousel />
 
-      {/* ── 11. Mobile App Download & Delivery Assurance ────────────────── */}
+      {/* ── 11. Mobile App Download & Delivery Assurance ────────────── */}
       <AppDownloadSection />
 
-      {/* ── 12. Product Customization Modal ──────────────────────────────── */}
+      {/* ── 12. Product Customization Modal ──────────────────────────── */}
       <ProductCustomizationModal
         item={customizingItem}
         onClose={() => setCustomizingItem(null)}
       />
 
-      {/* Bottom spacing */}
-      <div className="h-16 w-full" />
+      {/* Bottom safe spacing for floating cart */}
+      <div className="h-20 w-full" />
     </div>
   );
 }

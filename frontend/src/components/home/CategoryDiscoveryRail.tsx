@@ -117,10 +117,10 @@ function RotatingCategoryCard({
 
       {/* Category Title & Real Count */}
       <div className="mt-2.5 text-center px-1 w-full">
-        <h3 className="text-xs sm:text-sm font-bold text-white group-hover:text-amber-300 transition-colors truncate">
+        <h3 className="text-xs sm:text-sm font-bold text-stone-900 group-hover:text-red-600 transition-colors truncate">
           {category.name}
         </h3>
-        <span className="text-[10px] text-slate-400 block mt-0.5">
+        <span className="text-[10px] text-stone-500 block mt-0.5">
           {category.itemCount} {category.itemCount === 1 ? "item" : "items"}
         </span>
       </div>
@@ -219,14 +219,14 @@ export default function CategoryDiscoveryRail() {
     <section ref={sectionRef} className="max-w-7xl mx-auto px-4 sm:px-8 py-6">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <span className="text-[11px] font-black uppercase tracking-wider text-[#FF6B00] block">
+          <span className="text-[11px] font-black uppercase tracking-wider text-red-600 block">
             Explore Flavors
           </span>
-          <h2 className="text-xl sm:text-2xl font-serif font-black text-white tracking-tight">
+          <h2 className="text-xl sm:text-2xl font-serif font-black text-stone-900 tracking-tight">
             Menu Categories
           </h2>
         </div>
-        <span className="text-xs text-slate-400 hidden sm:block">
+        <span className="text-xs text-stone-500 hidden sm:block font-medium">
           Tap to explore full collection
         </span>
       </div>
