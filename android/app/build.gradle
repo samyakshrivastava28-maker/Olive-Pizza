@@ -19,9 +19,9 @@ android {
     signingConfigs {
         release {
             storeFile file("release.keystore")
-            storePassword System.getenv("KEYSTORE_PASSWORD") ?: "olivepizza"
-            keyAlias System.getenv("KEY_ALIAS") ?: "olivepizza"
-            keyPassword System.getenv("KEY_PASSWORD") ?: "olivepizza"
+            storePassword System.getenv("KEYSTORE_PASSWORD")
+            keyAlias System.getenv("KEY_ALIAS")
+            keyPassword System.getenv("KEY_PASSWORD")
             v1SigningEnabled true
             v2SigningEnabled true
         }

@@ -38,14 +38,24 @@ export const Turnstile: React.FC<TurnstileProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const widgetIdRef = useRef<string | null>(null);
 
-  // Cloudflare Turnstile Site Key (Can be overridden via VITE_TURNSTILE_SITE_KEY)
-  const siteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY || '0x4AAAAAAAxxxxxxPLACEHOLDER';
+  // Cloudflare Turnstile Site Key (Configured via VITE_TURNSTILE_SITE_KEY)
+  const siteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY;
+  const isPlaceholderOrMissing = !siteKey || siteKey.includes('PLACEHOLDER');
 
   useEffect(() => {
-    // If running in development or testing without explicit key, auto-trigger verify callback
-    if (!import.meta.env.PROD || siteKey.includes('PLACEHOLDER')) {
-      onVerify('dev_mock_turnstile_token');
-      return;
+    // If running in development or test without explicit key, allow dev mock bypass
+    if (!import.meta.env.PROD) {
+      if (isPlaceholderOrMissing) {
+        onVerify('dev_mock_turnstile_token');
+        return;
+      }
+    } else {
+      // IN PRODUCTION: Fail-closed. Never bypass Turnstile verification
+      if (isPlaceholderOrMissing) {
+        console.error('[Turnstile Widget] Critical: Missing valid VITE_TURNSTILE_SITE_KEY in production environment.');
+        onError?.();
+        return;
+      }
     }
 
     let intervalId: any = null;
@@ -90,7 +100,7 @@ export const Turnstile: React.FC<TurnstileProps> = ({
   }, [siteKey, theme, onVerify, onError, onExpire]);
 
   // Don't render empty container in dev placeholder mode
-  if (!import.meta.env.PROD && siteKey.includes('PLACEHOLDER')) {
+  if (!import.meta.env.PROD && isPlaceholderOrMissing) {
     return null;
   }
 

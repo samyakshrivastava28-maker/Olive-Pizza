@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router';
 import { auth } from '../lib/firebase';
 import { useAuthStore } from '../lib/store';
+import { fetchApi } from '../lib/config';
 import PizzaLoader from '../components/ui/PizzaLoader';
 import SEO from '../components/SEO';
 import { 
@@ -109,8 +110,7 @@ export default function BillPage() {
           return;
         }
 
-        const API_URL = import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_API_URL || '';
-        const res = await fetch(`${API_URL}/api/orders/bill/${billReference}`, {
+        const res = await fetchApi(`/api/orders/bill/${billReference}`, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'

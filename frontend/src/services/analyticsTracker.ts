@@ -1,3 +1,5 @@
+import { getApiUrl } from '../lib/config';
+
 interface QueuedEvent {
   eventType: string;
   sectionId?: string;
@@ -26,8 +28,7 @@ async function flushQueue() {
   const toSend = [...eventQueue];
   eventQueue = [];
 
-  const backendUrl = import.meta.env.VITE_BACKEND_URL || '';
-  const endpoint = `${backendUrl}/api/website-analytics/batch`;
+  const endpoint = getApiUrl('/api/website-analytics/batch');
 
   try {
     if (typeof navigator !== 'undefined' && navigator.sendBeacon) {

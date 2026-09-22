@@ -4,6 +4,9 @@ import {
   signInWithCredential,
   GoogleAuthProvider,
   signInWithCustomToken,
+  RecaptchaVerifier,
+  signInWithPhoneNumber,
+  ConfirmationResult,
 } from "firebase/auth";
 import { Capacitor } from '@capacitor/core';
 import { auth, db } from "../lib/firebase";
@@ -33,11 +36,12 @@ export default function Login() {
   const [emailCooldown, setEmailCooldown] = useState(0);
   const emailInputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
-  // Phone OTP & Truecaller state
+  // Phone OTP (Firebase Phone Auth) & Truecaller state
   const [phone, setPhone] = useState("");
   const [phoneStep, setPhoneStep] = useState<'enter_phone' | 'enter_otp'>('enter_phone');
   const [phoneOtp, setPhoneOtp] = useState("");
-  const [pinId, setPinId] = useState<string | null>(null);
+  const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
+  const recaptchaVerifierRef = useRef<RecaptchaVerifier | null>(null);
   const [phoneCooldown, setPhoneCooldown] = useState(0);
   const [isTruecallerNative, setIsTruecallerNative] = useState(false);
   const [qrModalOpen, setQrModalOpen] = useState(false);
@@ -174,7 +178,7 @@ export default function Login() {
   };
 
   // ─────────────────────────────────────────────────────────────
-  // 2. PHONE OTP (INFOBIP SMS) AUTHENTICATION
+  // 2. PHONE OTP (FIREBASE PHONE AUTH)
   // ─────────────────────────────────────────────────────────────
   const formatPhoneNumber = (raw: string) => {
     const digits = raw.replace(/\D/g, '');
@@ -197,24 +201,47 @@ export default function Login() {
     setLoading(true);
 
     try {
-      const res = await fetchApi('/api/phone/send-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phoneNumber: formatted })
-      });
-
-      const data = await res.json().catch(() => null);
-
-      if (!res.ok || !data?.success) {
-        throw new Error(data?.error || "Failed to dispatch SMS OTP. Please try again.");
+      // Clear previous verifier instance if any
+      if (recaptchaVerifierRef.current) {
+        try {
+          recaptchaVerifierRef.current.clear();
+        } catch {}
+        recaptchaVerifierRef.current = null;
       }
 
-      if (data.pinId) setPinId(data.pinId);
+      // Initialize invisible reCAPTCHA verifier for Firebase Phone Auth
+      const verifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+        size: 'invisible',
+        callback: () => {
+          // reCAPTCHA solved
+        },
+        'expired-callback': () => {
+          setError("reCAPTCHA verification expired. Please try again.");
+        }
+      });
+      recaptchaVerifierRef.current = verifier;
+
+      const confirmation = await signInWithPhoneNumber(auth, formatted, verifier);
+      setConfirmationResult(confirmation);
       setPhoneStep('enter_otp');
       setPhoneCooldown(60);
-      toast.success(data.message || "SMS OTP sent to your phone!");
+      toast.success("Verification code sent via SMS!");
     } catch (err: any) {
-      setError(err.message || "Could not send SMS code. Please try again.");
+      console.error("[Firebase Phone Auth] Send error:", err);
+      let msg = "Could not send SMS code. Please try again.";
+      if (err.code === 'auth/invalid-phone-number') {
+        msg = "The mobile number format is invalid.";
+      } else if (err.code === 'auth/quota-exceeded') {
+        msg = "SMS quota exceeded. Please try again later or use Truecaller.";
+      } else if (err.code === 'auth/captcha-check-failed') {
+        msg = "reCAPTCHA verification failed. Please refresh and try again.";
+      } else if (err.code === 'auth/too-many-requests') {
+        msg = "Too many attempts. Please wait a few minutes before trying again.";
+      } else if (err.message) {
+        msg = err.message;
+      }
+      setError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -227,51 +254,74 @@ export default function Login() {
       return;
     }
 
-    const formatted = formatPhoneNumber(phone);
     setError("");
     setLoading(true);
 
     try {
-      const res = await fetchApi('/api/phone/signin', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          method: 'sms',
-          phoneNumber: formatted,
-          otp: phoneOtp.trim(),
-          pinId: pinId || undefined
-        })
-      });
-
-      const data = await res.json().catch(() => null);
-
-      if (!res.ok || !data?.success || !data?.customToken) {
-        throw new Error(data?.error || "Invalid OTP code. Please try again.");
+      let userCredential;
+      if (confirmationResult) {
+        userCredential = await confirmationResult.confirm(phoneOtp.trim());
+      } else {
+        // Fallback for dev / sandbox mode verification
+        const formatted = formatPhoneNumber(phone);
+        const res = await fetchApi('/api/phone/signin', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            method: 'sms',
+            phoneNumber: formatted,
+            otp: phoneOtp.trim()
+          })
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data?.success || !data?.customToken) {
+          throw new Error(data?.error || "Invalid OTP code. Please try again.");
+        }
+        userCredential = await signInWithCustomToken(auth, data.customToken);
       }
 
-      const userCredential = await signInWithCustomToken(auth, data.customToken);
+      const idToken = await userCredential.user.getIdToken();
 
+      // Synchronize phone identity to Firestore collections
+      const syncRes = await fetchApi('/api/phone/firebase-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken })
+      }).catch(() => null);
+      const syncData = syncRes ? await syncRes.json().catch(() => null) : null;
+
+      const userData = syncData?.user || {};
       useAuthStore.getState().setUser({
         uid: userCredential.user.uid,
-        email: data.user?.email || null,
-        name: data.user?.name || "Customer",
-        phone: data.user?.phone || formatted,
+        email: userCredential.user.email || userData.email || null,
+        name: userData.name || userCredential.user.displayName || "Customer",
+        phone: userCredential.user.phoneNumber || formatPhoneNumber(phone),
         phoneVerified: true,
         phoneSetupCompleted: true,
         locationSetupCompleted: true,
       }, 'customer');
 
-      toast.success("Welcome back to Olive Pizza! 🍕");
+      toast.success("Welcome to Olive Pizza! 🍕");
       navigate(redirectUrl, { replace: true });
     } catch (err: any) {
-      setError(err.message || "Invalid OTP code. Please try again.");
+      console.error("[Firebase Phone Auth] Verify error:", err);
+      let msg = "Invalid or expired OTP code. Please try again.";
+      if (err.code === 'auth/invalid-verification-code') {
+        msg = "Incorrect OTP code. Please enter the 6-digit code received via SMS.";
+      } else if (err.code === 'auth/code-expired') {
+        msg = "The verification code has expired. Please request a new code.";
+      } else if (err.message) {
+        msg = err.message;
+      }
+      setError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
   };
 
   // ─────────────────────────────────────────────────────────────
-  // 3. TRUECALLER 1-TAP (NATIVE) & WEB QR
+  // 3. TRUECALLER 1-TAP (NATIVE), MOBILE WEB INTENT & WEB QR
   // ─────────────────────────────────────────────────────────────
   const handleTruecallerAuth = async () => {
     setError("");
@@ -279,7 +329,7 @@ export default function Login() {
 
     try {
       if (isTruecallerNative) {
-        // Native 1-Tap bottom sheet
+        // 1. Android Capacitor Native 1-Tap bottom sheet
         const nativeResult = await TruecallerService.verifyNative();
         const res = await fetchApi('/api/phone/signin', {
           method: 'POST',
@@ -313,9 +363,16 @@ export default function Login() {
         toast.success("Verified via Truecaller! Welcome!");
         navigate(redirectUrl, { replace: true });
       } else {
-        // Web / Desktop QR Modal
+        // 2. Web Session (Mobile Browser DeepLink or Desktop QR Modal)
         const session = await TruecallerService.createWebSession();
         setWebSession(session);
+
+        const isMobileBrowser = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || window.innerWidth < 768;
+        if (isMobileBrowser && session.deepLink) {
+          // On mobile browser, auto-trigger deep link intent to launch Truecaller app
+          window.location.href = session.deepLink;
+        }
+
         setQrModalOpen(true);
       }
     } catch (err: any) {
@@ -666,17 +723,14 @@ export default function Login() {
                 disabled={loading}
                 className="w-full py-3.5 bg-[#0087FF] hover:bg-[#0074db] disabled:opacity-50 text-white font-black text-sm rounded-2xl shadow-md shadow-blue-500/20 flex items-center justify-center gap-2 transition-all active:scale-[0.99] cursor-pointer"
               >
-                {isTruecallerNative ? (
-                  <>
-                    <Smartphone className="w-4 h-4" />
-                    <span>Instant 1-Tap Truecaller</span>
-                  </>
-                ) : (
-                  <>
-                    <QrCode className="w-4 h-4" />
-                    <span>Scan Truecaller QR Code</span>
-                  </>
-                )}
+                <Smartphone className="w-4 h-4" />
+                <span>
+                  {isTruecallerNative
+                    ? 'Instant 1-Tap Truecaller'
+                    : typeof window !== 'undefined' && (/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || window.innerWidth < 768)
+                    ? 'Verify with Truecaller App'
+                    : 'Verify with Truecaller (QR / 1-Tap)'}
+                </span>
               </button>
 
               <div className="relative flex items-center justify-center my-3">
@@ -783,6 +837,9 @@ export default function Login() {
                   </div>
                 </form>
               )}
+
+              {/* Invisible reCAPTCHA container for Firebase Phone Auth */}
+              <div id="recaptcha-container"></div>
             </div>
           )}
 

@@ -19,7 +19,7 @@ export interface HealthData {
 }
 
 const STATUS_ENDPOINT = '/api/health/status';
-const DIAGNOSTICS_ENDPOINT = '/api/health/diagnostics';
+const DIAGNOSTICS_ENDPOINT = '/api/health/ping';
 const STREAM_ENDPOINT = '/api/health/stream';
 
 export const useSystemHealth = () => {
@@ -35,7 +35,7 @@ export const useSystemHealth = () => {
   const processData = useCallback((parsed: any) => {
     if (!isMounted.current) return;
     setData(parsed);
-    const services = Object.values(parsed.services) as any[];
+    const services = Object.values(parsed.services || {}) as any[];
     const isDown = services.some(s => s.status === 'down' || s.status === 'error');
     const isDegraded = services.some(s => s.status === 'degraded' || s.status === 'checking');
     if (isDown) setStatus('critical');
@@ -49,8 +49,12 @@ export const useSystemHealth = () => {
       const res = await fetchApi(DIAGNOSTICS_ENDPOINT, { signal: AbortSignal.timeout(15000) });
       if (res.ok) {
         const json = await res.json();
-        if (json.success && isMounted.current) {
-          processData(json);
+        if (isMounted.current) {
+          if (json.services) {
+            processData(json);
+          } else {
+            setStatus('healthy');
+          }
           retryCount.current = 0;
         }
       } else if (isMounted.current) {
