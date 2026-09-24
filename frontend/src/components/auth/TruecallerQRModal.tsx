@@ -8,7 +8,7 @@ interface TruecallerQRModalProps {
   onClose: () => void;
   deepLink: string;
   requestId: string;
-  onSuccess: (status: TruecallerSessionStatusResponse) => void;
+  onSuccess: (status: TruecallerSessionStatusResponse, requestId?: string) => void;
   onError: (errorMsg: string) => void;
   onSwitchToSms?: () => void;
   onRefreshSession?: () => void;
@@ -61,8 +61,9 @@ export default function TruecallerQRModal({
       });
     }, 1000);
 
-    // 2. Status Polling Interval (every 2.2 seconds)
-    pollIntervalRef.current = setInterval(async () => {
+    // 2. Core status poller
+    const checkStatus = async () => {
+      if (!isMounted) return;
       try {
         const res = await TruecallerService.pollWebSession(requestId);
         if (!isMounted) return;
@@ -73,9 +74,9 @@ export default function TruecallerQRModal({
           setStep('VERIFIED');
           setTimeout(() => {
             if (isMounted) {
-              onSuccess(res);
+              onSuccess(res, requestId);
             }
-          }, 800);
+          }, 600);
         } else if (res.status === 'FAILED') {
           if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
           if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
@@ -83,16 +84,31 @@ export default function TruecallerQRModal({
           setErrorMessage(res.error || 'Truecaller verification was declined or failed.');
           onError(res.error || 'Truecaller verification failed.');
         } else {
-          // Progress stages visually as time elapses
-          setStep(prev => (prev === 'WAITING_FOR_SCAN' && timeLeft < 65 ? 'WAITING_FOR_CONSENT' : prev));
+          // Progress stages visually as user consents
+          setStep(prev => (prev === 'WAITING_FOR_SCAN' && timeLeft < 70 ? 'WAITING_FOR_CONSENT' : prev));
         }
       } catch {
         // Keep polling until countdown expires
       }
-    }, 2200);
+    };
+
+    // 3. Status Polling Interval (every 1.5 seconds)
+    pollIntervalRef.current = setInterval(checkStatus, 1500);
+
+    // 4. Instant verification check when returning to browser from Truecaller app
+    const handleVisibilityOrFocus = () => {
+      if (document.visibilityState === 'visible') {
+        checkStatus();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+    window.addEventListener('focus', handleVisibilityOrFocus);
 
     return () => {
       isMounted = false;
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+      window.removeEventListener('focus', handleVisibilityOrFocus);
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
       if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
     };

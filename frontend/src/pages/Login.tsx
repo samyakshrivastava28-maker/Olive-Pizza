@@ -391,10 +391,11 @@ export default function Login() {
     }
   };
 
-  const handleQrVerified = async (qrStatus: TruecallerSessionStatusResponse) => {
+  const handleQrVerified = async (qrStatus: TruecallerSessionStatusResponse, sessionRequestId?: string) => {
     setQrModalOpen(false);
     if (!qrStatus.phone) return;
 
+    const targetRequestId = sessionRequestId || webSession?.requestId;
     setLoading(true);
     try {
       const res = await fetchApi('/api/phone/signin', {
@@ -402,7 +403,7 @@ export default function Login() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           method: 'truecaller',
-          requestId: webSession?.requestId,
+          requestId: targetRequestId,
           phoneNumber: qrStatus.phone
         })
       });
