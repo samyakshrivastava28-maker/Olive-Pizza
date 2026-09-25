@@ -2,6 +2,8 @@ import React, { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ShieldCheck, X, RefreshCw, Smartphone, ExternalLink, CheckCircle2, AlertCircle, MessageSquare, Clock } from 'lucide-react';
 import { TruecallerService, TruecallerSessionStatusResponse } from '../../plugins/Truecaller';
+import { db } from '../../lib/firebase';
+import { doc, onSnapshot } from 'firebase/firestore';
 
 interface TruecallerQRModalProps {
   isOpen: boolean;
@@ -61,7 +63,9 @@ export default function TruecallerQRModal({
       });
     }, 1000);
 
-    // 2. Core status poller
+    let unsubscribeRealtime: (() => void) | null = null;
+
+    // 2. Core status poller (fallback)
     const checkStatus = async () => {
       if (!isMounted) return;
       try {
@@ -71,15 +75,23 @@ export default function TruecallerQRModal({
         if (res.status === 'VERIFIED') {
           if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
           if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+          if (unsubscribeRealtime) {
+            unsubscribeRealtime();
+            unsubscribeRealtime = null;
+          }
           setStep('VERIFIED');
           setTimeout(() => {
             if (isMounted) {
               onSuccess(res, requestId);
             }
-          }, 600);
+          }, 400);
         } else if (res.status === 'FAILED') {
           if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
           if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+          if (unsubscribeRealtime) {
+            unsubscribeRealtime();
+            unsubscribeRealtime = null;
+          }
           setStep('FAILED');
           setErrorMessage(res.error || 'Truecaller verification was declined or failed.');
           onError(res.error || 'Truecaller verification failed.');
@@ -92,10 +104,53 @@ export default function TruecallerQRModal({
       }
     };
 
-    // 3. Status Polling Interval (every 1.5 seconds)
+    // 3. Realtime Firestore Listener (Instant <50ms sync upon mobile tap)
+    try {
+      const sessionDocRef = doc(db, 'truecaller_web_sessions', requestId);
+      unsubscribeRealtime = onSnapshot(sessionDocRef, (snap) => {
+        if (!isMounted || !snap.exists()) return;
+        const data = snap.data();
+        if (data?.status === 'VERIFIED') {
+          if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+          if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+          if (unsubscribeRealtime) {
+            unsubscribeRealtime();
+            unsubscribeRealtime = null;
+          }
+          setStep('VERIFIED');
+          setTimeout(() => {
+            if (isMounted) {
+              onSuccess({
+                success: true,
+                status: 'VERIFIED',
+                phone: data.phone,
+                name: data.name,
+                country: data.country
+              }, requestId);
+            }
+          }, 350);
+        } else if (data?.status === 'FAILED') {
+          if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+          if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+          if (unsubscribeRealtime) {
+            unsubscribeRealtime();
+            unsubscribeRealtime = null;
+          }
+          setStep('FAILED');
+          setErrorMessage(data.error || 'Truecaller verification was declined or failed.');
+          onError(data.error || 'Truecaller verification failed.');
+        }
+      }, (err) => {
+        console.warn('[TruecallerQRModal] Firestore listener warning, falling back to polling:', err);
+      });
+    } catch (e) {
+      console.warn('[TruecallerQRModal] Could not attach realtime listener:', e);
+    }
+
+    // 4. Secondary Status Polling Interval (every 1.5 seconds)
     pollIntervalRef.current = setInterval(checkStatus, 1500);
 
-    // 4. Instant verification check when returning to browser from Truecaller app
+    // 5. Instant verification check when returning to browser from Truecaller app
     const handleVisibilityOrFocus = () => {
       if (document.visibilityState === 'visible') {
         checkStatus();
@@ -111,6 +166,10 @@ export default function TruecallerQRModal({
       window.removeEventListener('focus', handleVisibilityOrFocus);
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
       if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+      if (unsubscribeRealtime) {
+        unsubscribeRealtime();
+        unsubscribeRealtime = null;
+      }
     };
   }, [isOpen, requestId]);
 

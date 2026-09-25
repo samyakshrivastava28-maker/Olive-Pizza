@@ -20,6 +20,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { fetchApi } from "../lib/config";
 import { TruecallerService, TruecallerSessionStatusResponse } from "../plugins/Truecaller";
 import TruecallerQRModal from "../components/auth/TruecallerQRModal";
+import VerificationSuccess3D from "../components/auth/VerificationSuccess3D";
 
 export default function Login() {
   const [searchParams] = useSearchParams();
@@ -50,6 +51,22 @@ export default function Login() {
   // Common UI state
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [verifiedUser, setVerifiedUser] = useState<{
+    identifier: string;
+    method: 'email' | 'phone' | 'truecaller' | 'google';
+  } | null>(null);
+
+  // Clean up reCAPTCHA verifier on unmount
+  useEffect(() => {
+    return () => {
+      if (recaptchaVerifierRef.current) {
+        try {
+          recaptchaVerifierRef.current.clear();
+        } catch {}
+        recaptchaVerifierRef.current = null;
+      }
+    };
+  }, []);
 
   // Check Truecaller native availability
   useEffect(() => {
@@ -109,40 +126,18 @@ export default function Login() {
     }
   };
 
-  const handleEmailCodeChange = (index: number, val: string) => {
-    const digit = val.replace(/\D/g, '').slice(-1);
-    const newCode = [...emailCode];
-    newCode[index] = digit;
-    setEmailCode(newCode);
-
-    if (digit && index < 3) {
-      emailInputRefs.current[index + 1]?.focus();
-    }
-  };
-
-  const handleEmailKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Backspace' && !emailCode[index] && index > 0) {
-      emailInputRefs.current[index - 1]?.focus();
-    }
-  };
-
-  const handleVerifyEmailCode = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const fullCode = emailCode.join('');
-    if (fullCode.length !== 4) {
-      setError("Please enter the complete 4-digit code.");
-      return;
-    }
-
+  const handleVerifyEmailCodeWithDigits = async (fullCode: string) => {
+    if (fullCode.length !== 4) return;
     setError("");
     setLoading(true);
 
     try {
+      const cleanEmail = email.trim().toLowerCase();
       const res = await fetchApi('/api/auth/email/signin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: email.trim().toLowerCase(),
+          email: cleanEmail,
           code: fullCode
         })
       });
@@ -159,7 +154,7 @@ export default function Login() {
       // Hydrate state
       useAuthStore.getState().setUser({
         uid: userCredential.user.uid,
-        email: data.user?.email || email.trim().toLowerCase(),
+        email: data.user?.email || cleanEmail,
         name: data.user?.name || "Customer",
         phone: data.user?.phone || null,
         phoneVerified: Boolean(data.user?.phoneVerified),
@@ -168,13 +163,48 @@ export default function Login() {
         emailVerified: true,
       }, 'customer');
 
-      toast.success("Welcome back to Olive Pizza! 🍕");
-      navigate(redirectUrl, { replace: true });
+      toast.success("Identity verified! Welcome to Olive Pizza! 🍕");
+      setVerifiedUser({
+        identifier: cleanEmail,
+        method: 'email'
+      });
     } catch (err: any) {
       setError(err.message || "Failed to sign in. Please check your code.");
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleEmailCodeChange = (index: number, val: string) => {
+    const digit = val.replace(/\D/g, '').slice(-1);
+    const newCode = [...emailCode];
+    newCode[index] = digit;
+    setEmailCode(newCode);
+
+    if (digit && index < 3) {
+      emailInputRefs.current[index + 1]?.focus();
+    } else if (digit && index === 3) {
+      const full = newCode.join('');
+      if (full.length === 4) {
+        handleVerifyEmailCodeWithDigits(full);
+      }
+    }
+  };
+
+  const handleEmailKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace' && !emailCode[index] && index > 0) {
+      emailInputRefs.current[index - 1]?.focus();
+    }
+  };
+
+  const handleVerifyEmailCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const fullCode = emailCode.join('');
+    if (fullCode.length !== 4) {
+      setError("Please enter the complete 4-digit code.");
+      return;
+    }
+    await handleVerifyEmailCodeWithDigits(fullCode);
   };
 
   // ─────────────────────────────────────────────────────────────
@@ -186,6 +216,30 @@ export default function Login() {
       return `+${digits}`;
     }
     return `+91${digits.slice(-10)}`;
+  };
+
+  const getOrCreateRecaptchaVerifier = () => {
+    if (recaptchaVerifierRef.current) {
+      try {
+        recaptchaVerifierRef.current.clear();
+      } catch {}
+      recaptchaVerifierRef.current = null;
+    }
+    const container = document.getElementById('recaptcha-container');
+    if (container) {
+      container.innerHTML = '';
+    }
+    const verifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+      size: 'invisible',
+      callback: () => {
+        // reCAPTCHA solved
+      },
+      'expired-callback': () => {
+        setError("reCAPTCHA verification expired. Please tap send code again.");
+      }
+    });
+    recaptchaVerifierRef.current = verifier;
+    return verifier;
   };
 
   const handleSendPhoneOtp = async (e?: React.FormEvent) => {
@@ -201,26 +255,7 @@ export default function Login() {
     setLoading(true);
 
     try {
-      // Clear previous verifier instance if any
-      if (recaptchaVerifierRef.current) {
-        try {
-          recaptchaVerifierRef.current.clear();
-        } catch {}
-        recaptchaVerifierRef.current = null;
-      }
-
-      // Initialize invisible reCAPTCHA verifier for Firebase Phone Auth
-      const verifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-        size: 'invisible',
-        callback: () => {
-          // reCAPTCHA solved
-        },
-        'expired-callback': () => {
-          setError("reCAPTCHA verification expired. Please try again.");
-        }
-      });
-      recaptchaVerifierRef.current = verifier;
-
+      const verifier = getOrCreateRecaptchaVerifier();
       const confirmation = await signInWithPhoneNumber(auth, formatted, verifier);
       setConfirmationResult(confirmation);
       setPhoneStep('enter_otp');
@@ -228,6 +263,13 @@ export default function Login() {
       toast.success("Verification code sent via SMS!");
     } catch (err: any) {
       console.error("[Firebase Phone Auth] Send error:", err);
+      if (recaptchaVerifierRef.current) {
+        try { recaptchaVerifierRef.current.clear(); } catch {}
+        recaptchaVerifierRef.current = null;
+      }
+      const container = document.getElementById('recaptcha-container');
+      if (container) container.innerHTML = '';
+
       let msg = "Could not send SMS code. Please try again.";
       if (err.code === 'auth/invalid-phone-number') {
         msg = "The mobile number format is invalid.";
@@ -247,30 +289,26 @@ export default function Login() {
     }
   };
 
-  const handleVerifyPhoneOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!phoneOtp || phoneOtp.length < 4) {
-      setError("Please enter the verification code sent to your phone.");
-      return;
-    }
+  const handleVerifyPhoneOtpWithDigits = async (otpDigits: string) => {
+    if (!otpDigits || otpDigits.length < 6) return;
 
     setError("");
     setLoading(true);
 
     try {
       let userCredential;
+      const formatted = formatPhoneNumber(phone);
       if (confirmationResult) {
-        userCredential = await confirmationResult.confirm(phoneOtp.trim());
+        userCredential = await confirmationResult.confirm(otpDigits.trim());
       } else {
         // Fallback for dev / sandbox mode verification
-        const formatted = formatPhoneNumber(phone);
         const res = await fetchApi('/api/phone/signin', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             method: 'sms',
             phoneNumber: formatted,
-            otp: phoneOtp.trim()
+            otp: otpDigits.trim()
           })
         });
         const data = await res.json().catch(() => null);
@@ -295,14 +333,17 @@ export default function Login() {
         uid: userCredential.user.uid,
         email: userCredential.user.email || userData.email || null,
         name: userData.name || userCredential.user.displayName || "Customer",
-        phone: userCredential.user.phoneNumber || formatPhoneNumber(phone),
+        phone: userCredential.user.phoneNumber || formatted,
         phoneVerified: true,
         phoneSetupCompleted: true,
         locationSetupCompleted: true,
       }, 'customer');
 
-      toast.success("Welcome to Olive Pizza! 🍕");
-      navigate(redirectUrl, { replace: true });
+      toast.success("Phone verified! Welcome to Olive Pizza! 🍕");
+      setVerifiedUser({
+        identifier: userCredential.user.phoneNumber || formatted,
+        method: 'phone'
+      });
     } catch (err: any) {
       console.error("[Firebase Phone Auth] Verify error:", err);
       let msg = "Invalid or expired OTP code. Please try again.";
@@ -318,6 +359,15 @@ export default function Login() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleVerifyPhoneOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!phoneOtp || phoneOtp.length < 6) {
+      setError("Please enter the 6-digit verification code sent to your phone.");
+      return;
+    }
+    await handleVerifyPhoneOtpWithDigits(phoneOtp);
   };
 
   // ─────────────────────────────────────────────────────────────
@@ -361,7 +411,10 @@ export default function Login() {
         }, 'customer');
 
         toast.success("Verified via Truecaller! Welcome!");
-        navigate(redirectUrl, { replace: true });
+        setVerifiedUser({
+          identifier: data.user?.phone || 'Truecaller Verified',
+          method: 'truecaller'
+        });
       } else {
         // 2. Web Session (Mobile Browser DeepLink or Desktop QR Modal)
         const session = await TruecallerService.createWebSession();
@@ -422,7 +475,10 @@ export default function Login() {
           locationSetupCompleted: true,
         }, 'customer');
         toast.success("Verified via Truecaller! Welcome!");
-        navigate(redirectUrl, { replace: true });
+        setVerifiedUser({
+          identifier: qrStatus.phone,
+          method: 'truecaller'
+        });
       } else {
         throw new Error(data?.error || "Failed to finalize session after QR scan.");
       }
@@ -512,7 +568,10 @@ export default function Login() {
       }, 'customer');
 
       toast.success("Welcome to Olive Pizza!");
-      navigate(redirectUrl, { replace: true });
+      setVerifiedUser({
+        identifier: firebaseUser.email || 'Google Account',
+        method: 'google'
+      });
     } catch (err: any) {
       if (err.code !== 'auth/popup-closed-by-user') {
         let msg = "Google sign-in could not be completed.";
@@ -563,8 +622,16 @@ export default function Login() {
 
         {/* Main Card */}
         <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-[0_20px_50px_rgba(249,115,22,0.08)] border border-orange-100/80">
-          {/* Method Switcher Tabs */}
-          <div className="flex bg-orange-50/70 p-1.5 rounded-2xl mb-6 border border-orange-100/60">
+          {verifiedUser ? (
+            <VerificationSuccess3D
+              identifier={verifiedUser.identifier}
+              method={verifiedUser.method}
+              onContinue={() => navigate(redirectUrl, { replace: true })}
+            />
+          ) : (
+            <>
+              {/* Method Switcher Tabs */}
+              <div className="flex bg-orange-50/70 p-1.5 rounded-2xl mb-6 border border-orange-100/60">
             <button
               type="button"
               onClick={() => {
@@ -799,7 +866,13 @@ export default function Login() {
                       inputMode="numeric"
                       required
                       value={phoneOtp}
-                      onChange={(e) => setPhoneOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/\D/g, '').slice(0, 6);
+                        setPhoneOtp(val);
+                        if (val.length === 6) {
+                          handleVerifyPhoneOtpWithDigits(val);
+                        }
+                      }}
                       placeholder="6-digit code"
                       className="w-full px-4 py-3.5 bg-slate-50/70 border border-slate-200 focus:border-red-500 focus:bg-white rounded-2xl text-center text-xl font-black tracking-widest text-slate-900 focus:outline-none transition-all"
                     />
@@ -807,7 +880,7 @@ export default function Login() {
 
                   <button
                     type="submit"
-                    disabled={loading || phoneOtp.length < 4}
+                    disabled={loading || phoneOtp.length < 6}
                     className="w-full py-3.5 bg-gradient-to-r from-red-600 via-rose-600 to-orange-500 hover:from-red-700 hover:to-orange-600 disabled:opacity-50 text-white font-black text-sm rounded-2xl shadow-md shadow-red-500/25 flex items-center justify-center gap-2 transition-all active:scale-[0.99] cursor-pointer"
                   >
                     {loading ? (
@@ -838,9 +911,6 @@ export default function Login() {
                   </div>
                 </form>
               )}
-
-              {/* Invisible reCAPTCHA container for Firebase Phone Auth */}
-              <div id="recaptcha-container"></div>
             </div>
           )}
 
@@ -880,6 +950,8 @@ export default function Login() {
             </svg>
             <span>Continue with Google</span>
           </button>
+            </>
+          )}
         </div>
 
         {/* Footer Navigation */}
@@ -895,6 +967,9 @@ export default function Login() {
           </p>
         </div>
       </motion.div>
+
+      {/* Invisible reCAPTCHA container for Firebase Phone Auth - permanently mounted */}
+      <div id="recaptcha-container" className="invisible fixed bottom-0 left-0 pointer-events-none" />
 
       {/* Truecaller Web QR Modal */}
       {webSession && (

@@ -6,6 +6,7 @@ import { useNavigate } from "react-router";
 import toast from "react-hot-toast";
 import { fetchApi } from "../../lib/config";
 import { Mail, CheckCircle2, RefreshCw, KeyRound } from "lucide-react";
+import VerificationSuccess3D from "../../components/auth/VerificationSuccess3D";
 
 export default function VerifyEmail() {
   const { user, setUser } = useAuthStore();
@@ -16,14 +17,15 @@ export default function VerifyEmail() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [cooldown, setCooldown] = useState(0);
+  const [isVerified, setIsVerified] = useState(false);
 
   const currentUserEmail = auth.currentUser?.email || user?.email;
 
   useEffect(() => {
-    if (user?.emailVerified) {
+    if (user?.emailVerified && !isVerified) {
       navigate("/onboarding/phone");
     }
-  }, [user, navigate]);
+  }, [user, navigate, isVerified]);
 
   useEffect(() => {
     if (cooldown > 0) {
@@ -60,12 +62,8 @@ export default function VerifyEmail() {
     }
   };
 
-  const handleVerifyCode = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!currentUserEmail || code.length !== 4) {
-      setError("Please enter the 4-digit code.");
-      return;
-    }
+  const handleVerifyWithDigits = async (codeToVerify: string) => {
+    if (!currentUserEmail || codeToVerify.length !== 4) return;
 
     setLoading(true);
     setError("");
@@ -74,14 +72,15 @@ export default function VerifyEmail() {
       const res = await fetchApi("/api/auth/email/verify-code", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: currentUserEmail, code: code.trim() }),
+        body: JSON.stringify({ email: currentUserEmail, code: codeToVerify.trim() }),
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
         throw new Error(data.message || "Invalid verification code");
       }
 
-      // Backend verify-code endpoint already authoritatively updates emailVerified in Firestore
+      // Authoritatively reload current user in Firebase Auth
+      await auth.currentUser?.reload().catch(() => {});
 
       setUser({
         ...user,
@@ -89,13 +88,36 @@ export default function VerifyEmail() {
       }, 'customer');
 
       toast.success("Email verified successfully!");
-      navigate("/onboarding/phone");
+      setIsVerified(true);
     } catch (err: any) {
       setError(err.message || "Verification failed. Please check the code.");
     } finally {
       setLoading(false);
     }
   };
+
+  const handleVerifyCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentUserEmail || code.length !== 4) {
+      setError("Please enter the 4-digit code.");
+      return;
+    }
+    await handleVerifyWithDigits(code);
+  };
+
+  if (isVerified) {
+    return (
+      <div className="max-w-md mx-auto my-6 sm:my-12 p-5 sm:p-8 glass-card text-center w-full">
+        <VerificationSuccess3D
+          identifier={currentUserEmail || ''}
+          method="email"
+          title="Email Verified!"
+          subtitle="Your email address has been successfully verified."
+          onContinue={() => navigate("/onboarding/phone")}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-md mx-auto my-6 sm:my-12 p-5 sm:p-8 glass-card text-center w-full">
@@ -147,7 +169,13 @@ export default function VerifyEmail() {
               placeholder="0000"
               autoFocus
               value={code}
-              onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 4))}
+              onChange={(e) => {
+                const val = e.target.value.replace(/\D/g, '').slice(0, 4);
+                setCode(val);
+                if (val.length === 4) {
+                  handleVerifyWithDigits(val);
+                }
+              }}
               className="w-full min-h-[52px] text-center tracking-[0.8em] text-3xl font-mono font-bold p-3.5 border border-slate-200 dark:border-slate-700 rounded-xl bg-white/50 dark:bg-slate-900/50 focus:outline-none focus:ring-2 focus:ring-primary-500"
             />
           </div>
