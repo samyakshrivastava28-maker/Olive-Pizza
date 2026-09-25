@@ -1,511 +1,698 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
-  signInWithPopup,
-  signInWithCredential,
-  GoogleAuthProvider,
+  RecaptchaVerifier,
+  signInWithPhoneNumber,
+  ConfirmationResult,
   signInWithCustomToken,
+  updateProfile,
 } from "firebase/auth";
-import { Capacitor } from '@capacitor/core';
 import { auth, db } from "../lib/firebase";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { doc, setDoc } from "firebase/firestore";
 import { useNavigate, useSearchParams, Link } from "react-router";
 import toast from "react-hot-toast";
 import { useAuthStore } from "../lib/store";
-import PizzaLoader from "../components/ui/PizzaLoader";
-import { Mail, User, Phone, CheckCircle2, ArrowRight, RefreshCw, ArrowLeft } from "lucide-react";
-import { motion } from "framer-motion";
+import {
+  User,
+  Phone,
+  ShieldCheck,
+  MessageSquare,
+  ArrowRight,
+  ArrowLeft,
+  RefreshCw,
+  AlertCircle,
+  Sparkles,
+  Smartphone,
+  Edit2,
+  CheckCircle2,
+} from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { TruecallerService, TruecallerSessionStatusResponse } from "../plugins/Truecaller";
+import TruecallerQRModal from "../components/auth/TruecallerQRModal";
 import { fetchApi } from "../lib/config";
 
 export default function Register() {
   const [searchParams] = useSearchParams();
-  const redirectUrl = searchParams.get('redirect') || '/';
   const navigate = useNavigate();
+  const { setUser, user: existingUser } = useAuthStore();
 
-  // Form inputs
+  // Steps: 'step1_input' -> 'step2_verify'
+  const [currentStep, setCurrentStep] = useState<"step1_input" | "step2_verify">("step1_input");
+
+  // Step 1: Name & Phone Form State
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
 
-  // 4-Digit Email OTP verification step
-  const [step, setStep] = useState<'form' | 'verify_code'>('form');
-  const [emailCode, setEmailCode] = useState(["", "", "", ""]);
+  // Step 2: Verification Method & State
+  const [verifyMode, setVerifyMode] = useState<"choose" | "sms_otp">("choose");
+  const [otpDigits, setOtpDigits] = useState(["", "", "", "", "", ""]);
   const [cooldown, setCooldown] = useState(0);
-  const codeInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
+
+  // Truecaller Web QR Modal State
+  const [qrModalOpen, setQrModalOpen] = useState(false);
+  const [webSession, setWebSession] = useState<{ deepLink: string; requestId: string } | null>(null);
 
   // Status
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  // Refs
+  const recaptchaVerifierRef = useRef<RecaptchaVerifier | null>(null);
+  const otpInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  // Cleanup recaptcha on unmount
+  useEffect(() => {
+    return () => {
+      if (recaptchaVerifierRef.current) {
+        try {
+          recaptchaVerifierRef.current.clear();
+        } catch {}
+        recaptchaVerifierRef.current = null;
+      }
+    };
+  }, []);
+
   // Cooldown timer
   useEffect(() => {
     if (cooldown > 0) {
-      const t = setTimeout(() => setCooldown(cooldown - 1), 1000);
+      const t = setTimeout(() => setCooldown((c) => c - 1), 1000);
       return () => clearTimeout(t);
     }
   }, [cooldown]);
 
-  // Step 1: Submit Details & Send Verification Code
-  const handleInitiateSignup = async (e: React.FormEvent) => {
+  const cleanPhoneDigits = (raw: string) => raw.replace(/\D/g, "");
+  const formatE164 = (raw: string) => {
+    const digits = cleanPhoneDigits(raw);
+    if (digits.length === 10) return `+91${digits}`;
+    if (digits.length === 12 && digits.startsWith("91")) return `+${digits}`;
+    return raw.startsWith("+") ? raw : `+91${digits}`;
+  };
+
+  // ─── STEP 1: PROCEED TO VERIFY ─────────────────────────────────────────────
+  const handleProceedToVerify = (e: React.FormEvent) => {
     e.preventDefault();
     const cleanName = name.trim();
-    const cleanEmail = email.trim().toLowerCase();
-    const cleanPhone = phone.replace(/\D/g, '');
+    const digits = cleanPhoneDigits(phone);
 
     if (!cleanName) {
-      setError("Please enter your name.");
+      setError("Please enter your full name.");
       return;
     }
-    if (!cleanEmail || !cleanEmail.includes("@")) {
-      setError("Please enter a valid email address.");
-      return;
-    }
-    if (cleanPhone.length < 10) {
-      setError("Please enter a valid 10-digit phone number.");
+    if (digits.length !== 10) {
+      setError("Please enter a valid 10-digit mobile number.");
       return;
     }
 
     setError("");
-    setLoading(true);
+    setCurrentStep("step2_verify");
+  };
 
+  // Sync user profile helper
+  const syncAuthenticatedCustomer = async (uid: string, formattedPhone: string, method: string) => {
+    const customerName = name.trim() || "Customer";
     try {
-      const res = await fetchApi('/api/auth/email/send-code', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: cleanEmail })
-      });
+      const userRef = doc(db, "users", uid);
+      await setDoc(
+        userRef,
+        {
+          name: customerName,
+          displayName: customerName,
+          phone: formattedPhone,
+          phoneVerified: true,
+          phoneSetupCompleted: true,
+          verificationMethod: method,
+          role: "customer",
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
 
-      const data = await res.json().catch(() => null);
-
-      if (!res.ok || !data?.success) {
-        throw new Error(data?.message || "Failed to send verification code. Please try again.");
-      }
-
-      setStep('verify_code');
-      setCooldown(60);
-      toast.success("4-digit code sent to your email!");
-      setTimeout(() => codeInputRefs.current[0]?.focus(), 100);
-    } catch (err: any) {
-      setError(err.message || "Could not send verification code.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleCodeChange = (index: number, val: string) => {
-    const digit = val.replace(/\D/g, '').slice(-1);
-    const newCode = [...emailCode];
-    newCode[index] = digit;
-    setEmailCode(newCode);
-
-    if (digit && index < 3) {
-      codeInputRefs.current[index + 1]?.focus();
-    }
-  };
-
-  const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Backspace' && !emailCode[index] && index > 0) {
-      codeInputRefs.current[index - 1]?.focus();
-    }
-  };
-
-  // Step 2: Verify Code & Create Customer Account
-  const handleCompleteSignup = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const fullCode = emailCode.join('');
-    if (fullCode.length !== 4) {
-      setError("Please enter the complete 4-digit code.");
-      return;
+      // Also sync customer identities collection
+      const identityRef = doc(db, "customer_identities", formattedPhone);
+      await setDoc(
+        identityRef,
+        {
+          primaryUid: uid,
+          name: customerName,
+          verifiedAt: Date.now(),
+        },
+        { merge: true }
+      );
+    } catch (firestoreErr) {
+      console.warn("[Register] Firestore sync notice:", firestoreErr);
     }
 
-    const cleanEmail = email.trim().toLowerCase();
-    const cleanPhone = phone.replace(/\D/g, '');
-    const formattedPhone = cleanPhone.startsWith('91') && cleanPhone.length === 12
-      ? `+${cleanPhone}`
-      : `+91${cleanPhone.slice(-10)}`;
-
-    setError("");
-    setLoading(true);
-
-    try {
-      // Call backend email signin with name
-      const res = await fetchApi('/api/auth/email/signin', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: cleanEmail,
-          code: fullCode,
-          name: name.trim()
-        })
-      });
-
-      const data = await res.json().catch(() => null);
-
-      if (!res.ok || !data?.success || !data?.customToken) {
-        throw new Error(data?.message || "Invalid or expired verification code.");
-      }
-
-      // Establish session with customToken
-      const userCredential = await signInWithCustomToken(auth, data.customToken);
-
-      // Save phone number to user record
-      await setDoc(doc(db, "users", userCredential.user.uid), {
+    // Update frontend auth store
+    setUser(
+      {
+        uid,
+        name: customerName,
         phone: formattedPhone,
-        name: name.trim(),
-        updatedAt: new Date().toISOString()
-      }, { merge: true });
-
-      useAuthStore.getState().setUser({
-        uid: userCredential.user.uid,
-        email: cleanEmail,
-        name: name.trim(),
-        phone: formattedPhone,
-        phoneVerified: false,
+        phoneVerified: true,
         phoneSetupCompleted: true,
-        locationSetupCompleted: true,
-        emailVerified: true,
-      }, 'customer');
+        locationSetupCompleted: false,
+        onboardingComplete: false,
+      },
+      "customer"
+    );
 
-      toast.success("Account created successfully! Welcome to Olive Pizza! 🍕");
-      navigate(redirectUrl, { replace: true });
+    // Proceed to Step 3: Location
+    navigate("/onboarding/location", { replace: true });
+  };
+
+  // ─── STEP 2 - CHOICE A: TRUECALLER 1-TAP / QR ─────────────────────────────
+  const handleTruecallerVerification = async () => {
+    const formatted = formatE164(phone);
+    setLoading(true);
+    setError("");
+
+    try {
+      if (TruecallerService.isNative()) {
+        const isSupported = await TruecallerService.isNativeSupported();
+        if (!isSupported) {
+          toast("Truecaller is not installed on this device. Switching to SMS OTP verification.", { icon: "⚡" });
+          setVerifyMode("sms_otp");
+          await handleSendSmsOtp();
+          return;
+        }
+
+        const nativeResult = await TruecallerService.verifyNative();
+        const verifyRes = await TruecallerService.verifyOnBackend(nativeResult, undefined, formatted);
+
+        if (verifyRes.success) {
+          toast.success("Phone verified securely with Truecaller! ✓");
+          let uid = auth.currentUser?.uid;
+          if (verifyRes.customToken) {
+            const cred = await signInWithCustomToken(auth, verifyRes.customToken);
+            uid = cred.user.uid;
+          }
+          await syncAuthenticatedCustomer(uid || `phone_${cleanPhoneDigits(phone)}`, formatted, "truecaller");
+        } else {
+          throw new Error(verifyRes.error || "Truecaller verification was not approved.");
+        }
+      } else {
+        // Web flow: create session
+        const sessionRes = await TruecallerService.createWebSession(formatted);
+        const isMobileBrowser = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+        setWebSession({ deepLink: sessionRes.deepLink, requestId: sessionRes.requestId });
+        setQrModalOpen(true);
+
+        if (isMobileBrowser) {
+          window.location.href = sessionRes.deepLink;
+        }
+      }
     } catch (err: any) {
-      setError(err.message || "Failed to complete account registration.");
+      console.error("[Register] Truecaller error:", err);
+      let userFriendlyMsg = "Truecaller is temporarily unavailable. Please verify via SMS.";
+      if (err.code === "TRUECALLER_CONFIG_MISSING") {
+        userFriendlyMsg = "Truecaller verification is not configured for this environment. Please verify via SMS.";
+      } else if (err.code === "RATE_LIMIT_EXCEEDED") {
+        userFriendlyMsg = "Too many verification attempts. Please verify via SMS.";
+      } else if (err.message && !err.message.includes("object Object")) {
+        userFriendlyMsg = err.message;
+      }
+      setError(userFriendlyMsg);
+      toast.error(userFriendlyMsg);
+      // Automatically show SMS option
+      setVerifyMode("sms_otp");
     } finally {
       setLoading(false);
     }
   };
 
-  // Social Google Sign-in (Cross-platform Web & Capacitor Native)
-  const handleGoogleSignIn = async () => {
+  const handleQRSuccess = async (result: TruecallerSessionStatusResponse) => {
+    setQrModalOpen(false);
+    toast.success("Phone verified securely with Truecaller! ✓");
+    const formatted = formatE164(phone);
+
+    let uid = auth.currentUser?.uid;
+    if (result.customToken) {
+      try {
+        const cred = await signInWithCustomToken(auth, result.customToken);
+        uid = cred.user.uid;
+      } catch (tokErr) {
+        console.warn("[Register] Error signing in with customToken:", tokErr);
+      }
+    }
+    await syncAuthenticatedCustomer(uid || `phone_${cleanPhoneDigits(phone)}`, formatted, "truecaller");
+  };
+
+  // ─── STEP 2 - CHOICE B: FIREBASE SMS OTP ───────────────────────────────────
+  const getOrCreateRecaptchaVerifier = () => {
+    if (recaptchaVerifierRef.current) {
+      try {
+        recaptchaVerifierRef.current.clear();
+      } catch {}
+      recaptchaVerifierRef.current = null;
+    }
+    const container = document.getElementById("recaptcha-container");
+    if (container) {
+      container.innerHTML = "";
+    }
+    const verifier = new RecaptchaVerifier(auth, "recaptcha-container", {
+      size: "invisible",
+      callback: () => {},
+      "expired-callback": () => {
+        setError("reCAPTCHA verification expired. Please tap send code again.");
+      },
+    });
+    recaptchaVerifierRef.current = verifier;
+    return verifier;
+  };
+
+  const handleSendSmsOtp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const formatted = formatE164(phone);
     setError("");
     setLoading(true);
+
     try {
-      let firebaseUser: any = null;
-
-      if (Capacitor.isNativePlatform()) {
-        const { FirebaseAuthentication } = await import('@capacitor-firebase/authentication');
-        const nativeResult = await FirebaseAuthentication.signInWithGoogle();
-        const idToken = nativeResult.credential?.idToken;
-        if (!idToken) {
-          throw new Error('Google Sign-In failed on mobile device.');
-        }
-        const credential = GoogleAuthProvider.credential(idToken);
-        const cred = await signInWithCredential(auth, credential);
-        firebaseUser = cred.user;
-      } else {
-        const provider = new GoogleAuthProvider();
-        provider.setCustomParameters({ prompt: 'select_account' });
-        const result = await signInWithPopup(auth, provider);
-        firebaseUser = result.user;
-      }
-
-      if (!firebaseUser) {
-        throw new Error('Could not complete Google authentication.');
-      }
-
-      // Canonical Backend Authorization & User Profile Resolution
-      let serverUser: any = null;
-      try {
-        const token = await firebaseUser.getIdToken();
-        const authRes = await fetchApi('/api/auth/authorize-app', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({ targetApp: 'CUSTOMER' })
-        });
-        if (authRes.ok) {
-          const authData = await authRes.json();
-          if (authData.authorized) {
-            serverUser = authData.user;
-          }
-        }
-      } catch (authErr) {
-        console.warn('[Register] Backend authorize-app notice:', authErr);
-      }
-
-      // Non-blocking client record sync for customer fields
-      try {
-        const userRef = doc(db, "users", firebaseUser.uid);
-        const userDoc = await getDoc(userRef);
-        if (!userDoc.exists()) {
-          await setDoc(userRef, {
-            email: firebaseUser.email?.toLowerCase(),
-            name: serverUser?.name || firebaseUser.displayName || "Customer",
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          }, { merge: true });
-        }
-      } catch (docErr) {
-        console.warn('[Register] Client Firestore user doc sync notice:', docErr);
-      }
-
-      useAuthStore.getState().setUser({
-        uid: firebaseUser.uid,
-        email: firebaseUser.email,
-        name: serverUser?.name || firebaseUser.displayName || "Customer",
-        photoURL: firebaseUser.photoURL,
-        emailVerified: true,
-        phoneVerified: !!serverUser?.phone,
-      }, 'customer');
-
-      toast.success("Welcome to Olive Pizza!");
-      navigate(redirectUrl, { replace: true });
+      const verifier = getOrCreateRecaptchaVerifier();
+      const confirmation = await signInWithPhoneNumber(auth, formatted, verifier);
+      setConfirmationResult(confirmation);
+      setVerifyMode("sms_otp");
+      setCooldown(60);
+      toast.success("6-digit SMS verification code sent! 📩");
+      setTimeout(() => otpInputRefs.current[0]?.focus(), 150);
     } catch (err: any) {
-      if (err.code !== 'auth/popup-closed-by-user') {
-        let msg = "Google sign-in could not be completed.";
-        if (err.code === 'auth/popup-blocked') {
-          msg = "Popup was blocked by your browser. Please allow popups for Olive Pizza or try with Email/Phone.";
-        } else if (err.code === 'auth/unauthorized-domain') {
-          msg = "This domain is not authorized for Google sign-in in Firebase Console.";
-        } else if (err.message) {
-          msg = err.message;
-        }
-        setError(msg);
-        toast.error(msg);
+      console.error("[Register] Firebase Phone Auth send error:", err);
+      if (recaptchaVerifierRef.current) {
+        try {
+          recaptchaVerifierRef.current.clear();
+        } catch {}
+        recaptchaVerifierRef.current = null;
       }
+
+      let msg = "Could not send SMS code. Please try again.";
+      if (err.code === "auth/invalid-phone-number") {
+        msg = "The mobile number format is invalid.";
+      } else if (err.code === "auth/quota-exceeded") {
+        msg = "SMS quota exceeded. Please try again later or verify with Truecaller.";
+      } else if (err.code === "auth/captcha-check-failed") {
+        msg = "reCAPTCHA verification failed. Please try again.";
+      } else if (err.code === "auth/too-many-requests") {
+        msg = "Too many attempts. Please wait a few minutes before trying again.";
+      } else if (err.message) {
+        msg = err.message;
+      }
+      setError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleVerifySmsOtp = async (digits: string[]) => {
+    const code = digits.join("");
+    if (code.length !== 6) return;
+
+    setLoading(true);
+    setError("");
+
+    try {
+      const formatted = formatE164(phone);
+      let userCredential;
+
+      if (confirmationResult) {
+        userCredential = await confirmationResult.confirm(code);
+      } else {
+        // Fallback backend route
+        const res = await fetchApi("/api/phone/verify-otp", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            phoneNumber: formatted,
+            otp: code,
+          }),
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data?.success) {
+          throw new Error(data?.error || "Invalid OTP code.");
+        }
+        userCredential = { user: auth.currentUser || { uid: `phone_${cleanPhoneDigits(phone)}` } };
+      }
+
+      // Update Firebase Auth user display name if applicable
+      if (auth.currentUser && name.trim()) {
+        await updateProfile(auth.currentUser, { displayName: name.trim() }).catch(() => {});
+      }
+
+      toast.success("Phone verified successfully! ✓");
+      await syncAuthenticatedCustomer(
+        userCredential.user.uid,
+        userCredential.user.phoneNumber || formatted,
+        "firebase_sms"
+      );
+    } catch (err: any) {
+      console.error("[Register] Verify OTP error:", err);
+      let msg = "Invalid or expired OTP code. Please check and try again.";
+      if (err.code === "auth/invalid-verification-code") {
+        msg = "Incorrect OTP code. Please verify the 6 digits.";
+      } else if (err.code === "auth/code-expired") {
+        msg = "This verification code has expired. Please request a new one.";
+      } else if (err.message) {
+        msg = err.message;
+      }
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleOtpDigitChange = (index: number, val: string) => {
+    const digit = val.replace(/\D/g, "").slice(-1);
+    const newDigits = [...otpDigits];
+    newDigits[index] = digit;
+    setOtpDigits(newDigits);
+
+    if (digit && index < 5) {
+      otpInputRefs.current[index + 1]?.focus();
+    }
+
+    if (newDigits.every((d) => d.length === 1)) {
+      handleVerifySmsOtp(newDigits);
+    }
+  };
+
+  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Backspace" && !otpDigits[index] && index > 0) {
+      otpInputRefs.current[index - 1]?.focus();
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#FAF7F2] text-slate-900 flex flex-col justify-center items-center px-4 py-8 relative selection:bg-rose-500 selection:text-white">
-      {/* Background Ambience */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute -top-32 -right-32 w-96 h-96 bg-orange-200/40 rounded-full blur-3xl" />
-        <div className="absolute top-1/2 -left-32 w-96 h-96 bg-red-200/30 rounded-full blur-3xl" />
-        <div className="absolute -bottom-32 right-1/3 w-80 h-80 bg-amber-100/50 rounded-full blur-3xl" />
-      </div>
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8">
+      {/* Permanent, invisible reCAPTCHA container */}
+      <div id="recaptcha-container" className="fixed bottom-0 right-0 z-0 pointer-events-none"></div>
 
-      <motion.div
-        initial={{ opacity: 0, y: 15 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35, ease: "easeOut" }}
-        className="w-full max-w-md relative z-10"
-      >
-        {/* Brand Header */}
-        <div className="text-center mb-6">
-          <Link to="/" className="inline-flex items-center gap-2 group mb-3">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-red-600 via-rose-500 to-orange-500 flex items-center justify-center shadow-lg shadow-red-500/20 group-hover:scale-105 transition-transform">
-              <span className="text-2xl">🍕</span>
-            </div>
-          </Link>
-          <h1 className="text-2xl font-black tracking-tight text-slate-900">
-            Create Your Account
-          </h1>
-          <p className="text-sm text-slate-500 mt-1 font-medium">
-            Join Olive Pizza for hot deals, exclusive rewards & rapid delivery
-          </p>
+      <div className="sm:mx-auto sm:w-full sm:max-w-md">
+        <div className="flex justify-center mb-3">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-orange-100 dark:bg-orange-950/60 border border-orange-300 dark:border-orange-800 text-orange-700 dark:text-orange-400 text-xs font-bold uppercase tracking-wider">
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>
+              {currentStep === "step1_input"
+                ? "Step 1 of 4 • Account Info"
+                : "Step 2 of 4 • Verify Phone"}
+            </span>
+          </div>
         </div>
 
-        {/* Main Card */}
-        <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-[0_20px_50px_rgba(249,115,22,0.08)] border border-orange-100/80">
-          {/* Error Banner */}
+        <h1 className="text-2xl sm:text-3xl font-extrabold text-center text-slate-900 dark:text-white tracking-tight">
+          {currentStep === "step1_input" ? "Create Your Account" : "Verify Your Phone"}
+        </h1>
+        <p className="mt-2 text-center text-xs sm:text-sm text-slate-600 dark:text-slate-400 max-w-sm mx-auto">
+          {currentStep === "step1_input"
+            ? "Enter your name and mobile number to start ordering hot, delicious pizza."
+            : `We need to verify +91 ${cleanPhoneDigits(phone)} to secure your orders.`}
+        </p>
+      </div>
+
+      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
+        <div className="bg-white dark:bg-slate-900 py-8 px-5 sm:px-8 shadow-xl rounded-3xl border border-slate-200 dark:border-slate-800 space-y-6">
+          
           {error && (
             <motion.div
               initial={{ opacity: 0, y: -8 }}
               animate={{ opacity: 1, y: 0 }}
-              className="p-3.5 mb-5 rounded-2xl bg-red-50 border border-red-200/80 text-red-700 text-xs font-semibold flex items-center gap-2"
+              className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-xl text-xs text-red-600 dark:text-red-400 font-medium flex items-center gap-2"
             >
-              <span className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0" />
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />
               <span>{error}</span>
             </motion.div>
           )}
 
-          {step === 'form' ? (
-            <form onSubmit={handleInitiateSignup} className="space-y-4">
-              {/* Full Name */}
+          {/* ══════════════════════════════════════════════════════════════════
+              STEP 1: NAME + PHONE NUMBER FORM
+              ══════════════════════════════════════════════════════════════════ */}
+          {currentStep === "step1_input" && (
+            <form onSubmit={handleProceedToVerify} className="space-y-5">
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-                  Full Name
+                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
+                  Full Name *
                 </label>
                 <div className="relative">
-                  <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <input
                     type="text"
                     required
+                    placeholder="e.g. Samyak Shrivastava"
                     value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="John Doe"
-                    className="w-full pl-11 pr-4 py-3.5 bg-slate-50/70 border border-slate-200 focus:border-red-500 focus:bg-white rounded-2xl text-slate-900 text-sm font-medium focus:outline-none transition-all"
+                    onChange={(e) => {
+                      setName(e.target.value);
+                      setError("");
+                    }}
+                    className="w-full pl-10 pr-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-medium text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
                   />
                 </div>
               </div>
 
-              {/* Email Address */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-                  Email Address
-                </label>
-                <div className="relative">
-                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="you@example.com"
-                    className="w-full pl-11 pr-4 py-3.5 bg-slate-50/70 border border-slate-200 focus:border-red-500 focus:bg-white rounded-2xl text-slate-900 text-sm font-medium focus:outline-none transition-all"
-                  />
-                </div>
-              </div>
-
-              {/* Phone Number */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-                  Mobile Number
+                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
+                  Mobile Number *
                 </label>
                 <div className="relative flex items-center">
-                  <span className="absolute left-4 text-sm font-bold text-slate-500">
+                  <span className="absolute left-3.5 font-bold text-sm text-slate-500 dark:text-slate-400">
                     +91
                   </span>
                   <input
                     type="tel"
                     required
                     maxLength={10}
+                    placeholder="9876543210"
                     value={phone}
-                    onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                    placeholder="98765 43210"
-                    className="w-full pl-14 pr-4 py-3.5 bg-slate-50/70 border border-slate-200 focus:border-red-500 focus:bg-white rounded-2xl text-slate-900 text-sm font-medium focus:outline-none transition-all"
+                    onChange={(e) => {
+                      setPhone(e.target.value.replace(/\D/g, ""));
+                      setError("");
+                    }}
+                    className="w-full pl-14 pr-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-bold tracking-wider text-base focus:outline-none focus:ring-2 focus:ring-orange-500"
                   />
                 </div>
               </div>
 
-              {/* Submit CTA */}
-              <button
-                type="submit"
-                disabled={loading || !name.trim() || !email.trim() || phone.replace(/\D/g, '').length < 10}
-                className="w-full py-3.5 bg-gradient-to-r from-red-600 via-rose-600 to-orange-500 hover:from-red-700 hover:to-orange-600 disabled:opacity-50 text-white font-black text-sm rounded-2xl shadow-md shadow-red-500/25 flex items-center justify-center gap-2 transition-all active:scale-[0.99] cursor-pointer mt-2"
-              >
-                {loading ? (
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                ) : (
-                  <>
-                    <span>Continue with Verification</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </>
-                )}
-              </button>
-            </form>
-          ) : (
-            <form onSubmit={handleCompleteSignup} className="space-y-5">
-              <div className="text-center">
-                <p className="text-xs text-slate-500">
-                  Enter the 4-digit code sent to{" "}
-                  <span className="font-bold text-slate-800">{email}</span>
-                </p>
+              <div className="pt-2">
                 <button
-                  type="button"
-                  onClick={() => setStep('form')}
-                  className="text-xs text-red-600 font-bold hover:underline mt-1 inline-flex items-center gap-1 cursor-pointer"
+                  type="submit"
+                  disabled={!name.trim() || cleanPhoneDigits(phone).length !== 10}
+                  className="w-full py-4 px-6 rounded-2xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-base shadow-lg shadow-orange-600/25 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                 >
-                  <ArrowLeft className="w-3 h-3" /> Edit details
+                  <span>Verify</span>
+                  <ArrowRight className="w-5 h-5" />
                 </button>
               </div>
 
-              {/* 4-Digit Input Boxes */}
-              <div className="flex justify-center gap-3">
-                {emailCode.map((digit, index) => (
-                  <input
-                    key={index}
-                    ref={(el) => (codeInputRefs.current[index] = el)}
-                    type="text"
-                    inputMode="numeric"
-                    maxLength={1}
-                    value={digit}
-                    onChange={(e) => handleCodeChange(index, e.target.value)}
-                    onKeyDown={(e) => handleKeyDown(index, e)}
-                    className="w-14 h-16 text-center text-2xl font-black bg-slate-50 border-2 border-slate-200 focus:border-red-500 focus:bg-white rounded-2xl text-slate-900 focus:outline-none transition-all"
-                  />
-                ))}
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading || emailCode.join('').length !== 4}
-                className="w-full py-3.5 bg-gradient-to-r from-red-600 via-rose-600 to-orange-500 hover:from-red-700 hover:to-orange-600 disabled:opacity-50 text-white font-black text-sm rounded-2xl shadow-md shadow-red-500/25 flex items-center justify-center gap-2 transition-all active:scale-[0.99] cursor-pointer"
-              >
-                {loading ? (
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                ) : (
-                  <>
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span>Verify & Create Account</span>
-                  </>
-                )}
-              </button>
-
-              <div className="text-center">
-                {cooldown > 0 ? (
-                  <p className="text-xs text-slate-400 font-medium">
-                    Resend code in <span className="font-bold text-slate-600">{cooldown}s</span>
-                  </p>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={(e) => handleInitiateSignup(e)}
-                    disabled={loading}
-                    className="text-xs text-red-600 font-bold hover:underline cursor-pointer"
+              <div className="text-center pt-2">
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Already have an account?{" "}
+                  <Link
+                    to="/login"
+                    className="font-bold text-orange-600 dark:text-orange-400 hover:underline"
                   >
-                    Resend 4-digit code
-                  </button>
-                )}
+                    Log In
+                  </Link>
+                </p>
               </div>
             </form>
           )}
 
-          {/* Divider */}
-          <div className="relative flex items-center justify-center my-6">
-            <div className="border-t border-slate-200 w-full" />
-            <span className="bg-white px-3 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-              or
-            </span>
-            <div className="border-t border-slate-200 w-full" />
-          </div>
+          {/* ══════════════════════════════════════════════════════════════════
+              STEP 2: VERIFY PHONE (CHOICE A: TRUECALLER | CHOICE B: SMS)
+              ══════════════════════════════════════════════════════════════════ */}
+          {currentStep === "step2_verify" && (
+            <div className="space-y-6">
+              {/* Phone preview card with change button */}
+              <div className="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-100 dark:border-slate-750 flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-orange-100 dark:bg-orange-950/60 text-orange-600 flex items-center justify-center font-bold">
+                    <Smartphone className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block">
+                      Verifying Number
+                    </span>
+                    <span className="text-sm font-extrabold text-slate-900 dark:text-white">
+                      +91 {cleanPhoneDigits(phone)}
+                    </span>
+                  </div>
+                </div>
 
-          {/* Social Google Sign-in */}
-          <button
-            type="button"
-            onClick={handleGoogleSignIn}
-            disabled={loading}
-            className="w-full py-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 font-bold text-xs sm:text-sm rounded-2xl flex items-center justify-center gap-2.5 transition-all cursor-pointer"
-          >
-            <svg className="w-4 h-4" viewBox="0 0 24 24">
-              <path
-                fill="#4285F4"
-                d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-              />
-              <path
-                fill="#34A853"
-                d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-              />
-              <path
-                fill="#FBBC05"
-                d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
-              />
-              <path
-                fill="#EA4335"
-                d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
-              />
-            </svg>
-            <span>Sign up with Google</span>
-          </button>
-        </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCurrentStep("step1_input");
+                    setVerifyMode("choose");
+                    setError("");
+                  }}
+                  className="text-xs font-bold text-orange-600 dark:text-orange-400 hover:underline flex items-center gap-1"
+                >
+                  <Edit2 className="w-3.5 h-3.5" />
+                  <span>Change</span>
+                </button>
+              </div>
 
-        {/* Footer Navigation */}
-        <div className="text-center mt-6">
-          <p className="text-xs text-slate-500">
-            Already have an account?{" "}
-            <Link
-              to={`/login?redirect=${encodeURIComponent(redirectUrl)}`}
-              className="text-red-600 font-bold hover:underline"
-            >
-              Sign in
-            </Link>
-          </p>
+              {/* Mode A & B Selection Screen */}
+              {verifyMode === "choose" && (
+                <div className="space-y-3.5">
+                  <span className="block text-xs font-bold text-slate-400 uppercase tracking-wider">
+                    Select Verification Method
+                  </span>
+
+                  {/* Choice A: Truecaller 1-Tap / QR */}
+                  <button
+                    type="button"
+                    onClick={handleTruecallerVerification}
+                    disabled={loading}
+                    className="w-full flex items-center justify-between p-4 rounded-2xl border-2 border-[#0052CC]/30 hover:border-[#0052CC] bg-[#0052CC]/5 dark:bg-[#0052CC]/10 hover:bg-[#0052CC]/15 transition-all text-left group disabled:opacity-50"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-[#0052CC] text-white flex items-center justify-center shadow-md shadow-[#0052CC]/20">
+                        <ShieldCheck className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs text-[#0052CC] font-bold">✓</span>
+                          <span className="text-sm font-bold text-slate-900 dark:text-white">
+                            Verify with Truecaller
+                          </span>
+                        </div>
+                        <p className="text-xs text-[#0052CC] dark:text-blue-400 font-medium mt-0.5">
+                          Instant 1-Tap on mobile / QR scan on desktop
+                        </p>
+                      </div>
+                    </div>
+                    <ArrowRight className="w-4 h-4 text-[#0052CC] group-hover:translate-x-1 transition-transform" />
+                  </button>
+
+                  <div className="flex items-center my-3">
+                    <div className="flex-1 border-t border-slate-200 dark:border-slate-800"></div>
+                    <span className="px-3 text-xs uppercase font-bold text-slate-400">or</span>
+                    <div className="flex-1 border-t border-slate-200 dark:border-slate-800"></div>
+                  </div>
+
+                  {/* Choice B: Via SMS */}
+                  <button
+                    type="button"
+                    onClick={handleSendSmsOtp}
+                    disabled={loading}
+                    className="w-full flex items-center justify-between p-4 rounded-2xl border border-slate-200 dark:border-slate-700 hover:border-orange-500/50 bg-white dark:bg-slate-800 hover:bg-orange-50/20 dark:hover:bg-orange-950/20 transition-all text-left group disabled:opacity-50"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-orange-100 dark:bg-orange-950/50 text-orange-600 flex items-center justify-center">
+                        <MessageSquare className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <span className="text-sm font-bold text-slate-900 dark:text-white">
+                          Via SMS
+                        </span>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
+                          Receive 6-digit verification code by text
+                        </p>
+                      </div>
+                    </div>
+                    <ArrowRight className="w-4 h-4 text-slate-400 group-hover:translate-x-1 transition-transform" />
+                  </button>
+                </div>
+              )}
+
+              {/* SMS OTP Input Screen */}
+              {verifyMode === "sms_otp" && (
+                <div className="space-y-5">
+                  <div className="text-center">
+                    <span className="text-xs font-semibold text-slate-400">
+                      Enter the 6-digit code sent to +91 {cleanPhoneDigits(phone)}:
+                    </span>
+                  </div>
+
+                  <div className="flex justify-center gap-2 sm:gap-2.5">
+                    {otpDigits.map((digit, idx) => (
+                      <input
+                        key={idx}
+                        ref={(el) => (otpInputRefs.current[idx] = el)}
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={1}
+                        value={digit}
+                        onChange={(e) => handleOtpDigitChange(idx, e.target.value)}
+                        onKeyDown={(e) => handleOtpKeyDown(idx, e)}
+                        className="w-11 h-14 sm:w-12 sm:h-16 text-center text-xl sm:text-2xl font-mono font-bold rounded-2xl border-2 border-slate-200 dark:border-slate-700 focus:border-orange-500 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none transition-all"
+                      />
+                    ))}
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={loading || otpDigits.some((d) => d.length !== 1)}
+                    onClick={() => handleVerifySmsOtp(otpDigits)}
+                    className="w-full py-4 px-6 rounded-2xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-sm sm:text-base shadow-lg shadow-orange-600/25 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    {loading ? (
+                      <>
+                        <RefreshCw className="w-5 h-5 animate-spin" />
+                        <span>Verifying Code...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Confirm & Continue</span>
+                        <ArrowRight className="w-5 h-5" />
+                      </>
+                    )}
+                  </button>
+
+                  <div className="flex items-center justify-between text-xs pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setVerifyMode("choose")}
+                      className="font-medium text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+                    >
+                      ← Back to options
+                    </button>
+                    <button
+                      type="button"
+                      disabled={cooldown > 0 || loading}
+                      onClick={() => handleSendSmsOtp()}
+                      className="font-bold text-orange-600 hover:text-orange-700 disabled:text-slate-400 disabled:no-underline"
+                    >
+                      {cooldown > 0 ? `Resend in ${cooldown}s` : "Resend SMS"}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setCurrentStep("step1_input")}
+                  className="w-full text-center text-xs font-bold text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                >
+                  ← Edit Name or Mobile Number
+                </button>
+              </div>
+            </div>
+          )}
+
         </div>
-      </motion.div>
+      </div>
+
+      {/* Truecaller Web QR Modal */}
+      {webSession && (
+        <TruecallerQRModal
+          isOpen={qrModalOpen}
+          onClose={() => setQrModalOpen(false)}
+          deepLink={webSession.deepLink}
+          requestId={webSession.requestId}
+          onSuccess={handleQRSuccess}
+          onError={(msg) => {
+            setError(msg);
+            setVerifyMode("sms_otp");
+          }}
+          onSwitchToSms={() => {
+            setQrModalOpen(false);
+            setVerifyMode("sms_otp");
+            handleSendSmsOtp();
+          }}
+        />
+      )}
     </div>
   );
 }

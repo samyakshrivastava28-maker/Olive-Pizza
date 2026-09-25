@@ -126,6 +126,7 @@ const ForgotPassword = lazyWithRetry(() => import('./pages/ForgotPassword'));
 
 // Lazy loaded onboarding
 const VerifyEmail = lazyWithRetry(() => import('./pages/onboarding/VerifyEmail'));
+const SetupEmail = lazyWithRetry(() => import('./pages/onboarding/SetupEmail'));
 const SetupPhone = lazyWithRetry(() => import('./pages/onboarding/SetupPhone'));
 const SetupLocation = lazyWithRetry(() => import('./pages/onboarding/SetupLocation'));
 const OrderSuccessScreen = lazyWithRetry(() => import('./pages/OrderSuccessScreen'));
@@ -269,7 +270,8 @@ function AppContent() {
     
               {/* Onboarding Routes (Auth Required) */}
               <Route element={<AuthGuard />}>
-                <Route path="/onboarding/verify" element={<Suspense fallback={<PizzaLoader />}><VerifyEmail /></Suspense>} />
+                <Route path="/onboarding/email" element={<Suspense fallback={<PizzaLoader />}><SetupEmail /></Suspense>} />
+                <Route path="/onboarding/verify" element={<Suspense fallback={<PizzaLoader />}><SetupEmail /></Suspense>} />
                 <Route path="/onboarding/phone" element={<Suspense fallback={<PizzaLoader />}><SetupPhone /></Suspense>} />
                 <Route path="/onboarding/location" element={<Suspense fallback={<PizzaLoader />}><SetupLocation /></Suspense>} />
               </Route>

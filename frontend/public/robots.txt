@@ -1,0 +1,28 @@
+User-agent: *
+Allow: /
+Allow: /menu
+Allow: /product/
+Allow: /about
+Allow: /contact
+Allow: /privacy-policy
+Allow: /terms
+Allow: /refund-policy
+Allow: /delivery-policy
+Allow: /cancellation-policy
+Allow: /faq
+
+# Disallow authenticated, operational & private routes
+Disallow: /api/
+Disallow: /checkout
+Disallow: /onboarding/
+Disallow: /dashboard
+Disallow: /profile
+Disallow: /order-tracking
+Disallow: /tracking
+Disallow: /pos
+Disallow: /owner
+Disallow: /franchise
+Disallow: /manager
+Disallow: /delivery
+
+Sitemap: https://olivepizza.in/sitemap.xml
