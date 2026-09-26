@@ -128,6 +128,10 @@ jobs:
       - name: Build Release APK
         run: ./gradlew assembleRelease --no-daemon
         working-directory: android
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || 'olivepizza' }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS || 'olivepizza' }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'olivepizza' }}
 
       # 12. Verify the APK is properly signed
       - name: Verify APK Signature
