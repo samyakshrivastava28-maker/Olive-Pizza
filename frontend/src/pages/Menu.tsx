@@ -182,19 +182,19 @@ export default function Menu() {
       />
 
       <PageTransition className="w-full relative min-h-screen">
-        {/* Dark Ambient Background Glow */}
-        <div className="fixed inset-0 z-0 pointer-events-none bg-[radial-gradient(ellipse_at_top,rgba(245,158,11,0.08)_0%,transparent_60%)]" />
+        {/* Subtle Warm Ambient Glow */}
+        <div className="fixed inset-0 z-0 pointer-events-none bg-[radial-gradient(ellipse_at_top,rgba(248,231,201,0.3)_0%,transparent_60%)]" />
 
-        <div className="relative z-10 bg-dark-950/80 min-h-screen text-white pt-[calc(0.75rem+env(safe-area-inset-top,0px))] pb-[calc(8rem+env(safe-area-inset-bottom,0px))] w-full backdrop-blur-sm">
+        <div className="relative z-10 bg-[#FAF8F5] min-h-screen text-slate-900 pt-[calc(0.75rem+env(safe-area-inset-top,0px))] pb-[calc(8rem+env(safe-area-inset-bottom,0px))] w-full">
           <div className="responsive-container max-w-7xl mx-auto px-3 sm:px-4 md:px-6 space-y-4 md:space-y-6">
 
             {/* ── Top Bar Header (Mobile App Bar Aligned) ── */}
             <div className="flex items-center justify-between gap-2 pt-2">
-              <div className="flex items-center gap-2 text-[11px] sm:text-xs text-slate-300 bg-dark-900/90 px-3 py-2 rounded-full border border-white/10 shadow-md max-w-[70%] sm:max-w-md">
-                <MapPin size={14} className="text-amber-400 shrink-0 animate-bounce" />
+              <div className="flex items-center gap-2 text-[11px] sm:text-xs text-slate-800 bg-white px-3.5 py-2 rounded-full border border-slate-200 shadow-xs max-w-[70%] sm:max-w-md">
+                <MapPin size={14} className="text-primary-600 shrink-0 animate-bounce" />
                 <div className="truncate font-medium">
                   <span className="text-slate-500 font-bold">Delivery to: </span>
-                  <span className="text-slate-200">{user?.fullAddress || user?.full_address || "Rajnandgaon, Chhattisgarh"}</span>
+                  <span className="text-slate-900 font-bold">{user?.fullAddress || user?.full_address || "Rajnandgaon, Chhattisgarh"}</span>
                 </div>
               </div>
 
@@ -202,19 +202,19 @@ export default function Menu() {
                 <button 
                   onClick={() => navigate('/notifications')} 
                   aria-label="View Notifications"
-                  className="p-2.5 rounded-full bg-dark-900 border border-white/10 text-slate-300 hover:text-white relative min-touch-target shadow-md flex items-center justify-center"
+                  className="p-2.5 rounded-full bg-white border border-slate-200 text-slate-700 hover:text-primary-600 relative min-touch-target shadow-xs flex items-center justify-center cursor-pointer"
                 >
                   <Bell size={18} />
-                  <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-amber-400 rounded-full animate-ping" />
-                  <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-amber-400 rounded-full" />
+                  <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-primary-600 rounded-full animate-ping" />
+                  <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-primary-600 rounded-full" />
                 </button>
                 
                 <button 
                   onClick={() => navigate(user ? '/dashboard' : '/login')} 
                   aria-label="User Account"
-                  className="p-1 rounded-full bg-dark-900 border border-white/10 text-slate-300 hover:text-white min-touch-target shadow-md"
+                  className="p-1 rounded-full bg-white border border-slate-200 text-slate-700 hover:text-primary-600 min-touch-target shadow-xs cursor-pointer"
                 >
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center font-black text-xs text-dark-950 shadow-md">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-600 to-primary-800 border border-champagne/40 flex items-center justify-center font-black text-xs text-champagne shadow-xs">
                     {user?.name ? user.name[0].toUpperCase() : <User size={14} />}
                   </div>
                 </button>
@@ -232,35 +232,35 @@ export default function Menu() {
               <motion.div 
                 animate={{ scale: [1, 1.15, 1], opacity: [0.3, 0.5, 0.3] }}
                 transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-                className="absolute w-40 h-40 sm:w-56 sm:h-56 bg-gradient-to-r from-amber-500/20 via-primary-500/20 to-amber-400/20 rounded-full blur-3xl pointer-events-none z-0"
+                className="absolute w-40 h-40 sm:w-56 sm:h-56 bg-gradient-to-r from-primary-600/10 via-champagne/40 to-primary-500/10 rounded-full blur-3xl pointer-events-none z-0"
               />
 
               {/* 3D Floating Pizza Icon */}
               <motion.div
                 animate={{ y: [0, -5, 0], rotate: [0, 2, -2, 0] }}
                 transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-                className="relative z-10 w-12 h-12 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br from-dark-900 to-dark-950 border border-amber-400/30 flex items-center justify-center mb-1.5 shadow-[0_0_25px_rgba(245,158,11,0.3)]"
+                className="relative z-10 w-12 h-12 sm:w-16 sm:h-16 rounded-2xl bg-white border border-[#F8E7C9] flex items-center justify-center mb-1.5 shadow-[0_4px_20px_rgba(6,78,59,0.1)]"
               >
-                <span className="text-2xl sm:text-4xl filter drop-shadow-[0_4px_12px_rgba(0,0,0,0.6)]">🍕</span>
+                <span className="text-2xl sm:text-4xl filter drop-shadow-[0_4px_12px_rgba(0,0,0,0.15)]">🍕</span>
               </motion.div>
 
               {/* Main Shimmering Title */}
               <motion.h1 
                 animate={{ backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"] }}
                 transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
-                className="relative z-10 text-2xl sm:text-4xl md:text-5xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-amber-400 to-amber-100 drop-shadow-[0_4px_30px_rgba(245,158,11,0.4)]"
+                className="relative z-10 text-2xl sm:text-4xl md:text-5xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-primary-800 via-primary-600 to-primary-900 drop-shadow-xs"
                 style={{ backgroundSize: "200% 200%" }}
               >
                 Ölive Pizza
               </motion.h1>
 
               {/* Sub-header Rating & Trust Badge */}
-              <div className="relative z-10 flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs font-bold mt-1.5 bg-dark-900/90 border border-white/10 px-3 py-1 rounded-full shadow-md">
-                <span className="flex items-center gap-1 text-amber-400">
-                  <Star size={12} className="fill-amber-400" /> 4.9 (2.4k+ Reviews)
+              <div className="relative z-10 flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs font-bold mt-1.5 bg-white border border-slate-200 px-3 py-1 rounded-full shadow-xs">
+                <span className="flex items-center gap-1 text-amber-600">
+                  <Star size={12} className="fill-amber-500 text-amber-500" /> 4.9 (2.4k+ Reviews)
                 </span>
-                <span className="text-slate-600 hidden sm:inline">•</span>
-                <span className="text-emerald-400 flex items-center gap-1">
+                <span className="text-slate-300 hidden sm:inline">•</span>
+                <span className="text-emerald-700 flex items-center gap-1 font-bold">
                   <Award size={12} /> Rajnandgaon's #1 Kitchen
                 </span>
               </div>
@@ -274,11 +274,11 @@ export default function Menu() {
                 placeholder="Search pizzas, burgers, combos, drinks..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-dark-900/95 border border-white/15 text-white pl-4 pr-12 py-3 rounded-full focus:outline-none focus:border-amber-400 transition-all placeholder:text-slate-500 shadow-[0_0_20px_rgba(0,0,0,0.5)] text-xs sm:text-sm font-medium min-h-[44px]"
+                className="w-full bg-white border border-slate-200 text-slate-900 pl-4 pr-12 py-3 rounded-full focus:outline-none focus:border-primary-600 focus:ring-2 focus:ring-primary-600/15 transition-all placeholder:text-slate-400 shadow-sm text-xs sm:text-sm font-medium min-h-[44px]"
               />
               <button 
                 aria-label="Search"
-                className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-gradient-to-r from-amber-500 to-amber-600 text-dark-950 font-bold flex items-center justify-center transition-transform active:scale-95 min-touch-target shadow-md"
+                className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-primary-600 hover:bg-primary-700 text-champagne font-bold flex items-center justify-center transition-transform active:scale-95 min-touch-target shadow-md border border-champagne/25 cursor-pointer"
               >
                 <Search size={15} />
               </button>
@@ -286,7 +286,7 @@ export default function Menu() {
 
             {/* Store Closed Notice */}
             {!isStoreOpen() && (
-              <div className="w-full bg-amber-500/10 border border-amber-500/30 rounded-2xl p-3 text-center text-amber-400 text-xs font-bold">
+              <div className="w-full bg-amber-50 border border-amber-200 rounded-2xl p-3 text-center text-amber-900 text-xs font-bold">
                 🔥 Ovens open at 12:00 PM. Pre-orders are active!
               </div>
             )}
@@ -294,8 +294,8 @@ export default function Menu() {
             {/* ── Smart Horizontal Scrollable Category Bar ── */}
             <div className="pt-1">
               <div className="flex items-center justify-between mb-2 px-1">
-                <span className="text-[11px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider">Explore Menu</span>
-                <button onClick={() => setCategory('all')} className="text-xs font-bold text-amber-400 hover:underline">Show All ({allItems.length})</button>
+                <span className="text-[11px] sm:text-xs font-bold text-slate-600 uppercase tracking-wider">Explore Menu</span>
+                <button onClick={() => setCategory('all')} className="text-xs font-bold text-primary-700 hover:underline cursor-pointer">Show All ({allItems.length})</button>
               </div>
 
               {/* Scrollable Container with Touch Snap */}
@@ -307,10 +307,10 @@ export default function Menu() {
                       <button
                         key={cat.id}
                         onClick={() => setCategory(cat.id)}
-                        className={`min-touch-target snap-start shrink-0 whitespace-nowrap px-4 sm:px-5 py-2.5 rounded-full text-xs font-bold transition-all border min-h-[44px] flex items-center justify-center ${
+                        className={`min-touch-target snap-start shrink-0 whitespace-nowrap px-4 sm:px-5 py-2.5 rounded-full text-xs font-bold transition-all border min-h-[44px] flex items-center justify-center cursor-pointer ${
                           isActive
-                            ? "bg-gradient-to-r from-amber-500 to-amber-600 text-dark-950 border-amber-400 font-black shadow-[0_0_15px_rgba(245,158,11,0.4)] scale-105"
-                            : "bg-dark-900/90 text-slate-300 border-white/10 hover:border-white/20 active:scale-95"
+                            ? "bg-primary-600 text-champagne border-champagne/40 font-black shadow-md scale-105"
+                            : "bg-white text-slate-700 border-slate-200 hover:border-primary-600/30 active:scale-95 shadow-xs"
                         }`}
                       >
                         {cat.label}
@@ -323,17 +323,17 @@ export default function Menu() {
 
             {/* ── Production Mobile/Tablet Product Grid ── */}
             {isOutsideDeliveryZone ? (
-              <div className="text-center py-12 bg-red-500/10 rounded-3xl border border-red-500/20 p-8 space-y-4 my-6">
-                <div className="w-16 h-16 mx-auto rounded-full bg-red-500/20 flex items-center justify-center">
-                  <AlertCircle className="w-8 h-8 text-red-400" />
+              <div className="text-center py-12 bg-red-50 rounded-3xl border border-red-200 p-8 space-y-4 my-6">
+                <div className="w-16 h-16 mx-auto rounded-full bg-red-100 flex items-center justify-center">
+                  <AlertCircle className="w-8 h-8 text-red-600" />
                 </div>
-                <h2 className="text-xl font-black text-white">We currently don't deliver to this location.</h2>
-                <p className="text-xs sm:text-sm text-slate-300 max-w-md mx-auto">
+                <h2 className="text-xl font-black text-slate-900">We currently don't deliver to this location.</h2>
+                <p className="text-xs sm:text-sm text-slate-600 max-w-md mx-auto">
                   Your delivery address is outside the delivery radius of Olive Pizza branches. Please update your location to view the active menu and place orders.
                 </p>
                 <button 
                   onClick={() => navigate('/onboarding/location')}
-                  className="px-6 py-3 rounded-full bg-amber-500 hover:bg-amber-600 text-dark-950 font-black text-xs shadow-lg transition-transform active:scale-95"
+                  className="px-6 py-3 rounded-full bg-primary-600 hover:bg-primary-700 text-champagne font-black text-xs shadow-md transition-transform active:scale-95 cursor-pointer"
                 >
                   Change Delivery Location
                 </button>
@@ -341,13 +341,13 @@ export default function Menu() {
             ) : !isInitialized ? (
               <MenuSkeleton />
             ) : filteredItems.length === 0 ? (
-              <div className="text-center text-slate-400 py-16 bg-dark-900/40 rounded-3xl border border-white/5 p-8">
+              <div className="text-center text-slate-500 py-16 bg-white rounded-3xl border border-slate-200 p-8 shadow-xs">
                 <span className="text-5xl mb-3 block">🍕</span>
-                <p className="text-base font-bold text-white mb-1">No Items Match Your Filter</p>
+                <p className="text-base font-bold text-slate-900 mb-1">No Items Match Your Filter</p>
                 <p className="text-xs text-slate-500 max-w-sm mx-auto">Try typing another keyword like "Supreme" or click "Show All" above.</p>
                 <button 
                   onClick={() => { setCategory('all'); setSearchQuery(''); }}
-                  className="mt-4 px-5 py-2 rounded-full bg-amber-500 text-dark-950 font-bold text-xs shadow-md"
+                  className="mt-4 px-5 py-2 rounded-full bg-primary-600 hover:bg-primary-700 text-champagne font-bold text-xs shadow-md cursor-pointer"
                 >
                   Reset Filters
                 </button>
@@ -355,10 +355,10 @@ export default function Menu() {
             ) : (
               <div>
                 <div className="flex items-center justify-between mb-3 px-1">
-                  <span className="text-[11px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider">
+                  <span className="text-[11px] sm:text-xs font-bold text-slate-600 uppercase tracking-wider">
                     {category === 'all' ? 'All Handcrafted Items' : category.toUpperCase()} ({filteredItems.length})
                   </span>
-                  <span className="text-[11px] text-slate-500 font-medium">Fast 20-min delivery</span>
+                  <span className="text-[11px] text-emerald-700 font-bold">Fast 20-min delivery</span>
                 </div>
 
                 {/* 

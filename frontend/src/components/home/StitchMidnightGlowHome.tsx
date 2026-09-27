@@ -1,11 +1,13 @@
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Link, useNavigate } from "react-router";
 import { 
   Flame, Leaf, MapPin, ChevronRight, Plus, Minus,
   ArrowRight, Star, ShieldCheck, Gift,
-  Search, Utensils, Sparkles, Clock, Check, Heart, Shield
+  Search, Utensils, Sparkles, Clock, Check, Heart, Shield, X
 } from "lucide-react";
+import { collection, query, where, onSnapshot } from "firebase/firestore";
+import { db } from "../../lib/firebase";
 import { useDataStore } from "../../lib/dataStore";
 import { useStoreStatus } from "../../lib/useStoreStatus";
 import { useCartStore, useAuthStore } from "../../lib/store";
@@ -125,6 +127,41 @@ export default function StitchMidnightGlowHome() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<string>("all");
   const [customizingItem, setCustomizingItem] = useState<MenuItem | null>(null);
+  const [activeOrder, setActiveOrder] = useState<any>(null);
+
+  // Time-of-day smart greeting
+  const greeting = useMemo(() => {
+    const hour = new Date().getHours();
+    if (hour < 12) return { text: "Good morning", emoji: "☀️" };
+    if (hour < 17) return { text: "Good afternoon", emoji: "👋" };
+    if (hour < 22) return { text: "Good evening", emoji: "🍕" };
+    return { text: "Late night cravings?", emoji: "🌙" };
+  }, []);
+
+  // Listen for customer active orders (Continue Order feature)
+  useEffect(() => {
+    if (!user?.uid) {
+      setActiveOrder(null);
+      return;
+    }
+    const q = query(collection(db, "orders"), where("userId", "==", user.uid));
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        const active = snap.docs.find((docSnap) => {
+          const s = (docSnap.data().status || "").toLowerCase();
+          return !["delivered", "cancelled", "rejected", "failed"].includes(s);
+        });
+        if (active) {
+          setActiveOrder({ id: active.id, ...active.data() });
+        } else {
+          setActiveOrder(null);
+        }
+      },
+      () => {}
+    );
+    return () => unsub();
+  }, [user?.uid]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -255,54 +292,174 @@ export default function StitchMidnightGlowHome() {
   }, [triggerAnimation, addItem]);
 
   return (
-    <div className="w-full flex flex-col gap-6 sm:gap-8 pt-20 md:pt-22 text-stone-900">
+    <div className="w-full flex flex-col gap-6 sm:gap-8 pt-20 md:pt-22 text-slate-900">
       
       {/* ── 1. Top Ordering Context Header ──────────────────────────── */}
-      <header className="max-w-7xl mx-auto w-full px-4 sm:px-8">
-        <div className="flex flex-wrap items-center justify-between gap-3 py-2 border-b border-stone-200/80">
+      <header className="max-w-7xl mx-auto w-full px-4 sm:px-8 space-y-4">
+        {/* Top Context & Delivery Location */}
+        <div className="flex flex-wrap items-center justify-between gap-3 py-2 border-b border-slate-200">
           {/* Store Location */}
-          <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-stone-800">
-            <div className="w-7 h-7 rounded-full bg-red-100 flex items-center justify-center text-red-600 shrink-0">
+          <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-slate-900">
+            <div className="w-7 h-7 rounded-full bg-primary-600 border border-champagne/40 flex items-center justify-center text-champagne shrink-0 shadow-xs">
               <MapPin className="w-4 h-4" />
             </div>
             <div className="flex flex-col">
-              <span className="text-[10px] font-extrabold uppercase tracking-wider text-stone-400 leading-none">
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 leading-none">
                 Delivering From
               </span>
-              <span className="text-stone-900 font-extrabold flex items-center gap-1">
+              <span className="text-slate-900 font-extrabold flex items-center gap-1">
                 {userLocationText}
-                <ChevronRight className="w-3.5 h-3.5 text-stone-400" />
+                <ChevronRight className="w-3.5 h-3.5 text-primary-600" />
               </span>
             </div>
           </div>
 
           {/* Live Kitchen Status */}
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold shadow-xs">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary-50 border border-primary-200 text-primary-800 text-xs font-bold shadow-xs">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
               <span>Fired Up • 25–30 Min Fresh Delivery</span>
             </span>
           </div>
         </div>
 
-        {/* ── 2. Functional Search Bar ──────────────────────────────── */}
-        <form onSubmit={handleSearchSubmit} className="relative mt-4 group">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400 group-focus-within:text-red-600 transition-colors pointer-events-none" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search artisan pizzas, cheesy garlic breads, drinks, desserts..."
-            className="w-full h-12 pl-11 pr-24 sm:pr-28 rounded-2xl bg-white border border-stone-200 text-stone-900 placeholder-stone-400 text-xs sm:text-sm focus:outline-none focus:border-red-600 focus:ring-2 focus:ring-red-500/15 transition-all shadow-[0_2px_8px_rgba(0,0,0,0.04)]"
-          />
-          <button
-            type="submit"
-            className="absolute right-1.5 top-1/2 -translate-y-1/2 px-4 sm:px-5 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs uppercase tracking-wider transition-all shadow-xs active:scale-95 flex items-center gap-1 cursor-pointer"
+        {/* ── Smart Greeting ────────────────────────────────────────── */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1">
+          <div>
+            <h1 className="text-xl sm:text-2xl font-black text-slate-900 flex items-center gap-1.5">
+              <span>{greeting.text}</span>
+              <span>{greeting.emoji}</span>
+              {user?.name && <span className="text-primary-700">, {user.name.split(' ')[0]}</span>}
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-500 font-medium">
+              Handcrafted stone-baked pizzas delivered piping hot to your doorstep.
+            </p>
+          </div>
+        </div>
+
+        {/* ── Active Order Tracker Card (Continue Order) ─────────────── */}
+        {activeOrder && (
+          <motion.div
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            onClick={() => navigate(`/order-tracking/${activeOrder.id}`)}
+            className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-primary-900 via-primary-800 to-primary-900 border border-champagne/40 shadow-lg flex items-center justify-between gap-3 cursor-pointer group text-white"
           >
-            <span>Search</span>
-            <ChevronRight className="w-3.5 h-3.5" />
-          </button>
-        </form>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-primary-600/40 border border-champagne/40 text-champagne flex items-center justify-center font-black shrink-0">
+                <Clock className="w-5 h-5 animate-spin" style={{ animationDuration: '6s' }} />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-black text-champagne uppercase tracking-wider truncate">
+                    Order #{activeOrder.orderNumber || activeOrder.id?.slice(0, 6)}
+                  </span>
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping shrink-0" />
+                </div>
+                <p className="text-xs text-white/90 font-medium truncate">
+                  Status: <span className="capitalize text-champagne font-bold">{activeOrder.status?.replace(/_/g, ' ') || 'Preparing'}</span> • Tap to track live
+                </p>
+              </div>
+            </div>
+            <button className="px-3.5 py-1.5 rounded-xl bg-champagne text-primary-950 font-black text-xs flex items-center gap-1 shadow-sm group-hover:scale-105 transition-transform shrink-0">
+              <span>Track</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </motion.div>
+        )}
+
+        {/* ── 2. Functional Instant Search Bar ──────────────────────── */}
+        <div className="relative group">
+          <form onSubmit={handleSearchSubmit} className="relative">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-primary-600 transition-colors pointer-events-none" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search artisan pizzas, cheesy garlic breads, drinks, desserts..."
+              className="w-full h-12 pl-11 pr-28 rounded-2xl bg-white border border-slate-200 text-slate-900 placeholder-slate-400 text-xs sm:text-sm focus:outline-none focus:border-primary-600 focus:ring-2 focus:ring-primary-600/15 transition-all shadow-sm"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-24 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 cursor-pointer"
+                aria-label="Clear search"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+            <button
+              type="submit"
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 px-4 sm:px-5 py-2 rounded-xl bg-primary-600 hover:bg-primary-700 text-champagne font-extrabold text-xs uppercase tracking-wider border border-champagne/25 transition-all shadow-md active:scale-95 flex items-center gap-1 cursor-pointer"
+            >
+              <span>Search</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </form>
+
+          {/* Instant Search Matches Dropdown */}
+          {searchQuery.trim().length >= 2 && (
+            <div className="absolute top-full left-0 right-0 mt-1.5 bg-white border border-slate-200 rounded-2xl p-2 shadow-xl z-30 space-y-1.5">
+              {catalogProducts
+                .filter((p) => p.name.toLowerCase().includes(searchQuery.toLowerCase().trim()))
+                .slice(0, 4)
+                .map((match) => (
+                  <div
+                    key={match.id}
+                    onClick={() => navigate(`/product/${match.id}`)}
+                    className="flex items-center justify-between p-2 rounded-xl hover:bg-primary-50/50 transition-colors cursor-pointer group"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <img
+                        src={match.image}
+                        alt={match.name}
+                        className="w-10 h-10 object-cover rounded-lg shrink-0 border border-slate-100"
+                      />
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-slate-900 group-hover:text-primary-700 truncate">
+                          {match.name}
+                        </p>
+                        <p className="text-[11px] font-black text-primary-600">₹{match.basePrice}</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        triggerAnimation(e, match.image, () => {
+                          addItem({
+                            id: match.id,
+                            menuItemId: match.id,
+                            name: match.name,
+                            price: match.basePrice,
+                            quantity: 1,
+                            image: match.image,
+                            isVegetarian: match.isVegetarian,
+                            crust: "Classic Crust",
+                            size: "Medium",
+                          });
+                          toast.success(`Added ${match.name}! 🍕`);
+                        });
+                      }}
+                      className="px-3 py-1 rounded-lg bg-primary-600 hover:bg-primary-700 text-champagne text-[11px] font-bold shadow-xs cursor-pointer shrink-0"
+                    >
+                      + Add
+                    </button>
+                  </div>
+                ))}
+              <div className="pt-1 border-t border-slate-100 text-center">
+                <button
+                  type="button"
+                  onClick={() => navigate(`/menu?q=${encodeURIComponent(searchQuery.trim())}`)}
+                  className="text-xs font-bold text-primary-600 hover:underline py-1"
+                >
+                  View all results for "{searchQuery}" →
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </header>
 
       {/* ── 3. Visual Category Discovery Rail ───────────────────────── */}
@@ -314,44 +471,44 @@ export default function StitchMidnightGlowHome() {
           <div 
             data-product-card="true"
             id={`hero-spotlight-${heroProduct.id}`}
-            className="relative rounded-3xl overflow-hidden bg-white border border-stone-200/90 p-5 sm:p-7 shadow-[0_8px_30px_-4px_rgba(28,25,23,0.08)] flex flex-col-reverse md:flex-row items-center justify-between gap-6 sm:gap-8 group"
+            className="relative rounded-3xl overflow-hidden bg-gradient-to-br from-[#064E3B] via-[#043327] to-[#01140e] border border-champagne/30 p-5 sm:p-7 shadow-[0_12px_40px_rgba(6,78,59,0.25)] flex flex-col-reverse md:flex-row items-center justify-between gap-6 sm:gap-8 group text-white"
           >
             {/* Info & CTA */}
             <div className="flex-1 min-w-0 text-left w-full md:w-auto">
               <div className="flex flex-wrap items-center gap-2 mb-2.5">
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-100 text-red-700 text-[10px] font-black uppercase tracking-wider">
-                  <Flame className="w-3.5 h-3.5 text-red-600" />
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary-900/60 border border-primary-500/30 text-champagne text-[10px] font-black uppercase tracking-wider">
+                  <Flame className="w-3.5 h-3.5 text-champagne" />
                   Kitchen Spotlight
                 </span>
 
-                <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold ${
-                  heroProduct.isVegetarian ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800"
+                <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold border ${
+                  heroProduct.isVegetarian ? "bg-emerald-950/60 border-emerald-500/30 text-emerald-300" : "bg-rose-950/60 border-rose-500/30 text-rose-300"
                 }`}>
-                  <Leaf className="w-3 h-3 text-emerald-600" />
+                  <Leaf className="w-3 h-3 text-emerald-400" />
                   {heroProduct.isVegetarian ? "100% Pure Veg" : "Gourmet Non-Veg"}
                 </span>
 
-                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-100 text-amber-900 text-[10px] font-bold">
-                  <Sparkles className="w-3 h-3 text-amber-600" />
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-secondary-900/40 border border-champagne/20 text-champagne text-[10px] font-bold">
+                  <Sparkles className="w-3 h-3 text-champagne" />
                   Wood-Fired 450°C
                 </span>
               </div>
 
-              <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-stone-900 tracking-tight leading-tight group-hover:text-red-600 transition-colors">
+              <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-white tracking-tight leading-tight group-hover:text-champagne transition-colors">
                 {heroProduct.name}
               </h2>
 
-              <p className="text-xs sm:text-sm text-stone-600 line-clamp-2 mt-2 max-w-xl font-normal leading-relaxed">
+              <p className="text-xs sm:text-sm text-slate-300 line-clamp-2 mt-2 max-w-xl font-normal leading-relaxed">
                 {heroProduct.description}
               </p>
 
               {/* Price & Action Row */}
-              <div className="flex flex-wrap items-center gap-4 mt-5 pt-3 border-t border-stone-100">
+              <div className="flex flex-wrap items-center gap-4 mt-5 pt-3 border-t border-dark-800">
                 <div className="flex items-baseline gap-2">
-                  <span className="text-2xl sm:text-3xl font-black text-stone-900">
+                  <span className="text-2xl sm:text-3xl font-black text-champagne">
                     ₹{heroProduct.basePrice}
                   </span>
-                  <span className="text-xs text-stone-400 line-through font-medium">
+                  <span className="text-xs text-slate-500 line-through font-medium">
                     ₹{Math.round(heroProduct.basePrice * 1.25)}
                   </span>
                 </div>
@@ -360,7 +517,7 @@ export default function StitchMidnightGlowHome() {
                   {heroQty > 0 ? (
                     <div
                       onClick={(e) => e.stopPropagation()}
-                      className="flex items-center gap-2.5 px-3 py-1.5 rounded-2xl bg-red-50 border border-red-200 text-red-700 shadow-xs"
+                      className="flex items-center gap-2.5 px-3 py-1.5 rounded-2xl bg-primary-950 border border-primary-500/40 text-champagne shadow-xs"
                     >
                       <button
                         type="button"
@@ -372,11 +529,11 @@ export default function StitchMidnightGlowHome() {
                             updateQuantity(heroProduct.id, heroQty - 1);
                           }
                         }}
-                        className="w-8 h-8 rounded-xl bg-white text-red-600 hover:bg-red-600 hover:text-white flex items-center justify-center font-black text-xs transition-colors shadow-xs active:scale-90"
+                        className="w-8 h-8 rounded-xl bg-dark-800 text-champagne hover:bg-primary-600 hover:text-white flex items-center justify-center font-black text-xs transition-colors shadow-xs active:scale-90"
                       >
                         <Minus className="w-4 h-4" />
                       </button>
-                      <span className="font-black text-sm min-w-[16px] text-center">{heroQty}</span>
+                      <span className="font-black text-sm min-w-[16px] text-center text-champagne">{heroQty}</span>
                       <button
                         type="button"
                         onClick={(e) => {
@@ -385,7 +542,7 @@ export default function StitchMidnightGlowHome() {
                             updateQuantity(heroProduct.id, heroQty + 1);
                           });
                         }}
-                        className="w-8 h-8 rounded-xl bg-red-600 text-white hover:bg-red-700 flex items-center justify-center font-black text-xs transition-colors shadow-xs active:scale-90"
+                        className="w-8 h-8 rounded-xl bg-primary-600 text-champagne hover:bg-primary-500 flex items-center justify-center font-black text-xs transition-colors shadow-xs active:scale-90"
                       >
                         <Plus className="w-4 h-4" />
                       </button>
@@ -394,7 +551,7 @@ export default function StitchMidnightGlowHome() {
                     <button
                       type="button"
                       onClick={handleHeroAdd}
-                      className="px-6 py-3 rounded-2xl bg-red-600 hover:bg-red-700 text-white font-black text-xs uppercase tracking-wider flex items-center gap-2 shadow-sm shadow-red-500/20 active:scale-95 transition-all min-h-[44px] cursor-pointer"
+                      className="px-6 py-3 rounded-2xl bg-primary-600 hover:bg-primary-500 text-champagne font-black text-xs uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-primary-950/60 border border-champagne/30 active:scale-95 transition-all min-h-[44px] cursor-pointer"
                     >
                       <span>Add to Cart</span>
                       <Plus className="w-4 h-4" />
@@ -403,7 +560,7 @@ export default function StitchMidnightGlowHome() {
 
                   <Link
                     to={`/product/${heroProduct.id}`}
-                    className="px-4 py-3 rounded-2xl bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 transition-all active:scale-95 min-h-[44px]"
+                    className="px-4 py-3 rounded-2xl bg-dark-800 hover:bg-dark-700 text-slate-200 border border-white/10 font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 transition-all active:scale-95 min-h-[44px]"
                   >
                     <span>Details</span>
                     <ChevronRight className="w-3.5 h-3.5" />
@@ -413,7 +570,7 @@ export default function StitchMidnightGlowHome() {
             </div>
 
             {/* Elevated Food Image (Target for physical flight) */}
-            <div className="relative w-full md:w-72 md:h-56 h-48 rounded-2xl overflow-hidden bg-stone-100 shrink-0 border border-stone-200 shadow-md">
+            <div className="relative w-full md:w-72 md:h-56 h-48 rounded-2xl overflow-hidden bg-dark-800 shrink-0 border border-dark-700 shadow-md">
               <img
                 data-product-img="true"
                 src={heroProduct.image}
@@ -424,11 +581,11 @@ export default function StitchMidnightGlowHome() {
                     "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=500";
                 }}
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-stone-900/35 via-transparent to-transparent pointer-events-none" />
+              <div className="absolute inset-0 bg-gradient-to-t from-dark-950/60 via-transparent to-transparent pointer-events-none" />
               
               {heroProduct.rating && (
-                <div className="absolute top-3 left-3 flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/95 backdrop-blur-md border border-stone-100 text-stone-900 text-[11px] font-black shadow-md">
-                  <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                <div className="absolute top-3 left-3 flex items-center gap-1 px-2.5 py-1 rounded-full bg-dark-950/90 backdrop-blur-md border border-champagne/20 text-champagne text-[11px] font-black shadow-md">
+                  <Star className="w-3.5 h-3.5 text-champagne fill-champagne" />
                   <span>{heroProduct.rating.toFixed(1)}</span>
                 </div>
               )}
@@ -441,21 +598,21 @@ export default function StitchMidnightGlowHome() {
       <section className="max-w-7xl mx-auto w-full px-4 sm:px-8 py-2">
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6">
           <div>
-            <span className="inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-red-600 mb-1">
+            <span className="inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-primary-700 mb-1">
               <Utensils className="w-3.5 h-3.5" />
               <span>Fresh From The Stone Oven</span>
             </span>
-            <h3 className="text-2xl sm:text-3xl font-extrabold text-stone-900 tracking-tight">
+            <h3 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
               Handcrafted Pizzas & Specials
             </h3>
-            <p className="text-xs sm:text-sm text-stone-500 mt-1">
+            <p className="text-xs sm:text-sm text-slate-600 mt-1">
               Slow-fermented sourdough, San Marzano sauce & fresh mozzarella baked at 450°C
             </p>
           </div>
 
           <Link
             to="/menu"
-            className="inline-flex items-center gap-1 text-xs font-bold text-red-600 hover:text-red-700 transition-colors self-start sm:self-auto"
+            className="inline-flex items-center gap-1 text-xs font-bold text-primary-700 hover:underline transition-colors self-start sm:self-auto"
           >
             <span>View Full Menu</span>
             <ChevronRight className="w-4 h-4" />
@@ -479,8 +636,8 @@ export default function StitchMidnightGlowHome() {
                 onClick={() => setActiveFilter(tab.id)}
                 className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer active:scale-95 ${
                   isActive
-                    ? "bg-red-600 text-white shadow-sm"
-                    : "bg-white border border-stone-200 text-stone-700 hover:bg-stone-50"
+                    ? "bg-primary-600 text-champagne border border-champagne/30 shadow-md"
+                    : "bg-white border border-slate-200 text-slate-700 hover:border-primary-600/30"
                 }`}
               >
                 <span>{tab.icon}</span>
@@ -507,17 +664,17 @@ export default function StitchMidnightGlowHome() {
         <section className="max-w-7xl mx-auto w-full px-4 sm:px-8 py-4">
           <div className="flex items-end justify-between mb-4">
             <div>
-              <span className="inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-red-600 mb-1">
+              <span className="inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-primary-700 mb-1">
                 <Gift className="w-3.5 h-3.5" />
                 <span>Pair & Save</span>
               </span>
-              <h3 className="text-xl sm:text-2xl font-extrabold text-stone-900 tracking-tight">
+              <h3 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">
                 Curated Value Combos
               </h3>
             </div>
             <Link
               to="/menu?category=combo"
-              className="text-xs font-bold text-red-600 hover:text-red-700 flex items-center gap-1"
+              className="text-xs font-bold text-primary-700 hover:underline flex items-center gap-1"
             >
               <span>All Combos</span>
               <ChevronRight className="w-3.5 h-3.5" />
@@ -537,10 +694,10 @@ export default function StitchMidnightGlowHome() {
                   key={combo.id}
                   data-product-card="true"
                   id={`combo-card-${combo.id}`}
-                  className="p-4 rounded-2xl bg-white border border-stone-200/90 shadow-sm flex items-center justify-between gap-4 group"
+                  className="p-4 rounded-2xl bg-white border border-[#F8E7C9]/80 shadow-[0_4px_16px_rgba(6,78,59,0.06)] flex items-center justify-between gap-4 group hover:border-primary-600/30 transition-colors"
                 >
                   <div className="flex items-center gap-3.5 min-w-0">
-                    <div className="w-20 h-20 rounded-xl overflow-hidden bg-stone-100 shrink-0 border border-stone-200">
+                    <div className="w-20 h-20 rounded-xl overflow-hidden bg-[#FDFBF7] shrink-0 border border-slate-100">
                       <img
                         data-product-img="true"
                         src={combo.imageUrl || combo.image || "/images/pizza-placeholder.webp"}
@@ -553,16 +710,16 @@ export default function StitchMidnightGlowHome() {
                       />
                     </div>
                     <div className="min-w-0">
-                      <h4 className="text-sm font-bold text-stone-900 group-hover:text-red-600 transition-colors truncate">
+                      <h4 className="text-sm font-bold text-slate-900 group-hover:text-primary-700 transition-colors truncate">
                         {combo.name}
                       </h4>
                       {combo.description && (
-                        <p className="text-xs text-stone-500 line-clamp-1 mt-0.5">{combo.description}</p>
+                        <p className="text-xs text-slate-500 line-clamp-1 mt-0.5">{combo.description}</p>
                       )}
                       <div className="flex items-baseline gap-2 mt-1.5">
-                        <span className="text-base font-black text-stone-900">₹{comboPrice}</span>
+                        <span className="text-base font-black text-primary-600">₹{comboPrice}</span>
                         {hasDiscount && (
-                          <span className="text-xs text-stone-400 line-through">₹{originalPrice}</span>
+                          <span className="text-xs text-slate-400 line-through">₹{originalPrice}</span>
                         )}
                       </div>
                     </div>
@@ -571,7 +728,7 @@ export default function StitchMidnightGlowHome() {
                   {qty > 0 ? (
                     <div
                       onClick={(e) => e.stopPropagation()}
-                      className="flex items-center gap-2 px-2 py-1 rounded-xl bg-red-50 border border-red-200 text-red-700 shadow-xs shrink-0"
+                      className="flex items-center gap-2 px-2 py-1 rounded-xl bg-primary-50 border border-primary-200 text-primary-900 shadow-xs shrink-0"
                     >
                       <button
                         type="button"
@@ -579,11 +736,11 @@ export default function StitchMidnightGlowHome() {
                           if (qty <= 1) removeItem(combo.id);
                           else updateQuantity(combo.id, qty - 1);
                         }}
-                        className="w-6 h-6 rounded-lg bg-white text-red-600 hover:bg-red-600 hover:text-white flex items-center justify-center font-black text-xs transition-colors shadow-xs active:scale-90"
+                        className="w-6 h-6 rounded-lg bg-white text-primary-800 hover:bg-primary-600 hover:text-white flex items-center justify-center font-black text-xs transition-colors shadow-xs active:scale-90 border border-primary-100"
                       >
                         <Minus className="w-3 h-3" />
                       </button>
-                      <span className="font-black text-xs min-w-[14px] text-center">{qty}</span>
+                      <span className="font-black text-xs min-w-[14px] text-center text-primary-950">{qty}</span>
                       <button
                         type="button"
                         onClick={(e) => {
@@ -591,7 +748,7 @@ export default function StitchMidnightGlowHome() {
                             updateQuantity(combo.id, qty + 1);
                           });
                         }}
-                        className="w-6 h-6 rounded-lg bg-red-600 text-white hover:bg-red-700 flex items-center justify-center font-black text-xs transition-colors shadow-xs active:scale-90"
+                        className="w-6 h-6 rounded-lg bg-primary-600 text-champagne hover:bg-primary-700 flex items-center justify-center font-black text-xs transition-colors shadow-xs active:scale-90"
                       >
                         <Plus className="w-3 h-3" />
                       </button>
@@ -600,7 +757,7 @@ export default function StitchMidnightGlowHome() {
                     <button
                       type="button"
                       onClick={(e) => handleAddCombo(e, combo)}
-                      className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs uppercase tracking-wider shrink-0 transition-all active:scale-95 shadow-xs flex items-center gap-1 cursor-pointer"
+                      className="px-4 py-2 rounded-xl bg-primary-600 hover:bg-primary-700 text-champagne font-bold text-xs uppercase tracking-wider shrink-0 transition-all active:scale-95 shadow-md shadow-primary-900/10 border border-champagne/25 flex items-center gap-1 cursor-pointer"
                     >
                       <Plus className="w-3.5 h-3.5" />
                       <span>Add</span>
@@ -615,38 +772,38 @@ export default function StitchMidnightGlowHome() {
 
       {/* ── 7. Kitchen Craft Proofs & Trust Assurances ───────────────── */}
       <section className="max-w-7xl mx-auto w-full px-4 sm:px-8 py-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-6 rounded-3xl bg-stone-900 text-white border border-stone-800">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-6 rounded-3xl bg-white text-slate-900 border border-slate-200/80 shadow-[0_4px_20px_rgba(6,78,59,0.05)]">
           <div className="flex items-start gap-3.5">
-            <div className="w-10 h-10 rounded-xl bg-red-600/20 text-red-400 flex items-center justify-center shrink-0 border border-red-500/30">
+            <div className="w-10 h-10 rounded-xl bg-primary-50 text-primary-700 flex items-center justify-center shrink-0 border border-primary-200">
               <Clock className="w-5 h-5" />
             </div>
             <div>
-              <h5 className="font-bold text-sm text-white">48-Hour Cold Fermentation</h5>
-              <p className="text-xs text-stone-400 mt-1 leading-relaxed">
+              <h5 className="font-bold text-sm text-slate-900">48-Hour Cold Fermentation</h5>
+              <p className="text-xs text-slate-600 mt-1 leading-relaxed">
                 Slow-matured dough creates an airy, blistered crust that is remarkably light and easy to digest.
               </p>
             </div>
           </div>
 
           <div className="flex items-start gap-3.5">
-            <div className="w-10 h-10 rounded-xl bg-amber-600/20 text-amber-400 flex items-center justify-center shrink-0 border border-amber-500/30">
+            <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center shrink-0 border border-amber-200">
               <Flame className="w-5 h-5" />
             </div>
             <div>
-              <h5 className="font-bold text-sm text-white">450°C Italian Stone Oven</h5>
-              <p className="text-xs text-stone-400 mt-1 leading-relaxed">
+              <h5 className="font-bold text-sm text-slate-900">450°C Italian Stone Oven</h5>
+              <p className="text-xs text-slate-600 mt-1 leading-relaxed">
                 Flash-baked in 90 seconds to lock in toppings freshness while blistering the edges with authentic wood-smoke flavor.
               </p>
             </div>
           </div>
 
           <div className="flex items-start gap-3.5">
-            <div className="w-10 h-10 rounded-xl bg-emerald-600/20 text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/30">
+            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0 border border-emerald-200">
               <ShieldCheck className="w-5 h-5" />
             </div>
             <div>
-              <h5 className="font-bold text-sm text-white">100% Real Fior Di Latte</h5>
-              <p className="text-xs text-stone-400 mt-1 leading-relaxed">
+              <h5 className="font-bold text-sm text-slate-900">100% Real Fior Di Latte</h5>
+              <p className="text-xs text-slate-600 mt-1 leading-relaxed">
                 Pure cow-milk mozzarella from local artisanal dairies. Zero preservatives, zero artificial cheese analogs.
               </p>
             </div>

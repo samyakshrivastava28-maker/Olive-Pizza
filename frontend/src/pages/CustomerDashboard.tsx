@@ -201,22 +201,22 @@ export default function CustomerDashboard() {
   };
 
   return (
-    <PageTransition className="min-h-screen bg-[#FAF7F2] text-slate-900 pt-20 md:pt-24 pb-16 selection:bg-rose-500 selection:text-white">
+    <PageTransition className="min-h-screen bg-[#FAF8F5] text-slate-900 pt-20 md:pt-24 pb-16 selection:bg-primary-600 selection:text-champagne">
       <SEO title="My Profile | Olive Pizza" />
 
       {/* Ambient background glows */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-10 left-1/4 -translate-x-1/2 w-96 h-96 bg-orange-200/40 rounded-full blur-3xl" />
-        <div className="absolute top-1/2 right-10 w-96 h-96 bg-red-200/30 rounded-full blur-3xl" />
+        <div className="absolute top-10 left-1/4 -translate-x-1/2 w-96 h-96 bg-primary-100/20 rounded-full blur-3xl" />
+        <div className="absolute top-1/2 right-10 w-96 h-96 bg-[#F8E7C9]/30 rounded-full blur-3xl" />
       </div>
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 relative z-10 space-y-6">
         
         {/* ── 1. Profile Header Identity Card ──────────────────────────────── */}
-        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-orange-100/90 shadow-[0_15px_40px_rgba(249,115,22,0.06)]">
+        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-xs">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
             <div className="flex items-center gap-4">
-              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-tr from-red-600 via-rose-500 to-orange-500 flex items-center justify-center text-white text-2xl font-black shadow-lg shadow-red-500/20 shrink-0">
+              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-[#064E3B] text-champagne border border-champagne/30 flex items-center justify-center text-2xl font-black shadow-md shadow-primary-950/20 shrink-0">
                 {user?.photoURL ? (
                   <img src={user.photoURL} alt="Profile" className="w-full h-full object-cover rounded-2xl" />
                 ) : (
@@ -225,7 +225,7 @@ export default function CustomerDashboard() {
               </div>
 
               <div>
-                <h1 className="text-xl sm:text-2xl font-black text-slate-900">
+                <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
                   {user?.name || "Customer"}
                 </h1>
 
@@ -259,12 +259,12 @@ export default function CustomerDashboard() {
 
             {/* Loyalty Pill */}
             <div className="flex sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto pt-3 sm:pt-0 border-t sm:border-t-0 border-slate-100">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs font-black uppercase tracking-wider shadow-sm">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary-600 text-champagne text-xs font-black uppercase tracking-wider shadow-xs">
                 <Award className="w-3.5 h-3.5" />
                 <span>{loyaltyData?.tier || "Bronze"} Tier</span>
               </span>
               <p className="text-sm font-bold text-slate-700 mt-1">
-                <span className="text-red-600 font-black text-lg">{loyaltyData?.points || 0}</span> Points
+                <span className="text-primary-700 font-black text-lg">{loyaltyData?.points || 0}</span> Points
                 <span className="text-xs text-slate-400 ml-1">(₹{((loyaltyData?.points || 0) * 0.5).toFixed(0)} value)</span>
               </p>
             </div>
@@ -276,20 +276,20 @@ export default function CustomerDashboard() {
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="p-5 rounded-3xl bg-gradient-to-r from-red-600 via-rose-600 to-orange-500 text-white shadow-xl shadow-red-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+            className="p-5 rounded-3xl bg-[#064E3B] text-white border border-champagne/30 shadow-md shadow-primary-950/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
           >
             <div className="flex items-center gap-3.5">
-              <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center shrink-0">
-                <Flame className="w-6 h-6 text-white animate-pulse" />
+              <div className="w-12 h-12 rounded-2xl bg-white/15 backdrop-blur-md flex items-center justify-center shrink-0 border border-white/20">
+                <Flame className="w-6 h-6 text-champagne animate-pulse" />
               </div>
               <div>
-                <span className="text-[10px] font-black uppercase tracking-widest text-orange-200 block">
+                <span className="text-[10px] font-black uppercase tracking-widest text-champagne/80 block">
                   Active Live Order #{activeOrder.dailyOrderNumber || activeOrder.id?.slice(-4).toUpperCase() || 'LIVE'}
                 </span>
-                <p className="text-base font-black text-white capitalize mt-0.5">
+                <p className="text-base font-black text-champagne capitalize mt-0.5">
                   {activeOrder.status.replace(/_/g, ' ')}
                 </p>
-                <p className="text-xs text-rose-100">
+                <p className="text-xs text-champagne/80">
                   {activeOrder.items?.length || 1} items • ₹{activeOrder.totalAmount}
                 </p>
               </div>
@@ -297,17 +297,17 @@ export default function CustomerDashboard() {
 
             <button
               onClick={() => navigate(`/order-tracking/${activeOrder.id || ''}`)}
-              className="w-full sm:w-auto px-5 py-3 rounded-2xl bg-white text-red-600 hover:bg-orange-50 font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-md transition-all active:scale-95 cursor-pointer"
+              className="w-full sm:w-auto px-5 py-3 rounded-2xl bg-champagne hover:bg-champagne/90 text-primary-950 font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-sm transition-all active:scale-95 cursor-pointer"
             >
-              <Navigation className="w-4 h-4 text-red-600" />
-              <span>Track Live GPS Route</span>
+              <Navigation className="w-4 h-4 text-primary-950" />
+              <span>Track Live Route</span>
               <ChevronRight className="w-4 h-4" />
             </button>
           </motion.div>
         )}
 
         {/* ── 3. Segmented Navigation Tabs ─────────────────────────────────── */}
-        <div className="flex bg-orange-100/70 p-1.5 rounded-2xl border border-orange-200/60 overflow-x-auto scrollbar-none">
+        <div className="flex bg-slate-100/90 p-1.5 rounded-2xl border border-slate-200 overflow-x-auto scrollbar-none">
           {[
             { id: "profile", label: "Profile & Addresses", icon: User },
             { id: "orders", label: "My Orders", icon: History },
@@ -324,11 +324,11 @@ export default function CustomerDashboard() {
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex-1 min-w-[120px] py-2.5 px-3 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
                   isActive
-                    ? "bg-white text-slate-900 shadow-sm"
+                    ? "bg-white text-slate-900 shadow-xs border border-slate-200"
                     : "text-slate-600 hover:text-slate-900"
                 }`}
               >
-                <Icon className={`w-4 h-4 ${isActive ? "text-red-600" : "text-slate-400"}`} />
+                <Icon className={`w-4 h-4 ${isActive ? "text-primary-700" : "text-slate-400"}`} />
                 <span>{tab.label}</span>
               </button>
             );
@@ -348,7 +348,7 @@ export default function CustomerDashboard() {
               className="space-y-6"
             >
               {/* Edit Details Card */}
-              <div className="bg-white rounded-3xl p-6 sm:p-8 border border-orange-100/90 shadow-sm">
+              <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-xs">
                 <h3 className="text-lg font-black text-slate-900 mb-4">
                   Personal Information
                 </h3>
@@ -363,7 +363,7 @@ export default function CustomerDashboard() {
                       required
                       value={nameInput}
                       onChange={(e) => setNameInput(e.target.value)}
-                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 focus:border-red-500 focus:bg-white rounded-2xl text-slate-900 text-sm font-medium focus:outline-none transition-all"
+                      className="w-full px-4 py-3 bg-[#FAF8F5] border border-slate-200 focus:border-primary-600 focus:bg-white rounded-2xl text-slate-900 text-sm font-medium focus:outline-none transition-all"
                     />
                   </div>
 
@@ -394,7 +394,7 @@ export default function CustomerDashboard() {
                         <button
                           type="button"
                           onClick={() => setIsPhoneModalOpen(true)}
-                          className="absolute right-2 px-3 py-1.5 bg-white border border-slate-200 text-red-600 font-bold text-xs rounded-xl hover:bg-red-50 transition-colors cursor-pointer"
+                          className="absolute right-2 px-3 py-1.5 bg-white border border-slate-200 text-primary-700 font-bold text-xs rounded-xl hover:bg-primary-50 transition-colors cursor-pointer"
                         >
                           Change
                         </button>
@@ -405,7 +405,7 @@ export default function CustomerDashboard() {
                   <button
                     type="submit"
                     disabled={savingProfile || !nameInput.trim()}
-                    className="px-6 py-3 bg-gradient-to-r from-red-600 to-orange-500 text-white font-black text-xs uppercase tracking-wider rounded-2xl shadow-md shadow-red-500/20 hover:scale-105 active:scale-95 disabled:opacity-50 transition-all cursor-pointer"
+                    className="px-6 py-3 bg-primary-600 hover:bg-primary-700 text-champagne font-black text-xs uppercase tracking-wider rounded-2xl shadow-xs active:scale-95 disabled:opacity-50 transition-all cursor-pointer"
                   >
                     {savingProfile ? "Saving..." : "Save Changes"}
                   </button>

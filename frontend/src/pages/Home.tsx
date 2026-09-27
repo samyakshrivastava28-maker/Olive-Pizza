@@ -226,14 +226,14 @@ export default function Home() {
 
         {/* ─── Flagship Canonical Content ─────────────────────────────────── */}
         <main
-          className="w-full pb-16 relative overflow-hidden bg-[#FAF7F2]"
+          className="w-full pb-16 relative overflow-hidden bg-[#FAF8F5]"
         >
-          {/* Subtle warm oven ambient background glows */}
+          {/* Subtle warm champagne & emerald ambient glows */}
           <div
-            className="absolute inset-0 pointer-events-none opacity-40 z-0"
+            className="absolute inset-0 pointer-events-none opacity-20 z-0"
             style={{
               background:
-                "radial-gradient(ellipse at 20% 20%, rgba(249,115,22,0.08) 0%, transparent 60%), radial-gradient(ellipse at 80% 60%, rgba(225,29,72,0.06) 0%, transparent 60%)",
+                "radial-gradient(ellipse at 20% 10%, rgba(6,78,59,0.1) 0%, transparent 60%), radial-gradient(ellipse at 80% 50%, rgba(248,231,201,0.2) 0%, transparent 60%)",
             }}
           />
 

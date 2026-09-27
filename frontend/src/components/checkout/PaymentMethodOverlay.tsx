@@ -17,14 +17,14 @@ export default function PaymentMethodOverlay({ onClose, onSelect, total }: any) 
     >
       <motion.div 
         initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-        className="w-full max-w-md bg-dark-900 border border-white/10 rounded-t-3xl sm:rounded-3xl px-6 pt-6 pb-safe sm:pb-6 shadow-2xl"
+        className="w-full max-w-md bg-white border border-slate-200 rounded-t-3xl sm:rounded-3xl px-6 pt-6 pb-safe sm:pb-6 shadow-2xl text-slate-900"
       >
         <div className="flex justify-between items-center mb-6">
           <div>
-            <h2 className="text-xl font-bold text-white">Payment Method</h2>
-            <p className="text-sm text-white/50 mt-1">Select how you want to pay ₹{total}</p>
+            <h2 className="text-xl font-black text-slate-900 tracking-tight">Payment Method</h2>
+            <p className="text-xs text-slate-500 mt-0.5">Select how you want to pay <span className="font-bold text-primary-700">₹{total}</span></p>
           </div>
-          <button onClick={onClose} className="p-2 bg-white/5 rounded-full hover:bg-white/10 text-white/70 transition-colors">
+          <button onClick={onClose} className="p-2 bg-slate-100 rounded-full hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -36,22 +36,22 @@ export default function PaymentMethodOverlay({ onClose, onSelect, total }: any) 
               <button
                 key={m.id}
                 onClick={() => onSelect(m.id)}
-                className="w-full flex items-center gap-4 p-4 rounded-2xl bg-white/[0.03] border border-white/5 hover:border-white/20 hover:bg-white/[0.05] transition-all active:scale-[0.98] group"
+                className="w-full flex items-center gap-4 p-4 rounded-2xl bg-[#FAF8F5] border border-slate-200 hover:border-primary-500 hover:bg-primary-50/30 transition-all active:scale-[0.98] group cursor-pointer text-left"
               >
-                <div className={`p-3 rounded-xl ${m.bg} ${m.color}`}>
+                <div className="p-3 rounded-xl bg-primary-100 text-primary-700 group-hover:bg-primary-600 group-hover:text-champagne transition-colors">
                   <Icon className="w-6 h-6" />
                 </div>
                 <div className="text-left flex-1">
-                  <p className="font-bold text-white group-hover:text-primary-300 transition-colors">{m.name}</p>
-                  <p className="text-xs text-white/50">{m.desc}</p>
+                  <p className="font-bold text-slate-900 group-hover:text-primary-800 transition-colors">{m.name}</p>
+                  <p className="text-xs text-slate-500">{m.desc}</p>
                 </div>
               </button>
             )
           })}
         </div>
         
-        <div className="mt-6 flex items-center justify-center gap-2 text-xs text-white/40">
-           <ShieldCheck className="w-4 h-4" /> 100% Secure & Encrypted Payments
+        <div className="mt-6 flex items-center justify-center gap-2 text-xs text-slate-500">
+           <ShieldCheck className="w-4 h-4 text-primary-600" /> 100% Secure & Encrypted Payments
         </div>
       </motion.div>
     </motion.div>

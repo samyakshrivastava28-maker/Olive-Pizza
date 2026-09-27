@@ -591,12 +591,11 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAF7F2] text-slate-900 flex flex-col justify-center items-center px-4 py-8 relative selection:bg-rose-500 selection:text-white">
+    <div className="min-h-screen bg-[#FAF8F5] text-slate-900 flex flex-col justify-center items-center px-4 py-8 relative selection:bg-primary-600 selection:text-champagne">
       {/* Background Ambience: Warm pizza-kitchen glows */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute -top-32 -left-32 w-96 h-96 bg-orange-200/40 rounded-full blur-3xl" />
-        <div className="absolute top-1/2 -right-32 w-96 h-96 bg-red-200/30 rounded-full blur-3xl" />
-        <div className="absolute -bottom-32 left-1/3 w-80 h-80 bg-amber-100/50 rounded-full blur-3xl" />
+        <div className="absolute -top-32 -left-32 w-96 h-96 bg-primary-100/20 rounded-full blur-3xl" />
+        <div className="absolute top-1/2 -right-32 w-96 h-96 bg-[#F8E7C9]/30 rounded-full blur-3xl" />
       </div>
 
       <motion.div
@@ -608,20 +607,20 @@ export default function Login() {
         {/* Brand Header */}
         <div className="text-center mb-6">
           <Link to="/" className="inline-flex items-center gap-2 group mb-3">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-red-600 via-rose-500 to-orange-500 flex items-center justify-center shadow-lg shadow-red-500/20 group-hover:scale-105 transition-transform">
+            <div className="w-12 h-12 rounded-2xl bg-[#064E3B] text-champagne border border-champagne/30 flex items-center justify-center shadow-md shadow-primary-950/20 group-hover:scale-105 transition-transform">
               <span className="text-2xl">🍕</span>
             </div>
           </Link>
           <h1 className="text-2xl font-black tracking-tight text-slate-900">
             Welcome to Olive Pizza
           </h1>
-          <p className="text-sm text-slate-500 mt-1 font-medium">
+          <p className="text-xs sm:text-sm text-slate-500 mt-1 font-medium">
             Fast, wood-fired pizzas delivered piping hot to your door
           </p>
         </div>
 
         {/* Main Card */}
-        <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-[0_20px_50px_rgba(249,115,22,0.08)] border border-orange-100/80">
+        <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-xs border border-slate-200">
           {verifiedUser ? (
             <VerificationSuccess3D
               identifier={verifiedUser.identifier}
@@ -631,20 +630,20 @@ export default function Login() {
           ) : (
             <>
               {/* Method Switcher Tabs */}
-              <div className="flex bg-orange-50/70 p-1.5 rounded-2xl mb-6 border border-orange-100/60">
+              <div className="flex bg-slate-100/90 p-1.5 rounded-2xl mb-6 border border-slate-200">
             <button
               type="button"
               onClick={() => {
                 setAuthMethod('email');
                 setError("");
               }}
-              className={`flex-1 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all ${
+              className={`flex-1 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer ${
                 authMethod === 'email'
-                  ? 'bg-white text-slate-900 shadow-sm shadow-orange-950/5'
+                  ? 'bg-white text-slate-900 shadow-xs border border-slate-200'
                   : 'text-slate-500 hover:text-slate-900'
               }`}
             >
-              <Mail className="w-4 h-4 text-rose-500" />
+              <Mail className="w-4 h-4 text-primary-700" />
               Email OTP
             </button>
             <button
@@ -653,13 +652,13 @@ export default function Login() {
                 setAuthMethod('phone');
                 setError("");
               }}
-              className={`flex-1 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all ${
+              className={`flex-1 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer ${
                 authMethod === 'phone'
-                  ? 'bg-white text-slate-900 shadow-sm shadow-orange-950/5'
+                  ? 'bg-white text-slate-900 shadow-xs border border-slate-200'
                   : 'text-slate-500 hover:text-slate-900'
               }`}
             >
-              <Phone className="w-4 h-4 text-emerald-600" />
+              <Phone className="w-4 h-4 text-primary-700" />
               Phone / Truecaller
             </button>
           </div>
@@ -693,7 +692,7 @@ export default function Login() {
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         placeholder="you@example.com"
-                        className="w-full pl-11 pr-4 py-3.5 bg-slate-50/70 border border-slate-200 focus:border-red-500 focus:bg-white rounded-2xl text-slate-900 text-sm font-medium focus:outline-none transition-all"
+                        className="w-full pl-11 pr-4 py-3.5 bg-[#FAF8F5] border border-slate-200 focus:border-primary-600 focus:bg-white rounded-2xl text-slate-900 text-sm font-medium focus:outline-none transition-all"
                       />
                     </div>
                   </div>
@@ -701,14 +700,14 @@ export default function Login() {
                   <button
                     type="submit"
                     disabled={loading || !email.trim()}
-                    className="w-full py-3.5 bg-gradient-to-r from-red-600 via-rose-600 to-orange-500 hover:from-red-700 hover:to-orange-600 disabled:opacity-50 text-white font-black text-sm rounded-2xl shadow-md shadow-red-500/25 flex items-center justify-center gap-2 transition-all active:scale-[0.99] cursor-pointer"
+                    className="w-full py-3.5 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-champagne font-black text-sm rounded-2xl shadow-md shadow-primary-900/15 flex items-center justify-center gap-2 transition-all active:scale-[0.99] cursor-pointer"
                   >
                     {loading ? (
-                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <RefreshCw className="w-4 h-4 animate-spin text-champagne" />
                     ) : (
                       <>
                         <span>Send 4-Digit Code</span>
-                        <ArrowRight className="w-4 h-4" />
+                        <ArrowRight className="w-4 h-4 text-champagne" />
                       </>
                     )}
                   </button>
@@ -722,7 +721,7 @@ export default function Login() {
                     <button
                       type="button"
                       onClick={() => setEmailStep('enter_email')}
-                      className="text-xs text-red-600 font-bold hover:underline mt-1 cursor-pointer"
+                      className="text-xs text-primary-700 font-bold hover:underline mt-1 cursor-pointer"
                     >
                       Change email
                     </button>
@@ -740,7 +739,7 @@ export default function Login() {
                         value={digit}
                         onChange={(e) => handleEmailCodeChange(index, e.target.value)}
                         onKeyDown={(e) => handleEmailKeyDown(index, e)}
-                        className="w-14 h-16 text-center text-2xl font-black bg-slate-50 border-2 border-slate-200 focus:border-red-500 focus:bg-white rounded-2xl text-slate-900 focus:outline-none transition-all"
+                        className="w-14 h-16 text-center text-2xl font-black bg-[#FAF8F5] border-2 border-slate-200 focus:border-primary-600 focus:bg-white rounded-2xl text-slate-900 focus:outline-none transition-all"
                       />
                     ))}
                   </div>
@@ -748,13 +747,13 @@ export default function Login() {
                   <button
                     type="submit"
                     disabled={loading || emailCode.join('').length !== 4}
-                    className="w-full py-3.5 bg-gradient-to-r from-red-600 via-rose-600 to-orange-500 hover:from-red-700 hover:to-orange-600 disabled:opacity-50 text-white font-black text-sm rounded-2xl shadow-md shadow-red-500/25 flex items-center justify-center gap-2 transition-all active:scale-[0.99] cursor-pointer"
+                    className="w-full py-3.5 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-champagne font-black text-sm rounded-2xl shadow-md shadow-primary-900/15 flex items-center justify-center gap-2 transition-all active:scale-[0.99] cursor-pointer"
                   >
                     {loading ? (
-                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <RefreshCw className="w-4 h-4 animate-spin text-champagne" />
                     ) : (
                       <>
-                        <CheckCircle2 className="w-4 h-4" />
+                        <CheckCircle2 className="w-4 h-4 text-champagne" />
                         <span>Verify & Sign In</span>
                       </>
                     )}
@@ -770,7 +769,7 @@ export default function Login() {
                         type="button"
                         onClick={() => handleSendEmailCode()}
                         disabled={loading}
-                        className="text-xs text-red-600 font-bold hover:underline cursor-pointer"
+                        className="text-xs text-primary-700 font-bold hover:underline cursor-pointer"
                       >
                         Resend 4-digit code
                       </button>
@@ -826,7 +825,7 @@ export default function Login() {
                         value={phone}
                         onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
                         placeholder="98765 43210"
-                        className="w-full pl-14 pr-4 py-3.5 bg-slate-50/70 border border-slate-200 focus:border-red-500 focus:bg-white rounded-2xl text-slate-900 text-sm font-medium focus:outline-none transition-all"
+                        className="w-full pl-14 pr-4 py-3.5 bg-[#FAF8F5] border border-slate-200 focus:border-primary-600 focus:bg-white rounded-2xl text-slate-900 text-sm font-medium focus:outline-none transition-all"
                       />
                     </div>
                   </div>
@@ -834,14 +833,14 @@ export default function Login() {
                   <button
                     type="submit"
                     disabled={loading || phone.replace(/\D/g, '').length < 10}
-                    className="w-full py-3.5 bg-gradient-to-r from-red-600 via-rose-600 to-orange-500 hover:from-red-700 hover:to-orange-600 disabled:opacity-50 text-white font-black text-sm rounded-2xl shadow-md shadow-red-500/25 flex items-center justify-center gap-2 transition-all active:scale-[0.99] cursor-pointer"
+                    className="w-full py-3.5 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-champagne font-black text-sm rounded-2xl shadow-md shadow-primary-900/15 flex items-center justify-center gap-2 transition-all active:scale-[0.99] cursor-pointer"
                   >
                     {loading ? (
-                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <RefreshCw className="w-4 h-4 animate-spin text-champagne" />
                     ) : (
                       <>
                         <span>Send SMS Code</span>
-                        <ArrowRight className="w-4 h-4" />
+                        <ArrowRight className="w-4 h-4 text-champagne" />
                       </>
                     )}
                   </button>
@@ -856,7 +855,7 @@ export default function Login() {
                       <button
                         type="button"
                         onClick={() => setPhoneStep('enter_phone')}
-                        className="text-xs text-red-600 font-bold hover:underline cursor-pointer"
+                        className="text-xs text-primary-700 font-bold hover:underline cursor-pointer"
                       >
                         Change
                       </button>
@@ -874,20 +873,20 @@ export default function Login() {
                         }
                       }}
                       placeholder="6-digit code"
-                      className="w-full px-4 py-3.5 bg-slate-50/70 border border-slate-200 focus:border-red-500 focus:bg-white rounded-2xl text-center text-xl font-black tracking-widest text-slate-900 focus:outline-none transition-all"
+                      className="w-full px-4 py-3.5 bg-[#FAF8F5] border border-slate-200 focus:border-primary-600 focus:bg-white rounded-2xl text-center text-xl font-black tracking-widest text-slate-900 focus:outline-none transition-all"
                     />
                   </div>
 
                   <button
                     type="submit"
                     disabled={loading || phoneOtp.length < 6}
-                    className="w-full py-3.5 bg-gradient-to-r from-red-600 via-rose-600 to-orange-500 hover:from-red-700 hover:to-orange-600 disabled:opacity-50 text-white font-black text-sm rounded-2xl shadow-md shadow-red-500/25 flex items-center justify-center gap-2 transition-all active:scale-[0.99] cursor-pointer"
+                    className="w-full py-3.5 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-champagne font-black text-sm rounded-2xl shadow-md shadow-primary-900/15 flex items-center justify-center gap-2 transition-all active:scale-[0.99] cursor-pointer"
                   >
                     {loading ? (
-                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <RefreshCw className="w-4 h-4 animate-spin text-champagne" />
                     ) : (
                       <>
-                        <CheckCircle2 className="w-4 h-4" />
+                        <CheckCircle2 className="w-4 h-4 text-champagne" />
                         <span>Verify & Continue</span>
                       </>
                     )}
@@ -903,7 +902,7 @@ export default function Login() {
                         type="button"
                         onClick={() => handleSendPhoneOtp()}
                         disabled={loading}
-                        className="text-xs text-red-600 font-bold hover:underline cursor-pointer"
+                        className="text-xs text-primary-700 font-bold hover:underline cursor-pointer"
                       >
                         Resend SMS OTP
                       </button>

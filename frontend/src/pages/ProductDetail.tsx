@@ -307,33 +307,33 @@ export default function ProductDetail() {
         {/* Back Button */}
         <button
           onClick={() => navigate("/menu")}
-          className="mb-8 flex items-center gap-2 font-bold text-slate-500 hover:text-primary-600 transition-colors"
+          className="mb-6 flex items-center gap-2 font-bold text-slate-600 hover:text-primary-700 transition-colors cursor-pointer text-sm"
         >
           <span>&larr;</span> Back to Menu
         </button>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16 items-start">
           {/* Left Column: 3D Interactive Showcase */}
           <div
-            className="relative rounded-3xl overflow-hidden bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900 flex items-center justify-center min-h-[400px] lg:min-h-[600px] shadow-2xl"
+            className="relative rounded-3xl overflow-hidden bg-gradient-to-br from-[#064E3B] via-[#043327] to-[#01140e] border border-champagne/30 flex items-center justify-center min-h-[380px] lg:min-h-[560px] shadow-xl"
             style={{ perspective: 1000 }}
             onMouseMove={handleMouseMove}
             onMouseLeave={handleMouseLeave}
           >
             <div className="absolute top-6 left-6 z-20 flex gap-2">
-                <span className="text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded border shadow-sm backdrop-blur-md">
-                  {item.category === "combo" ? (
-                    <span className="text-primary-400 border-primary-500/30">COMBO 🚀</span>
-                  ) : item.isVegetarian ? (
-                    <span className="text-success border-success/30">VEG</span>
-                  ) : (
-                    <span className="text-error border-error/30">NON-VEG</span>
-                  )}
-                </span>
+              <span className="text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-md border shadow-xs backdrop-blur-md bg-dark-950/70">
+                {item.category === "combo" ? (
+                  <span className="text-champagne border-champagne/30">COMBO 🚀</span>
+                ) : item.isVegetarian ? (
+                  <span className="text-emerald-400 border-emerald-500/30">VEG 🌿</span>
+                ) : (
+                  <span className="text-rose-400 border-rose-500/30">NON-VEG 🍗</span>
+                )}
+              </span>
             </div>
 
             <motion.div
-              key={`size-${selectedSize}`}          // Re-mounts spring on every size change
+              key={`size-${selectedSize}`}
               initial={{ scale: sizeScale * 0.85, rotateX: 0, rotateY: 0 }}
               animate={{
                 scale: sizeScale,
@@ -349,7 +349,7 @@ export default function ProductDetail() {
             >
               {/* Ground shadow — scales with pizza */}
               <motion.div
-                className="absolute -bottom-8 w-3/4 h-8 bg-black/25 dark:bg-black/60 blur-2xl rounded-[100%]"
+                className="absolute -bottom-8 w-3/4 h-8 bg-black/60 blur-2xl rounded-[100%]"
                 animate={{
                   scaleX: sizeScale,
                   scaleY: sizeScale * 0.6,
@@ -358,14 +358,14 @@ export default function ProductDetail() {
                 transition={{ type: "spring", stiffness: 260, damping: 18 }}
               />
 
-              {/* Orange glow pulse on size change */}
+              {/* Emerald/Champagne glow pulse on size change */}
               <motion.div
                 key={`glow-${selectedSize}`}
                 className="absolute inset-0 rounded-full pointer-events-none"
                 initial={{ opacity: 0.7, scale: 1.1 }}
                 animate={{ opacity: 0, scale: 1.6 }}
                 transition={{ duration: 0.55, ease: 'easeOut' }}
-                style={{ background: 'radial-gradient(circle, rgba(249,115,22,0.35) 0%, transparent 70%)' }}
+                style={{ background: 'radial-gradient(circle, rgba(248,231,201,0.3) 0%, transparent 70%)' }}
               />
 
               <img
@@ -381,29 +381,36 @@ export default function ProductDetail() {
           </div>
 
           {/* Right Column: Configuration & Add to Cart */}
-          <div className="flex flex-col space-y-8">
+          <div className="flex flex-col space-y-6">
             <div>
-              <h1 className="text-4xl lg:text-5xl font-black text-slate-800 dark:text-slate-100 mb-4 tracking-tight">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-primary-50 text-primary-800 border border-primary-200">
+                  {item.category?.toUpperCase() || "PIZZA"}
+                </span>
+                <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+                  Wood-Fired 450°C
+                </span>
+              </div>
+              <h1 className="text-3xl lg:text-4xl font-black text-slate-900 tracking-tight">
                 {item.name}
               </h1>
-              <p className="text-lg text-slate-500 dark:text-slate-400 font-medium leading-relaxed">
+              <p className="text-sm sm:text-base text-slate-600 font-medium leading-relaxed mt-2">
                 {item.description}
               </p>
             </div>
 
-            <div className="h-px bg-slate-200 dark:bg-slate-700 w-full" />
+            <div className="h-px bg-slate-200 w-full" />
 
             {/* Size Selector */}
             {item.variants && item.variants.length > 0 && (
               <div>
-                <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">
+                <h3 className="text-xs font-black text-primary-800 uppercase tracking-widest mb-3">
                   1. Choose Size
                 </h3>
-                <div className="flex flex-wrap gap-3">
+                <div className="flex flex-wrap gap-2.5">
                   {item.variants.map((v, vi) => {
                     const isActive = selectedSize === v.name;
-                    // Pizza circle grows with each index
-                    const circleSize = 18 + vi * 6; // px: 18, 24, 30, 36…
+                    const circleSize = 18 + vi * 6;
                     const diameter = SIZE_DIAMETERS[vi] || `${8 + vi * 2}"`;
                     return (
                       <motion.button
@@ -411,41 +418,39 @@ export default function ProductDetail() {
                         onClick={() => setSelectedSize(v.name)}
                         whileTap={{ scale: 0.93 }}
                         whileHover={{ scale: 1.04 }}
-                        className={`relative flex flex-col items-center gap-2 px-5 py-3 rounded-2xl font-bold capitalize transition-colors duration-200 ${
+                        className={`relative flex flex-col items-center gap-1.5 px-4 py-3 rounded-2xl font-bold capitalize transition-colors duration-200 cursor-pointer ${
                           isActive
-                            ? "bg-primary-500 text-white shadow-lg shadow-primary-500/40 ring-2 ring-primary-500 ring-offset-2 dark:ring-offset-slate-900"
-                            : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-primary-400"
+                            ? "bg-primary-600 text-champagne border border-champagne/40 shadow-md ring-2 ring-primary-500"
+                            : "bg-white text-slate-700 border border-slate-200 hover:border-primary-600/30 shadow-xs"
                         }`}
                       >
-                        {/* Pizza circle silhouette */}
                         <motion.div
                           animate={{ scale: isActive ? 1.15 : 1 }}
                           transition={{ type: 'spring', stiffness: 400, damping: 20 }}
-                          className={`rounded-full border-2 flex items-center justify-center ${
-                            isActive ? 'border-white/60 bg-white/20' : 'border-slate-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-700'
+                          className={`rounded-full border flex items-center justify-center ${
+                            isActive ? 'border-champagne/60 bg-champagne/20' : 'border-slate-200 bg-slate-100'
                           }`}
                           style={{ width: circleSize, height: circleSize }}
                         >
                           <span style={{ fontSize: circleSize * 0.5 }}>🍕</span>
                         </motion.div>
 
-                        <span className="text-sm leading-none">{v.name}</span>
+                        <span className="text-xs leading-none">{v.name}</span>
                         <span className={`text-[10px] font-normal leading-none ${
-                          isActive ? 'text-white/70' : 'text-slate-400'
+                          isActive ? 'text-champagne/80' : 'text-slate-500'
                         }`}>{diameter}</span>
                         {v.price > 0 && (
-                          <span className={`text-[10px] font-bold ${
-                            isActive ? 'text-white/80' : 'text-primary-500'
+                          <span className={`text-[10px] font-black ${
+                            isActive ? 'text-champagne' : 'text-primary-700'
                           }`}>
                             +₹{v.price}
                           </span>
                         )}
 
-                        {/* Active indicator dot */}
                         {isActive && (
                           <motion.div
                             layoutId="size-active-dot"
-                            className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-primary-400"
+                            className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-champagne"
                           />
                         )}
                       </motion.button>
@@ -458,23 +463,23 @@ export default function ProductDetail() {
             {/* Crust Selector */}
             {item.crusts && item.crusts.length > 0 && (
               <div>
-                <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">
+                <h3 className="text-xs font-black text-primary-800 uppercase tracking-widest mb-3">
                   2. Choose Crust
                 </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   {item.crusts.map((c) => (
                     <button
                       key={c.name}
                       onClick={() => setSelectedCrust(c.name)}
-                      className={`flex items-center justify-between px-5 py-4 rounded-2xl font-bold transition-all duration-300 text-left ${
+                      className={`flex items-center justify-between px-4 py-3.5 rounded-2xl font-bold transition-all duration-200 text-left cursor-pointer ${
                         selectedCrust === c.name
-                          ? "bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-400 border-2 border-primary-500"
-                          : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-2 border-transparent hover:bg-slate-50 dark:hover:bg-slate-700"
+                          ? "bg-primary-50 text-primary-900 border-2 border-primary-600 shadow-xs"
+                          : "bg-white text-slate-700 border-2 border-slate-200 hover:border-primary-600/30 shadow-xs"
                       }`}
                     >
-                      <span>{c.name}</span>
+                      <span className="text-xs sm:text-sm">{c.name}</span>
                       {c.price > 0 && (
-                        <span className="text-xs opacity-70">+₹{c.price}</span>
+                        <span className="text-xs text-primary-700 font-black">+₹{c.price}</span>
                       )}
                     </button>
                   ))}
@@ -485,28 +490,28 @@ export default function ProductDetail() {
             {/* Extra Toppings Matrix */}
             {item.addons && item.addons.length > 0 && (
               <div>
-                <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">
+                <h3 className="text-xs font-black text-primary-800 uppercase tracking-widest mb-3">
                   3. Extra Toppings
                 </h3>
-                <div className="flex flex-wrap gap-3">
+                <div className="flex flex-wrap gap-2">
                   {item.addons.map((addon) => {
                     const isSelected = selectedAddOns.includes(addon.name);
                     return (
                       <button
                         key={addon.name}
                         onClick={() => toggleAddOn(addon.name)}
-                        className={`flex items-center gap-2 px-4 py-2.5 rounded-full font-bold text-sm transition-all duration-300 ${
+                        className={`flex items-center gap-2 px-3.5 py-2 rounded-full font-bold text-xs transition-all duration-200 cursor-pointer ${
                           isSelected
-                            ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-300 dark:border-green-800"
-                            : "bg-white dark:bg-slate-800 text-slate-500 border border-slate-200 dark:border-slate-700 hover:border-green-400"
+                            ? "bg-primary-50 text-primary-900 border border-primary-600 shadow-xs"
+                            : "bg-white text-slate-600 border border-slate-200 hover:border-primary-600/30 shadow-xs"
                         }`}
                       >
                         <div
-                          className={`w-4 h-4 rounded shadow-inner flex items-center justify-center transition-colors ${isSelected ? "bg-green-500" : "bg-slate-200 dark:bg-slate-700"}`}
+                          className={`w-3.5 h-3.5 rounded shadow-inner flex items-center justify-center transition-colors ${isSelected ? "bg-primary-600" : "bg-slate-200"}`}
                         >
                           {isSelected && (
                             <svg
-                              className="w-3 h-3 text-white"
+                              className="w-2.5 h-2.5 text-champagne"
                               fill="none"
                               viewBox="0 0 24 24"
                               stroke="currentColor"
@@ -521,7 +526,7 @@ export default function ProductDetail() {
                           )}
                         </div>
                         <span>{addon.name}</span>
-                        <span className="text-xs opacity-60">
+                        <span className="text-[10px] text-slate-500">
                           +₹{addon.price}
                         </span>
                       </button>
@@ -534,17 +539,17 @@ export default function ProductDetail() {
             <div className="flex-1" />
 
             {/* Price & Checkout Footer */}
-            <div className="sticky bottom-4 z-30 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl p-6 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 flex items-center justify-between">
+            <div className="sticky bottom-4 z-30 bg-white/95 backdrop-blur-xl p-5 md:p-6 rounded-3xl shadow-[0_8px_30px_rgba(6,78,59,0.12)] border border-slate-200 flex items-center justify-between">
               <div className="flex flex-col">
                 {item.discountPercentage && item.discountPercentage > 0 ? (
                   <>
-                    <span className="text-sm text-slate-500 line-through font-medium">₹{item.basePrice}</span>
-                    <span className="text-3xl md:text-5xl font-black text-accent-500 tracking-tight drop-shadow-[0_2px_10px_rgba(249,115,22,0.3)]">
+                    <span className="text-xs text-slate-400 line-through font-medium">₹{item.basePrice}</span>
+                    <span className="text-2xl md:text-4xl font-black text-primary-700 tracking-tight">
                       ₹{calculateTotal()}
                     </span>
                   </>
                 ) : (
-                  <span className="text-3xl md:text-5xl font-black text-white tracking-tight drop-shadow-xl">
+                  <span className="text-2xl md:text-4xl font-black text-primary-700 tracking-tight">
                     ₹{calculateTotal()}
                   </span>
                 )}
@@ -553,7 +558,7 @@ export default function ProductDetail() {
               <button
                 onClick={handleAddToCart}
                 disabled={!item.isAvailable}
-                className="bg-primary-600 hover:bg-primary-700 text-white font-black text-lg px-8 py-4 rounded-2xl shadow-xl shadow-primary-500/30 transition-transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="bg-primary-600 hover:bg-primary-700 text-champagne border border-champagne/30 font-black text-sm sm:text-base px-7 py-3.5 rounded-2xl shadow-md shadow-primary-900/15 transition-transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
               >
                 Add to Cart
               </button>

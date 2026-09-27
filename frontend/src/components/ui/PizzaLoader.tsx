@@ -43,7 +43,7 @@ const PizzaLoader: React.FC<PizzaLoaderProps> = ({
 
   if (fullScreen) {
     return (
-      <div className={`fixed inset-0 z-50 flex items-center justify-center bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm ${overlayClassName}`}>
+      <div className={`fixed inset-0 z-50 flex items-center justify-center bg-dark-950/90 backdrop-blur-md ${overlayClassName}`}>
         {loaderContent}
       </div>
     );

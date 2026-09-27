@@ -1131,28 +1131,28 @@ export default function OrderTracking() {
   return (
     <>
       <SEO title="Track Your Order" noIndex={true} />
-      <div className="min-h-screen bg-[#07090E] text-slate-100 antialiased selection:bg-[#FF6B00] selection:text-white pt-20 pb-24">
+      <div className="min-h-screen bg-[#FAF8F5] text-slate-900 antialiased pt-6 sm:pt-10 pb-24">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           
           {/* ── Top Header Navigation Bar ─────────────────────────────── */}
           <div className="flex items-center justify-between gap-3 mb-6">
             <button
               onClick={() => navigate("/dashboard")}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white transition-all text-xs font-bold active:scale-95"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 hover:text-slate-900 transition-all text-xs font-bold active:scale-95 shadow-xs cursor-pointer"
             >
-              <ChevronLeft className="w-4 h-4 text-orange-400" />
+              <ChevronLeft className="w-4 h-4 text-primary-600" />
               <span>Dashboard</span>
             </button>
 
             <div className="flex items-center gap-2">
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold">
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold shadow-xs">
                 <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-600" />
                 </span>
                 <span>Live Order</span>
               </div>
-              <span className="text-xs font-mono font-bold text-slate-300 bg-white/5 border border-white/10 px-3 py-1.5 rounded-xl">
+              <span className="text-xs font-mono font-bold text-slate-800 bg-white border border-slate-200 px-3 py-1.5 rounded-xl shadow-xs">
                 {order?.dailyOrderNumber || `#${orderId?.slice(-6).toUpperCase()}`}
               </span>
             </div>
@@ -1160,14 +1160,12 @@ export default function OrderTracking() {
             <button
               onClick={() => {
                 navigator.clipboard.writeText(window.location.href);
-                toast.success("Tracking link copied! 📋", {
-                  style: { background: "#0C0E14", color: "#fff", border: "1px solid rgba(255, 107, 0, 0.4)" }
-                });
+                toast.success("Tracking link copied! 📋");
               }}
               aria-label="Share Link"
-              className="w-10 h-10 flex items-center justify-center bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl text-slate-300 hover:text-white transition-all active:scale-95"
+              className="w-10 h-10 flex items-center justify-center bg-white hover:bg-slate-50 border border-slate-200 rounded-2xl text-slate-700 hover:text-slate-900 transition-all active:scale-95 shadow-xs cursor-pointer"
             >
-              <Share2 className="w-4 h-4 text-orange-400" />
+              <Share2 className="w-4 h-4 text-primary-600" />
             </button>
           </div>
 
@@ -1177,28 +1175,28 @@ export default function OrderTracking() {
             {/* ── Left Column: Status Hero, Stepper, Details, Bill ──────── */}
             <div className="lg:col-span-7 flex flex-col gap-6">
 
-              {/* 1. Status Hero Card (Primary Focal Point) */}
-              <div className="p-5 sm:p-6 rounded-3xl bg-[#12151E] border border-white/10 shadow-xl relative overflow-hidden">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-white/5">
+              {/* 1. Status Hero Card (Emerald Ink Flagship Surface) */}
+              <div className="p-5 sm:p-6 rounded-3xl bg-[#064E3B] text-white border border-champagne/30 shadow-md shadow-primary-950/20 relative overflow-hidden">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-champagne/20">
                   <div>
                     <div className="flex items-center gap-2 mb-1.5">
                       <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
                         order.status === 'out_for_delivery'
-                          ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                          ? 'bg-blue-500/20 text-blue-200 border border-blue-400/30'
                           : order.status === 'preparing'
-                          ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                          : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                          ? 'bg-champagne/20 text-champagne border border-champagne/30'
+                          : 'bg-emerald-400/20 text-emerald-200 border border-emerald-400/30'
                       }`}>
                         {order.status === 'out_for_delivery' ? 'On The Road' : order.status === 'preparing' ? 'In Kitchen' : 'Confirmed'}
                       </span>
-                      <span className="text-slate-500 text-xs">•</span>
-                      <span className="text-slate-400 text-xs font-medium">Stone oven prep</span>
+                      <span className="text-champagne/40 text-xs">•</span>
+                      <span className="text-champagne/80 text-xs font-medium">Stone oven prep</span>
                     </div>
 
-                    <h1 className="text-xl sm:text-2xl font-serif font-black text-white tracking-tight">
+                    <h1 className="text-xl sm:text-2xl font-serif font-black text-champagne tracking-tight">
                       {statusLabel}
                     </h1>
-                    <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                    <p className="text-xs text-champagne/80 mt-1 leading-relaxed">
                       {order.status === 'preparing'
                         ? 'Your pizzas are hand-stretched and baking inside our wood-fired oven.'
                         : order.status === 'out_for_delivery'
@@ -1208,24 +1206,24 @@ export default function OrderTracking() {
                   </div>
 
                   {/* Timing & Distance Pill */}
-                  <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center p-3 sm:p-0 rounded-2xl bg-white/[0.03] sm:bg-transparent border sm:border-0 border-white/5 shrink-0">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center p-3 sm:p-0 rounded-2xl bg-white/10 sm:bg-transparent border sm:border-0 border-champagne/20 shrink-0">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-champagne/70">
                       Estimated Arrival
                     </span>
                     {eta !== null ? (
                       <div className="flex items-baseline gap-1">
-                        <span className="text-2xl font-black text-[#FFB693]">
+                        <span className="text-2xl font-black text-champagne">
                           {eta}
                         </span>
-                        <span className="text-xs font-bold text-slate-400">min</span>
+                        <span className="text-xs font-bold text-champagne/80">min</span>
                       </div>
                     ) : (
-                      <span className="text-xs font-semibold text-slate-400 mt-1">
-                        Arrival time unavailable
+                      <span className="text-xs font-semibold text-champagne/70 mt-1">
+                        Arrival time calculating...
                       </span>
                     )}
                     {distance !== null && (
-                      <span className="text-[10px] text-blue-400 font-semibold mt-0.5">
+                      <span className="text-[10px] text-champagne/90 font-bold mt-0.5">
                         📍 {distance} km away
                       </span>
                     )}
@@ -1235,9 +1233,9 @@ export default function OrderTracking() {
                 {/* 5-Step Visual Stepper */}
                 <div className="pt-6">
                   <div className="grid grid-cols-5 gap-2 relative">
-                    <div className="absolute top-4 left-4 right-4 h-1 bg-white/10 -z-0 rounded-full">
+                    <div className="absolute top-4 left-4 right-4 h-1 bg-white/20 -z-0 rounded-full">
                       <div 
-                        className="h-full bg-gradient-to-r from-[#FF6B00] to-amber-400 rounded-full transition-all duration-700"
+                        className="h-full bg-champagne rounded-full transition-all duration-700"
                         style={{ width: `${Math.min(100, Math.max(0, (stageIndex / 4) * 100))}%` }}
                       />
                     </div>
@@ -1256,15 +1254,15 @@ export default function OrderTracking() {
                         <div key={idx} className="flex flex-col items-center text-center relative z-10">
                           <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
                             isCurrent
-                              ? "bg-gradient-to-tr from-[#FF6B00] to-amber-400 text-white shadow-[0_0_15px_rgba(255,107,0,0.5)] scale-110"
+                              ? "bg-champagne text-primary-950 shadow-[0_0_15px_rgba(248,231,201,0.6)] scale-110 font-bold"
                               : isPassed
-                              ? "bg-emerald-500 text-white"
-                              : "bg-[#1A1D27] text-slate-500 border border-white/10"
+                              ? "bg-emerald-300 text-primary-950 font-bold"
+                              : "bg-[#01140e] text-white/40 border border-white/20"
                           }`}>
                             <s.icon className="w-4 h-4" />
                           </div>
                           <span className={`text-[10px] font-bold mt-2 truncate max-w-[60px] ${
-                            isCurrent ? "text-amber-400" : isPassed ? "text-slate-300" : "text-slate-500"
+                            isCurrent ? "text-champagne font-extrabold" : isPassed ? "text-champagne/90" : "text-white/40"
                           }`}>
                             {s.label}
                           </span>
@@ -1276,15 +1274,15 @@ export default function OrderTracking() {
               </div>
 
               {/* 2. Mobile Supporting Live Map (Rendered here on mobile screen sizes) */}
-              <div className="lg:hidden w-full rounded-3xl overflow-hidden bg-[#12151E] border border-white/10 p-2 shadow-xl">
-                <div className="px-3 py-2 flex items-center justify-between text-xs">
-                  <span className="font-bold text-white flex items-center gap-1.5">
-                    <Navigation className="w-3.5 h-3.5 text-orange-400" />
+              <div className="lg:hidden w-full rounded-3xl overflow-hidden bg-white border border-slate-200 p-2 shadow-xs">
+                <div className="px-3 py-2 flex items-center justify-between text-xs border-b border-slate-100 mb-2">
+                  <span className="font-bold text-slate-900 flex items-center gap-1.5">
+                    <Navigation className="w-3.5 h-3.5 text-primary-600" />
                     <span>Live GPS Route</span>
                   </span>
-                  <span className="text-[11px] text-slate-400 font-mono">OpenStreetMap</span>
+                  <span className="text-[11px] text-slate-500 font-mono">OpenStreetMap</span>
                 </div>
-                <div className="relative w-full h-[260px] rounded-2xl overflow-hidden bg-[#0A0D14]">
+                <div className="relative w-full h-[260px] rounded-2xl overflow-hidden bg-slate-100">
                   <MapErrorBoundary>
                     <TrackingMap
                       restaurantLat={RESTAURANT_LOCATION.lat}
@@ -1313,29 +1311,29 @@ export default function OrderTracking() {
 
               {/* 3. Delivery Partner Info Card */}
               {['partner_assigned', 'picked_up', 'out_for_delivery'].includes(order.status) && (
-                <div className="p-5 rounded-3xl bg-[#12151E] border border-white/10 flex items-center justify-between gap-4 shadow-lg">
+                <div className="p-5 rounded-3xl bg-white border border-slate-200 flex items-center justify-between gap-4 shadow-xs">
                   {partnerDetails ? (
                     <>
                       <div className="flex items-center gap-3.5 min-w-0">
                         <div className="relative shrink-0">
-                          <div className="w-12 h-12 rounded-2xl bg-orange-500/10 border border-orange-500/30 flex items-center justify-center overflow-hidden">
+                          <div className="w-12 h-12 rounded-2xl bg-primary-50 border border-primary-200 flex items-center justify-center overflow-hidden">
                             {partnerDetails.photoUrl ? (
                               <img src={partnerDetails.photoUrl} alt="" className="w-full h-full object-cover" />
                             ) : (
-                              <Truck className="w-6 h-6 text-orange-400" />
+                              <Truck className="w-6 h-6 text-primary-700" />
                             )}
                           </div>
-                          <div className="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-emerald-500 border-2 border-[#12151E] rounded-full" />
+                          <div className="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-emerald-500 border-2 border-white rounded-full" />
                         </div>
 
                         <div className="min-w-0">
-                          <span className="text-[10px] font-black uppercase tracking-wider text-orange-400 block">
+                          <span className="text-[10px] font-black uppercase tracking-wider text-primary-700 block">
                             Delivery Partner
                           </span>
-                          <h4 className="text-base font-bold text-white truncate">
+                          <h4 className="text-base font-bold text-slate-900 truncate">
                             {partnerDetails.name || "Delivery Partner"}
                           </h4>
-                          <p className="text-xs text-slate-400 truncate">
+                          <p className="text-xs text-slate-500 truncate">
                             {partnerDetails.vehicleType || "Scooter"}{partnerDetails.vehicleNumber ? ` · ${partnerDetails.vehicleNumber}` : ""}
                           </p>
                         </div>
@@ -1344,24 +1342,24 @@ export default function OrderTracking() {
                       {partnerDetails.phone && (
                         <a
                           href={`tel:${partnerDetails.phone}`}
-                          className="w-11 h-11 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white flex items-center justify-center shadow-lg shadow-emerald-500/20 active:scale-95 transition-all shrink-0"
+                          className="w-11 h-11 rounded-2xl bg-primary-600 hover:bg-primary-700 text-champagne flex items-center justify-center shadow-xs active:scale-95 transition-all shrink-0 cursor-pointer"
                           aria-label="Call Partner"
                         >
-                          <Phone className="w-5 h-5" />
+                          <Phone className="w-5 h-5 text-champagne" />
                         </a>
                       )}
                     </>
                   ) : (
                     <div className="flex items-center gap-3.5">
-                      <div className="w-12 h-12 rounded-2xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-orange-400">
+                      <div className="w-12 h-12 rounded-2xl bg-primary-50 border border-primary-200 flex items-center justify-center text-primary-700">
                         <Truck className="w-6 h-6 animate-pulse" />
                       </div>
                       <div>
-                        <span className="text-[10px] font-black uppercase tracking-wider text-orange-400 block">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-primary-700 block">
                           Delivery Partner
                         </span>
-                        <h4 className="text-sm font-bold text-white">Assigning partner...</h4>
-                        <p className="text-xs text-slate-400">Rider details will appear as soon as assigned</p>
+                        <h4 className="text-sm font-bold text-slate-900">Assigning partner...</h4>
+                        <p className="text-xs text-slate-500">Rider details will appear as soon as assigned</p>
                       </div>
                     </div>
                   )}
@@ -1369,70 +1367,70 @@ export default function OrderTracking() {
               )}
 
               {/* 4. Delivery Address & Store Hub */}
-              <div className="p-5 rounded-3xl bg-[#12151E] border border-white/10 shadow-lg flex flex-col gap-4">
+              <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-xs flex flex-col gap-4">
                 <div className="flex items-start gap-3.5">
-                  <div className="w-10 h-10 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 shrink-0 mt-0.5">
+                  <div className="w-10 h-10 rounded-2xl bg-primary-50 border border-primary-200 flex items-center justify-center text-primary-700 shrink-0 mt-0.5">
                     <MapPin className="w-5 h-5" />
                   </div>
                   <div>
-                    <span className="text-[10px] font-black uppercase tracking-wider text-blue-400 block">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-primary-700 block">
                       Delivering To
                     </span>
-                    <p className="text-sm font-bold text-white mt-0.5">
+                    <p className="text-sm font-bold text-slate-900 mt-0.5">
                       {order.deliveryAddress?.addressLine || order.deliveryAddress?.address || order.deliveryAddress?.fullAddress || "Your Selected Location"}
                     </p>
                     {order.deliveryAddress?.landmark && (
-                      <p className="text-xs text-slate-400 mt-0.5">Landmark: {order.deliveryAddress.landmark}</p>
+                      <p className="text-xs text-slate-500 mt-0.5">Landmark: {order.deliveryAddress.landmark}</p>
                     )}
                   </div>
                 </div>
 
-                <div className="h-px bg-white/5" />
+                <div className="h-px bg-slate-100" />
 
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-10 h-10 rounded-2xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-orange-400 shrink-0">
+                    <div className="w-10 h-10 rounded-2xl bg-secondary-100 border border-secondary-300/80 flex items-center justify-center text-primary-800 shrink-0">
                       <Store className="w-5 h-5" />
                     </div>
                     <div className="min-w-0">
-                      <span className="text-[10px] font-black uppercase tracking-wider text-orange-400 block">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-primary-700 block">
                         Fulfilling Kitchen
                       </span>
-                      <p className="text-xs font-bold text-white truncate">Olive Pizza • Central Hub</p>
-                      <p className="text-[11px] text-slate-400 truncate">{RESTAURANT_LOCATION.address}</p>
+                      <p className="text-xs font-bold text-slate-900 truncate">Olive Pizza • Central Hub</p>
+                      <p className="text-[11px] text-slate-500 truncate">{RESTAURANT_LOCATION.address}</p>
                     </div>
                   </div>
 
                   <a
                     href={`tel:${RESTAURANT_LOCATION.phone || '9999999999'}`}
-                    className="px-3.5 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white text-xs font-bold flex items-center gap-1.5 active:scale-95 transition-all shrink-0"
+                    className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 hover:text-slate-900 text-xs font-bold flex items-center gap-1.5 active:scale-95 transition-all shrink-0 cursor-pointer"
                   >
-                    <Phone className="w-3.5 h-3.5 text-orange-400" />
+                    <Phone className="w-3.5 h-3.5 text-primary-600" />
                     <span>Call Store</span>
                   </a>
                 </div>
               </div>
 
               {/* 5. Order Items Breakdown & Bill */}
-              <div className="p-5 sm:p-6 rounded-3xl bg-[#12151E] border border-white/10 shadow-lg">
-                <h3 className="text-base font-serif font-black text-white mb-4 flex items-center gap-2">
-                  <ShoppingBag className="w-4 h-4 text-orange-400" />
+              <div className="p-5 sm:p-6 rounded-3xl bg-white border border-slate-200 shadow-xs">
+                <h3 className="text-base font-serif font-black text-slate-900 mb-4 flex items-center gap-2">
+                  <ShoppingBag className="w-4 h-4 text-primary-600" />
                   <span>Order Items ({order.items?.length || 0})</span>
                 </h3>
 
-                <div className="space-y-3 mb-5 divide-y divide-white/5">
+                <div className="space-y-3 mb-5 divide-y divide-slate-100">
                   {order.items?.map((item: any, i: number) => (
                     <div key={i} className="flex items-center justify-between gap-3 pt-3 first:pt-0">
                       <div className="flex items-center gap-3 min-w-0">
                         {item.image && (
-                          <div className="w-10 h-10 rounded-xl overflow-hidden bg-black/40 border border-white/10 shrink-0">
+                          <div className="w-10 h-10 rounded-xl overflow-hidden bg-slate-100 border border-slate-200 shrink-0">
                             <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
                           </div>
                         )}
                         <div className="min-w-0">
-                          <p className="text-sm font-bold text-white truncate">{item.name}</p>
+                          <p className="text-sm font-bold text-slate-900 truncate">{item.name}</p>
                           {(item.variant || item.crust) && (
-                            <p className="text-xs text-slate-400 truncate">
+                            <p className="text-xs text-slate-500 truncate">
                               {[item.variant, item.crust].filter(Boolean).join(" • ")}
                             </p>
                           )}
@@ -1440,30 +1438,30 @@ export default function OrderTracking() {
                       </div>
 
                       <div className="flex items-baseline gap-2 shrink-0">
-                        <span className="text-xs font-bold text-slate-400">×{item.quantity}</span>
-                        <span className="text-sm font-black text-[#FFB693]">₹{item.price * item.quantity}</span>
+                        <span className="text-xs font-bold text-slate-500">×{item.quantity}</span>
+                        <span className="text-sm font-black text-primary-700">₹{item.price * item.quantity}</span>
                       </div>
                     </div>
                   ))}
                 </div>
 
                 {/* Bill Summary */}
-                <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5 space-y-2">
-                  <div className="flex justify-between text-xs text-slate-400">
+                <div className="p-4 rounded-2xl bg-[#FAF8F5] border border-slate-200 space-y-2">
+                  <div className="flex justify-between text-xs text-slate-500">
                     <span>Subtotal</span>
-                    <span>₹{order.totalAmount - (order.deliveryFee || 40)}</span>
+                    <span className="font-semibold text-slate-800">₹{order.totalAmount - (order.deliveryFee || 40)}</span>
                   </div>
-                  <div className="flex justify-between text-xs text-slate-400">
+                  <div className="flex justify-between text-xs text-slate-500">
                     <span>Delivery Fee</span>
-                    <span>₹{order.deliveryFee || 40}</span>
+                    <span className="font-semibold text-slate-800">₹{order.deliveryFee || 40}</span>
                   </div>
-                  <div className="flex justify-between items-center pt-2 mt-1 border-t border-white/5">
-                    <span className="text-sm font-bold text-white">Grand Total</span>
-                    <span className="text-lg font-black text-amber-400">₹{order.totalAmount}</span>
+                  <div className="flex justify-between items-center pt-2 mt-1 border-t border-slate-200">
+                    <span className="text-sm font-bold text-slate-900">Grand Total</span>
+                    <span className="text-lg font-black text-primary-800">₹{order.totalAmount}</span>
                   </div>
-                  <div className="flex items-center justify-between pt-1 text-[11px] text-slate-400">
+                  <div className="flex items-center justify-between pt-1 text-[11px] text-slate-500">
                     <span>Payment Mode</span>
-                    <span className="font-bold text-emerald-400">
+                    <span className="font-bold text-emerald-700">
                       {order.paymentMethod === "online" ? "Paid Online" : "Cash on Delivery"}
                     </span>
                   </div>
@@ -1473,9 +1471,9 @@ export default function OrderTracking() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
                   <button
                     onClick={() => navigate(`/bill/${order.billReference || order.id || orderId}`)}
-                    className="py-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white font-bold text-xs flex items-center justify-center gap-2 active:scale-95 transition-all"
+                    className="py-3 rounded-xl bg-primary-600 hover:bg-primary-700 text-champagne font-bold text-xs flex items-center justify-center gap-2 active:scale-95 transition-all shadow-xs cursor-pointer"
                   >
-                    <Receipt className="w-4 h-4 text-orange-400" />
+                    <Receipt className="w-4 h-4 text-champagne" />
                     <span>View Official Bill</span>
                   </button>
 
@@ -1483,7 +1481,7 @@ export default function OrderTracking() {
                     <button
                       onClick={handleCancel}
                       disabled={cancelling}
-                      className="py-3 rounded-xl bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 font-bold text-xs flex items-center justify-center gap-1.5 active:scale-95 transition-all disabled:opacity-50"
+                      className="py-3 rounded-xl bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 font-bold text-xs flex items-center justify-center gap-1.5 active:scale-95 transition-all disabled:opacity-50 cursor-pointer"
                     >
                       <span>{cancelling ? "Cancelling..." : "Cancel Order"}</span>
                     </button>
@@ -1495,16 +1493,16 @@ export default function OrderTracking() {
 
             {/* ── Right Column (Desktop Sticky Live 2.5D Map) ─────────── */}
             <div className="hidden lg:block lg:col-span-5 sticky top-24">
-              <div className="rounded-3xl overflow-hidden bg-[#12151E] border border-white/10 p-3 shadow-2xl">
-                <div className="px-3 py-2 flex items-center justify-between text-xs border-b border-white/5 mb-2">
-                  <span className="font-bold text-white flex items-center gap-1.5">
-                    <Navigation className="w-3.5 h-3.5 text-orange-400" />
+              <div className="rounded-3xl overflow-hidden bg-white border border-slate-200 p-3 shadow-md">
+                <div className="px-3 py-2 flex items-center justify-between text-xs border-b border-slate-100 mb-2">
+                  <span className="font-bold text-slate-900 flex items-center gap-1.5">
+                    <Navigation className="w-3.5 h-3.5 text-primary-600" />
                     <span>Live GPS Tracking</span>
                   </span>
-                  <span className="text-[11px] text-slate-400 font-mono">OpenStreetMap 2.5D</span>
+                  <span className="text-[11px] text-slate-500 font-mono">OpenStreetMap 2.5D</span>
                 </div>
 
-                <div className="relative w-full h-[520px] rounded-2xl overflow-hidden bg-[#0A0D14]">
+                <div className="relative w-full h-[520px] rounded-2xl overflow-hidden bg-slate-100">
                   <MapErrorBoundary>
                     <TrackingMap
                       restaurantLat={RESTAURANT_LOCATION.lat}

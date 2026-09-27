@@ -5,38 +5,57 @@
 @theme {
   --font-sans: "Inter", "Outfit", system-ui, sans-serif;
   
-  /* Primary Brand Color - Deep Olive Green */
-  --color-primary-50: #f4f7f4;
-  --color-primary-100: #e3ebe3;
-  --color-primary-200: #c7d7c8;
-  --color-primary-300: #9eb8a1;
-  --color-primary-400: #749578;
-  --color-primary-500: #55775a;
-  --color-primary-600: #425e47;
-  --color-primary-700: #354a3a;
-  --color-primary-800: #2c3d31;
-  --color-primary-900: #25332a;
-  --color-primary-950: #131c17;
+  /* Primary Brand Color - Emerald Ink (#064E3B) Spectrum */
+  --color-primary-50: #e6f5ef;
+  --color-primary-100: #c1e7d7;
+  --color-primary-200: #97d7bd;
+  --color-primary-300: #62c29c;
+  --color-primary-400: #2ca578;
+  --color-primary-500: #0d825c;
+  --color-primary-600: #064E3B; /* Canonical Emerald Ink */
+  --color-primary-700: #054131;
+  --color-primary-800: #043327;
+  --color-primary-900: #03261c;
+  --color-primary-950: #01140e;
 
-  /* Secondary Color - Warm Pizza Orange */
-  --color-secondary-400: #fb923c;
-  --color-secondary-500: #f97316;
-  --color-secondary-600: #ea580c;
+  /* Secondary Brand Color - Champagne (#F8E7C9) Luxury Spectrum */
+  --color-secondary-100: #fefcf7;
+  --color-secondary-200: #fcf6eb;
+  --color-secondary-300: #F8E7C9; /* Canonical Champagne */
+  --color-secondary-400: #edd29e;
+  --color-secondary-500: #dfc28a;
+  --color-secondary-600: #c6a466;
 
-  /* Accent Color - Premium Gold */
-  --color-accent-400: #fbbf24;
-  --color-accent-500: #f59e0b;
-  --color-accent-600: #d97706;
+  /* Champagne Named Aliases */
+  --color-champagne-light: #fefcf7;
+  --color-champagne: #F8E7C9;
+  --color-champagne-deep: #dfc28a;
 
-  /* Background - Near Black & Cards - Dark Slate */
-  --color-dark-950: #0a0a0a;
-  --color-dark-900: #121212;
-  --color-dark-800: #1e1e1e;
-  --color-dark-700: #2d2d2d;
+  /* Emerald Named Aliases */
+  --color-emerald-ink: #064E3B;
+  --color-emerald-light: #0d825c;
+  --color-emerald-deep: #03261c;
+
+  /* Background - Obsidian & Dark Forest Slate Surfaces */
+  --color-dark-950: #070B08;
+  --color-dark-900: #0D140F;
+  --color-dark-800: #141F18;
+  --color-dark-700: #1E2E23;
+  --color-dark-600: #2C3E33;
   
-  /* Utilities */
-  --color-success: #4ade80;
-  --color-error: #f87171;
+  /* Statutory Food Quality & Utilities */
+  --color-veg: #10B981;
+  --color-nonveg: #E11D48;
+  --color-success: #10B981;
+  --color-error: #F43F5E;
+
+  /* Warm Supporting Food-First Surfaces */
+  --color-warm-bg: #FAF8F5;
+  --color-warm-surface: #FDFBF7;
+  --color-warm-card: #FFFFFF;
+  --color-warm-border: #E8E5DD;
+  --color-warm-muted: #64748B;
+  --color-warm-text: #0F172A;
 }
 
 :root {
@@ -51,6 +70,12 @@
 }
 
 @layer utilities {
+  .food-card {
+    @apply bg-white border border-[#F8E7C9]/60 shadow-[0_4px_20px_rgba(6,78,59,0.06)] rounded-2xl md:rounded-3xl overflow-hidden transition-all duration-300;
+  }
+  .food-surface {
+    @apply bg-[#FAF8F5] text-slate-900;
+  }
   .premium-card {
     @apply bg-dark-900 border border-dark-800 shadow-md rounded-2xl overflow-hidden;
   }
@@ -138,21 +163,43 @@ a, button, [role="button"] {
   line-height: 1.5;
 }
 
-/* ─── Premium Glow Utilities ──────────────────────────────────────────────── */
+/* ─── Premium Glow & Surface Utilities ───────────────────────────────────── */
 .glow-orange {
   box-shadow: 0 0 24px rgba(249, 115, 22, 0.35), 0 8px 32px rgba(0,0,0,0.4);
 }
 
 .glow-gold {
-  box-shadow: 0 0 24px rgba(251, 191, 36, 0.3), 0 8px 32px rgba(0,0,0,0.4);
+  box-shadow: 0 0 24px rgba(248, 231, 201, 0.35), 0 8px 32px rgba(0,0,0,0.4);
+}
+
+.luxury-emerald-glow {
+  box-shadow: 0 0 24px rgba(6, 78, 59, 0.45), 0 8px 32px rgba(0,0,0,0.5);
+}
+
+.luxury-champagne-glow {
+  box-shadow: 0 0 28px rgba(248, 231, 201, 0.25), 0 8px 32px rgba(0,0,0,0.4);
+}
+
+.luxury-champagne-surface {
+  background: linear-gradient(135deg, #F8E7C9 0%, #edd29e 100%);
+  color: #064E3B;
+  box-shadow: 0 8px 30px rgba(248, 231, 201, 0.15);
 }
 
 /* ─── Premium Glass Card ──────────────────────────────────────────────────── */
 .glass-card {
-  background: rgba(30, 30, 30, 0.7);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(13, 20, 15, 0.75);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(248, 231, 201, 0.08);
+  border-radius: 1.25rem;
+}
+
+.glass-emerald {
+  background: rgba(6, 78, 59, 0.25);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(6, 78, 59, 0.4);
   border-radius: 1.25rem;
 }
 
@@ -163,7 +210,7 @@ a, button, [role="button"] {
 }
 
 .luxury-shimmer {
-  background: linear-gradient(90deg, #1e1e1e 25%, #2d2d2d 50%, #1e1e1e 75%);
+  background: linear-gradient(90deg, #0d140f 25%, #141f18 50%, #0d140f 75%);
   background-size: 200% auto;
   animation: luxury-shimmer 1.6s linear infinite;
   will-change: background-position;
@@ -174,9 +221,9 @@ html {
   scroll-behavior: smooth;
 }
 
-/* ─── Remove default focus ring, use premium outline ──────────────────────── */
+/* ─── Remove default focus ring, use premium emerald outline ──────────────── */
 *:focus-visible {
-  outline: 2px solid rgba(249, 115, 22, 0.6);
+  outline: 2px solid rgba(6, 78, 59, 0.85);
   outline-offset: 3px;
   border-radius: 6px;
 }

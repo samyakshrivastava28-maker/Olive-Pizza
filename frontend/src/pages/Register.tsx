@@ -383,14 +383,14 @@ export default function Register() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-[#FAF8F5] text-slate-900 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8">
       {/* Permanent, invisible reCAPTCHA container */}
       <div id="recaptcha-container" className="fixed bottom-0 right-0 z-0 pointer-events-none"></div>
 
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center mb-3">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-orange-100 dark:bg-orange-950/60 border border-orange-300 dark:border-orange-800 text-orange-700 dark:text-orange-400 text-xs font-bold uppercase tracking-wider">
-            <Sparkles className="w-3.5 h-3.5" />
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-secondary-100 border border-secondary-300 text-primary-800 text-xs font-bold uppercase tracking-wider">
+            <Sparkles className="w-3.5 h-3.5 text-primary-700" />
             <span>
               {currentStep === "step1_input"
                 ? "Step 1 of 4 • Account Info"
@@ -399,10 +399,10 @@ export default function Register() {
           </div>
         </div>
 
-        <h1 className="text-2xl sm:text-3xl font-extrabold text-center text-slate-900 dark:text-white tracking-tight">
+        <h1 className="text-2xl sm:text-3xl font-black text-center text-slate-900 tracking-tight">
           {currentStep === "step1_input" ? "Create Your Account" : "Verify Your Phone"}
         </h1>
-        <p className="mt-2 text-center text-xs sm:text-sm text-slate-600 dark:text-slate-400 max-w-sm mx-auto">
+        <p className="mt-2 text-center text-xs sm:text-sm text-slate-600 max-w-sm mx-auto">
           {currentStep === "step1_input"
             ? "Enter your name and mobile number to start ordering hot, delicious pizza."
             : `We need to verify +91 ${cleanPhoneDigits(phone)} to secure your orders.`}
@@ -410,13 +410,13 @@ export default function Register() {
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white dark:bg-slate-900 py-8 px-5 sm:px-8 shadow-xl rounded-3xl border border-slate-200 dark:border-slate-800 space-y-6">
+        <div className="bg-white py-8 px-5 sm:px-8 shadow-xs rounded-3xl border border-slate-200 space-y-6">
           
           {error && (
             <motion.div
               initial={{ opacity: 0, y: -8 }}
               animate={{ opacity: 1, y: 0 }}
-              className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-xl text-xs text-red-600 dark:text-red-400 font-medium flex items-center gap-2"
+              className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-medium flex items-center gap-2"
             >
               <AlertCircle className="w-4 h-4 flex-shrink-0" />
               <span>{error}</span>
@@ -429,7 +429,7 @@ export default function Register() {
           {currentStep === "step1_input" && (
             <form onSubmit={handleProceedToVerify} className="space-y-5">
               <div>
-                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
                   Full Name *
                 </label>
                 <div className="relative">
@@ -443,17 +443,17 @@ export default function Register() {
                       setName(e.target.value);
                       setError("");
                     }}
-                    className="w-full pl-10 pr-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-medium text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    className="w-full pl-10 pr-4 py-3 rounded-2xl border border-slate-200 bg-[#FAF8F5] text-slate-900 font-medium text-sm focus:outline-none focus:border-primary-600 focus:bg-white"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
                   Mobile Number *
                 </label>
                 <div className="relative flex items-center">
-                  <span className="absolute left-3.5 font-bold text-sm text-slate-500 dark:text-slate-400">
+                  <span className="absolute left-3.5 font-bold text-sm text-slate-500">
                     +91
                   </span>
                   <input
@@ -466,7 +466,7 @@ export default function Register() {
                       setPhone(e.target.value.replace(/\D/g, ""));
                       setError("");
                     }}
-                    className="w-full pl-14 pr-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-bold tracking-wider text-base focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    className="w-full pl-14 pr-4 py-3 rounded-2xl border border-slate-200 bg-[#FAF8F5] text-slate-900 font-bold tracking-wider text-base focus:outline-none focus:border-primary-600 focus:bg-white"
                   />
                 </div>
               </div>
@@ -475,19 +475,19 @@ export default function Register() {
                 <button
                   type="submit"
                   disabled={!name.trim() || cleanPhoneDigits(phone).length !== 10}
-                  className="w-full py-4 px-6 rounded-2xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-base shadow-lg shadow-orange-600/25 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="w-full py-4 px-6 rounded-2xl bg-primary-600 hover:bg-primary-700 text-champagne font-bold text-base shadow-md shadow-primary-900/15 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
                 >
                   <span>Verify</span>
-                  <ArrowRight className="w-5 h-5" />
+                  <ArrowRight className="w-5 h-5 text-champagne" />
                 </button>
               </div>
 
               <div className="text-center pt-2">
-                <p className="text-xs text-slate-500 dark:text-slate-400">
+                <p className="text-xs text-slate-500">
                   Already have an account?{" "}
                   <Link
                     to="/login"
-                    className="font-bold text-orange-600 dark:text-orange-400 hover:underline"
+                    className="font-bold text-primary-700 hover:underline"
                   >
                     Log In
                   </Link>
@@ -502,16 +502,16 @@ export default function Register() {
           {currentStep === "step2_verify" && (
             <div className="space-y-6">
               {/* Phone preview card with change button */}
-              <div className="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-100 dark:border-slate-750 flex items-center justify-between">
+              <div className="p-3.5 bg-[#FAF8F5] rounded-2xl border border-slate-200 flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-xl bg-orange-100 dark:bg-orange-950/60 text-orange-600 flex items-center justify-center font-bold">
+                  <div className="w-8 h-8 rounded-xl bg-primary-100 text-primary-700 flex items-center justify-center font-bold">
                     <Smartphone className="w-4 h-4" />
                   </div>
                   <div>
-                    <span className="text-[10px] uppercase font-bold text-slate-400 block">
+                    <span className="text-[10px] uppercase font-bold text-slate-500 block">
                       Verifying Number
                     </span>
-                    <span className="text-sm font-extrabold text-slate-900 dark:text-white">
+                    <span className="text-sm font-extrabold text-slate-900">
                       +91 {cleanPhoneDigits(phone)}
                     </span>
                   </div>
@@ -524,7 +524,7 @@ export default function Register() {
                     setVerifyMode("choose");
                     setError("");
                   }}
-                  className="text-xs font-bold text-orange-600 dark:text-orange-400 hover:underline flex items-center gap-1"
+                  className="text-xs font-bold text-primary-700 hover:underline flex items-center gap-1 cursor-pointer"
                 >
                   <Edit2 className="w-3.5 h-3.5" />
                   <span>Change</span>

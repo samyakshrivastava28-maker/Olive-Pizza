@@ -59,14 +59,14 @@ export default function LiveCoupons() {
         {/* Section Header */}
         <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 md:mb-14">
           <div>
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/20 backdrop-blur-md mb-3">
-              <Flame className="w-4 h-4 text-amber-400 animate-bounce" />
-              <span className="text-xs font-black uppercase tracking-wider text-amber-300">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-primary-950 border border-primary-500/30 backdrop-blur-md mb-3">
+              <Flame className="w-4 h-4 text-champagne animate-bounce" />
+              <span className="text-xs font-black uppercase tracking-wider text-champagne">
                 Exclusive Savings
               </span>
             </div>
             <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight">
-              Active <span className="bg-gradient-to-r from-amber-400 via-orange-400 to-red-500 bg-clip-text text-transparent">Promo Coupons</span>
+              Active <span className="bg-gradient-to-r from-champagne via-primary-300 to-emerald-400 bg-clip-text text-transparent">Promo Coupons</span>
             </h2>
           </div>
           <p className="text-slate-400 text-sm sm:text-base max-w-md mt-2 md:mt-0 font-medium">
@@ -95,33 +95,32 @@ export default function LiveCoupons() {
                 viewport={{ once: true }}
                 transition={{ duration: 0.45, delay: idx * 0.08 }}
                 whileHover={{ y: -6, scale: 1.02 }}
-                className="group relative rounded-3xl p-6 overflow-hidden border border-white/10 transition-all duration-300 flex flex-col justify-between"
+                className="group relative rounded-3xl p-6 overflow-hidden border border-champagne/20 transition-all duration-300 flex flex-col justify-between shadow-[0_12px_35px_rgba(0,0,0,0.6)]"
                 style={{
                   background:
-                    "linear-gradient(135deg, rgba(28, 25, 23, 0.95) 0%, rgba(12, 10, 9, 0.98) 100%)",
-                  boxShadow: "0 12px 35px rgba(0, 0, 0, 0.6)",
+                    "linear-gradient(135deg, rgba(13, 20, 15, 0.95) 0%, rgba(7, 11, 8, 0.98) 100%)",
                 }}
               >
                 {/* Glowing Ribbon Header Badge */}
                 <div className="absolute top-0 right-0">
-                  <div className="bg-gradient-to-l from-orange-500 to-amber-500 text-white font-black text-[10px] uppercase tracking-widest px-4 py-1 rounded-bl-2xl shadow-md border-b border-l border-orange-400/40 flex items-center gap-1">
-                    <Sparkles className="w-3 h-3 animate-pulse" />
+                  <div className="bg-gradient-to-l from-primary-600 to-primary-700 text-champagne font-black text-[10px] uppercase tracking-widest px-4 py-1 rounded-bl-2xl shadow-md border-b border-l border-champagne/30 flex items-center gap-1">
+                    <Sparkles className="w-3 h-3 text-champagne animate-pulse" />
                     LIVE OFFER
                   </div>
                 </div>
 
                 {/* Left Ticket Cutout Decorative Dots */}
-                <div className="absolute top-1/2 -left-3 -translate-y-1/2 w-6 h-6 rounded-full bg-dark-950 border border-white/10" />
-                <div className="absolute top-1/2 -right-3 -translate-y-1/2 w-6 h-6 rounded-full bg-dark-950 border border-white/10" />
+                <div className="absolute top-1/2 -left-3 -translate-y-1/2 w-6 h-6 rounded-full bg-dark-950 border border-dark-800" />
+                <div className="absolute top-1/2 -right-3 -translate-y-1/2 w-6 h-6 rounded-full bg-dark-950 border border-dark-800" />
 
                 {/* Coupon Content */}
                 <div>
                   <div className="flex items-center gap-3 mb-3">
-                    <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center shadow-inner">
+                    <div className="w-12 h-12 rounded-2xl bg-primary-950 border border-primary-500/30 text-champagne flex items-center justify-center shadow-inner">
                       <Ticket className="w-6 h-6" />
                     </div>
                     <div>
-                      <span className="text-2xl sm:text-3xl font-black text-amber-400 tracking-tight">
+                      <span className="text-2xl sm:text-3xl font-black text-champagne tracking-tight">
                         {discountLabel}
                       </span>
                       {minAmount > 0 && (
@@ -139,7 +138,7 @@ export default function LiveCoupons() {
                   {/* Expiry Badge */}
                   {expiryDate && (
                     <div className="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-400 bg-white/5 px-2.5 py-1 rounded-lg border border-white/5 mb-5">
-                      <Clock className="w-3.5 h-3.5 text-orange-400" />
+                      <Clock className="w-3.5 h-3.5 text-champagne" />
                       <span>Valid till {expiryDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                     </div>
                   )}
@@ -147,7 +146,7 @@ export default function LiveCoupons() {
 
                 {/* Coupon Code Copy Button */}
                 <div className="pt-4 border-t border-dashed border-white/15 flex items-center justify-between gap-3">
-                  <div className="px-3.5 py-2 rounded-xl bg-black/60 border border-white/10 font-mono text-sm sm:text-base font-black text-white tracking-wider flex-1 text-center">
+                  <div className="px-3.5 py-2 rounded-xl bg-black/60 border border-dark-700 font-mono text-sm sm:text-base font-black text-champagne tracking-wider flex-1 text-center">
                     {coupon.code}
                   </div>
 
@@ -156,8 +155,8 @@ export default function LiveCoupons() {
                     whileTap={{ scale: 0.94 }}
                     className={`px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center gap-2 transition-all shadow-md ${
                       isCopied
-                        ? "bg-emerald-500 text-white shadow-emerald-500/30"
-                        : "bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white shadow-orange-500/30"
+                        ? "bg-emerald-600 text-white shadow-emerald-500/30"
+                        : "bg-primary-600 hover:bg-primary-500 text-champagne border border-champagne/30 shadow-primary-950/40"
                     }`}
                   >
                     {isCopied ? (

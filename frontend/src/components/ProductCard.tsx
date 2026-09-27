@@ -126,12 +126,12 @@ export default memo(function ProductCard({
       onClick={handleCardClick}
       data-product-card="true"
       id={`product-card-${item.id}`}
-      className={`rounded-2xl md:rounded-3xl bg-white border border-stone-200/90 shadow-[0_4px_20px_-2px_rgba(28,25,23,0.06)] hover:shadow-[0_12px_32px_-4px_rgba(28,25,23,0.12)] overflow-hidden flex flex-col relative transition-all duration-300 group cursor-pointer ${
+      className={`rounded-2xl md:rounded-3xl bg-white border border-[#F8E7C9]/80 shadow-[0_4px_20px_rgba(6,78,59,0.06)] hover:shadow-[0_12px_28px_rgba(6,78,59,0.12)] hover:border-primary-600/40 overflow-hidden flex flex-col relative transition-all duration-300 group cursor-pointer ${
         !item.isAvailable ? 'opacity-65 grayscale cursor-not-allowed' : ''
       }`}
     >
-      {/* ── Top Visual / Food Image Area ───────────────────────────── */}
-      <div className="relative w-full aspect-[4/3] overflow-hidden bg-stone-100">
+      {/* ── Top Visual / Food Image Area (Appetizing, Crisp, High Contrast) ── */}
+      <div className="relative w-full aspect-[4/3] overflow-hidden bg-[#FDFBF7]">
         <img
           data-product-img="true"
           src={responsiveImage.src}
@@ -147,15 +147,12 @@ export default memo(function ProductCard({
           }}
         />
 
-        {/* Subtle Bottom Shade for Photo Depth */}
-        <div className="absolute inset-0 bg-gradient-to-t from-stone-900/40 via-transparent to-transparent pointer-events-none" />
-
         {/* Top Badges Row */}
         <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between z-10">
           <div className="flex items-center gap-1.5">
             {/* Statutory FSSAI Veg / Non-Veg Indicator */}
             <div
-              className={`w-4 h-4 rounded-sm border-2 bg-white/95 backdrop-blur-sm flex items-center justify-center shadow-sm ${
+              className={`w-4 h-4 rounded-sm border-2 bg-white/95 backdrop-blur-sm flex items-center justify-center shadow-xs ${
                 item.isVegetarian ? 'border-emerald-600' : 'border-rose-600'
               }`}
             >
@@ -168,7 +165,7 @@ export default memo(function ProductCard({
 
             {/* Discount Badge */}
             {appliedDiscount > 0 && item.isAvailable && (
-              <span className="px-2 py-0.5 rounded-full bg-red-600 text-white text-[10px] font-black uppercase tracking-wider shadow-sm">
+              <span className="px-2 py-0.5 rounded-full bg-secondary-300 text-primary-950 border border-secondary-400/60 text-[10px] font-black uppercase tracking-wider shadow-xs">
                 {appliedDiscount}% OFF
               </span>
             )}
@@ -183,13 +180,13 @@ export default memo(function ProductCard({
         {/* Bottom Floating Metadata on Image */}
         <div className="absolute bottom-2 left-2.5 right-2.5 flex items-center justify-between z-10 pointer-events-none">
           {ratingValue ? (
-            <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/95 backdrop-blur-md text-stone-900 text-[11px] font-extrabold shadow-sm">
+            <div className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-white/95 backdrop-blur-md border border-[#F8E7C9] text-primary-950 text-[11px] font-extrabold shadow-xs">
               <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
               <span>{ratingValue}</span>
             </div>
           ) : (
-            <div className="flex items-center gap-1 text-[11px] text-white/90 font-medium drop-shadow-md">
-              <Clock className="w-3 h-3 text-amber-400" />
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/90 backdrop-blur-xs text-[11px] text-slate-700 font-bold shadow-xs">
+              <Clock className="w-3 h-3 text-primary-600" />
               <span>15–20m</span>
             </div>
           )}
@@ -197,8 +194,8 @@ export default memo(function ProductCard({
 
         {/* Sold Out Overlay */}
         {!item.isAvailable && (
-          <div className="absolute inset-0 bg-stone-900/70 backdrop-blur-xs flex items-center justify-center z-20">
-            <span className="px-3.5 py-1 rounded-full bg-stone-900 text-stone-200 text-xs font-bold uppercase tracking-wider border border-stone-700">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-20">
+            <span className="px-3.5 py-1 rounded-full bg-white text-slate-800 text-xs font-bold uppercase tracking-wider border border-slate-200 shadow-md">
               Sold Out
             </span>
           </div>
@@ -208,24 +205,24 @@ export default memo(function ProductCard({
       {/* ── Product Content Body ───────────────────────────────────── */}
       <div className="p-3.5 sm:p-4 flex flex-col flex-1 bg-white">
         {/* Title */}
-        <h3 className="font-extrabold text-stone-900 text-sm sm:text-base leading-snug line-clamp-1 group-hover:text-red-600 transition-colors">
+        <h3 className="font-extrabold text-slate-900 text-sm sm:text-base leading-snug line-clamp-1 group-hover:text-primary-700 transition-colors">
           {item.name}
         </h3>
 
         {/* Description */}
-        <p className="text-stone-500 text-xs line-clamp-2 mt-1 min-h-[2rem] leading-relaxed">
+        <p className="text-slate-500 text-xs line-clamp-2 mt-1 min-h-[2rem] leading-relaxed">
           {item.description || 'Authentic hand-stretched dough with San Marzano sauce and melted mozzarella.'}
         </p>
 
         {/* ── Card Footer: Pricing & Action ──────────────────────────── */}
-        <div className="mt-3 pt-3 border-t border-stone-100 flex items-center justify-between gap-2">
+        <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
           {/* Price Stack */}
           <div className="flex items-baseline gap-1.5">
-            <span className="text-base sm:text-lg font-black text-stone-900">
+            <span className="text-base sm:text-lg font-black text-primary-600">
               ₹{finalPrice}
             </span>
             {appliedDiscount > 0 && (
-              <span className="text-xs text-stone-400 line-through font-medium">
+              <span className="text-xs text-slate-400 line-through font-medium">
                 ₹{item.basePrice}
               </span>
             )}
@@ -240,7 +237,7 @@ export default memo(function ProductCard({
                   e.stopPropagation();
                   onOpenCustomization(item);
                 }}
-                className="w-8 h-8 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-600 flex items-center justify-center transition-colors border border-stone-200/80 active:scale-90"
+                className="w-8 h-8 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 flex items-center justify-center transition-colors border border-slate-200 active:scale-90 cursor-pointer"
                 title="Customize Crust & Toppings"
               >
                 <SlidersHorizontal className="w-3.5 h-3.5" />
@@ -251,23 +248,23 @@ export default memo(function ProductCard({
             {cartQuantity > 0 ? (
               <div
                 onClick={(e) => e.stopPropagation()}
-                className="flex items-center gap-2 px-2 py-1 rounded-xl bg-red-50 border border-red-200 text-red-700 shadow-xs"
+                className="flex items-center gap-2 px-2 py-1 rounded-xl bg-primary-50 border border-primary-200 text-primary-900 shadow-xs"
               >
                 <button
                   type="button"
                   onClick={handleDecrease}
-                  className="w-6 h-6 rounded-lg bg-white text-red-600 hover:bg-red-600 hover:text-white flex items-center justify-center font-black text-xs transition-colors shadow-xs active:scale-90 cursor-pointer"
+                  className="w-6 h-6 rounded-lg bg-white text-primary-800 hover:bg-primary-600 hover:text-white flex items-center justify-center font-black text-xs transition-colors shadow-xs active:scale-90 cursor-pointer border border-primary-100"
                   aria-label="Decrease quantity"
                 >
                   <Minus className="w-3 h-3" />
                 </button>
-                <span className="font-black text-xs sm:text-sm min-w-[14px] text-center">
+                <span className="font-black text-xs sm:text-sm min-w-[14px] text-center text-primary-950">
                   {cartQuantity}
                 </span>
                 <button
                   type="button"
                   onClick={handleIncrease}
-                  className="w-6 h-6 rounded-lg bg-red-600 text-white hover:bg-red-700 flex items-center justify-center font-black text-xs transition-colors shadow-xs active:scale-90 cursor-pointer"
+                  className="w-6 h-6 rounded-lg bg-primary-600 text-champagne hover:bg-primary-700 flex items-center justify-center font-black text-xs transition-colors shadow-xs active:scale-90 cursor-pointer"
                   aria-label="Increase quantity"
                 >
                   <Plus className="w-3 h-3" />
@@ -280,7 +277,7 @@ export default memo(function ProductCard({
                 whileTap={{ scale: 0.94 }}
                 disabled={!item.isAvailable}
                 onClick={handleAdd}
-                className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-black text-xs uppercase tracking-wider flex items-center gap-1.5 shadow-sm shadow-red-500/20 transition-all cursor-pointer min-h-[36px]"
+                className="px-4 py-2 rounded-xl bg-primary-600 hover:bg-primary-700 text-champagne font-black text-xs uppercase tracking-wider flex items-center gap-1.5 shadow-md shadow-primary-900/15 border border-champagne/30 transition-all cursor-pointer min-h-[36px]"
               >
                 <span>Add</span>
                 <Plus className="w-3.5 h-3.5" />
