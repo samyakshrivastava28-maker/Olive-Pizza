@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router';
 import { Sparkles, Utensils, Flame } from 'lucide-react';
 import { useDataStore } from '../../lib/dataStore';
+import { getOptimizedImageUrl } from '../../lib/imageOptimizer';
 
 interface CravingProductItem {
   id: string;
@@ -70,7 +71,7 @@ function CravingCategoryCard({
     const nextIdx = (currentImgIndex + 1) % productList.length;
     if (productList[nextIdx]?.image) {
       const img = new Image();
-      img.src = productList[nextIdx].image;
+      img.src = getOptimizedImageUrl(productList[nextIdx].image, { width: 256, quality: 'auto:good' });
     }
   }, [currentImgIndex, productList]);
 
@@ -146,7 +147,7 @@ function CravingCategoryCard({
           <AnimatePresence mode="wait">
             <motion.img
               key={activeProduct.image}
-              src={activeProduct.image}
+              src={getOptimizedImageUrl(activeProduct.image, { width: 256, quality: 'auto:good' })}
               alt={activeProduct.name}
               initial={{
                 opacity: 0,

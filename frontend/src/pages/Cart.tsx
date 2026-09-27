@@ -18,6 +18,7 @@ import { collection, getDocs, query, limit } from "firebase/firestore";
 import { MenuItem } from "../types/models";
 import toast from "react-hot-toast";
 import SEO from "../components/SEO";
+import { getOptimizedImageUrl } from "../lib/imageOptimizer";
 
 export default function Cart() {
   const { items, total, addItem, removeItem, updateQuantity, clearCart, franchiseId: cartFranchiseId, setFranchiseId } = useCartStore();
@@ -276,8 +277,10 @@ export default function Cart() {
                 >
                   {/* Item Image */}
                   <img
-                    src={item.image}
+                    src={getOptimizedImageUrl(item.image, { preset: 'thumbnail', width: 200, height: 200 })}
                     alt={item.name}
+                    loading="lazy"
+                    decoding="async"
                     className="w-20 h-20 sm:w-24 sm:h-24 object-cover rounded-xl sm:rounded-2xl shrink-0 border border-white/5 shadow-md"
                   />
 
@@ -354,7 +357,13 @@ export default function Cart() {
                 {recommendations.map(rec => (
                   <div key={rec.id} className="bg-dark-950/80 p-3 rounded-2xl border border-dark-800 flex flex-col justify-between">
                     <div className="flex items-center gap-3 sm:flex-col sm:text-center mb-3">
-                      <img src={rec.image} alt={rec.name} className="w-14 h-14 sm:w-16 sm:h-16 object-cover rounded-xl shrink-0" />
+                      <img
+                        src={getOptimizedImageUrl(rec.image, { preset: 'thumbnail', width: 140, height: 140 })}
+                        alt={rec.name}
+                        loading="lazy"
+                        decoding="async"
+                        className="w-14 h-14 sm:w-16 sm:h-16 object-cover rounded-xl shrink-0"
+                      />
                       <div className="min-w-0">
                         <h4 className="font-bold text-white text-xs sm:text-sm truncate">{rec.name}</h4>
                         <p className="text-accent-400 font-bold text-xs mt-0.5">₹{rec.basePrice}</p>

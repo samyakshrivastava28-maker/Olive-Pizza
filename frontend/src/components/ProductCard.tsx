@@ -7,6 +7,7 @@ import WishlistButton from './ui/WishlistButton';
 import { useCartStore } from '../lib/store';
 import { useCartAnimation } from './ui/CartAnimationProvider';
 import toast from 'react-hot-toast';
+import { getResponsiveImageSrcSet } from '../lib/imageOptimizer';
 
 interface ProductCardProps {
   item: MenuItem;
@@ -109,9 +110,11 @@ export default memo(function ProductCard({
       ? (item as any).rating.toFixed(1)
       : null;
 
-  const optimizedImage = item.image?.includes('cloudinary')
-    ? item.image.replace('/upload/', '/upload/f_auto,q_auto:good,w_500/')
-    : item.image || '/images/pizza-placeholder.webp';
+  const responsiveImage = getResponsiveImageSrcSet(item.image, {
+    preset: 'card',
+    widths: [320, 480, 640],
+    sizes: '(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw',
+  });
 
   return (
     <motion.div
@@ -131,7 +134,9 @@ export default memo(function ProductCard({
       <div className="relative w-full aspect-[4/3] overflow-hidden bg-stone-100">
         <img
           data-product-img="true"
-          src={optimizedImage}
+          src={responsiveImage.src}
+          srcSet={responsiveImage.srcSet || undefined}
+          sizes={responsiveImage.sizes}
           alt={item.name}
           loading="lazy"
           decoding="async"

@@ -13,6 +13,7 @@ import { useLoadingStore } from "../lib/loadingStore";
 import { useMotionValue, useTransform } from "framer-motion";
 import SEO from "../components/SEO";
 import { generateProductSchema } from "../lib/schema";
+import { getOptimizedImageUrl } from "../lib/imageOptimizer";
 import NotFound from "./NotFound";
 
 function ProductSkeleton() {
@@ -369,8 +370,10 @@ export default function ProductDetail() {
 
               <img
                 ref={pizzaImageRef}
-                src={item.image}
+                src={getOptimizedImageUrl(item.image, { preset: 'detail', width: 900 })}
                 alt={item.name}
+                loading="eager"
+                decoding="async"
                 className="w-full h-full object-contain drop-shadow-2xl"
                 style={{ transform: "translateZ(50px)" }}
               />

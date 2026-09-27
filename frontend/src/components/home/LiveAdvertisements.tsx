@@ -6,6 +6,7 @@ import { isItemActiveAndValid } from "../../lib/scheduling";
 import { db } from "../../lib/firebase";
 import { collection, onSnapshot, query, orderBy } from "firebase/firestore";
 import { Link } from "react-router";
+import { getOptimizedImageUrl, getOptimizedVideoUrl, getVideoPosterUrl } from "../../lib/imageOptimizer";
 
 interface AdItem {
   id: string;
@@ -156,7 +157,9 @@ export default function LiveAdvertisements() {
                 <div className="absolute inset-0 w-full h-full z-0 overflow-hidden">
                   <video
                     ref={videoRef}
-                    src={mediaSrc}
+                    src={getOptimizedVideoUrl(mediaSrc)}
+                    poster={getVideoPosterUrl(mediaSrc, { width: 1200 })}
+                    preload="metadata"
                     autoPlay
                     loop
                     muted={isMuted}
@@ -172,8 +175,10 @@ export default function LiveAdvertisements() {
                 </div>
               ) : (
                 <img
-                  src={mediaSrc}
+                  src={getOptimizedImageUrl(mediaSrc, { preset: 'banner' })}
                   alt={currentAd.title || "Olive Pizza Promotion"}
+                  loading="lazy"
+                  decoding="async"
                   className="absolute inset-0 w-full h-full object-cover z-0"
                 />
               )}
