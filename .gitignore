@@ -49,7 +49,4 @@ pnpm-debug.log*
 *.njsproj
 *.sln
 *.sw?
-
-# Graphify Cache
-graphify-out/cache/
 scratch/

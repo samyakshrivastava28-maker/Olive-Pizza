@@ -107,13 +107,11 @@ All Android builds across all 5 app repositories share a unified keystore and au
 
 ---
 
-## 6. Graphify Knowledge Graph Metrics
+## 6. Codebase Architecture & Structural Metrics
 
-Generated via Graphify AST extraction on the unified codebase:
-- **Nodes**: 1,002
-- **Edges**: 2,728
-- **Detected Communities**: 77
-- **Visualization Artifacts**:
-  - Interactive Graph: `graphify-out/graph.html`
-  - Collapsible D3 Hierarchy: `graphify-out/GRAPH_TREE.html`
-  - Structural Analysis: `graphify-out/.graphify_analysis.json`
+Extracted via AST analysis of the unified codebase:
+- **Code Entities Analyzed**: 221 core frontend & service modules
+- **Graph Nodes**: 1,002
+- **Inter-Component Edges**: 2,728
+- **Detected Functional Communities**: 77
+- **Analysis Scope**: Components, state stores, services, API routes, and Capacitor native plugins
