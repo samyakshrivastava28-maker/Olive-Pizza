@@ -30,8 +30,8 @@ export default function Cart() {
   const [showFranchiseMismatch, setShowFranchiseMismatch] = useState(false);
   const [resolvedFranchiseInfo, setResolvedFranchiseInfo] = useState<{ id: string; name: string } | null>(null);
   const [recommendations, setRecommendations] = useState<MenuItem[]>([]);
-  const [couponCode, setCouponCode] = useState("BEST50");
-  const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discount: number } | null>({ code: "BEST50", discount: 50 });
+  const [couponCode, setCouponCode] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discount: number } | null>(null);
   const [showCouponInput, setShowCouponInput] = useState(false);
   const [deliveryInstruction, setDeliveryInstruction] = useState("Please ring the bell");
 
@@ -111,18 +111,52 @@ export default function Cart() {
     fetchRecommendations();
 
     const savedCoupon = localStorage.getItem('olive_applied_coupon');
-    if (savedCoupon) {
-      const discount = savedCoupon.toUpperCase() === "BEST50" ? 50 : 30;
-      setAppliedCoupon({ code: savedCoupon.toUpperCase(), discount });
-      setCouponCode(savedCoupon.toUpperCase());
+    if (savedCoupon && savedCoupon.toUpperCase() !== "BEST50") {
+      const code = savedCoupon.toUpperCase();
+      const { coupons } = useDataStore.getState();
+      const matching = coupons?.find((c: any) => (c.code || '').toUpperCase() === code);
+      let discount = 30;
+      if (matching) {
+        if (matching.discountType === 'percentage') {
+          discount = Math.round(total * (Number(matching.discountValue) / 100));
+          if (matching.maxDiscountAmount && discount > matching.maxDiscountAmount) {
+            discount = matching.maxDiscountAmount;
+          }
+        } else {
+          discount = Number(matching.discountValue) || 50;
+        }
+      } else if (code === "OLIVE20") {
+        discount = Math.round(total * 0.2);
+      }
+      setAppliedCoupon({ code, discount });
+      setCouponCode(code);
+    } else if (savedCoupon?.toUpperCase() === "BEST50") {
+      localStorage.removeItem('olive_applied_coupon');
     }
 
     const handleCouponAppliedEvent = (e: any) => {
       const code = e.detail || localStorage.getItem('olive_applied_coupon');
-      if (code) {
-        const discount = code.toUpperCase() === "BEST50" ? 50 : 30;
-        setAppliedCoupon({ code: code.toUpperCase(), discount });
-        setCouponCode(code.toUpperCase());
+      if (code && typeof code === 'string') {
+        const uppercaseCode = code.toUpperCase();
+        const { coupons } = useDataStore.getState();
+        const matching = coupons?.find((c: any) => (c.code || '').toUpperCase() === uppercaseCode);
+        let discount = 30;
+        if (matching) {
+          if (matching.discountType === 'percentage') {
+            discount = Math.round(total * (Number(matching.discountValue) / 100));
+            if (matching.maxDiscountAmount && discount > matching.maxDiscountAmount) {
+              discount = matching.maxDiscountAmount;
+            }
+          } else {
+            discount = Number(matching.discountValue) || 50;
+          }
+        } else if (uppercaseCode === "BEST50") {
+          discount = 50;
+        } else if (uppercaseCode === "OLIVE20") {
+          discount = Math.round(total * 0.2);
+        }
+        setAppliedCoupon({ code: uppercaseCode, discount });
+        setCouponCode(uppercaseCode);
       }
     };
 
@@ -132,18 +166,57 @@ export default function Cart() {
 
   const handleApplyCoupon = () => {
     if (!couponCode.trim()) return;
-    if (couponCode.toUpperCase() === "BEST50" || couponCode.toUpperCase() === "OLIVE20") {
-      const discount = couponCode.toUpperCase() === "BEST50" ? 50 : Math.round(total * 0.2);
-      setAppliedCoupon({ code: couponCode.toUpperCase(), discount });
+    const code = couponCode.trim().toUpperCase();
+    const { coupons } = useDataStore.getState();
+    const matchingCoupon = (coupons && coupons.length > 0)
+      ? coupons.find((c: any) => (c.code || '').toUpperCase() === code && c.isActive !== false)
+      : null;
+
+    if (matchingCoupon) {
+      if (matchingCoupon.minOrderAmount && total < matchingCoupon.minOrderAmount) {
+        toast.error(`Minimum order amount of ₹${matchingCoupon.minOrderAmount} required for ${code}`);
+        return;
+      }
+      let discount = 0;
+      if (matchingCoupon.discountType === 'percentage') {
+        discount = Math.round(total * (Number(matchingCoupon.discountValue) / 100));
+        if (matchingCoupon.maxDiscountAmount && discount > matchingCoupon.maxDiscountAmount) {
+          discount = matchingCoupon.maxDiscountAmount;
+        }
+      } else {
+        discount = Number(matchingCoupon.discountValue) || 50;
+      }
+      setAppliedCoupon({ code, discount });
+      localStorage.setItem('olive_applied_coupon', code);
       setShowCouponInput(false);
-      toast.success(`Coupon ${couponCode.toUpperCase()} applied! Saved ₹${discount}`);
+      toast.success(`Coupon ${code} applied! Saved ₹${discount}`);
+      return;
+    }
+
+    if (code === "BEST50") {
+      if (total < 349) {
+        toast.error("Minimum order of ₹349 required for BEST50");
+        return;
+      }
+      setAppliedCoupon({ code: "BEST50", discount: 50 });
+      localStorage.setItem('olive_applied_coupon', "BEST50");
+      setShowCouponInput(false);
+      toast.success("Coupon BEST50 applied! Saved ₹50");
+    } else if (code === "OLIVE20") {
+      const discount = Math.round(total * 0.2);
+      setAppliedCoupon({ code: "OLIVE20", discount });
+      localStorage.setItem('olive_applied_coupon', "OLIVE20");
+      setShowCouponInput(false);
+      toast.success(`Coupon OLIVE20 applied! Saved ₹${discount}`);
     } else {
-      toast.error("Invalid coupon code. Try BEST50");
+      toast.error("Invalid coupon code");
     }
   };
 
   const handleRemoveCoupon = () => {
     setAppliedCoupon(null);
+    setCouponCode("");
+    localStorage.removeItem('olive_applied_coupon');
     toast.success("Coupon removed");
   };
 
@@ -204,9 +277,9 @@ export default function Cart() {
   }
 
   // Offer threshold calculation
-  const BEST50_THRESHOLD = 349;
-  const amountNeeded = Math.max(0, BEST50_THRESHOLD - subtotal);
-  const progressPct = Math.min(100, Math.round((subtotal / BEST50_THRESHOLD) * 100));
+  const OFFER_THRESHOLD = 349;
+  const amountNeeded = Math.max(0, OFFER_THRESHOLD - subtotal);
+  const progressPct = Math.min(100, Math.round((subtotal / OFFER_THRESHOLD) * 100));
 
   // ─── ACTIVE CART DESIGN (REFERENCE ALIGNED) ──────────────────────────────────
   return (
@@ -255,8 +328,8 @@ export default function Cart() {
           <span className="flex items-center gap-1.5">
             <Sparkles className="w-4 h-4 text-primary-700 shrink-0" />
             {amountNeeded > 0 
-              ? `Add ₹${amountNeeded} more to unlock BEST50 (₹50 discount)!`
-              : `🎉 Congratulations! You unlocked BEST50 (₹50 discount)!`}
+              ? `Add ₹${amountNeeded} more to unlock special discounts on orders above ₹${OFFER_THRESHOLD}!`
+              : `🎉 Congratulations! Your cart qualifies for special discounts & offers!`}
           </span>
           <span className="font-extrabold text-primary-800">{progressPct}%</span>
         </div>

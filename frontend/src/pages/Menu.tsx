@@ -194,7 +194,7 @@ export default function Menu() {
                 <MapPin size={14} className="text-primary-600 shrink-0 animate-bounce" />
                 <div className="truncate font-medium">
                   <span className="text-slate-500 font-bold">Delivery to: </span>
-                  <span className="text-slate-900 font-bold">{user?.fullAddress || user?.full_address || "Rajnandgaon, Chhattisgarh"}</span>
+                  <span className="text-slate-900 font-bold">{user?.fullAddress || user?.full_address || "Select Delivery Location"}</span>
                 </div>
               </div>
 

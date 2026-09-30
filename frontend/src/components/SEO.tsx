@@ -11,8 +11,8 @@ interface SEOProps {
   breadcrumbs?: Array<{ name: string; url: string }>;
 }
 
-const DEFAULT_TITLE = 'Olive Pizza — Fresh Artisanal Pizzas in Rajnandgaon & Durg';
-const DEFAULT_DESCRIPTION = 'Order handcrafted artisanal pizzas, garlic bread, combos & sides from Olive Pizza. Hot & fresh contactless delivery to your door across Rajnandgaon and Durg.';
+const DEFAULT_TITLE = 'Olive Pizza — Fresh Artisanal Pizzas & Fast Delivery';
+const DEFAULT_DESCRIPTION = 'Order handcrafted artisanal pizzas, garlic bread, combos & sides from Olive Pizza. Hot & fresh contactless delivery right to your door.';
 const BASE_URL = 'https://olivepizza.in';
 const DEFAULT_IMAGE = 'https://res.cloudinary.com/olive-pizza/image/upload/v1700000000/brand/og-banner.jpg';
 

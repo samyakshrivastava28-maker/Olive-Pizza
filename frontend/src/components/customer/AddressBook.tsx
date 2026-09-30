@@ -8,6 +8,8 @@ import toast from 'react-hot-toast';
 import { LocationManager, LocationData } from '../../lib/permissions';
 import { useAuthStore } from '../../lib/store';
 
+import { fetchApi } from '../../lib/config';
+
 // Reuse Leaflet map from SetupLocation but dynamically import to save bundle
 import { MapContainer, TileLayer, Marker, Popup, useMapEvents } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
@@ -18,7 +20,7 @@ L.Icon.Default.mergeOptions({
   iconUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png",
   shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
 });
-const RAJNANDGAON_CENTER = { lat: 21.0963, lng: 81.0335 };
+const DEFAULT_MAP_CENTER = { lat: 21.0963, lng: 81.0335 };
 
 export interface SavedAddress {
   id: string;
@@ -39,7 +41,7 @@ export default function AddressBook() {
   const { user, setUser } = useAuthStore();
 
   const [newAddress, setNewAddress] = useState<Partial<SavedAddress>>({ type: 'Home' });
-  const [markerPos, setMarkerPos] = useState(RAJNANDGAON_CENTER);
+  const [markerPos, setMarkerPos] = useState(DEFAULT_MAP_CENTER);
   const [gettingGps, setGettingGps] = useState(false);
   const [saveLoading, setSaveLoading] = useState(false);
 
@@ -79,17 +81,15 @@ export default function AddressBook() {
 
   const reverseGeocode = async (lat: number, lng: number) => {
     try {
-      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
-      const data = await res.json();
-      if (data && data.address) {
-        const foundCity = data.address.city || data.address.town || data.address.village || "";
-        const foundPincode = data.address.postcode || "";
-        
+      const res = await fetchApi(`/api/location/reverse-geocode?lat=${lat}&lng=${lng}`);
+      const data = await res.json().catch(() => null);
+      if (data?.success && data?.location) {
+        const loc = data.location;
         setNewAddress(prev => ({
           ...prev,
-          addressLine: data.display_name,
-          city: foundCity || 'Rajnandgaon',
-          pincode: foundPincode
+          addressLine: loc.displayName || '',
+          city: loc.city || '',
+          pincode: loc.postcode || ''
         }));
       }
     } catch (err) {
@@ -123,7 +123,7 @@ export default function AddressBook() {
         addressLine: newAddress.addressLine || '',
         landmark: newAddress.landmark || '',
         pincode: newAddress.pincode || '',
-        city: newAddress.city || 'Rajnandgaon',
+        city: newAddress.city || '',
         lat: markerPos.lat,
         lng: markerPos.lng,
         isDefault: addresses.length === 0, // First address is default
