@@ -17,6 +17,9 @@ import {
   X,
   ShieldCheck,
   MapPinned,
+  Building2,
+  Sparkles,
+  Zap,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
@@ -42,6 +45,17 @@ L.Icon.Default.mergeOptions({
     "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
 });
 
+export interface PopularLocality {
+  id?: string;
+  title: string;
+  subtitle: string;
+  lat: number;
+  lng: number;
+  pincode?: string;
+  type?: string;
+  isServiceable?: boolean;
+}
+
 export interface ServiceableCity {
   id?: string;
   city: string;
@@ -53,6 +67,7 @@ export interface ServiceableCity {
   viewbox?: number[];
   activeBranches?: number;
   branchNames?: string[];
+  popularLocalities?: PopularLocality[];
   serviceable?: boolean;
 }
 
@@ -137,7 +152,15 @@ export default function SetupLocation() {
           setCities(data.cities);
           const initialCity = data.cities[0];
           setSelectedCity(initialCity);
-          if (initialCity.center && !isNaN(initialCity.center.lat) && !isNaN(initialCity.center.lng)) {
+          if (initialCity.popularLocalities && initialCity.popularLocalities.length > 0) {
+            const firstLoc = initialCity.popularLocalities[0];
+            setMarkerPos({ lat: firstLoc.lat, lng: firstLoc.lng });
+            setAddressLine(`${firstLoc.title}, ${firstLoc.subtitle}`);
+            setStreetArea(firstLoc.title);
+            if (firstLoc.pincode) setPincode(firstLoc.pincode);
+            setIsServiceable(true);
+            setServiceabilityMessage(`Delivering in ${initialCity.city}`);
+          } else if (initialCity.center && !isNaN(initialCity.center.lat) && !isNaN(initialCity.center.lng)) {
             setMarkerPos(initialCity.center);
             setIsServiceable(true);
             setServiceabilityMessage(`Delivering in ${initialCity.city}`);
@@ -165,10 +188,18 @@ export default function SetupLocation() {
     };
   }, []);
 
-  // When selected city changes, update coordinate anchor
+  // When selected city changes, update coordinate anchor and default locality
   const handleCitySelect = (city: ServiceableCity) => {
     setSelectedCity(city);
-    if (city.center && !isNaN(city.center.lat) && !isNaN(city.center.lng)) {
+    if (city.popularLocalities && city.popularLocalities.length > 0) {
+      const firstLoc = city.popularLocalities[0];
+      setMarkerPos({ lat: firstLoc.lat, lng: firstLoc.lng });
+      setAddressLine(`${firstLoc.title}, ${firstLoc.subtitle}`);
+      setStreetArea(firstLoc.title);
+      if (firstLoc.pincode) setPincode(firstLoc.pincode);
+      setIsServiceable(true);
+      setServiceabilityMessage(`Delivering in ${city.city}`);
+    } else if (city.center && !isNaN(city.center.lat) && !isNaN(city.center.lng)) {
       setMarkerPos(city.center);
       setIsServiceable(true);
       setServiceabilityMessage(`Delivering in ${city.city}`);
@@ -176,6 +207,18 @@ export default function SetupLocation() {
     setSearchResults([]);
     setSearchQuery("");
     setError("");
+  };
+
+  // Quick 1-tap select for popular city localities (Blinkit style fast direct select)
+  const handleSelectLocality = (item: PopularLocality) => {
+    setMarkerPos({ lat: item.lat, lng: item.lng });
+    setAddressLine(`${item.title}, ${item.subtitle}`);
+    setStreetArea(item.title);
+    if (item.pincode) setPincode(item.pincode);
+    setIsServiceable(item.isServiceable !== false);
+    setServiceabilityMessage(`Delivering in ${selectedCity?.city || item.title}`);
+    setError("");
+    toast.success(`Selected ${item.title}`);
   };
 
   // 2. Reverse geocode via server proxy with authoritative serviceability
@@ -607,6 +650,78 @@ export default function SetupLocation() {
                     </motion.div>
                   )}
                 </AnimatePresence>
+
+                {/* Popular Localities in Selected City (Instant 1-Tap Select) */}
+                {!searchQuery && selectedCity?.popularLocalities && selectedCity.popularLocalities.length > 0 && (
+                  <div className="pt-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                        <span className="text-[11px] font-black uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                          Popular Localities in {selectedCity.city}
+                        </span>
+                      </div>
+                      <span className="text-[10px] font-semibold text-primary-600 dark:text-primary-400">
+                        ⚡ Tap to select instantly
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-60 overflow-y-auto pr-0.5">
+                      {selectedCity.popularLocalities.map((loc) => {
+                        const isSelected =
+                          markerPos &&
+                          Math.abs(markerPos.lat - loc.lat) < 0.0015 &&
+                          Math.abs(markerPos.lng - loc.lng) < 0.0015;
+
+                        return (
+                          <button
+                            key={loc.id || loc.title}
+                            type="button"
+                            onClick={() => handleSelectLocality(loc)}
+                            className={`p-2.5 rounded-2xl border text-left transition-all flex items-start gap-2.5 cursor-pointer ${
+                              isSelected
+                                ? "border-primary-500 bg-primary-50/80 dark:bg-primary-950/50 shadow-xs ring-1 ring-primary-500"
+                                : "border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/60 hover:bg-white dark:hover:bg-slate-800 hover:border-slate-300"
+                            }`}
+                          >
+                            <div
+                              className={`p-1.5 rounded-xl shrink-0 mt-0.5 ${
+                                isSelected
+                                  ? "bg-primary-600 text-white"
+                                  : "bg-white dark:bg-slate-700 text-primary-600 dark:text-primary-400 shadow-2xs"
+                              }`}
+                            >
+                              {loc.type === "transit" ? (
+                                <Navigation className="w-3.5 h-3.5" />
+                              ) : loc.type === "commercial" ? (
+                                <Building2 className="w-3.5 h-3.5" />
+                              ) : (
+                                <MapPin className="w-3.5 h-3.5" />
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-1">
+                                <span className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                                  {loc.title}
+                                </span>
+                                {isSelected ? (
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-primary-600 shrink-0" />
+                                ) : (
+                                  <span className="text-[9px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-1.5 py-0.5 rounded-sm shrink-0">
+                                    Deliverable
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-[11px] text-slate-500 dark:text-slate-400 truncate block mt-0.5 font-medium">
+                                {loc.subtitle}
+                              </span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
