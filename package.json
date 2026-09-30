@@ -33,8 +33,6 @@
     "@langchain/core": "^1.2.2",
     "@langchain/google-genai": "^2.2.0",
     "@langchain/openai": "^1.5.5",
-    "@langchain/textsplitters": "^1.0.1",
-    "@qdrant/js-client-rest": "^1.18.0",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.6.1",
     "@supabase/supabase-js": "^2.108.2",
