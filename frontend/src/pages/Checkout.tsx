@@ -11,7 +11,8 @@ import toast from 'react-hot-toast';
 import PaymentMethodOverlay from '../components/checkout/PaymentMethodOverlay';
 import ProcessingOverlay from '../components/checkout/ProcessingOverlay';
 import PageTransition from '../components/PageTransition';
-import LocationPicker3D from '../components/map/LocationPicker3D';
+import { openLocationModal } from '../components/location/LocationChangeModal';
+const LocationPicker3D = React.lazy(() => import('../components/map/LocationPicker3D'));
 import { fetchRoute } from '../services/navigationRouting.service';
 import { RESTAURANT_LOCATION, MAX_DELIVERY_RADIUS_KM, fetchApi } from '../lib/config';
 import { OrderingContextService } from '../lib/orderingContext';
@@ -90,6 +91,19 @@ export default function Checkout() {
     verifyRadius();
     return () => { active = false; };
   }, [mapCenter.lat, mapCenter.lng, address, user?.uid]);
+
+  useEffect(() => {
+    const handleLocationChange = (e: any) => {
+      if (e.detail?.fullAddress) {
+        setAddress(e.detail.fullAddress);
+      }
+      if (e.detail?.lat && e.detail?.lng) {
+        setMapCenter({ lat: e.detail.lat, lng: e.detail.lng });
+      }
+    };
+    window.addEventListener('location-changed', handleLocationChange as EventListener);
+    return () => window.removeEventListener('location-changed', handleLocationChange as EventListener);
+  }, []);
 
   // Auto-sync customer onboarding location or fetch GPS if address empty
   useEffect(() => {
@@ -499,14 +513,16 @@ export default function Checkout() {
             </h2>
             <div className="bg-[#FAF8F5] rounded-2xl p-4 border border-slate-200 mb-4 relative overflow-hidden h-64 flex flex-col">
               <div className="absolute inset-0 z-0">
-                 <LocationPicker3D
+                <React.Suspense fallback={<div className="w-full h-full flex items-center justify-center bg-slate-100 text-xs text-slate-500 font-medium">Loading 3D Map...</div>}>
+                  <LocationPicker3D
                     initialCenter={mapCenter}
                     onChange={({lat, lng, address: reverseAddr}) => {
                       setMapCenter({lat, lng});
                       if (reverseAddr) setAddress(reverseAddr);
                     }}
                     className="w-full h-full"
-                 />
+                  />
+                </React.Suspense>
               </div>
               <div className="relative z-10 flex flex-col gap-3 mt-auto">
                 <div className="flex items-start gap-3">
@@ -526,35 +542,44 @@ export default function Checkout() {
               </div>
             </div>
             
-            <div className="flex gap-2 relative z-10 mb-6">
-               <button 
-                onClick={() => {
-                  toast('Drag the map to set your exact location', { icon: '🗺️' });
-                }} 
-                className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors cursor-pointer"
-               >
-                 Edit on Map
-               </button>
-               <button 
-                onClick={() => {
-                    if (navigator.geolocation) {
-                      const t = toast.loading('Locating...');
-                      navigator.geolocation.getCurrentPosition(
-                        async (pos) => {
-                          const { latitude, longitude } = pos.coords;
-                          setMapCenter({lat: latitude, lng: longitude});
-                          toast.success('Location found!', { id: t });
-                        },
-                        () => toast.error('Location access denied', { id: t })
-                      );
-                   } else {
-                     toast.error('Geolocation not supported');
-                   }
-                }} 
-                className="flex-1 py-2.5 rounded-xl bg-primary-50 text-primary-800 border border-primary-200 text-xs font-bold hover:bg-primary-100 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-               >
-                 <Navigation className="w-3.5 h-3.5 text-primary-700" /> Use My GPS
-               </button>
+            <div className="flex flex-wrap sm:flex-nowrap gap-2 relative z-10 mb-6">
+                <button 
+                 type="button"
+                 onClick={() => openLocationModal()} 
+                 className="flex-1 py-2.5 px-3 rounded-xl bg-primary-600 hover:bg-primary-700 text-white text-xs font-bold transition-colors cursor-pointer flex items-center justify-center gap-1.5 shadow-sm"
+                >
+                  <MapPin className="w-3.5 h-3.5" /> Saved / Search
+                </button>
+                <button 
+                 type="button"
+                 onClick={() => {
+                   toast('Drag the map to set your exact location', { icon: '🗺️' });
+                 }} 
+                 className="py-2.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors cursor-pointer"
+                >
+                  Edit on Map
+                </button>
+                <button 
+                 type="button"
+                 onClick={() => {
+                     if (navigator.geolocation) {
+                       const t = toast.loading('Locating...');
+                       navigator.geolocation.getCurrentPosition(
+                         async (pos) => {
+                           const { latitude, longitude } = pos.coords;
+                           setMapCenter({lat: latitude, lng: longitude});
+                           toast.success('Location found!', { id: t });
+                         },
+                         () => toast.error('Location access denied', { id: t })
+                       );
+                    } else {
+                      toast.error('Geolocation not supported');
+                    }
+                 }} 
+                 className="py-2.5 px-3 rounded-xl bg-primary-50 text-primary-800 border border-primary-200 text-xs font-bold hover:bg-primary-100 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Navigation className="w-3.5 h-3.5 text-primary-700" /> GPS
+                </button>
             </div>
 
             <div className="space-y-4 relative z-10 border-t border-slate-100 pt-5 mt-2">

@@ -27,12 +27,11 @@ export default defineConfig({
           'vendor-firebase': ['firebase/app', 'firebase/firestore', 'firebase/auth'],
           'vendor-motion': ['framer-motion'],
           'vendor-leaflet': ['leaflet', 'react-leaflet'],
+          'vendor-maplibre': ['maplibre-gl'],
           'vendor-supabase': ['@supabase/supabase-js'],
           'vendor-ui': ['lucide-react', 'react-hot-toast'],
           'vendor-state': ['zustand'],
           'vendor-three': ['three', '@react-three/fiber', '@react-three/drei'],
-          'vendor-charts': ['chart.js', 'react-chartjs-2'],
-          'vendor-utils': ['date-fns', 'html2canvas', 'jspdf']
         }
       }
     }

@@ -10,9 +10,10 @@ import PageTransition from "../components/PageTransition";
 import ProductCard from "../components/ProductCard";
 import ProductCustomizationModal from "../components/menu/ProductCustomizationModal";
 import { isStoreOpen } from "../lib/utils";
-import { Search, MapPin, Bell, User, Sparkles, SlidersHorizontal, Flame, Star, Award, Heart, AlertCircle } from "lucide-react";
+import { Search, MapPin, Bell, User, Sparkles, SlidersHorizontal, Flame, Star, Award, Heart, AlertCircle, ChevronDown } from "lucide-react";
 import { useLocation, useNavigate } from "react-router";
 import { OrderingContextService } from "../lib/orderingContext";
+import { openLocationModal } from "../components/location/LocationChangeModal";
 import SEO from "../components/SEO";
 
 function MenuSkeleton() {
@@ -86,28 +87,69 @@ export default function Menu() {
     initialize();
   }, [initialize]);
 
+  const [currentAddress, setCurrentAddress] = useState<string>(() => {
+    if (user?.fullAddress) return user.fullAddress;
+    try {
+      const stored = localStorage.getItem('op_active_location');
+      if (stored) return JSON.parse(stored).fullAddress;
+    } catch {}
+    return '';
+  });
+
+  useEffect(() => {
+    if (user?.fullAddress) {
+      setCurrentAddress(user.fullAddress);
+    }
+  }, [user?.fullAddress]);
+
   // Enforcement Point 2: Delivery radius re-verification before accessing menu
   const [isOutsideDeliveryZone, setIsOutsideDeliveryZone] = useState(false);
 
-  useEffect(() => {
-    const checkRadius = async () => {
-      const lat = (user as any)?.lat;
-      const lng = (user as any)?.lng;
-      if (lat != null && lng != null && !isNaN(Number(lat)) && !isNaN(Number(lng))) {
-        const res = await OrderingContextService.resolveContext({
-          lat: Number(lat),
-          lng: Number(lng),
-          customerId: user?.uid
-        });
-        if (!res.isServiceable) {
-          setIsOutsideDeliveryZone(true);
-        } else {
-          setIsOutsideDeliveryZone(false);
+  const checkRadius = async (coords?: { lat: number; lng: number }) => {
+    let lat = coords?.lat ?? (user as any)?.lat;
+    let lng = coords?.lng ?? (user as any)?.lng;
+
+    if (!lat || !lng) {
+      try {
+        const stored = localStorage.getItem('op_active_location');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          lat = parsed.lat;
+          lng = parsed.lng;
         }
+      } catch {}
+    }
+
+    if (lat != null && lng != null && !isNaN(Number(lat)) && !isNaN(Number(lng))) {
+      const res = await OrderingContextService.resolveContext({
+        lat: Number(lat),
+        lng: Number(lng),
+        customerId: user?.uid
+      });
+      if (!res.isServiceable) {
+        setIsOutsideDeliveryZone(true);
+      } else {
+        setIsOutsideDeliveryZone(false);
       }
-    };
+    }
+  };
+
+  useEffect(() => {
     checkRadius();
   }, [user]);
+
+  useEffect(() => {
+    const handleLocationChange = (e: any) => {
+      if (e.detail?.fullAddress) {
+        setCurrentAddress(e.detail.fullAddress);
+      }
+      if (e.detail?.lat && e.detail?.lng) {
+        checkRadius({ lat: e.detail.lat, lng: e.detail.lng });
+      }
+    };
+    window.addEventListener('location-changed', handleLocationChange as EventListener);
+    return () => window.removeEventListener('location-changed', handleLocationChange as EventListener);
+  }, []);
 
   const allItems: MenuItem[] = useMemo(() => {
     const parsedProducts = products
@@ -190,13 +232,19 @@ export default function Menu() {
 
             {/* ── Top Bar Header (Mobile App Bar Aligned) ── */}
             <div className="flex items-center justify-between gap-2 pt-2">
-              <div className="flex items-center gap-2 text-[11px] sm:text-xs text-slate-800 bg-white px-3.5 py-2 rounded-full border border-slate-200 shadow-xs max-w-[70%] sm:max-w-md">
-                <MapPin size={14} className="text-primary-600 shrink-0 animate-bounce" />
-                <div className="truncate font-medium">
+              <button
+                type="button"
+                onClick={() => openLocationModal()}
+                className="flex items-center gap-2 text-[11px] sm:text-xs text-slate-800 bg-white px-3.5 py-2 rounded-full border border-slate-200 shadow-xs max-w-[70%] sm:max-w-md hover:border-primary-400 hover:shadow-sm transition-all cursor-pointer text-left group"
+                title="Change delivery location"
+              >
+                <MapPin size={14} className="text-primary-600 shrink-0 group-hover:scale-110 transition-transform" />
+                <div className="truncate font-medium flex-1 min-w-0">
                   <span className="text-slate-500 font-bold">Delivery to: </span>
-                  <span className="text-slate-900 font-bold">{user?.fullAddress || user?.full_address || "Select Delivery Location"}</span>
+                  <span className="text-slate-900 font-bold">{currentAddress || "Select Delivery Location"}</span>
                 </div>
-              </div>
+                <ChevronDown size={13} className="text-slate-400 shrink-0 group-hover:text-primary-600 transition-colors" />
+              </button>
 
               <div className="flex items-center gap-2 shrink-0">
                 <button 

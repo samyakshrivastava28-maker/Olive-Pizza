@@ -13,6 +13,7 @@ import {
   MapPin, Clock, ShoppingBag, Flame, AlertTriangle, AlertCircle
 } from "lucide-react";
 import { OrderingContextService } from "../lib/orderingContext";
+import { openLocationModal } from "../components/location/LocationChangeModal";
 import { db } from "../lib/firebase";
 import { collection, getDocs, query, limit } from "firebase/firestore";
 import { MenuItem } from "../types/models";
@@ -34,41 +35,79 @@ export default function Cart() {
   const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discount: number } | null>(null);
   const [showCouponInput, setShowCouponInput] = useState(false);
   const [deliveryInstruction, setDeliveryInstruction] = useState("Please ring the bell");
+  const [activeAddress, setActiveAddress] = useState<string>(() => {
+    if (user?.fullAddress) return user.fullAddress;
+    try {
+      const stored = localStorage.getItem('op_active_location');
+      if (stored) return JSON.parse(stored).fullAddress;
+    } catch {}
+    return '';
+  });
 
   useEffect(() => {
-    const verifyCartLocationAndFranchise = async () => {
-      const lat = (user as any)?.lat;
-      const lng = (user as any)?.lng;
+    if (user?.fullAddress) {
+      setActiveAddress(user.fullAddress);
+    }
+  }, [user?.fullAddress]);
 
-      if (lat != null && lng != null && !isNaN(Number(lat)) && !isNaN(Number(lng))) {
-        const res = await OrderingContextService.resolveContext({
-          lat: Number(lat),
-          lng: Number(lng),
-          customerId: user?.uid
-        });
+  const verifyCartLocationAndFranchise = async (coords?: { lat: number; lng: number }) => {
+    let lat = coords?.lat ?? (user as any)?.lat;
+    let lng = coords?.lng ?? (user as any)?.lng;
 
-        if (!res.isServiceable || !res.context) {
-          setIsOutsideDeliveryZone(true);
-        } else {
-          setIsOutsideDeliveryZone(false);
-          const currentFranchiseId = res.context.franchiseId;
+    if (!lat || !lng) {
+      try {
+        const stored = localStorage.getItem('op_active_location');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          lat = parsed.lat;
+          lng = parsed.lng;
+        }
+      } catch {}
+    }
 
-          // Check if cart has items belonging to another franchise (Section 3c)
-          if (items.length > 0 && cartFranchiseId && cartFranchiseId !== currentFranchiseId) {
-            setResolvedFranchiseInfo({
-              id: currentFranchiseId,
-              name: res.context.branchName || 'Olive Pizza'
-            });
-            setShowFranchiseMismatch(true);
-          } else if (!cartFranchiseId && currentFranchiseId) {
-            setFranchiseId(currentFranchiseId);
-          }
+    if (lat != null && lng != null && !isNaN(Number(lat)) && !isNaN(Number(lng))) {
+      const res = await OrderingContextService.resolveContext({
+        lat: Number(lat),
+        lng: Number(lng),
+        customerId: user?.uid
+      });
+
+      if (!res.isServiceable || !res.context) {
+        setIsOutsideDeliveryZone(true);
+      } else {
+        setIsOutsideDeliveryZone(false);
+        const currentFranchiseId = res.context.franchiseId;
+
+        // Check if cart has items belonging to another franchise (Section 3c)
+        if (items.length > 0 && cartFranchiseId && cartFranchiseId !== currentFranchiseId) {
+          setResolvedFranchiseInfo({
+            id: currentFranchiseId,
+            name: res.context.branchName || 'Olive Pizza'
+          });
+          setShowFranchiseMismatch(true);
+        } else if (!cartFranchiseId && currentFranchiseId) {
+          setFranchiseId(currentFranchiseId);
         }
       }
-    };
+    }
+  };
 
+  useEffect(() => {
     verifyCartLocationAndFranchise();
   }, [user?.lat, user?.lng, items.length, cartFranchiseId]);
+
+  useEffect(() => {
+    const handleLocationChange = (e: any) => {
+      if (e.detail?.fullAddress) {
+        setActiveAddress(e.detail.fullAddress);
+      }
+      if (e.detail?.lat && e.detail?.lng) {
+        verifyCartLocationAndFranchise({ lat: e.detail.lat, lng: e.detail.lng });
+      }
+    };
+    window.addEventListener('location-changed', handleLocationChange as EventListener);
+    return () => window.removeEventListener('location-changed', handleLocationChange as EventListener);
+  }, []);
 
   useEffect(() => {
     const fetchRecommendations = async () => {
@@ -601,15 +640,19 @@ export default function Cart() {
               <span className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
                 <MapPin size={14} className="text-primary-600" /> Deliver To
               </span>
-              <button onClick={() => navigate('/checkout')} className="text-xs font-bold text-primary-700 hover:underline cursor-pointer">
+              <button 
+                type="button"
+                onClick={() => openLocationModal()} 
+                className="text-xs font-bold text-primary-700 hover:text-primary-800 hover:underline cursor-pointer"
+              >
                 Change
               </button>
             </div>
             <p className="text-xs font-bold text-slate-900 truncate">
-              {user?.fullAddress || user?.full_address || "Home"}
+              {activeAddress ? activeAddress.split(',')[0] : (user?.fullAddress || user?.full_address || "Set Delivery Location")}
             </p>
             <p className="text-[11px] text-slate-500 line-clamp-2">
-              Dongargaon Rd, near Saraswati school, Rajnandgaon, CG
+              {activeAddress || user?.fullAddress || user?.full_address || "Tap Change to choose a saved address or add a new delivery location"}
             </p>
 
             <div className="pt-2 border-t border-slate-100">
