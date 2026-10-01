@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { auth, db } from '../../lib/firebase';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MapPin, Plus, Edit2, Trash2, Home, Briefcase, Navigation, Check, Map, X, Star } from 'lucide-react';
+import { MapPin, Plus, Edit2, Trash2, Home, Briefcase, Navigation, Check, Map, X, Star, Search } from 'lucide-react';
 import PizzaLoader from '../ui/PizzaLoader';
 import toast from 'react-hot-toast';
 import { LocationManager, LocationData } from '../../lib/permissions';
@@ -11,9 +11,10 @@ import { useAuthStore } from '../../lib/store';
 import { fetchApi } from '../../lib/config';
 
 // Reuse Leaflet map from SetupLocation but dynamically import to save bundle
-import { MapContainer, TileLayer, Marker, Popup, useMapEvents } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
+import { ParallelLocationSearchService, NormalizedLocationResult } from '../../services/location/ParallelLocationSearchService';
 delete (L.Icon.Default.prototype as any)._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png",
@@ -21,6 +22,14 @@ L.Icon.Default.mergeOptions({
   shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
 });
 const DEFAULT_MAP_CENTER = { lat: 21.0963, lng: 81.0335 };
+
+function ChangeView({ center }: { center: { lat: number; lng: number } }) {
+  const map = useMap();
+  useEffect(() => {
+    map.setView([center.lat, center.lng], 15, { animate: true });
+  }, [center, map]);
+  return null;
+}
 
 export interface SavedAddress {
   id: string;
@@ -44,6 +53,56 @@ export default function AddressBook() {
   const [markerPos, setMarkerPos] = useState(DEFAULT_MAP_CENTER);
   const [gettingGps, setGettingGps] = useState(false);
   const [saveLoading, setSaveLoading] = useState(false);
+
+  // Parallel multi-provider search state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<NormalizedLocationResult[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const searchDebounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleSearchChange = (query: string) => {
+    setSearchQuery(query);
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    if (!query || query.trim().length < 2) {
+      setSearchResults([]);
+      setSearching(false);
+      return;
+    }
+
+    setSearching(true);
+    searchDebounceRef.current = setTimeout(async () => {
+      try {
+        await ParallelLocationSearchService.search(query.trim(), {
+          lat: markerPos.lat,
+          lng: markerPos.lng,
+          limit: 6,
+          onPartialResults: (partial, isFinal) => {
+            setSearchResults(partial);
+            if (isFinal) setSearching(false);
+          },
+        });
+      } catch (err) {
+        console.warn('[AddressBook] Search error:', err);
+      } finally {
+        setSearching(false);
+      }
+    }, 280);
+  };
+
+  const handleSelectSearchResult = (result: NormalizedLocationResult) => {
+    setMarkerPos({ lat: result.latitude, lng: result.longitude });
+    setNewAddress((prev) => ({
+      ...prev,
+      addressLine: result.formattedAddress || result.name,
+      city: result.city || prev.city || '',
+      pincode: result.pincode || prev.pincode || '',
+    }));
+    setSearchResults([]);
+    setSearchQuery(result.name || result.formattedAddress);
+    setIsSearchFocused(false);
+    toast.success(`Selected: ${result.name}`);
+  };
 
   useEffect(() => {
     fetchAddresses();
@@ -244,16 +303,68 @@ export default function AddressBook() {
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div>
+                  {/* Parallel Multi-Provider Search Bar */}
+                  <div className="relative mb-3">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <input
+                        type="text"
+                        value={searchQuery}
+                        onFocus={() => setIsSearchFocused(true)}
+                        onChange={(e) => handleSearchChange(e.target.value)}
+                        placeholder="Search area, landmark, or street..."
+                        className="w-full pl-9 pr-10 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs focus:border-primary-500 outline-none"
+                      />
+                      {searching && (
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                          <PizzaLoader size="inline" />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Results Dropdown */}
+                    <AnimatePresence>
+                      {isSearchFocused && searchResults.length > 0 && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 4 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0 }}
+                          className="absolute z-30 top-full left-0 right-0 mt-1 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 max-h-52 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-750"
+                        >
+                          {searchResults.map((item) => (
+                            <button
+                              key={item.id}
+                              type="button"
+                              onClick={() => handleSelectSearchResult(item)}
+                              className="w-full p-2.5 text-left hover:bg-primary-50 dark:hover:bg-slate-700/60 transition-colors flex items-start gap-2.5 text-xs text-slate-700 dark:text-slate-200 cursor-pointer"
+                            >
+                              <MapPin className="w-3.5 h-3.5 text-primary-500 shrink-0 mt-0.5" />
+                              <div className="min-w-0 flex-1">
+                                <div className="font-bold text-slate-900 dark:text-white truncate">
+                                  {item.name}
+                                </div>
+                                <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
+                                  {item.formattedAddress}
+                                </div>
+                              </div>
+                            </button>
+                          ))}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+
                   <button
                     onClick={handleGetGps}
                     disabled={gettingGps}
-                    className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 mb-4 transition-colors"
+                    className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2.5 rounded-xl flex items-center justify-center gap-2 mb-3 transition-colors text-xs"
                   >
                     {gettingGps ? <PizzaLoader size="inline" /> : '📍 Use Current GPS Location'}
                   </button>
                   <div className="h-[250px] rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 relative z-0">
                     <MapContainer center={[markerPos.lat, markerPos.lng]} zoom={15} style={{ width: "100%", height: "100%" }}>
                       <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                      <ChangeView center={markerPos} />
                       <LocationMarker />
                     </MapContainer>
                   </div>
