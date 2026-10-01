@@ -155,7 +155,7 @@ export default function Menu() {
       }
       return matchesCategory && matchesSearch;
     });
-  }, [allItems, category, debouncedSearch]);
+  }, [allItems, category, debouncedSearch, wishlistIds]);
 
   const categoryList = [
     { id: 'all', label: 'All 🍕' },

@@ -33,6 +33,8 @@ import { trackEvent, computeRankingScore } from "../lib/analytics";
 import toast from "react-hot-toast";
 import SEO from "../components/SEO";
 import { generateRestaurantSchema } from "../lib/schema";
+import { fetchApi } from "../lib/config";
+import { clientDataCache } from "../lib/clientDataCache";
 
 import LiveMenuCategories from "../components/home/LiveMenuCategories";
 import LiveCoupons from "../components/home/LiveCoupons";
@@ -157,16 +159,25 @@ export default function Home() {
       return config && typeof config === 'object' && Array.isArray(config.sections) && config.sections.length > 0;
     };
 
-    // 1. Instant fallback / initial fetch from API
-    fetch('/api/homepage/live')
-      .then(res => res.json())
-      .then(data => {
-        if (isMounted && data.success && isValidSchema(data.config)) {
-          cachedPageSchema = data.config;
-          setPageSchema(data.config);
+    // 1. Instant SWR cache fetch with fallback to resilient fetchApi (works on native Capacitor & Vercel)
+    clientDataCache.fetchWithSWR<{ success: boolean; config: any }>(
+      'public:homepage_live',
+      () => fetchApi('/api/homepage/live').then(res => res.json()),
+      {
+        ttlMs: 60 * 1000,
+        onFreshData: (data: { success: boolean; config: any }) => {
+          if (isMounted && data && data.success && isValidSchema(data.config)) {
+            cachedPageSchema = data.config;
+            setPageSchema(data.config);
+          }
         }
-      })
-      .catch(() => {});
+      }
+    ).then(cached => {
+      if (isMounted && cached && cached.success && isValidSchema(cached.config)) {
+        cachedPageSchema = cached.config;
+        setPageSchema(cached.config);
+      }
+    }).catch(() => {});
 
     // 2. Real-time Firestore snapshot listener for zero-delay instant updates
     const unsubscribeFirestore = onSnapshot(

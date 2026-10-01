@@ -15,12 +15,15 @@ interface LuxuryProductCardProps {
   index: number;
 }
 
-export default function LuxuryProductCard({ product, wishlistIds, index }: LuxuryProductCardProps) {
-  const { items, addItem, updateQuantity, removeItem } = useCartStore();
-  const { triggerAnimation } = useCartAnimation();
-
-  const inCartItem = items.find((i) => i.id === product.id || i.menuItemId === product.id);
+export default React.memo(function LuxuryProductCard({ product, wishlistIds, index }: LuxuryProductCardProps) {
+  const addItem = useCartStore((s) => s.addItem);
+  const updateQuantity = useCartStore((s) => s.updateQuantity);
+  const removeItem = useCartStore((s) => s.removeItem);
+  const inCartItem = useCartStore(
+    useCallback((s) => s.items.find((i) => i.id === product.id || i.menuItemId === product.id), [product.id])
+  );
   const cartQuantity = inCartItem?.quantity || 0;
+  const { triggerAnimation } = useCartAnimation();
 
   const appliedDiscount = Number(product.discountPercentage || 0);
   const basePrice = Number(product.basePrice || product.price || 0);
@@ -227,4 +230,4 @@ export default function LuxuryProductCard({ product, wishlistIds, index }: Luxur
       </Link>
     </motion.div>
   );
-}
+});

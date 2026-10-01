@@ -474,10 +474,10 @@ export default function SetupLocation() {
         longitude: loc.lng,
         formattedAddress: loc.fullAddress || "Current GPS Location",
         name: "Current Location",
-        city: loc.city || selectedCity?.city,
-        state: loc.state || selectedCity?.state,
+        city: (loc as any).city || selectedCity?.city,
+        state: (loc as any).state || selectedCity?.state,
         country: "India",
-        pincode: loc.pincode,
+        pincode: (loc as any).pincode,
         isServiceable: true,
       });
 

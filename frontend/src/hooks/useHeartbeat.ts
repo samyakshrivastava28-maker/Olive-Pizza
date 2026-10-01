@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useAuthStore } from '../lib/store';
+import { fetchApi } from '../lib/config';
 
 export function useHeartbeat() {
   const { user, role, isAuthenticated } = useAuthStore();
@@ -18,7 +19,7 @@ export function useHeartbeat() {
           batteryLevel = battery.level;
         }
 
-        await fetch('/api/heartbeat', {
+        await fetchApi('/api/heartbeat', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

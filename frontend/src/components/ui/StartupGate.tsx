@@ -204,7 +204,7 @@ export default function StartupGate({ children }: StartupGateProps) {
             playsInline
             muted
             autoPlay
-            preload="auto"
+            preload="metadata"
             poster={posterFrameUrl}
             style={{
               transform: 'translateZ(0)',

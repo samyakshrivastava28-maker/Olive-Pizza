@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { fetchApi } from '../lib/config';
 
 export function useVersionCheck() {
   useEffect(() => {
@@ -8,7 +9,7 @@ export function useVersionCheck() {
 
     const checkVersion = async () => {
       try {
-        const response = await fetch('/api/version/status', {
+        const response = await fetchApi('/api/version/status', {
           // ensure we get the latest status, bypassing network cache
           cache: 'no-store' 
         });

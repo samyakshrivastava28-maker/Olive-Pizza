@@ -4,6 +4,7 @@ import { Browser } from '@capacitor/browser';
 import { Capacitor } from '@capacitor/core';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Download, Smartphone, X } from 'lucide-react';
+import { fetchApi } from '../../lib/config';
 
 export default function AutoUpdater() {
   const [updateAvailable, setUpdateAvailable] = useState(false);
@@ -63,12 +64,12 @@ export default function AutoUpdater() {
         const intervalMs = 9.5 * 60 * 1000; // ~9.5 to 10 minutes
         if (!lastPing || (now - parseInt(lastPing, 10)) > intervalMs) {
           localStorage.setItem('olive_last_demo_keep_warm_ping', now.toString());
-          fetch('/api/health/ping').catch(() => {});
+          fetchApi('/api/health/ping').catch(() => {});
         }
       } catch {}
 
       try {
-        const res = await fetch('/api/health/version');
+        const res = await fetchApi('/api/health/version');
         if (!res.ok) return;
         const data = await res.json();
         

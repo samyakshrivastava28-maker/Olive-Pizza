@@ -23,12 +23,14 @@ export default memo(function ProductCard({
   onOpenCustomization,
 }: ProductCardProps) {
   const navigate = useNavigate();
-  const { items, addItem, updateQuantity, removeItem } = useCartStore();
-  const { triggerAnimation } = useCartAnimation();
-
-  // Find if item is already added to cart
-  const inCartItem = items.find((i) => i.id === item.id || i.menuItemId === item.id);
+  const addItem = useCartStore((s) => s.addItem);
+  const updateQuantity = useCartStore((s) => s.updateQuantity);
+  const removeItem = useCartStore((s) => s.removeItem);
+  const inCartItem = useCartStore(
+    useCallback((s) => s.items.find((i) => i.id === item.id || i.menuItemId === item.id), [item.id])
+  );
   const cartQuantity = inCartItem?.quantity || 0;
+  const { triggerAnimation } = useCartAnimation();
 
   const appliedDiscount = item.discountPercentage || discount;
   const finalPrice =

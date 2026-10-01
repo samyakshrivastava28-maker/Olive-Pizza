@@ -104,9 +104,10 @@ export default function Checkout() {
           const { latitude, longitude } = position.coords;
           setMapCenter({ lat: latitude, lng: longitude });
           try {
-            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
+            const res = await fetchApi(`/api/location/reverse-geocode?lat=${latitude}&lng=${longitude}`);
             const data = await res.json();
-            if (data && data.display_name) setAddress(data.display_name);
+            const addr = data?.location?.displayName || data?.display_name;
+            if (addr) setAddress(addr);
           } catch (err) {}
         },
         () => {}
