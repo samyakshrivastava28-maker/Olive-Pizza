@@ -4,8 +4,8 @@ import { performUpdate } from '../lib/versionManager';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useEffect, useState, Suspense } from 'react';
 import { doc, updateDoc } from 'firebase/firestore';
-import { db, auth } from '../lib/firebase';
-import { Home, Menu as MenuIcon, ShoppingBag, User, Search, MapPin, ReceiptText, WifiOff, Download, RefreshCw, Bot, Bell } from 'lucide-react';
+import { Home, Menu as MenuIcon, ShoppingBag, User, Search, MapPin, ReceiptText, WifiOff, Download, RefreshCw, Bot, Bell, ChevronDown } from 'lucide-react';
+import LocationChangeModal, { openLocationModal } from './location/LocationChangeModal';
 
 import PWAPrompts from './ui/PWAPrompts';
 import { usePWA } from '../lib/usePWA';
@@ -38,6 +38,30 @@ export default function MainLayout() {
 
   const [scrolled, setScrolled] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [activeAddress, setActiveAddress] = useState<string>(() => {
+    if (user?.fullAddress) return user.fullAddress;
+    try {
+      const stored = localStorage.getItem('op_active_location');
+      if (stored) return JSON.parse(stored).fullAddress;
+    } catch {}
+    return '';
+  });
+
+  useEffect(() => {
+    if (user?.fullAddress) {
+      setActiveAddress(user.fullAddress);
+    }
+  }, [user?.fullAddress]);
+
+  useEffect(() => {
+    const handleLocationChange = (e: any) => {
+      if (e.detail?.fullAddress) {
+        setActiveAddress(e.detail.fullAddress);
+      }
+    };
+    window.addEventListener('location-changed', handleLocationChange as EventListener);
+    return () => window.removeEventListener('location-changed', handleLocationChange as EventListener);
+  }, []);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
@@ -125,27 +149,41 @@ export default function MainLayout() {
           }}
         >
           <div className="h-14 md:h-16 flex items-center justify-between px-4 md:px-6">
-            {/* Logo */}
-            <Link to="/" className="flex items-center gap-2.5 group">
-              <img
-                src="/logo-transparent.png"
-                alt="Olive Pizza Logo"
-                className="h-8 md:h-10 w-auto object-contain bg-transparent transition-transform duration-200 group-hover:scale-105"
-              />
-              <span className="text-lg md:text-xl font-black tracking-tight hidden sm:block text-white group-hover:text-champagne transition-colors duration-200">
-                Olive Pizza
-              </span>
-            </Link>
+            {/* Logo & Delivery Location */}
+            <div className="flex items-center gap-2 sm:gap-3">
+              <Link to="/" className="flex items-center gap-2 group shrink-0">
+                <img
+                  src="/logo-transparent.png"
+                  alt="Olive Pizza Logo"
+                  className="h-8 md:h-10 w-auto object-contain bg-transparent transition-transform duration-200 group-hover:scale-105"
+                />
+                <span className="text-lg md:text-xl font-black tracking-tight hidden sm:block text-white group-hover:text-champagne transition-colors duration-200">
+                  Olive Pizza
+                </span>
+              </Link>
+
+              {/* Delivery Location Pill (Clickable on Desktop & Mobile) */}
+              <button
+                type="button"
+                onClick={() => openLocationModal()}
+                className="flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full transition-all cursor-pointer border border-white/10 hover:border-amber-400/40 bg-white/5 hover:bg-white/10 text-left max-w-[125px] sm:max-w-[170px] md:max-w-[210px] shadow-sm group"
+                title="Change delivery location"
+              >
+                <MapPin className="w-3.5 h-3.5 text-amber-400 shrink-0 group-hover:scale-110 transition-transform" />
+                <div className="flex flex-col leading-none min-w-0">
+                  <span className="text-[8px] sm:text-[9px] text-amber-300 font-bold uppercase tracking-wider block">
+                    Deliver To
+                  </span>
+                  <span className="truncate text-xs font-semibold text-slate-200 group-hover:text-white block mt-0.5">
+                    {activeAddress ? activeAddress.split(',')[0] : 'Set Location'}
+                  </span>
+                </div>
+                <ChevronDown className="w-3 h-3 text-slate-400 shrink-0 ml-0.5" />
+              </button>
+            </div>
 
             {/* Desktop Navigation */}
             <nav className="hidden md:flex gap-1 items-center">
-              {isAuthenticated && user?.fullAddress && (
-                <div className="flex items-center gap-2 text-xs text-slate-300 max-w-[180px] px-3 py-1.5 rounded-full mr-2"
-                  style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(248,231,201,0.12)" }}>
-                  <MapPin className="w-3 h-3 text-champagne shrink-0" />
-                  <span className="truncate">{user.fullAddress}</span>
-                </div>
-              )}
 
               {[
                 { label: "Home", path: "/" },
@@ -387,6 +425,9 @@ export default function MainLayout() {
 
       {/* Universal Flagship Footer */}
       <FlagshipFooter />
+
+      {/* Global Interactive Location Selector & Permission Recovery Modal */}
+      <LocationChangeModal />
     </div>
   );
 }

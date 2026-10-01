@@ -20,6 +20,12 @@ export default function StartupGate({ children }: StartupGateProps) {
   const [showVideo, setShowVideo] = useState(() => {
     if (typeof window === 'undefined') return false;
 
+    // Never block local development with intro gate
+    if (import.meta.env.DEV) {
+      window.__OP_APP_STARTUP_INTRO_PLAYED__ = true;
+      return false;
+    }
+
     // 0. Never play intro on deep-links, tracking pages, checkout, or internal routes
     const pathname = window.location.pathname;
     const search = window.location.search || '';

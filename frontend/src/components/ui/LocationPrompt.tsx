@@ -6,6 +6,7 @@ import { doc, updateDoc } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MapPin, Loader2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { openLocationModal } from '../location/LocationChangeModal';
 
 export default function LocationPrompt() {
   const { user, role, isAuthenticated, setUser } = useAuthStore();
@@ -54,13 +55,10 @@ export default function LocationPrompt() {
       }
     } catch (error: any) {
       console.error('Location error:', error);
-      if (error.message?.includes('denied')) {
-        toast.error('Location permission denied. You can set it manually later.');
-        setShowPrompt(false);
-        setDismissed(true);
-      } else {
-        toast.error('Failed to get address. Please set manually.');
-      }
+      setShowPrompt(false);
+      setDismissed(true);
+      // Seamlessly transition to location selector modal
+      openLocationModal();
     } finally {
       setLoading(false);
     }
@@ -104,10 +102,14 @@ export default function LocationPrompt() {
               )}
             </button>
             <button
-              onClick={() => { setShowPrompt(false); setDismissed(true); }}
-              className="w-full bg-transparent hover:bg-white/5 text-slate-300 font-medium py-3 rounded-xl transition-colors"
+              onClick={() => {
+                setShowPrompt(false);
+                setDismissed(true);
+                openLocationModal();
+              }}
+              className="w-full bg-transparent hover:bg-white/5 text-amber-300 font-semibold py-3 rounded-xl transition-colors text-xs"
             >
-              Enter Manually Later
+              Select from Saved / Add Location
             </button>
           </div>
         </motion.div>
