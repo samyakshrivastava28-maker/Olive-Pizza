@@ -126,63 +126,35 @@ export class ParallelLocationSearchService {
       options.onPartialResults?.(ranked, isFinal);
     };
 
-    // 2. Concurrently start all enabled search providers
-    const promises: Promise<void>[] = [];
+    // 2. Query Authoritative Backend Parallel Location Search Coordinator
+    // The backend concurrently queries Mapbox, Geoapify, Photon (OSM), and Mappls,
+    // deduplicates spatially, applies multi-provider scoring, and checks in-memory serviceability.
+    try {
+      const backendParams = new URLSearchParams({
+        q: cleanQuery,
+        city,
+        limit: String(limit),
+      });
+      if (biasLat != null && biasLng != null) {
+        backendParams.append('lat', String(biasLat));
+        backendParams.append('lng', String(biasLng));
+      }
 
-    // Branch A: Direct fast client-side Photon (OSM) search (sub-250ms for instant initial results)
-    promises.push(
-      (async () => {
-        try {
-          const directPhotonResults = await this.queryDirectPhoton(
-            cleanQuery,
-            city,
-            biasLat,
-            biasLng,
-            abortController.signal
-          );
-          if (directPhotonResults.length > 0) {
-            handleNewProviderResults(directPhotonResults, false);
-          }
-        } catch {
-          // Non-fatal: other providers will contribute
+      const res = await fetchApi(`/api/location/search-parallel?${backendParams.toString()}`, {
+        signal: abortController.signal,
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.success && Array.isArray(data.results)) {
+          handleNewProviderResults(data.results, false);
         }
-      })()
-    );
-
-    // Branch B: Backend Authoritative Multi-Provider Engine (Mapbox, Geoapify, Nominatim, Mappls + Serviceability)
-    promises.push(
-      (async () => {
-        try {
-          const backendParams = new URLSearchParams({
-            q: cleanQuery,
-            city,
-            limit: String(limit),
-          });
-          if (biasLat != null && biasLng != null) {
-            backendParams.append('lat', String(biasLat));
-            backendParams.append('lng', String(biasLng));
-          }
-
-          const res = await fetchApi(`/api/location/search-parallel?${backendParams.toString()}`, {
-            signal: abortController.signal,
-          });
-
-          if (res.ok) {
-            const data = await res.json();
-            if (data?.success && Array.isArray(data.results)) {
-              handleNewProviderResults(data.results, false);
-            }
-          }
-        } catch (err: any) {
-          if (err.name !== 'AbortError') {
-            console.warn('[ParallelLocationSearch] Backend search warning:', err?.message);
-          }
-        }
-      })()
-    );
-
-    // Wait for all providers to settle
-    await Promise.allSettled(promises);
+      }
+    } catch (err: any) {
+      if (err.name !== 'AbortError') {
+        console.warn('[ParallelLocationSearch] Backend search warning:', err?.message);
+      }
+    }
 
     // Final check for session freshness
     if (currentSessionId !== this.activeSessionId) {
@@ -201,84 +173,6 @@ export class ParallelLocationSearchService {
 
     options.onPartialResults?.(finalRanked, true);
     return finalRanked;
-  }
-
-  // ─── Direct Fast Photon Query (Instant Client-Side OSM Provider) ───────────
-  private static async queryDirectPhoton(
-    query: string,
-    city: string,
-    lat?: number,
-    lng?: number,
-    signal?: AbortSignal
-  ): Promise<NormalizedLocationResult[]> {
-    const q = city ? `${query} ${city}` : query;
-    const params = new URLSearchParams({
-      q,
-      limit: '8',
-      lang: 'en',
-    });
-    if (lat != null && lng != null) {
-      params.append('lat', String(lat));
-      params.append('lon', String(lng));
-    }
-
-    const res = await fetch(`https://photon.komoot.io/api/?${params.toString()}`, {
-      signal,
-    });
-
-    if (!res.ok) return [];
-    const data = await res.json();
-    const features = data?.features || [];
-
-    const results: NormalizedLocationResult[] = [];
-    for (const feat of features) {
-      const props = feat.properties || {};
-      const coords = feat.geometry?.coordinates;
-      if (!coords || coords.length < 2) continue;
-
-      const longitude = Number(coords[0]);
-      const latitude = Number(coords[1]);
-      if (isNaN(latitude) || isNaN(longitude)) continue;
-
-      const name = (props.name || props.street || query).trim();
-      const subtitleParts = [
-        props.street,
-        props.locality || props.district || props.suburb,
-        props.city || city,
-        props.state,
-        props.country || 'India',
-      ].filter(Boolean).filter((val, idx, arr) => arr.indexOf(val) === idx);
-
-      const formattedAddress = [name, ...subtitleParts.filter((p) => p !== name)].join(', ');
-
-      results.push({
-        id: `photon_${props.osm_id || Math.random().toString(36).substring(2, 9)}`,
-        provider: 'photon',
-        name,
-        formattedAddress,
-        latitude,
-        longitude,
-        city: props.city || city,
-        district: props.district || props.county,
-        state: props.state,
-        country: props.country || 'India',
-        pincode: props.postcode,
-        type: props.osm_value || props.type || 'place',
-        relevance: 0.8,
-        matchedProviders: ['photon'],
-        providerCount: 1,
-        address: {
-          road: props.street,
-          suburb: props.locality || props.district,
-          city: props.city || city,
-          state: props.state,
-          postcode: props.postcode,
-          country: props.country || 'India',
-        },
-      });
-    }
-
-    return results;
   }
 
   // ─── Deduplication: Spatial Clustering (<180m) + Semantic Matching ─────────
