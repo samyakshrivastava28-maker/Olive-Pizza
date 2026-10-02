@@ -59,17 +59,17 @@ export default function LiveCoupons() {
         {/* Section Header */}
         <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 md:mb-14">
           <div>
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-primary-950 border border-primary-500/30 backdrop-blur-md mb-3">
-              <Flame className="w-4 h-4 text-champagne animate-bounce" />
-              <span className="text-xs font-black uppercase tracking-wider text-champagne">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-primary-50 border border-primary-200 backdrop-blur-md mb-3">
+              <Flame className="w-4 h-4 text-primary-700 animate-bounce" />
+              <span className="text-xs font-black uppercase tracking-wider text-primary-800">
                 Exclusive Savings
               </span>
             </div>
-            <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight">
-              Active <span className="bg-gradient-to-r from-champagne via-primary-300 to-emerald-400 bg-clip-text text-transparent">Promo Coupons</span>
+            <h2 className="text-3xl sm:text-5xl font-black text-slate-900 tracking-tight">
+              Active <span className="bg-gradient-to-r from-primary-700 via-primary-600 to-amber-600 bg-clip-text text-transparent">Promo Coupons</span>
             </h2>
           </div>
-          <p className="text-slate-400 text-sm sm:text-base max-w-md mt-2 md:mt-0 font-medium">
+          <p className="text-slate-600 text-sm sm:text-base max-w-md mt-2 md:mt-0 font-medium">
             Copy discount codes below and apply at checkout for instant cash discounts!
           </p>
         </div>
@@ -110,8 +110,8 @@ export default function LiveCoupons() {
                 </div>
 
                 {/* Left Ticket Cutout Decorative Dots */}
-                <div className="absolute top-1/2 -left-3 -translate-y-1/2 w-6 h-6 rounded-full bg-dark-950 border border-dark-800" />
-                <div className="absolute top-1/2 -right-3 -translate-y-1/2 w-6 h-6 rounded-full bg-dark-950 border border-dark-800" />
+                <div className="absolute top-1/2 -left-3 -translate-y-1/2 w-6 h-6 rounded-full bg-[#FAF8F5] border border-champagne/30" />
+                <div className="absolute top-1/2 -right-3 -translate-y-1/2 w-6 h-6 rounded-full bg-[#FAF8F5] border border-champagne/30" />
 
                 {/* Coupon Content */}
                 <div>

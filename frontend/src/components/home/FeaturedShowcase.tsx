@@ -130,31 +130,31 @@ export default function FeaturedShowcase({
           {/* ── Section Header ── */}
           <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 md:mb-12 gap-4">
             <div>
-              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-orange-500/10 border border-orange-500/20 backdrop-blur-md mb-3">
-                <Sparkles className="w-4 h-4 text-orange-400 animate-spin" />
-                <span className="text-xs font-black uppercase tracking-wider text-orange-300">
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-orange-50 border border-orange-200 backdrop-blur-md mb-3">
+                <Sparkles className="w-4 h-4 text-orange-600 animate-spin" />
+                <span className="text-xs font-black uppercase tracking-wider text-orange-800">
                   Curated Selections
                 </span>
               </div>
-              <h2 className="text-3xl sm:text-4xl md:text-5xl font-black text-white tracking-tight">
+              <h2 className="text-3xl sm:text-4xl md:text-5xl font-black text-slate-900 tracking-tight">
                 Recommended{" "}
-                <span className="bg-gradient-to-r from-orange-400 via-amber-300 to-yellow-500 bg-clip-text text-transparent">
+                <span className="bg-gradient-to-r from-orange-600 via-amber-600 to-yellow-600 bg-clip-text text-transparent">
                   for You
                 </span>
               </h2>
-              <p className="text-slate-400 text-xs sm:text-sm md:text-base max-w-xl mt-2 font-medium">
+              <p className="text-slate-600 text-xs sm:text-sm md:text-base max-w-xl mt-2 font-medium">
                 Handpicked selections featuring our top products, most ordered favorites, and smart AI recommendations.
               </p>
             </div>
 
             {/* ── Filter Tabs ── */}
-            <div className="flex items-center gap-1.5 sm:gap-2 p-1.5 rounded-2xl bg-dark-900/90 border border-white/10 backdrop-blur-xl overflow-x-auto hide-scrollbar self-start md:self-auto">
+            <div className="flex items-center gap-1.5 sm:gap-2 p-1.5 rounded-2xl bg-white border border-slate-200 shadow-sm overflow-x-auto hide-scrollbar self-start md:self-auto">
               <button
                 onClick={() => setActiveTab("all")}
-                className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-extrabold transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-extrabold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
                   activeTab === "all"
-                    ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/20"
-                    : "text-slate-400 hover:text-white hover:bg-white/5"
+                    ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/20"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
                 }`}
               >
                 <Sparkles className="w-3.5 h-3.5" /> All Picks
@@ -162,10 +162,10 @@ export default function FeaturedShowcase({
 
               <button
                 onClick={() => setActiveTab("top")}
-                className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-extrabold transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-extrabold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
                   activeTab === "top"
-                    ? "bg-gradient-to-r from-amber-500 to-yellow-500 text-black shadow-lg shadow-amber-500/20"
-                    : "text-slate-400 hover:text-white hover:bg-white/5"
+                    ? "bg-gradient-to-r from-amber-500 to-yellow-500 text-white shadow-md shadow-amber-500/20"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
                 }`}
               >
                 <Crown className="w-3.5 h-3.5" /> Top Products
@@ -173,10 +173,10 @@ export default function FeaturedShowcase({
 
               <button
                 onClick={() => setActiveTab("most_ordered")}
-                className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-extrabold transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-extrabold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
                   activeTab === "most_ordered"
-                    ? "bg-gradient-to-r from-red-500 to-orange-500 text-white shadow-lg shadow-red-500/20"
-                    : "text-slate-400 hover:text-white hover:bg-white/5"
+                    ? "bg-gradient-to-r from-red-500 to-orange-500 text-white shadow-md shadow-red-500/20"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
                 }`}
               >
                 <Flame className="w-3.5 h-3.5" /> Most Ordered
@@ -184,10 +184,10 @@ export default function FeaturedShowcase({
 
               <button
                 onClick={() => setActiveTab("ai")}
-                className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-extrabold transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-extrabold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
                   activeTab === "ai"
-                    ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/20"
-                    : "text-slate-400 hover:text-white hover:bg-white/5"
+                    ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-md shadow-emerald-500/20"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
                 }`}
               >
                 <Bot className="w-3.5 h-3.5" /> AI Recommended

@@ -86,10 +86,10 @@ function RotatingCategoryCard({
       className="group relative flex flex-col items-center cursor-pointer select-none outline-none shrink-0 w-28 sm:w-32 md:w-36"
     >
       {/* Fixed Dimension Circular Avatar Frame (guarantees NO layout shifts) */}
-      <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-full p-1 bg-gradient-to-tr from-primary-600/40 via-champagne/20 to-transparent border border-champagne/20 group-hover:border-champagne transition-colors duration-300 shadow-xl overflow-hidden flex items-center justify-center">
+      <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-full p-1 bg-gradient-to-tr from-primary-600/20 via-primary-500/10 to-transparent border border-slate-200 group-hover:border-primary-500 transition-colors duration-300 shadow-md overflow-hidden flex items-center justify-center">
         
         {/* Real Product Image Crossfade Container */}
-        <div className="relative w-full h-full rounded-full overflow-hidden bg-black/60">
+        <div className="relative w-full h-full rounded-full overflow-hidden bg-slate-900">
           {activeImage ? (
             <AnimatePresence mode="wait">
               <motion.img
@@ -105,8 +105,8 @@ function RotatingCategoryCard({
               />
             </AnimatePresence>
           ) : (
-            <div className="w-full h-full flex items-center justify-center text-slate-500">
-              <Utensils className="w-6 h-6 text-champagne/60" />
+            <div className="w-full h-full flex items-center justify-center text-slate-400">
+              <Utensils className="w-6 h-6 text-champagne/80" />
             </div>
           )}
 
@@ -117,10 +117,10 @@ function RotatingCategoryCard({
 
       {/* Category Title & Real Count */}
       <div className="mt-2.5 text-center px-1 w-full">
-        <h3 className="text-xs sm:text-sm font-bold text-white group-hover:text-champagne transition-colors truncate">
+        <h3 className="text-xs sm:text-sm font-bold text-slate-900 group-hover:text-primary-700 transition-colors truncate">
           {category.name}
         </h3>
-        <span className="text-[10px] text-slate-400 block mt-0.5">
+        <span className="text-[10px] text-slate-500 font-medium block mt-0.5">
           {category.itemCount} {category.itemCount === 1 ? "item" : "items"}
         </span>
       </div>
@@ -219,14 +219,14 @@ export default function CategoryDiscoveryRail() {
     <section ref={sectionRef} className="max-w-7xl mx-auto px-4 sm:px-8 py-6">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <span className="text-[11px] font-black uppercase tracking-wider text-champagne block">
+          <span className="text-[11px] font-black uppercase tracking-wider text-primary-700 block">
             Explore Flavors
           </span>
-          <h2 className="text-xl sm:text-2xl font-serif font-black text-white tracking-tight">
+          <h2 className="text-xl sm:text-2xl font-serif font-black text-slate-900 tracking-tight">
             Menu Categories
           </h2>
         </div>
-        <span className="text-xs text-slate-400 hidden sm:block font-medium">
+        <span className="text-xs text-slate-500 hidden sm:block font-medium">
           Tap to explore full collection
         </span>
       </div>

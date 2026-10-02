@@ -140,17 +140,17 @@ export default function PreviouslyOrdered() {
         {/* Section Header */}
         <div className="flex flex-col md:flex-row md:items-end justify-between mb-8">
           <div>
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 backdrop-blur-md mb-2">
-              <Bot className="w-4 h-4 text-emerald-400 animate-pulse" />
-              <span className="text-xs font-black uppercase tracking-wider text-emerald-300">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 backdrop-blur-md mb-2">
+              <Bot className="w-4 h-4 text-emerald-700 animate-pulse" />
+              <span className="text-xs font-black uppercase tracking-wider text-emerald-800">
                 Personalized Favorites
               </span>
             </div>
-            <h2 className="text-2xl sm:text-4xl font-black text-white tracking-tight">
-              Order <span className="bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 bg-clip-text text-transparent">It Again</span>
+            <h2 className="text-2xl sm:text-4xl font-black text-slate-900 tracking-tight">
+              Order <span className="bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 bg-clip-text text-transparent">It Again</span>
             </h2>
           </div>
-          <p className="text-slate-400 text-xs sm:text-sm max-w-md mt-2 md:mt-0 font-medium">
+          <p className="text-slate-600 text-xs sm:text-sm max-w-md mt-2 md:mt-0 font-medium">
             Items you enjoyed over the last 30 days. One click to re-order instantly!
           </p>
         </div>

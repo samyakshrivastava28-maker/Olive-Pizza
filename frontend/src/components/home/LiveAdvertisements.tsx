@@ -109,14 +109,14 @@ export default function LiveAdvertisements() {
         {/* Section Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-purple-500/10 border border-purple-500/20 backdrop-blur-md mb-2">
-              <Sparkles className="w-3.5 h-3.5 text-purple-400 animate-pulse" />
-              <span className="text-xs font-black uppercase tracking-wider text-purple-300">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-purple-50 border border-purple-200 backdrop-blur-md mb-2">
+              <Sparkles className="w-3.5 h-3.5 text-purple-700 animate-pulse" />
+              <span className="text-xs font-black uppercase tracking-wider text-purple-800">
                 Special Announcements
               </span>
             </div>
-            <h2 className="text-2xl sm:text-4xl font-black text-white tracking-tight">
-              Featured <span className="bg-gradient-to-r from-purple-400 via-pink-400 to-orange-400 bg-clip-text text-transparent">Promotions & News</span>
+            <h2 className="text-2xl sm:text-4xl font-black text-slate-900 tracking-tight">
+              Featured <span className="bg-gradient-to-r from-purple-700 via-pink-600 to-orange-600 bg-clip-text text-transparent">Promotions & News</span>
             </h2>
           </div>
 
@@ -125,14 +125,14 @@ export default function LiveAdvertisements() {
             <div className="flex items-center gap-2">
               <button
                 onClick={handlePrev}
-                className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/15 border border-white/10 text-white flex items-center justify-center transition-colors"
+                className="w-10 h-10 rounded-full bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 shadow-sm flex items-center justify-center transition-colors cursor-pointer"
                 aria-label="Previous announcement"
               >
                 <ChevronLeft className="w-5 h-5" />
               </button>
               <button
                 onClick={handleNext}
-                className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/15 border border-white/10 text-white flex items-center justify-center transition-colors"
+                className="w-10 h-10 rounded-full bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 shadow-sm flex items-center justify-center transition-colors cursor-pointer"
                 aria-label="Next announcement"
               >
                 <ChevronRight className="w-5 h-5" />
