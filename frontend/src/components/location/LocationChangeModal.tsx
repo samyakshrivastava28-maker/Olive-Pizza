@@ -19,6 +19,7 @@ import {
   Crosshair,
   Building,
   Compass,
+  Trash2,
 } from 'lucide-react';
 import { useAuthStore } from '../../lib/store';
 import { LocationManager } from '../../lib/permissions';
@@ -98,13 +99,49 @@ function MapClickHandler({ onClick }: { onClick: (lat: number, lng: number) => v
 export default function LocationChangeModal() {
   const { user, setUser, role } = useAuthStore();
   const [isOpen, setIsOpen] = useState(false);
-  const [view, setView] = useState<'main' | 'search' | 'map' | 'details'>('main');
+  const [view, setView] = useState<'main' | 'search' | 'map' | 'details' | 'limit_reached'>('main');
 
   // Location detection states
   const [detectingGps, setDetectingGps] = useState(false);
   const [gpsFailedOrOff, setGpsFailedOrOff] = useState(false);
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
   const [loadingAddresses, setLoadingAddresses] = useState(false);
+  const [deletingAddressId, setDeletingAddressId] = useState<string | null>(null);
+
+  // Permanently delete a saved address from Firestore and backend
+  const handleDeleteAddress = async (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setDeletingAddressId(id);
+    try {
+      // 1. Delete on backend
+      await fetchApi(`/api/location/addresses/${id}`, { method: 'DELETE' }).catch(() => {});
+
+      // 2. Delete on Firestore directly
+      if (user?.uid) {
+        const remaining = savedAddresses.filter((a) => a.id !== id);
+        await updateDoc(doc(db, 'users', user.uid), {
+          addresses: remaining,
+          savedAddresses: remaining,
+        }).catch(() => {});
+      }
+
+      const updated = savedAddresses.filter((a) => a.id !== id);
+      setSavedAddresses(updated);
+      try {
+        localStorage.setItem(SAVED_ADDRESSES_KEY, JSON.stringify(updated));
+      } catch {}
+
+      toast.success('Location permanently deleted! 🗑️');
+      if (view === 'limit_reached' && updated.length < 8) {
+        setView('search');
+      }
+    } catch (err: any) {
+      console.error('[LocationChangeModal] Delete error:', err);
+      toast.error('Failed to delete address. Please try again.');
+    } finally {
+      setDeletingAddressId(null);
+    }
+  };
 
   // Search state (Parallel Multi-Provider)
   const [searchQuery, setSearchQuery] = useState('');
@@ -430,6 +467,13 @@ export default function LocationChangeModal() {
       return;
     }
 
+    if (saveToProfile && savedAddresses.length >= 8) {
+      toast.error('Location limit reached (8/8). Please delete an existing location first.');
+      setView('limit_reached');
+      setSavingLocation(false);
+      return;
+    }
+
     setSavingLocation(true);
 
     const parts = [houseFlat.trim(), floor.trim(), streetArea.trim(), landmark.trim(), pincode.trim()].filter(Boolean);
@@ -465,7 +509,26 @@ export default function LocationChangeModal() {
         try {
           await updateDoc(doc(db, 'users', user.uid), {
             addresses: updated,
+            savedAddresses: updated,
           });
+          // Also persist authoritatively to backend
+          await fetchApi('/api/location/save', {
+            method: 'POST',
+            body: JSON.stringify({
+              id: newEntry.id,
+              formattedAddress: newEntry.addressLine,
+              lat: newEntry.lat,
+              lng: newEntry.lng,
+              houseFlat: newEntry.houseFlat,
+              floor: newEntry.floor,
+              streetArea: newEntry.streetArea,
+              landmark: newEntry.landmark,
+              pincode: newEntry.pincode,
+              instructions: newEntry.instructions,
+              type: newEntry.type,
+              label: resolvedTagName,
+            }),
+          }).catch(() => {});
         } catch (err) {
           console.warn('[LocationChangeModal] Save address error:', err);
         }
@@ -512,12 +575,14 @@ export default function LocationChangeModal() {
                 {view === 'search' && 'Search Delivery Address'}
                 {view === 'map' && 'Select Spot on Map'}
                 {view === 'details' && 'Address Details'}
+                {view === 'limit_reached' && 'Saved Locations Limit (8/8)'}
               </h3>
               <p className="text-[11px] text-slate-400">
                 {view === 'main' && 'Choose or add your active delivery address'}
                 {view === 'search' && 'Instant multi-provider location search'}
                 {view === 'map' && 'Drag pin or tap map to set exact delivery entrance'}
                 {view === 'details' && 'House number, floor & delivery notes'}
+                {view === 'limit_reached' && 'You have reached 8 saved addresses. Delete one to add a new address.'}
               </p>
             </div>
           </div>
@@ -598,11 +663,16 @@ export default function LocationChangeModal() {
                 <div className="flex items-center justify-between mb-2.5">
                   <span className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
                     <Clock className="w-3.5 h-3.5 text-amber-400" />
-                    Saved Locations ({savedAddresses.length})
+                    Saved Locations ({savedAddresses.length}/8)
                   </span>
                   <button
                     type="button"
                     onClick={() => {
+                      if (savedAddresses.length >= 8) {
+                        toast.error('Location limit reached (8/8). Delete a location to add a new one.');
+                        setView('limit_reached');
+                        return;
+                      }
                       setHouseFlat('');
                       setFloor('');
                       setStreetArea('');
@@ -689,7 +759,20 @@ export default function LocationChangeModal() {
                             </div>
                           </div>
 
-                          <div className="shrink-0">
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              type="button"
+                              onClick={(e) => handleDeleteAddress(addr.id, e)}
+                              disabled={deletingAddressId === addr.id}
+                              className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                              title="Delete saved location"
+                            >
+                              {deletingAddressId === addr.id ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin text-red-400" />
+                              ) : (
+                                <Trash2 className="w-3.5 h-3.5" />
+                              )}
+                            </button>
                             {isActive ? (
                               <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center text-slate-950">
                                 <Check className="w-3.5 h-3.5 stroke-[3]" />
@@ -1054,6 +1137,94 @@ export default function LocationChangeModal() {
                 )}
               </button>
             </form>
+          )}
+
+          {/* ── VIEW 5: LIMIT REACHED (Max 8 Locations) ── */}
+          {view === 'limit_reached' && (
+            <div className="space-y-4">
+              <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-200">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="font-bold text-sm text-white">Maximum 8 Saved Locations Reached</h4>
+                    <p className="text-xs text-amber-300/80 mt-1 leading-relaxed">
+                      Olive Pizza allows storing up to 8 delivery addresses. To add a new address, please permanently delete one of your older locations below.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2 max-h-[360px] overflow-y-auto pr-1">
+                {savedAddresses.map((addr) => (
+                  <div
+                    key={addr.id}
+                    className="p-3.5 rounded-2xl bg-white/[0.04] border border-white/10 flex items-center justify-between gap-3"
+                  >
+                    <div className="flex items-start gap-3 min-w-0">
+                      <div
+                        className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${
+                          addr.type === 'Home'
+                            ? 'bg-blue-500/20 text-blue-400'
+                            : addr.type === 'Work'
+                            ? 'bg-purple-500/20 text-purple-400'
+                            : 'bg-amber-500/20 text-amber-400'
+                        }`}
+                      >
+                        {addr.type === 'Home' ? (
+                          <Home className="w-4 h-4" />
+                        ) : addr.type === 'Work' ? (
+                          <Briefcase className="w-4 h-4" />
+                        ) : (
+                          <MapPin className="w-4 h-4" />
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <span className="font-bold text-xs text-white uppercase tracking-wide">
+                          {addr.customTag || addr.type}
+                        </span>
+                        <p className="text-xs text-slate-300 truncate mt-0.5 max-w-[190px] sm:max-w-[250px]">
+                          {addr.addressLine}
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={(e) => handleDeleteAddress(addr.id, e)}
+                      disabled={deletingAddressId === addr.id}
+                      className="px-3 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 disabled:opacity-50"
+                    >
+                      {deletingAddressId === addr.id ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Deleting...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Delete</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              {savedAddresses.length < 8 ? (
+                <button
+                  type="button"
+                  onClick={() => setView('search')}
+                  className="w-full py-3.5 px-4 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-sm flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg shadow-amber-500/20"
+                >
+                  <Plus className="w-4 h-4 stroke-[3]" />
+                  <span>Space Available! Add New Address ({savedAddresses.length}/8)</span>
+                </button>
+              ) : (
+                <p className="text-[11px] text-center text-slate-500">
+                  Delete at least 1 address above to unlock adding new addresses.
+                </p>
+              )}
+            </div>
           )}
         </div>
       </motion.div>

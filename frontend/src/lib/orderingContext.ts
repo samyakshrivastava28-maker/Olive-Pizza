@@ -77,7 +77,8 @@ export class OrderingContextService {
     const { lat, lng, addressLine, customerId } = params;
 
     try {
-      const res = await fetchApi('/api/franchise/ordering-context/resolve', {
+      // 1. Try canonical location serviceability endpoint first
+      let res = await fetchApi('/api/location/serviceability', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -88,12 +89,30 @@ export class OrderingContextService {
         })
       });
 
-      const data = await res.json();
+      // 2. Fallback to franchise ordering context endpoint if 404
+      if (!res.ok && res.status === 404) {
+        res = await fetchApi('/api/franchise/ordering-context/resolve', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            lat,
+            lng,
+            addressLine,
+            customerId: customerId || 'guest'
+          })
+        });
+      }
+
+      const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.isServiceable) {
         this.clearCachedContext();
+        const safeError = data.code === 'NOT_FOUND' || data.error?.includes('not found')
+          ? "We currently don't deliver to this location. Available for Takeaway!"
+          : (data.error || "We currently don't deliver to this location.");
+
         return {
           isServiceable: false,
-          error: data.error || "We currently don't deliver to this location.",
+          error: safeError,
           code: data.code || 'OUT_OF_DELIVERY_ZONE'
         };
       }

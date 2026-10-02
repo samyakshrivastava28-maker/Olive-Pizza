@@ -173,6 +173,12 @@ export default function AddressBook() {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!auth.currentUser) return;
+
+    if (addresses.length >= 8) {
+      toast.error('Maximum 8 saved addresses allowed. Please delete an address first.');
+      return;
+    }
+
     setSaveLoading(true);
 
     try {
@@ -190,8 +196,24 @@ export default function AddressBook() {
 
       const updatedAddresses = [...addresses, addressToSave];
       await updateDoc(doc(db, 'users', auth.currentUser.uid), {
-        addresses: updatedAddresses
+        addresses: updatedAddresses,
+        savedAddresses: updatedAddresses,
       });
+
+      // Synchronize with canonical backend
+      await fetchApi('/api/location/save', {
+        method: 'POST',
+        body: JSON.stringify({
+          id: addressToSave.id,
+          formattedAddress: addressToSave.addressLine,
+          lat: addressToSave.lat,
+          lng: addressToSave.lng,
+          landmark: addressToSave.landmark,
+          pincode: addressToSave.pincode,
+          type: addressToSave.type,
+          label: addressToSave.type,
+        }),
+      }).catch(() => {});
 
       setAddresses(updatedAddresses);
       setIsAdding(false);
@@ -219,10 +241,17 @@ export default function AddressBook() {
     }
 
     setAddresses(newAddresses);
+
+    // 1. Delete on Firestore
     await updateDoc(doc(db, 'users', auth.currentUser.uid), {
-      addresses: newAddresses
-    });
-    toast.success('Address deleted');
+      addresses: newAddresses,
+      savedAddresses: newAddresses,
+    }).catch(() => {});
+
+    // 2. Permanently delete on backend
+    await fetchApi(`/api/location/addresses/${id}`, { method: 'DELETE' }).catch(() => {});
+
+    toast.success('Address permanently deleted');
   };
 
   const handleSetDefault = async (id: string) => {
@@ -272,13 +301,24 @@ export default function AddressBook() {
   return (
     <div className="bg-white dark:bg-slate-800 p-4 md:p-8 rounded-3xl shadow-lg border border-slate-200 dark:border-slate-700">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4">
-        <h2 className="text-2xl font-black flex items-center gap-2 text-slate-800 dark:text-white">
-          <MapPin className="text-primary-500 w-6 h-6" /> My Locations
-        </h2>
+        <div className="flex items-center gap-3">
+          <h2 className="text-2xl font-black flex items-center gap-2 text-slate-800 dark:text-white">
+            <MapPin className="text-primary-500 w-6 h-6" /> My Locations
+          </h2>
+          <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+            {addresses.length}/8
+          </span>
+        </div>
         {!isAdding && (
           <button 
-            onClick={() => setIsAdding(true)}
-            className="bg-primary-600 hover:bg-primary-500 text-white px-5 py-2.5 rounded-xl font-bold transition-all shadow-md shadow-primary-500/30 flex items-center gap-2 text-sm"
+            onClick={() => {
+              if (addresses.length >= 8) {
+                toast.error('Limit reached: Maximum 8 saved locations allowed. Delete an existing address to add a new one.');
+                return;
+              }
+              setIsAdding(true);
+            }}
+            className="bg-primary-600 hover:bg-primary-500 text-white px-5 py-2.5 rounded-xl font-bold transition-all shadow-md shadow-primary-500/30 flex items-center gap-2 text-sm cursor-pointer"
           >
             <Plus size={18} /> Add New Address
           </button>
