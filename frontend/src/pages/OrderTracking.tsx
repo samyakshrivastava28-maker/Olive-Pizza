@@ -8,7 +8,7 @@ import React, {
 import { useParams, useNavigate, useSearchParams } from "react-router";
 import { useAuthStore } from "../lib/store";
 import { auth, db } from "../lib/firebase";
-import { doc, getDoc, onSnapshot, updateDoc, collection, getDocs, query, where } from "firebase/firestore";
+import { doc, getDoc, onSnapshot, collection, getDocs, query, where } from "firebase/firestore";
 import { useNotificationDebugger } from "../hooks/useNotificationDebugger";
 import { supabase } from "../lib/supabase";
 import type { RealtimeChannel } from "@supabase/supabase-js";
@@ -229,36 +229,27 @@ function DeliverySuccessScreen({ order, orderId, partnerDetails, navigate }: any
     if (rating === 0) return;
     setIsSubmitting(true);
     try {
-      // 1. Update Order
-      await updateDoc(doc(db, "orders", orderId), {
-        deliveryRating: {
-          score: rating,
-          review,
-          createdAt: new Date().toISOString()
-        }
+      // Route rating through server-authoritative backend API
+      const res = await fetchApi(`/api/orders/${orderId}/rating`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          overallRating: rating,
+          deliveryRating: rating,
+          comment: review,
+        }),
       });
-      
-      // 2. Update Delivery Partner Metrics
-      if (order.deliveryPartnerId) {
-        const partnerRef = doc(db, "users", order.deliveryPartnerId);
-        const partnerSnap = await getDoc(partnerRef);
-        if (partnerSnap.exists()) {
-          const pData = partnerSnap.data();
-          const currentMetrics = pData.metrics || {};
-          const newRatingSum = (currentMetrics.ratingSum || 0) + rating;
-          const newRatingCount = (currentMetrics.ratingCount || 0) + 1;
-          await updateDoc(partnerRef, {
-            "metrics.ratingSum": newRatingSum,
-            "metrics.ratingCount": newRatingCount
-          });
-        }
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `Failed to submit rating (HTTP ${res.status})`);
       }
       
       setRatingSubmitted(true);
       setTimeout(() => {
         navigate("/");
       }, 1500);
-    } catch (e) {
+    } catch (e: any) {
       console.error("Error submitting rating:", e);
     } finally {
       setIsSubmitting(false);

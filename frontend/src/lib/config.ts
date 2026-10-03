@@ -48,10 +48,13 @@ function getOrGenerateDeviceId(): string {
   }
 }
 
+import { auth } from './firebase';
+
 /**
  * Resilient Fetch wrapper that automatically retries directly against Render backend
  * if local proxy / edge rewrite encounters a cold start or network glitch.
  * Automatically injects X-Device-Id header for hardware rate-limiting.
+ * Automatically injects Firebase Auth Bearer token if user is signed in.
  */
 export const fetchApi = async (endpoint: string, init?: RequestInit): Promise<Response> => {
   const primaryUrl = getApiUrl(endpoint);
@@ -59,6 +62,19 @@ export const fetchApi = async (endpoint: string, init?: RequestInit): Promise<Re
   if (!headers.has('X-Device-Id')) {
     headers.set('X-Device-Id', getOrGenerateDeviceId());
   }
+
+  try {
+    const currentUser = auth.currentUser;
+    if (currentUser && !headers.has('Authorization')) {
+      const token = await currentUser.getIdToken();
+      if (token) {
+        headers.set('Authorization', `Bearer ${token}`);
+      }
+    }
+  } catch (err) {
+    console.warn('[fetchApi] Could not attach bearer token:', err);
+  }
+
   const mergedInit = { ...init, headers };
   
   try {
