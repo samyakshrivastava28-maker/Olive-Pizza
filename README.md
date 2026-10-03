@@ -5,26 +5,27 @@
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-v4.0-38B2AC?logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
 [![Capacitor](https://img.shields.io/badge/Capacitor-8.0-119EFF?logo=capacitor&logoColor=white)](https://capacitorjs.com/)
 [![Firebase](https://img.shields.io/badge/Firebase-Auth%20%26%20Firestore-FFCA28?logo=firebase&logoColor=black)](https://firebase.google.com/)
+[![Supabase](https://img.shields.io/badge/Supabase-Live_GPS_Tracking-3ECF8E?logo=supabase&logoColor=white)](https://supabase.com/)
 [![MapLibre](https://img.shields.io/badge/MapLibre-3D%20Maps-396BFF?logo=maplibre&logoColor=white)](https://maplibre.org/)
 [![License](https://img.shields.io/badge/License-Proprietary-red.svg)]()
 
-> **Olive Pizza Customer App** is an enterprise-grade, mobile-first food ordering experience built for **Olive Pizza**, Rajnandgaon, Chhattisgarh, India. Available as a responsive Mobile Web app, native Android APK (Capacitor), and native iOS app (Capacitor).
+> **Olive Pizza Customer App** is an enterprise-grade, mobile-first food ordering experience built for **Olive Pizza**, Rajnandgaon, Chhattisgarh, India. Available as a responsive Mobile Web application, native Android APK (Capacitor), and native iOS app (Capacitor).
 
-Part of the **Olive Pizza Multi-App Ecosystem**. For full platform architecture, see [`docs/architecture/projectoverview.md`](./docs/architecture/projectoverview.md).
+Part of the **Olive Pizza Multi-App Ecosystem**. Connects to the authoritative **Canonical Central Backend** (Port 5000).
 
 ---
 
 ## 🌟 Core UX & Feature Highlights
 
-### 📱 1. Mobile-First Design & Native App Feel
-* **Mobile-First Priority**: Designed with a strict mobile-first policy:
+### 📱 1. Mobile-First Policy & Native App Feel
+* **Mobile-First Priority**: Designed following strict mobile-first architecture:
   1. Mobile Website
   2. Android / iOS Native App (Capacitor)
   3. Desktop Website
-* **Premium Aesthetics**: Smooth micro-interactions, glassmorphic floating cards, tactile touch targets, and branded Olive Pizza color palettes.
+* **Premium Aesthetics**: Smooth micro-interactions, glassmorphic floating cards, tactile touch targets, and branded Olive Pizza color tokens.
 
 ### 🍕 2. Interactive 3D Visual Menu & Cart Experience
-* **Customization Engine**: Category capsules, pizza size selectors (8", 10", 12"), crust options (*Hand-Tossed*, *Thin & Crispy*, *Cheese Burst*), and dynamic paid add-ons.
+* **Server-Authoritative Pricing**: All pizza prices, sizes (8", 10", 12"), crust options (*Hand-Tossed*, *Thin & Crispy*, *Cheese Burst*), add-ons, discounts, and taxes are strictly calculated and enforced on the server. Zero client price trust.
 * **Sequenced 5-Step Add-to-Cart Motion**:
   1. 3D pizza delivery box drops into the viewport.
   2. The selected food item smoothly flies into the box.
@@ -35,43 +36,38 @@ Part of the **Olive Pizza Multi-App Ecosystem**. For full platform architecture,
   - Ambient soft breathing motion while idle.
   - Spring-loaded drawer opening animation with live badge count updates.
 
-### 🛵 3. Live 3D Order Tracking (`OrderTracking.tsx`)
+### 🛵 3. Live 3D Order Tracking & Telemetry
 * **60fps Smooth Telemetry**: MapLibre GL JS 3D vector map with dynamic camera auto-following.
-* **Real-Time Rider Radar**: Interpolated rider coordinates streamed in real-time from the backend WebSocket server (`/ws`) and Supabase PostgreSQL.
+* **Real-Time Rider Radar**: Interpolated rider coordinates streamed in real-time from the backend WebSocket server (`/ws`) and **Supabase PostgreSQL** (`public.delivery_locations`).
 * **Lifecycle Timeline**: Live status updates across all order stages (`pending` ➔ `accepted` ➔ `preparing` ➔ `ready` ➔ `out_for_delivery` ➔ `delivered`).
 
 ### 💳 4. Multi-Gateway Checkout & Instant Phone Verification
-* **Payment Gateways**: Cashfree, PhonePe, Razorpay, UPI QR, and Cash on Delivery with strict backend validation.
+* **Payment Gateways**: Cashfree, PhonePe, Razorpay, UPI QR, and Cash on Delivery with strict backend validation and server-computed GST totals.
 * **Fast OTP & 1-Tap Auth**: Fast2SMS OTP integration, Truecaller 1-tap phone verification, and Firebase Authentication.
-* **Location Pinning**: Interactive map pin dragging with OpenStreetMap Nominatim reverse-geocoding.
+* **Location Pinning**: Interactive map pin dragging with OpenStreetMap reverse-geocoding and server-validated branch delivery radius.
 
-### 🛡️ 5. Startup Deadlock Prevention
-* **Decoupled Auth Resolution**: Eliminates cold-start freezing on the splash screen by resolving auth tokens asynchronously with a strict 1500ms safety watchdog ceiling.
+### 🎨 5. Server-Driven UI (SDUI) Runtime
+* Dynamically renders custom layouts, promo banners, festive themes, and featured sections published by the owner from the SDUI Studio without requiring new App Store or Play Store deployments.
 
 ### 🔒 6. Idempotency & Order Deduplication
-* **Multi-Click Protection**: Seamlessly generates and attaches unique client idempotency keys, preventing accidental double-ordering or dual charges during checkout.
+* Multi-click checkout protection using cryptographic client idempotency keys, preventing duplicate charges and double order creation.
 
-### 📜 7. Indian DPDP Act 2023 Data Privacy Rights
-* **Full Transparency & Rights**: Built-in mechanisms for Right to Access (sanitized data export), Right to Correction, formal Grievance Redressal (`GRV-...`), and Account Erasure with a 30-day cooling period.
-* **PII Protection**: Raw phone numbers are completely masked/scrubbed from FCM push notification data payloads.
+### 📜 7. Indian DPDP Act 2023 Data Privacy Compliance
+* Full compliance with data privacy regulations: Right to Access (sanitized data export), Right to Correction, formal Grievance Redressal (`GRV-...`), and Account Erasure with a 30-day statutory cooling period.
+* Raw customer phone numbers are completely masked and scrubbed from FCM push notification payloads.
 
 ---
 
 ## 🏗️ System Architecture & Connectivity
 
-The Customer App is one of six client applications connecting to the **Canonical Central Backend**:
-
-```
+```text
  [Customer App (Port 3000)] ───► [Canonical Central Backend (Port 5000)]
                                            │
           ┌────────────────────────────────┼────────────────────────────────┐
           ▼                                ▼                                ▼
-     [Firestore]                  [Supabase Postgres]             [Operational Postgres]
-(Orders, Menu, Auth)             (Live GPS Telemetry)             (Payments, System State)
+     [Firestore]                  [Supabase Postgres]              [Main PostgreSQL]
+(Realtime Projections, Menu)      (Live GPS Telemetry)         (Canonical Orders, Payments)
 ```
-
-For full ecosystem documentation, please inspect:
-- 📖 [Comprehensive Project Overview](./docs/architecture/projectoverview.md)
 
 ---
 
@@ -94,66 +90,26 @@ For full ecosystem documentation, please inspect:
 
 ### 2. Installation
 ```bash
-# Clone or navigate to the directory
 cd olive-pizza
-
-# Install dependencies
 npm install
 ```
 
-### 3. Environment Variables
-Create a `.env` file in the root directory:
-```env
-VITE_API_URL=http://localhost:5000
-VITE_WS_URL=ws://localhost:5000/ws
-VITE_FIREBASE_API_KEY=your_firebase_api_key
-VITE_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
-VITE_FIREBASE_PROJECT_ID=olive-pizza-08
-VITE_FIREBASE_STORAGE_BUCKET=olive-pizza-08.appspot.com
-VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
-VITE_FIREBASE_APP_ID=your_app_id
-VITE_SUPABASE_URL=https://your-supabase-project.supabase.co
-VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
-```
-
-### 4. Running Locally
+### 3. Running Locally
 ```bash
-# Start Vite development server on port 3000
+# Start Vite development server
 npm run dev
 ```
 
-### 5. Building for Production
+### 4. Native App Builds (Capacitor)
 ```bash
-# Run TypeScript compilation and Vite production build
-npm run build
-```
-
----
-
-## 📱 Mobile App Compilation (Capacitor)
-
-### Android
-```bash
-# Build web assets and sync to native Android container
+# Build web assets and sync to native platforms
 npm run build
 npx cap sync android
-
-# Open in Android Studio to build debug/release APK
-npx cap open android
-```
-
-### iOS
-```bash
-# Build web assets and sync to native iOS container
-npm run build
 npx cap sync ios
-
-# Open in Xcode to build archive/IPA
-npx cap open ios
 ```
 
 ---
 
-## 📄 License & Proprietary Notice
+## 📜 License
 
-Proprietary Software — All rights reserved by **Olive Pizza**, Rajnandgaon, Chhattisgarh, India.
+Proprietary © Olive Pizza. All rights reserved.
