@@ -34,6 +34,7 @@ cloudflared/
 # Logs
 logs/
 *.log
+*.jsonl
 npm-debug.log*
 yarn-debug.log*
 pnpm-debug.log*
