@@ -16,6 +16,10 @@ import PizzaShowcase3D from './sections/PizzaShowcase3D';
 import CountdownBanner from './sections/CountdownBanner';
 import GallerySection from './sections/GallerySection';
 import TestimonialsSection from './sections/TestimonialsSection';
+import WhyUsSection from './sections/WhyUsSection';
+import DeliveryAreaSection from './sections/DeliveryAreaSection';
+import CtaSection from './sections/CtaSection';
+import FooterSection from './sections/FooterSection';
 
 import { useStoreStatus } from '../../lib/useStoreStatus';
 
@@ -153,6 +157,18 @@ const renderSection = (
     case 'COMPLETE_YOUR_MEAL':
       Component = <div className={opacity}><CompleteYourMealSection /></div>;
       break;
+    case 'WHY_US':
+      Component = <div className={opacity}><WhyUsSection config={section.config} /></div>;
+      break;
+    case 'DELIVERY_AREA':
+      Component = <div className={opacity}><DeliveryAreaSection config={section.config} /></div>;
+      break;
+    case 'CTA':
+      Component = <div className={opacity}><CtaSection config={section.config} /></div>;
+      break;
+    case 'FOOTER':
+      Component = <div className={opacity}><FooterSection config={section.config} /></div>;
+      break;
     default:
       Component = <div className={`text-white p-4 bg-white/5 border border-white/10 ${opacity}`}>Unknown Section Type: {section.type}</div>;
   }
@@ -221,8 +237,25 @@ export default function PageRenderer({ schema, isEditorMode = false, onElementSe
     (s) => ['ADS', 'ADVERTISEMENTS', 'PROMOTIONS'].includes((s.type || '').toUpperCase()) && !s.isHidden
   );
 
+  // Resolve curated typography font if preset or font family is configured
+  const presetFontMap: Record<string, string> = {
+    'Clean': 'Outfit, sans-serif',
+    'Pizza Energy': 'Poppins, sans-serif',
+    'Midnight Glow': 'Outfit, sans-serif',
+    'Minimal': 'Inter, sans-serif',
+    'Bold Festival': '"Playfair Display", serif',
+  };
+
+  const activePreset = schema.metadata?.themePreset || schema.globalSettings?.themePreset;
+  const activeFont = schema.globalSettings?.typography?.fontFamily
+    ? `${schema.globalSettings.typography.fontFamily}, sans-serif`
+    : (activePreset && presetFontMap[activePreset]) || undefined;
+
   return (
-    <div className="w-full flex flex-col gap-6 py-6 relative z-10">
+    <div 
+      className="w-full flex flex-col gap-6 py-6 relative z-10"
+      style={activeFont ? { fontFamily: activeFont } : undefined}
+    >
       {cleanSections.map((section) => {
         const isCravings = ['CRAVINGS', 'CRAVING_CATEGORIES'].includes((section.type || '').toUpperCase());
         return (
