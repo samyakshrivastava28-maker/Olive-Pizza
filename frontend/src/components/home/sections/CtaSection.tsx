@@ -15,15 +15,23 @@ export default function CtaSection({ config }: CtaSectionProps) {
   const buttonText = config?.buttonText || 'ORDER PIZZA NOW';
 
   const handleClick = () => {
-    if (config?.buttonAction?.type === 'NAVIGATE' && config.buttonAction.target) {
-      navigate(config.buttonAction.target);
+    const action = config?.buttonAction;
+
+    if (action?.type === 'EXTERNAL_LINK' && action.url) {
+      window.open(action.url, '_blank', 'noopener,noreferrer');
+      return;
+    }
+
+    if (action?.type === 'OPEN_OFFERS') {
+      navigate('/menu?tab=combos');
+      return;
+    }
+
+    const menuEl = document.getElementById('menu-section');
+    if (menuEl) {
+      menuEl.scrollIntoView({ behavior: 'smooth' });
     } else {
-      const menuEl = document.getElementById('menu-section');
-      if (menuEl) {
-        menuEl.scrollIntoView({ behavior: 'smooth' });
-      } else {
-        navigate('/menu');
-      }
+      navigate('/menu');
     }
   };
 

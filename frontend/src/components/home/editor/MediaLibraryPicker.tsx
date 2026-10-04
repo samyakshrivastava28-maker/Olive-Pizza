@@ -42,43 +42,31 @@ export default function MediaLibraryPicker({ onSelect, onClose, title = "Media L
 
     setUploading(true);
     try {
-      // 1. Get Signature
+      // Upload through the canonical Owner backend so validation,
+      // optimization, media-library registration, and responsive variants
+      // all happen in one authoritative pipeline.
       const { getCurrentAuthToken } = await import('../../../lib/firebase');
       const token = await getCurrentAuthToken().catch(() => '');
 
-      const sigRes = await fetch('/api/media/sign-upload?folder=olive-pizza/media', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const sigData = await sigRes.json();
-      
-      if (!sigData.signature || !sigData.cloudName) {
-        throw new Error(sigData.error || 'Failed to get upload signature');
-      }
-
-      // 2. Upload directly to Cloudinary
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('api_key', sigData.apiKey);
-      formData.append('timestamp', sigData.timestamp.toString());
-      formData.append('signature', sigData.signature);
-      formData.append('folder', sigData.folder);
+      formData.append('folder', 'olive-pizza/media');
 
-      const isVideo = file.type.startsWith('video/') || file.name.match(/\.(mp4|mov|webm)$/i);
-      const resourceType = isVideo ? 'video' : 'image';
-
-      const uploadRes = await fetch(`https://api.cloudinary.com/v1_1/${sigData.cloudName}/${resourceType}/upload`, {
+      const uploadRes = await fetch('/api/media/upload', {
         method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
         body: formData
       });
-      
+
       const uploadData = await uploadRes.json();
-      if (uploadData.secure_url) {
-        toast.success(`${isVideo ? 'Video' : 'Image'} uploaded successfully!`);
-        fetchAssets(); // Refresh list
-        onSelect(uploadData.secure_url); // Auto select
-      } else {
-        throw new Error(uploadData.error?.message || 'Cloudinary upload failed');
+      if (!uploadRes.ok || !uploadData.success) {
+        throw new Error(uploadData.error || 'Media upload failed');
       }
+
+      const isVideo = uploadData.resource_type === 'video' || file.type.startsWith('video/');
+      toast.success(`${isVideo ? 'Video' : 'Image'} optimized and uploaded successfully!`);
+      fetchAssets();
+      onSelect(uploadData.optimizedUrl || uploadData.optimized_url || uploadData.url);
     } catch (err: any) {
       toast.error(err.message || 'Upload failed');
     }
