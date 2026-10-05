@@ -27,12 +27,23 @@ export default function SetupPhone() {
   const [countdown, setCountdown] = useState(0);
   const [isNativeApp, setIsNativeApp] = useState(false);
   const [pinId, setPinId] = useState<string | null>(null);
+  const [devOtpBypass, setDevOtpBypass] = useState(false);
 
   // Web QR Session State
   const [qrModalOpen, setQrModalOpen] = useState(false);
   const [webSession, setWebSession] = useState<{ deepLink: string; requestId: string } | null>(null);
 
-  const isDevMode = import.meta.env.VITE_PHONE_AUTH_MODE === 'development' || !import.meta.env.PROD;
+  // Query backend for active development OTP bypass status
+  useEffect(() => {
+    fetchApi('/api/phone/dev-status')
+      .then(res => res.json())
+      .then(data => {
+        if (data?.devOtpBypass) {
+          setDevOtpBypass(true);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // 1. If user is already phone-verified, skip verification immediately
   useEffect(() => {
@@ -160,8 +171,8 @@ export default function SetupPhone() {
           // Open deep link for mobile browser
           setWebSession({ deepLink: sessionRes.deepLink, requestId: sessionRes.requestId });
           setQrModalOpen(true);
-          // Try invoking deep link
-          window.location.href = sessionRes.deepLink;
+          // Try invoking deep link safely via system intent
+          TruecallerService.launchDeepLink(sessionRes.deepLink);
         } else {
           // Open Desktop QR Modal with live status polling
           setWebSession({ deepLink: sessionRes.deepLink, requestId: sessionRes.requestId });
@@ -225,9 +236,12 @@ export default function SetupPhone() {
       });
 
       const data = await res.json();
+      if (data.devOtpBypass) {
+        setDevOtpBypass(true);
+      }
       if (data.success) {
         if (data.pinId) setPinId(data.pinId);
-        toast.success(data.message || "OTP sent successfully via SMS!");
+        toast.success(data.message || (data.devOtpBypass ? "⚡ DEV OTP BYPASS ACTIVE: Enter any code" : "OTP sent successfully via SMS!"));
         setStep('otp_input');
         setCountdown(data.cooldownSeconds || 60);
       } else {
@@ -238,7 +252,7 @@ export default function SetupPhone() {
       const errMsg: string = err.message || "Failed to send OTP.";
       toast.error(errMsg);
       setError(errMsg);
-      if (isDevMode) setStep('otp_input');
+      if (devOtpBypass) setStep('otp_input');
     } finally {
       setLoading(false);
     }
@@ -246,7 +260,11 @@ export default function SetupPhone() {
 
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!otp || otp.length < 4) {
+    if (!otp || !otp.trim()) {
+      setError("Please enter the verification code.");
+      return;
+    }
+    if (!devOtpBypass && otp.length < 4) {
       setError("Please enter the verification code sent to your phone.");
       return;
     }
@@ -272,9 +290,9 @@ export default function SetupPhone() {
       });
 
       const data = await res.json();
-      if (data.success || isDevMode) {
+      if (data.success) {
         toast.success("Phone verified successfully! ✓");
-        await syncUserSession(formatted, 'sms_otp');
+        await syncUserSession(formatted, data.provider || 'sms_otp');
         navigate(redirectPath, { replace: true });
       } else {
         throw new Error(data.error || "Invalid OTP code.");
@@ -290,9 +308,13 @@ export default function SetupPhone() {
   // Demo Bypass (Developer only in non-production)
   const handleDemoBypass = async () => {
     if (!isDevMode) return;
+    if (!phone.trim() || phone.replace(/\D/g, '').length < 10) {
+      toast.error("Please enter a 10-digit phone number first");
+      return;
+    }
     setLoading(true);
     try {
-      const formatted = normalizePhone(phone || '9999999999');
+      const formatted = normalizePhone(phone);
       await syncUserSession(formatted, 'demo_bypass');
       toast.success("⚡ Demo bypass verified!");
       navigate(redirectPath, { replace: true });
@@ -447,27 +469,23 @@ export default function SetupPhone() {
                   </div>
                   <div>
                     <span className="text-sm font-bold text-slate-900 dark:text-white">
-                      Verify with SMS
+                      {devOtpBypass ? "Verify with Dev OTP" : "Verify with SMS"}
                     </span>
                     <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
-                      Receive a 6-digit OTP code on your phone
+                      {devOtpBypass ? "Instant verification with any test code" : "Receive a 6-digit OTP code on your phone"}
                     </p>
                   </div>
                 </div>
                 <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-orange-500 group-hover:translate-x-1 transition-all" />
               </button>
 
-              {/* Dev Test Bypass */}
-              {isDevMode && (
+              {/* Dev Test Bypass Notice */}
+              {devOtpBypass && (
                 <div className="pt-2">
-                  <button
-                    type="button"
-                    onClick={handleDemoBypass}
-                    disabled={loading}
-                    className="w-full py-2.5 px-4 rounded-xl text-xs font-bold text-purple-400 bg-purple-950/30 hover:bg-purple-950/50 border border-purple-800/40 transition-colors"
-                  >
-                    ⚡ Instant Demo Bypass (Testing Mode)
-                  </button>
+                  <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-300 text-xs font-bold flex items-center justify-center gap-2">
+                    <span>⚡</span>
+                    <span>DEV OTP BYPASS ACTIVE</span>
+                  </div>
                 </div>
               )}
             </div>
@@ -476,12 +494,19 @@ export default function SetupPhone() {
           {/* Step 2: SMS OTP Verification Input */}
           {step === 'otp_input' && (
             <form onSubmit={handleVerifyOtp} className="space-y-5">
+              {devOtpBypass && (
+                <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-300 text-xs font-bold flex items-center justify-center gap-2">
+                  <span>⚡</span>
+                  <span>DEV OTP BYPASS ACTIVE — Enter any code to test</span>
+                </div>
+              )}
+
               <div className="text-center mb-2">
                 <div className="w-12 h-12 rounded-2xl bg-orange-100 dark:bg-orange-950/50 text-orange-500 flex items-center justify-center mx-auto mb-3">
                   <MessageSquare className="w-6 h-6" />
                 </div>
                 <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
-                  Enter the 6-digit verification code sent to <br />
+                  {devOtpBypass ? "Enter any test verification code for" : "Enter the 6-digit verification code sent to"} <br />
                   <strong className="text-slate-900 dark:text-white">+91 {phone}</strong>
                 </p>
               </div>
@@ -490,17 +515,17 @@ export default function SetupPhone() {
                 <input
                   type="text"
                   required
-                  maxLength={6}
+                  maxLength={devOtpBypass ? 20 : 6}
                   value={otp}
-                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
-                  placeholder="• • • • • •"
+                  onChange={(e) => setOtp(devOtpBypass ? e.target.value.trim() : e.target.value.replace(/\D/g, ''))}
+                  placeholder={devOtpBypass ? "Any code to test" : "• • • • • •"}
                   className="block w-full text-center tracking-[0.5em] text-2xl py-3 border border-slate-300 dark:border-slate-700 rounded-2xl bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-extrabold focus:outline-none focus:ring-2 focus:ring-orange-500"
                 />
               </div>
 
               <button
                 type="submit"
-                disabled={loading || otp.length < 4}
+                disabled={loading || (!devOtpBypass && otp.length < 4) || !otp.trim()}
                 className="w-full flex justify-center py-3.5 px-4 rounded-2xl shadow-lg text-sm font-bold text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:opacity-50 transition-all"
               >
                 {loading ? <PizzaLoader size="inline" /> : "Verify Code & Continue"}
@@ -529,13 +554,19 @@ export default function SetupPhone() {
                 )}
               </div>
 
-              {isDevMode && (
+              {devOtpBypass && (
                 <button
                   type="button"
-                  onClick={handleDemoBypass}
-                  className="w-full py-2 text-xs font-bold text-purple-400 bg-purple-950/30 hover:bg-purple-950/50 border border-purple-800/40 rounded-xl transition-colors"
+                  onClick={() => {
+                    setOtp("DEV_PASS");
+                    setTimeout(() => {
+                      const fakeEvent = { preventDefault: () => {} } as any;
+                      handleVerifyOtp(fakeEvent);
+                    }, 50);
+                  }}
+                  className="w-full py-2.5 text-xs font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 rounded-xl transition-colors"
                 >
-                  ⚡ Instant Demo Bypass (Testing Mode)
+                  ⚡ Fast Dev Pass (DEV_OTP_BYPASS)
                 </button>
               )}
             </form>

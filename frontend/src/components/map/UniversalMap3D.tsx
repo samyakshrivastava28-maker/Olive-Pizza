@@ -65,7 +65,9 @@ const OSM_RASTER_STYLE: maplibregl.StyleSpecification = {
     'osm-tiles': {
       type: 'raster',
       tiles: [
-        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+        'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png',
       ],
       tileSize: 256,
       attribution: '© OpenStreetMap contributors',

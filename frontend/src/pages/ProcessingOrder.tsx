@@ -31,8 +31,12 @@ export default function ProcessingOrder() {
         setStep('preparing');
         const token = await auth.currentUser?.getIdToken();
         const currentUser = auth.currentUser;
-        const customerPhone = currentUser?.phoneNumber || (currentUser as any)?.phone || '9999999999';
+        const customerPhone = currentUser?.phoneNumber || (currentUser as any)?.phone;
         
+        if (!customerPhone || customerPhone === '9999999999' || customerPhone.replace(/\D/g, '').length < 10) {
+          throw new Error('A verified mobile number is required to place an order. Please complete your phone profile.');
+        }
+
         // 1. Sync User Address to Profile
         if (currentUser && address && deliveryType === 'delivery') {
            const userRef = doc(db, 'users', currentUser.uid);
@@ -48,15 +52,16 @@ export default function ProcessingOrder() {
 
         // 2. Validate Cart & Create Payment Intent
         setStep('validating');
-        let verifiedPaymentId = 'pay_cod_' + Date.now();
+        const isCod = !paymentMethod || paymentMethod.toLowerCase() === 'cod';
+        let verifiedPaymentId: string | null = isCod ? 'COD' : null;
 
-        try {
+        if (!isCod) {
           const intentRes = await fetchApi('/api/payment/create-intent', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
             body: JSON.stringify({
               items: items.map((item: any) => ({
-                menuItemId: item.menuItemId || item.id || item._id || 'item-' + Math.random().toString(36).substr(2, 9),
+                menuItemId: item.menuItemId || item.id || item._id,
                 name: item.name,
                 quantity: item.quantity,
                 price: item.price,
@@ -64,7 +69,7 @@ export default function ProcessingOrder() {
                 crust: item.crust || 'normal',
                 image: item.image || ''
               })),
-              paymentMethod: paymentMethod || 'cod',
+              paymentMethod,
               deliveryAddress: deliveryType === 'delivery' ? address : 'Pickup',
               customerName: currentUser?.displayName || 'Gourmet Customer',
               customerPhone,
@@ -72,33 +77,34 @@ export default function ProcessingOrder() {
             })
           });
 
-          if (intentRes.ok) {
-            const intentData = await intentRes.json();
-            if (intentData.paymentId) {
-              verifiedPaymentId = intentData.paymentId;
-            }
+          if (!intentRes.ok) {
+            const errData = await intentRes.json().catch(() => null);
+            throw new Error(errData?.error || 'Failed to initiate secure payment gateway session.');
+          }
 
-            // 3. Online Payment Verification (if not COD)
-            if (paymentMethod && paymentMethod !== 'cod' && intentData.providerPaymentId) {
-              setStep('applying_discount');
-              const verifyRes = await fetchApi('/api/payment/verify', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-                body: JSON.stringify({
-                  paymentId: intentData.paymentId,
-                  providerPaymentId: intentData.providerPaymentId,
-                  providerTransactionId: 'tx_' + Date.now()
-                })
-              });
+          const intentData = await intentRes.json();
+          if (!intentData?.paymentId) {
+            throw new Error('Payment gateway did not return a valid payment ID.');
+          }
+          verifiedPaymentId = intentData.paymentId;
 
-              const verifyData = await verifyRes.json();
-              if (!verifyRes.ok || !verifyData.verified) {
-                throw new Error(verifyData.error || 'Payment verification failed');
-              }
+          // 3. Online Payment Verification
+          if (intentData.providerPaymentId) {
+            setStep('applying_discount');
+            const verifyRes = await fetchApi('/api/payment/verify', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+              body: JSON.stringify({
+                paymentId: intentData.paymentId,
+                providerPaymentId: intentData.providerPaymentId
+              })
+            });
+
+            const verifyData = await verifyRes.json().catch(() => null);
+            if (!verifyRes.ok || !verifyData?.verified) {
+              throw new Error(verifyData?.error || 'Online payment could not be verified. Your card was not charged.');
             }
           }
-        } catch (intentErr: any) {
-          console.warn('[ProcessingOrder] Payment session notice:', intentErr.message);
         }
 
         // 4. Atomically submit order to backend
@@ -108,7 +114,7 @@ export default function ProcessingOrder() {
           headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
           body: JSON.stringify({
             items: items.map((item: any) => ({
-              menuItemId: item.menuItemId || item.id || item._id || 'item-' + Math.random().toString(36).substr(2, 9),
+              menuItemId: item.menuItemId || item.id || item._id,
               name: item.name,
               quantity: item.quantity,
               price: item.price,

@@ -31,7 +31,7 @@ export default function LocationMap({ className = "w-full h-64 md:h-96 rounded-2
       >
         <TileLayer
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors'
           maxZoom={19}
         />
         <Marker position={position} icon={restaurantIcon}>

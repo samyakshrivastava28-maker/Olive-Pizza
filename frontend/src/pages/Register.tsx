@@ -199,7 +199,7 @@ export default function Register() {
         setQrModalOpen(true);
 
         if (isMobileBrowser) {
-          window.location.href = sessionRes.deepLink;
+          TruecallerService.launchDeepLink(sessionRes.deepLink);
         }
       }
     } catch (err: any) {

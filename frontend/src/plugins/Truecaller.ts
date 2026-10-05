@@ -61,6 +61,21 @@ export const TruecallerService = {
     return Truecaller.verify();
   },
 
+  launchDeepLink: (deepLink: string) => {
+    if (!deepLink) return;
+    if (Capacitor.isNativePlatform()) {
+      try {
+        window.open(deepLink, '_system');
+        return;
+      } catch {}
+    }
+    try {
+      window.location.href = deepLink;
+    } catch {
+      window.open(deepLink, '_blank');
+    }
+  },
+
   createWebSession: async (expectedPhone?: string, token?: string): Promise<TruecallerWebSessionResponse> => {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (token) headers['Authorization'] = `Bearer ${token}`;

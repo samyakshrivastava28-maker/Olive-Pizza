@@ -93,12 +93,14 @@ export default function PhoneUpdateModal({ isOpen, onClose, currentPhone, onSucc
 
   const handleInstantBypass = async () => {
     if (!isDevMode) return;
+    const trimmed = newPhone.trim();
+    if (!trimmed || trimmed.replace(/\D/g, '').length < 10) {
+      toast.error('Please enter a valid 10-digit phone number first');
+      return;
+    }
     setLoading(true);
     try {
-      let phoneNumber = newPhone.trim() ? newPhone.trim() : '9999999999';
-      if (!phoneNumber.startsWith('+')) {
-        phoneNumber = `+91${phoneNumber}`;
-      }
+      let phoneNumber = trimmed.startsWith('+') ? trimmed : `+91${trimmed}`;
       if (auth.currentUser?.uid) {
         await setDoc(doc(db, 'users', auth.currentUser.uid), {
           phone: phoneNumber,
@@ -160,13 +162,15 @@ export default function PhoneUpdateModal({ isOpen, onClose, currentPhone, onSucc
 
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
+    const trimmed = newPhone.trim();
+    if (!trimmed || trimmed.replace(/\D/g, '').length < 10) {
+      toast.error('Please enter a valid 10-digit phone number');
+      return;
+    }
     setLoading(true);
 
     try {
-      let phoneNumber = newPhone.trim() ? newPhone.trim() : '9999999999';
-      if (!phoneNumber.startsWith('+')) {
-        phoneNumber = `+91${phoneNumber}`;
-      }
+      let phoneNumber = trimmed.startsWith('+') ? trimmed : `+91${trimmed}`;
       const token = auth.currentUser ? await auth.currentUser.getIdToken() : '';
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (token) headers['Authorization'] = `Bearer ${token}`;
@@ -176,7 +180,7 @@ export default function PhoneUpdateModal({ isOpen, onClose, currentPhone, onSucc
         headers,
         body: JSON.stringify({ 
           phoneNumber: phoneNumber, 
-          otp: otp || '123456',
+          otp: otp || '',
           userId: auth.currentUser?.uid
         })
       });
@@ -191,10 +195,7 @@ export default function PhoneUpdateModal({ isOpen, onClose, currentPhone, onSucc
       }
     } catch (err: any) {
       if (isDevMode) {
-        let phoneNumber = newPhone.trim() ? newPhone.trim() : '9999999999';
-        if (!phoneNumber.startsWith('+')) {
-          phoneNumber = `+91${phoneNumber}`;
-        }
+        let phoneNumber = trimmed.startsWith('+') ? trimmed : `+91${trimmed}`;
         toast.success("Phone verified (Testing Bypass)!");
         onSuccess(phoneNumber);
         onClose();

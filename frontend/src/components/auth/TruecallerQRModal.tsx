@@ -35,6 +35,7 @@ export default function TruecallerQRModal({
   const [errorMessage, setErrorMessage] = useState<string>('');
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const checkStatusRef = useRef<(() => Promise<void>) | null>(null);
 
   useEffect(() => {
     if (!isOpen || !requestId) {
@@ -105,6 +106,7 @@ export default function TruecallerQRModal({
         // Keep polling until countdown expires
       }
     };
+    checkStatusRef.current = checkStatus;
 
     // 3. Realtime Firestore Listener (Instant <50ms sync upon mobile tap)
     try {
@@ -174,6 +176,7 @@ export default function TruecallerQRModal({
         unsubscribeRealtime();
         unsubscribeRealtime = null;
       }
+      checkStatusRef.current = null;
     };
   }, [isOpen, requestId]);
 
@@ -323,7 +326,7 @@ export default function TruecallerQRModal({
             <div className="mt-4 pt-3 border-t border-stone-100 dark:border-stone-800 flex flex-col gap-2">
               <button
                 type="button"
-                onClick={() => checkStatus()}
+                onClick={() => checkStatusRef.current?.()}
                 className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors"
               >
                 <CheckCircle2 className="w-4 h-4" />
