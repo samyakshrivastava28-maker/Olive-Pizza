@@ -46,7 +46,7 @@ export default function Login() {
   const [phoneCooldown, setPhoneCooldown] = useState(0);
   const [isTruecallerNative, setIsTruecallerNative] = useState(false);
   const [qrModalOpen, setQrModalOpen] = useState(false);
-  const [webSession, setWebSession] = useState<{ deepLink: string; requestId: string } | null>(null);
+  const [webSession, setWebSession] = useState<{ deepLink: string; requestId: string; bridgeUrl?: string } | null>(null);
 
   // Common UI state
   const [loading, setLoading] = useState(false);
@@ -379,55 +379,60 @@ export default function Login() {
 
     try {
       if (isTruecallerNative) {
-        // 1. Android Capacitor Native 1-Tap bottom sheet
-        const nativeResult = await TruecallerService.verifyNative();
-        const res = await fetchApi('/api/phone/signin', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            method: 'truecaller',
-            payload: nativeResult.payload,
-            signature: nativeResult.signature,
-            signatureAlgorithm: nativeResult.signatureAlgorithm
-          })
-        });
+        try {
+          // 1. Android Capacitor Native 1-Tap bottom sheet
+          const nativeResult = await TruecallerService.verifyNative();
+          const res = await fetchApi('/api/phone/signin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              method: 'truecaller',
+              payload: nativeResult.payload,
+              signature: nativeResult.signature,
+              signatureAlgorithm: nativeResult.signatureAlgorithm
+            })
+          });
 
-        const data = await res.json().catch(() => null);
+          const data = await res.json().catch(() => null);
 
-        if (!res.ok || !data?.success || !data?.customToken) {
-          throw new Error(data?.error || "Truecaller verification failed on server.");
+          if (!res.ok || !data?.success || !data?.customToken) {
+            throw new Error(data?.error || "Truecaller verification failed on server.");
+          }
+
+          const userCredential = await signInWithCustomToken(auth, data.customToken);
+
+          useAuthStore.getState().setUser({
+            uid: userCredential.user.uid,
+            email: data.user?.email || null,
+            name: data.user?.name || "Customer",
+            phone: data.user?.phone || null,
+            phoneVerified: true,
+            phoneSetupCompleted: true,
+            locationSetupCompleted: true,
+          }, 'customer');
+
+          toast.success("Verified via Truecaller! Welcome!");
+          setVerifiedUser({
+            identifier: data.user?.phone || 'Truecaller Verified',
+            method: 'truecaller'
+          });
+          return;
+        } catch (nativeErr: any) {
+          console.warn('[Truecaller] Native 1-tap unavailable or profile not found, continuing with seamless web flow:', nativeErr);
         }
-
-        const userCredential = await signInWithCustomToken(auth, data.customToken);
-
-        useAuthStore.getState().setUser({
-          uid: userCredential.user.uid,
-          email: data.user?.email || null,
-          name: data.user?.name || "Customer",
-          phone: data.user?.phone || null,
-          phoneVerified: true,
-          phoneSetupCompleted: true,
-          locationSetupCompleted: true,
-        }, 'customer');
-
-        toast.success("Verified via Truecaller! Welcome!");
-        setVerifiedUser({
-          identifier: data.user?.phone || 'Truecaller Verified',
-          method: 'truecaller'
-        });
-      } else {
-        // 2. Web Session (Mobile Browser DeepLink or Desktop QR Modal)
-        const session = await TruecallerService.createWebSession();
-        setWebSession(session);
-
-        const isMobileBrowser = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || window.innerWidth < 768;
-        if (isMobileBrowser && session.deepLink) {
-          // On mobile browser, auto-trigger deep link intent to launch Truecaller app
-          window.location.href = session.deepLink;
-        }
-
-        setQrModalOpen(true);
       }
+
+      // 2. Web Session (Mobile Browser DeepLink or Desktop QR Modal)
+      const session = await TruecallerService.createWebSession();
+      setWebSession(session);
+
+      const isMobileBrowser = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || window.innerWidth < 768;
+      if (isMobileBrowser && session.deepLink) {
+        // On mobile browser, auto-trigger deep link intent to launch Truecaller app
+        window.location.href = session.deepLink;
+      }
+
+      setQrModalOpen(true);
     } catch (err: any) {
       let msg = "Truecaller is temporarily unavailable. Please verify via SMS.";
       if (err.code === 'TRUECALLER_CONFIG_MISSING') {
@@ -448,40 +453,52 @@ export default function Login() {
     setQrModalOpen(false);
     if (!qrStatus.phone) return;
 
-    const targetRequestId = sessionRequestId || webSession?.requestId;
     setLoading(true);
     try {
-      const res = await fetchApi('/api/phone/signin', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          method: 'truecaller',
-          requestId: targetRequestId,
-          phoneNumber: qrStatus.phone
-        })
-      });
+      let customToken = qrStatus.customToken;
+      let userData: any = {
+        phone: qrStatus.phone,
+        name: qrStatus.name || "Customer",
+        email: null
+      };
 
-      const data = await res.json().catch(() => null);
-
-      if (res.ok && data?.customToken) {
-        const userCredential = await signInWithCustomToken(auth, data.customToken);
-        useAuthStore.getState().setUser({
-          uid: userCredential.user.uid,
-          email: data.user?.email || null,
-          name: qrStatus.name || data.user?.name || "Customer",
-          phone: qrStatus.phone,
-          phoneVerified: true,
-          phoneSetupCompleted: true,
-          locationSetupCompleted: true,
-        }, 'customer');
-        toast.success("Verified via Truecaller! Welcome!");
-        setVerifiedUser({
-          identifier: qrStatus.phone,
-          method: 'truecaller'
+      if (!customToken) {
+        const targetRequestId = sessionRequestId || webSession?.requestId;
+        const res = await fetchApi('/api/phone/signin', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            method: 'truecaller',
+            requestId: targetRequestId,
+            phoneNumber: qrStatus.phone
+          })
         });
-      } else {
-        throw new Error(data?.error || "Failed to finalize session after QR scan.");
+
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data?.customToken) {
+          throw new Error(data?.error || "Failed to finalize session after QR scan.");
+        }
+        customToken = data.customToken;
+        if (data.user) {
+          userData = { ...userData, ...data.user };
+        }
       }
+
+      const userCredential = await signInWithCustomToken(auth, customToken!);
+      useAuthStore.getState().setUser({
+        uid: userCredential.user.uid,
+        email: userData.email || userCredential.user.email || null,
+        name: qrStatus.name || userData.name || userCredential.user.displayName || "Customer",
+        phone: qrStatus.phone,
+        phoneVerified: true,
+        phoneSetupCompleted: true,
+        locationSetupCompleted: true,
+      }, 'customer');
+      toast.success("Verified via Truecaller! Welcome!");
+      setVerifiedUser({
+        identifier: qrStatus.phone,
+        method: 'truecaller'
+      });
     } catch (err: any) {
       setError(err.message || "Failed to finalize session after QR scan.");
       toast.error(err.message || "Failed to finalize session after QR scan.");
@@ -977,6 +994,7 @@ export default function Login() {
           onClose={() => setQrModalOpen(false)}
           deepLink={webSession.deepLink}
           requestId={webSession.requestId}
+          bridgeUrl={webSession.bridgeUrl}
           onSuccess={handleQrVerified}
           onError={(err) => {
             setError(err);

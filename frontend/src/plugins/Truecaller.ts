@@ -25,6 +25,7 @@ export interface TruecallerWebSessionResponse {
   success: boolean;
   requestId: string;
   deepLink: string;
+  bridgeUrl?: string;
   expiresAt: number;
 }
 
@@ -64,18 +65,29 @@ export const TruecallerService = {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
-    const res = await fetchApi('/api/phone/truecaller/session', {
+    let res = await fetchApi('/api/phone/truecaller/session', {
       method: 'POST',
       headers,
       body: JSON.stringify({ expectedPhone })
-    });
+    }).catch(() => null);
 
-    const data = await res.json().catch(() => null);
-    if (!res.ok || !data?.success) {
-      const code = data?.code || (res.status === 429 ? 'RATE_LIMIT_EXCEEDED' : 'TRUECALLER_SESSION_CREATE_FAILED');
+    // If local proxy failed, directly contact production Render backend
+    if (!res || !res.ok) {
+      try {
+        res = await fetch('https://olivepizza-owner.onrender.com/api/phone/truecaller/session', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ expectedPhone })
+        });
+      } catch {}
+    }
+
+    const data = res ? await res.json().catch(() => null) : null;
+    if (!res || !res.ok || !data?.success) {
+      const code = data?.code || (res?.status === 429 ? 'RATE_LIMIT_EXCEEDED' : 'TRUECALLER_SESSION_CREATE_FAILED');
       let msg = data?.error;
       if (!msg) {
-        if (res.status === 429) {
+        if (res?.status === 429) {
           msg = 'Too many verification attempts. Please verify via SMS or wait a few minutes.';
         } else if (code === 'TRUECALLER_CONFIG_MISSING') {
           msg = 'Truecaller verification is not configured for this environment. Please verify via SMS.';
@@ -91,10 +103,16 @@ export const TruecallerService = {
   },
 
   pollWebSession: async (requestId: string): Promise<TruecallerSessionStatusResponse> => {
-    const res = await fetchApi(`/api/phone/truecaller/session/${requestId}`);
-    const data = await res.json().catch(() => null);
-    if (!res.ok || !data) {
-      if (res.status === 404 || data?.code === 'TRUECALLER_SESSION_EXPIRED') {
+    let res = await fetchApi(`/api/phone/truecaller/session/${requestId}`).catch(() => null);
+    if (!res || !res.ok) {
+      try {
+        res = await fetch(`https://olivepizza-owner.onrender.com/api/phone/truecaller/session/${requestId}`);
+      } catch {}
+    }
+
+    const data = res ? await res.json().catch(() => null) : null;
+    if (!res || !res.ok || !data) {
+      if (res?.status === 404 || data?.code === 'TRUECALLER_SESSION_EXPIRED') {
         return {
           success: false,
           status: 'FAILED',

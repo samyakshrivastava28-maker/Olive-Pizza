@@ -257,6 +257,14 @@ service cloud.firestore {
       allow read, write: if hasFullAccess();
     }
     
+    // --- TRUECALLER WEB/QR VERIFICATION SESSIONS ---
+    match /truecaller_web_sessions/{requestId} {
+      // Allow single-document lookup by exact cryptographically secure requestId for instant web/desktop listener
+      allow get: if true;
+      allow list: if false;
+      allow write: if hasFullAccess();
+    }
+
     match /{document=**} {
       allow read, write: if hasFullAccess();
     }

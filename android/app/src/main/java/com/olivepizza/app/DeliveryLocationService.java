@@ -66,7 +66,7 @@ public class DeliveryLocationService extends Service {
             token = intent.getStringExtra("token");
             apiUrl = intent.getStringExtra("apiUrl");
             if (apiUrl == null) {
-                apiUrl = "https://olive-pizza-backend.onrender.com/api/delivery/location";
+                apiUrl = "https://olivepizza-owner.onrender.com/api/delivery/location";
             }
         }
 

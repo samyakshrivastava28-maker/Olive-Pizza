@@ -63,7 +63,7 @@ public class MainActivity extends BridgeActivity {
     public static final String CHANNEL_SYSTEM             = "olive_system";
 
     // Backend URL — must match vercel.json rewrite target + .env RENDER_PUBLIC_URL
-    private static final String BACKEND_URL = "https://olive-pizza-backend.onrender.com";
+    private static final String BACKEND_URL = "https://olivepizza-owner.onrender.com";
 
     private static final ExecutorService NETWORK_EXECUTOR = Executors.newSingleThreadExecutor();
     private static volatile boolean batteryPromptShown = false;

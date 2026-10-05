@@ -10,6 +10,7 @@ interface TruecallerQRModalProps {
   onClose: () => void;
   deepLink: string;
   requestId: string;
+  bridgeUrl?: string;
   onSuccess: (status: TruecallerSessionStatusResponse, requestId?: string) => void;
   onError: (errorMsg: string) => void;
   onSwitchToSms?: () => void;
@@ -23,6 +24,7 @@ export default function TruecallerQRModal({
   onClose,
   deepLink,
   requestId,
+  bridgeUrl,
   onSuccess,
   onError,
   onSwitchToSms,
@@ -125,7 +127,9 @@ export default function TruecallerQRModal({
                 status: 'VERIFIED',
                 phone: data.phone,
                 name: data.name,
-                country: data.country
+                country: data.country,
+                customToken: data.customToken,
+                userId: data.userId
               }, requestId);
             }
           }, 350);
@@ -175,8 +179,9 @@ export default function TruecallerQRModal({
 
   if (!isOpen) return null;
 
+  const qrTarget = bridgeUrl || `https://olivepizza-owner.onrender.com/api/phone/truecaller/bridge?requestId=${encodeURIComponent(requestId)}`;
   const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(
-    deepLink
+    qrTarget
   )}&format=svg`;
 
   const handleRetry = () => {
@@ -316,9 +321,18 @@ export default function TruecallerQRModal({
           {/* Footer Actions */}
           {step !== 'VERIFIED' && step !== 'TIMED_OUT' && step !== 'FAILED' && (
             <div className="mt-4 pt-3 border-t border-stone-100 dark:border-stone-800 flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => checkStatus()}
+                className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>I have tapped Continue on my phone</span>
+              </button>
+
               <a
                 href={deepLink}
-                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-semibold text-[#0052CC] bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
+                className="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-xl text-xs font-semibold text-[#0052CC] bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
               >
                 <Smartphone className="w-4 h-4" />
                 <span>Tap to Open in Truecaller App</span>
