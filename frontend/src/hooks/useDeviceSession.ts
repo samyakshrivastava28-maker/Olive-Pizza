@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAuthStore } from '../lib/store';
 import { auth, db } from '../lib/firebase';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
+import { verifyAndRefreshTokens } from '../lib/fcm';
 
 export function getDeviceFingerprint() {
   let fingerprint = localStorage.getItem('device_fingerprint');
@@ -67,9 +68,7 @@ export function useDeviceSession() {
 
         // Automated Silent Token Validation / Refresh
         if (typeof window !== 'undefined' && ('Notification' in window) && window.Notification.permission === 'granted') {
-          import('../lib/fcm').then(({ verifyAndRefreshTokens }) => {
-            verifyAndRefreshTokens(uid).catch(console.error);
-          });
+          verifyAndRefreshTokens(uid).catch(console.error);
         }
       } catch (err) {
         console.error("Failed to register device session:", err);

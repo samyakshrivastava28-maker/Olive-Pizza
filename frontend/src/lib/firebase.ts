@@ -2,6 +2,7 @@ import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
+import { getMessaging } from 'firebase/messaging';
 
 export const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyAqkcY-WQrW3WoZWRrv8oo7MTAI_nVrLw4",
@@ -22,7 +23,6 @@ export const storage = getStorage(app);
 export const getMessagingInstance = async () => {
   if (typeof window === 'undefined' || !('Notification' in window)) return null;
   try {
-    const { getMessaging } = await import('firebase/messaging');
     return getMessaging(app);
   } catch {
     return null;

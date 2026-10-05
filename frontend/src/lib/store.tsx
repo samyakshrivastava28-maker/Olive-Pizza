@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { isCapacitorNative } from './platform';
 
 // App Store (For PWA and Global UI states)
 interface AppState {
@@ -38,33 +39,29 @@ export const useAuthStore = create<AuthState>()(
 
         // Role-Aware Permission Policy
         if (user && (role === 'owner' || role === 'delivery_partner')) {
-          import('../lib/platform').then(({ isCapacitorNative }) => {
-            if (isCapacitorNative()) {
-              const storageKey = `olive_staff_permissions_${role}`;
-              const alreadyPrompted = localStorage.getItem(storageKey);
-              const isRoleTransition = prevRole && prevRole !== role;
+          if (isCapacitorNative()) {
+            const storageKey = `olive_staff_permissions_${role}`;
+            const alreadyPrompted = localStorage.getItem(storageKey);
+            const isRoleTransition = prevRole && prevRole !== role;
 
-              // Only prompt if not yet prompted for this role, or if user transitioned into this role
-              if (!alreadyPrompted || isRoleTransition) {
-                localStorage.setItem(storageKey, 'true');
-                import('../plugins/AlarmPermission').then(({ AlarmPermission }) => {
-                  AlarmPermission.setupPermissions({ role }).catch(err =>
-                    console.warn('[AlarmPermission] Non-fatal setup error:', err)
-                  );
-                }).catch(console.error);
-              }
+            // Only prompt if not yet prompted for this role, or if user transitioned into this role
+            if (!alreadyPrompted || isRoleTransition) {
+              localStorage.setItem(storageKey, 'true');
+              import('../plugins/AlarmPermission').then(({ AlarmPermission }) => {
+                AlarmPermission.setupPermissions({ role }).catch(err =>
+                  console.warn('[AlarmPermission] Non-fatal setup error:', err)
+                );
+              }).catch(console.error);
             }
-          });
+          }
         } else if (role === 'customer') {
           // If transitioned from delivery_partner to customer, stop delivery background tracking
           if (prevRole === 'delivery_partner') {
-            import('../lib/platform').then(({ isCapacitorNative }) => {
-              if (isCapacitorNative()) {
-                import('./DeliveryPlugin').then(({ DeliveryPlugin }) => {
-                  DeliveryPlugin.stopTracking().catch(() => {});
-                }).catch(() => {});
-              }
-            });
+            if (isCapacitorNative()) {
+              import('./DeliveryPlugin').then(({ DeliveryPlugin }) => {
+                DeliveryPlugin.stopTracking().catch(() => {});
+              }).catch(() => {});
+            }
           }
         }
       },
