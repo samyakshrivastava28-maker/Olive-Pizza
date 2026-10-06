@@ -305,9 +305,9 @@ export default function SetupPhone() {
     }
   };
 
-  // Demo Bypass (Developer only in non-production)
+  // Demo Bypass (Developer only when backend devOtpBypass is confirmed active)
   const handleDemoBypass = async () => {
-    if (!isDevMode) return;
+    if (!devOtpBypass) return;
     if (!phone.trim() || phone.replace(/\D/g, '').length < 10) {
       toast.error("Please enter a 10-digit phone number first");
       return;

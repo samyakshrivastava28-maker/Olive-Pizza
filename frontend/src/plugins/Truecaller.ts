@@ -42,11 +42,15 @@ export interface TruecallerSessionStatusResponse {
 
 export const TruecallerService = {
   isNative: (): boolean => {
-    return Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
+    return Capacitor.isNativePlatform() && (Capacitor.getPlatform() === 'android' || Capacitor.getPlatform() === 'ios');
   },
 
   isNativeSupported: async (): Promise<boolean> => {
-    if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android') {
+    if (!Capacitor.isNativePlatform()) {
+      return false;
+    }
+    const platform = Capacitor.getPlatform();
+    if (platform !== 'android' && platform !== 'ios') {
       return false;
     }
     try {
