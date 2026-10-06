@@ -622,6 +622,38 @@ export default function SetupLocation() {
         );
       }
 
+      // Sync active location in localStorage and broadcast location-changed event
+      try {
+        const activeLoc = {
+          lat: payload.lat,
+          lng: payload.lng,
+          address: payload.formattedAddress,
+          fullAddress: payload.formattedAddress,
+          city: payload.city,
+          state: payload.state,
+          pincode: payload.pincode,
+          updatedAt: Date.now()
+        };
+        localStorage.setItem('op_active_location', JSON.stringify(activeLoc));
+        LocationManager.setCachedLocation({
+          lat: payload.lat,
+          lng: payload.lng,
+          fullAddress: payload.formattedAddress,
+          city: payload.city,
+          pincode: payload.pincode
+        });
+        window.dispatchEvent(new CustomEvent('location-changed', {
+          detail: {
+            lat: payload.lat,
+            lng: payload.lng,
+            fullAddress: payload.formattedAddress,
+            address: payload.formattedAddress
+          }
+        }));
+      } catch (locErr) {
+        console.warn("[SetupLocation] Error persisting active location locally:", locErr);
+      }
+
       toast.success("Delivery location confirmed! ✓");
       // Advance to Step 4: Optional Email
       navigate("/onboarding/email", { replace: true });

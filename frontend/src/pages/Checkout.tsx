@@ -60,10 +60,27 @@ export default function Checkout() {
     isRestaurantOpen: true,
   });
 
-  const [mapCenter, setMapCenter] = useState<{lat: number, lng: number}>({
-    lat: (user as any)?.lat || RESTAURANT_LOCATION.lat,
-    lng: (user as any)?.lng || RESTAURANT_LOCATION.lng
-  });
+  const getInitialCoords = () => {
+    const uLat = (user as any)?.lat != null ? Number((user as any).lat) : null;
+    const uLng = (user as any)?.lng != null ? Number((user as any).lng) : null;
+    if (uLat != null && uLng != null && !isNaN(uLat) && !isNaN(uLng)) {
+      return { lat: uLat, lng: uLng };
+    }
+    try {
+      const stored = localStorage.getItem('op_active_location');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        const pLat = Number(parsed.lat);
+        const pLng = Number(parsed.lng);
+        if (!isNaN(pLat) && !isNaN(pLng)) {
+          return { lat: pLat, lng: pLng };
+        }
+      }
+    } catch {}
+    return { lat: RESTAURANT_LOCATION.lat, lng: RESTAURANT_LOCATION.lng };
+  };
+
+  const [mapCenter, setMapCenter] = useState<{lat: number, lng: number}>(getInitialCoords);
 
   const [isServiceableLocation, setIsServiceableLocation] = useState<boolean>(true);
   const [serviceAreaNotice, setServiceAreaNotice] = useState<string>('');
@@ -107,11 +124,27 @@ export default function Checkout() {
 
   // Auto-sync customer onboarding location or fetch GPS if address empty
   useEffect(() => {
-    if ((user as any)?.lat && (user as any)?.lng) {
-      setMapCenter({ lat: (user as any).lat, lng: (user as any).lng });
+    let activeLat = (user as any)?.lat != null ? Number((user as any).lat) : null;
+    let activeLng = (user as any)?.lng != null ? Number((user as any).lng) : null;
+    let activeAddr = (user as any)?.fullAddress || (user as any)?.full_address || '';
+
+    if (!activeLat || !activeLng || !activeAddr) {
+      try {
+        const stored = localStorage.getItem('op_active_location');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (!activeLat && !isNaN(Number(parsed.lat))) activeLat = Number(parsed.lat);
+          if (!activeLng && !isNaN(Number(parsed.lng))) activeLng = Number(parsed.lng);
+          if (!activeAddr && (parsed.address || parsed.fullAddress)) activeAddr = parsed.address || parsed.fullAddress;
+        }
+      } catch {}
     }
-    if ((user as any)?.fullAddress || (user as any)?.full_address) {
-      setAddress((user as any).fullAddress || (user as any).full_address);
+
+    if (activeLat != null && activeLng != null && !isNaN(activeLat) && !isNaN(activeLng)) {
+      setMapCenter({ lat: activeLat, lng: activeLng });
+    }
+    if (activeAddr) {
+      setAddress(activeAddr);
     } else if (!address && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         async (position) => {
