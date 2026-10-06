@@ -2,9 +2,20 @@ import { registerPlugin, Capacitor } from '@capacitor/core';
 import { fetchApi } from '../lib/config';
 
 export interface TruecallerNativeResult {
+  successful?: boolean;
   payload: string;
   signature: string;
   signatureAlgorithm?: string;
+  requestNonce?: string;
+  phoneNumber?: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  countryCode?: string;
+  city?: string;
+  avatarUrl?: string;
+  isVerified?: boolean;
+  isBusiness?: boolean;
 }
 
 export interface TruecallerPlugin {

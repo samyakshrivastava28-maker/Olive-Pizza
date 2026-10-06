@@ -30,9 +30,24 @@ public class TruecallerPlugin extends Plugin {
         public void onSuccessProfileShared(@NonNull TrueProfile trueProfile) {
             if (savedCall != null) {
                 JSObject ret = new JSObject();
+                ret.put("successful", true);
+                ret.put("firstName", trueProfile.firstName);
+                ret.put("lastName", trueProfile.lastName);
+                ret.put("phoneNumber", trueProfile.phoneNumber);
+                ret.put("gender", trueProfile.gender);
+                ret.put("street", trueProfile.street);
+                ret.put("city", trueProfile.city);
+                ret.put("zipcode", trueProfile.zipcode);
+                ret.put("countryCode", trueProfile.countryCode);
+                ret.put("email", trueProfile.email);
+                ret.put("url", trueProfile.url);
+                ret.put("avatarUrl", trueProfile.avatarUrl);
+                ret.put("isVerified", trueProfile.isTrueName);
                 ret.put("payload", trueProfile.payload);
                 ret.put("signature", trueProfile.signature);
                 ret.put("signatureAlgorithm", trueProfile.signatureAlgorithm);
+                ret.put("requestNonce", trueProfile.requestNonce);
+                ret.put("isBusiness", trueProfile.isBusiness);
                 savedCall.resolve(ret);
                 savedCall = null;
             }
@@ -41,22 +56,49 @@ public class TruecallerPlugin extends Plugin {
         @Override
         public void onFailureProfileShared(@NonNull TrueError trueError) {
             if (savedCall != null) {
-                String errorMsg = "Truecaller verification failed.";
+                String errorReason = "ERROR_TYPE_NULL";
                 switch (trueError.getErrorType()) {
                     case TrueError.ERROR_TYPE_INTERNAL:
-                        errorMsg = "Internal Error";
+                        errorReason = "ERROR_TYPE_INTERNAL";
                         break;
                     case TrueError.ERROR_TYPE_NETWORK:
-                        errorMsg = "Network Error";
+                        errorReason = "ERROR_TYPE_NETWORK";
                         break;
                     case TrueError.ERROR_TYPE_USER_DENIED:
-                        errorMsg = "User Denied";
+                        errorReason = "ERROR_TYPE_USER_DENIED";
                         break;
                     case TrueError.ERROR_PROFILE_NOT_FOUND:
-                        errorMsg = "Profile Not Found";
+                        errorReason = "ERROR_TYPE_UNAUTHORIZED_PARTNER";
+                        break;
+                    case TrueError.ERROR_TYPE_UNAUTHORIZED_USER:
+                        errorReason = "ERROR_TYPE_UNAUTHORIZED_USER";
+                        break;
+                    case TrueError.ERROR_TYPE_TRUECALLER_CLOSED_UNEXPECTEDLY:
+                        errorReason = "ERROR_TYPE_TRUECALLER_CLOSED_UNEXPECTEDLY";
+                        break;
+                    case TrueError.ERROR_TYPE_TRUESDK_TOO_OLD:
+                        errorReason = "ERROR_TYPE_TRUESDK_TOO_OLD";
+                        break;
+                    case TrueError.ERROR_TYPE_POSSIBLE_REQ_CODE_COLLISION:
+                        errorReason = "ERROR_TYPE_POSSIBLE_REQ_CODE_COLLISION";
+                        break;
+                    case TrueError.ERROR_TYPE_RESPONSE_SIGNATURE_MISMATCH:
+                        errorReason = "ERROR_TYPE_RESPONSE_SIGNATURE_MISMATCH";
+                        break;
+                    case TrueError.ERROR_TYPE_REQUEST_NONCE_MISMATCH:
+                        errorReason = "ERROR_TYPE_REQUEST_NONCE_MISMATCH";
+                        break;
+                    case TrueError.ERROR_TYPE_INVALID_ACCOUNT_STATE:
+                        errorReason = "ERROR_TYPE_INVALID_ACCOUNT_STATE";
+                        break;
+                    case TrueError.ERROR_TYPE_TC_NOT_INSTALLED:
+                        errorReason = "ERROR_TYPE_TC_NOT_INSTALLED";
+                        break;
+                    case TrueError.ERROR_TYPE_ACTIVITY_NOT_FOUND:
+                        errorReason = "ERROR_TYPE_ACTIVITY_NOT_FOUND";
                         break;
                 }
-                savedCall.reject(errorMsg, Integer.toString(trueError.getErrorType()));
+                savedCall.reject(errorReason, Integer.toString(trueError.getErrorType()));
                 savedCall = null;
             }
         }
