@@ -40,6 +40,16 @@
 				<string>olivepizza</string>
 			</array>
 		</dict>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>com.olivepizza.app.truecaller</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>truecallersdk-c9aiH3dac128598c845bcad3edd6fd3bb402e</string>
+			</array>
+		</dict>
 	</array>
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
