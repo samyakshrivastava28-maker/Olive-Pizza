@@ -87,7 +87,7 @@ service cloud.firestore {
     }
 
     match /security_logs/{logId} {
-      allow create: if true;
+      allow create: if hasFullAccess() || (isSignedIn() && request.resource.data.size() < 15);
       allow read, update, delete: if hasFullAccess();
     }
 
@@ -190,17 +190,17 @@ service cloud.firestore {
     }
     
     match /client_errors/{errorId} {
-      allow create: if request.resource.data.size() < 12;
+      allow create: if hasFullAccess() || (isSignedIn() && request.resource.data.size() < 12);
       allow read, update, delete: if hasFullAccess();
     }
     
     match /activity_logs/{logId} {
-      allow create: if request.resource.data.size() < 12;
+      allow create: if hasFullAccess() || (isSignedIn() && request.resource.data.size() < 12);
       allow read, update, delete: if hasFullAccess();
     }
     
     match /crash_reports/{reportId} {
-      allow create: if request.resource.data.size() < 12;
+      allow create: if hasFullAccess() || (isSignedIn() && request.resource.data.size() < 12);
       allow read, update, delete: if hasFullAccess();
     }
 

@@ -5,6 +5,8 @@ import { db } from './firebase';
 import { isCapacitorNative, getPushCompatibility } from './platform';
 import { fetchApi } from './config';
 
+let messageListenerUnsubscribe: (() => void) | null = null;
+
 /**
  * Requests push notification permission from the user.
  * - If running in Capacitor native: defers to the native plugin (no action here).
@@ -89,8 +91,16 @@ export async function verifyAndRefreshTokens(userId?: string): Promise<string | 
         console.log('[FCM] Token saved for first time.');
       }
 
+      // Clean up previous foreground message listener if already active
+      if (messageListenerUnsubscribe) {
+        try {
+          messageListenerUnsubscribe();
+        } catch {}
+        messageListenerUnsubscribe = null;
+      }
+
       // Listen for foreground messages (when tab is open)
-      onMessage(messaging, (payload) => {
+      messageListenerUnsubscribe = onMessage(messaging, (payload) => {
         console.log('[FCM] Foreground message received:', payload.data?.tag || 'no-tag');
 
         // App update push

@@ -11,28 +11,49 @@ export const CLOSING_HOUR = 24; // 12 AM (midnight)
 
 import { Capacitor } from '@capacitor/core';
 
-export const PRODUCTION_BACKEND_URL = "https://olivepizza-owner.onrender.com";
+export const getApiBaseUrl = (): string => {
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL.replace(/\/+$/, '');
+  }
+  if (
+    Capacitor.isNativePlatform() ||
+    (typeof window !== 'undefined' && (
+      window.location.protocol === 'capacitor:' ||
+      window.location.protocol === 'ionic:' ||
+      (window.location.hostname === 'localhost' && window.location.port === '')
+    ))
+  ) {
+    return "https://olivepizza-owner.onrender.com";
+  }
+  if (import.meta.env.DEV) {
+    return "";
+  }
+  return "https://olivepizza-owner.onrender.com";
+};
+
+export const PRODUCTION_BACKEND_URL = getApiBaseUrl() || "https://olivepizza-owner.onrender.com";
 
 /**
- * Resilient API URL resolver:
- * - On Native Capacitor Android/iOS: directly routes to production Render backend
- * - On Web / PWA: routes through relative /api or falls back to production Render backend
+ * Canonical API URL resolver:
+ * - Uses VITE_API_BASE_URL when present
+ * - Uses relative proxy in development
+ * - Uses production URL for Native Capacitor
  */
 export const getApiUrl = (endpoint: string): string => {
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-  if (typeof window === 'undefined') return `${PRODUCTION_BACKEND_URL}${cleanEndpoint}`;
+  const base = getApiBaseUrl();
+  return base ? `${base}${cleanEndpoint}` : cleanEndpoint;
+};
 
-  // If running inside Capacitor Native Container or local webview
-  if (
-    Capacitor.isNativePlatform() ||
-    window.location.protocol === 'capacitor:' ||
-    window.location.protocol === 'ionic:' ||
-    (window.location.hostname === 'localhost' && window.location.port === '')
-  ) {
-    return `${PRODUCTION_BACKEND_URL}${cleanEndpoint}`;
+export const getWebSocketUrl = (): string => {
+  const base = getApiBaseUrl();
+  if (base.startsWith('https://')) return base.replace('https://', 'wss://') + '/ws';
+  if (base.startsWith('http://')) return base.replace('http://', 'ws://') + '/ws';
+  if (typeof window !== 'undefined' && window.location.host) {
+    const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${proto}//${window.location.host}/ws`;
   }
-
-  return cleanEndpoint;
+  return 'wss://olivepizza-owner.onrender.com/ws';
 };
 
 function getOrGenerateDeviceId(): string {
