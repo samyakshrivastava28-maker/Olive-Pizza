@@ -28,12 +28,23 @@ export default function LocationPicker3D({ initialCenter, onChange, className }:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const geocodeCache = useRef<Map<string, string>>(new Map());
+
   const performGeocode = async (loc: LatLng) => {
+    const key = `${loc.lat.toFixed(4)},${loc.lng.toFixed(4)}`;
+    if (geocodeCache.current.has(key)) {
+      onChange?.({ lat: loc.lat, lng: loc.lng, address: geocodeCache.current.get(key)! });
+      return;
+    }
+
     setIsGeocoding(true);
     try {
       const res = await fetchApi(`/api/location/reverse-geocode?lat=${loc.lat}&lng=${loc.lng}`);
       const data = await res.json();
       const address = data?.location?.displayName || data?.display_name || '';
+      if (address) {
+        geocodeCache.current.set(key, address);
+      }
       onChange?.({ lat: loc.lat, lng: loc.lng, address });
     } catch (err) {
       onChange?.({ lat: loc.lat, lng: loc.lng, address: '' });
@@ -46,10 +57,10 @@ export default function LocationPicker3D({ initialCenter, onChange, className }:
     setCenter(newCenter);
     if (geocodeTimeoutRef.current) window.clearTimeout(geocodeTimeoutRef.current);
     
-    // Debounce geocoding to avoid API rate limits
+    // Snappy 400ms debounce
     geocodeTimeoutRef.current = window.setTimeout(() => {
       performGeocode(newCenter);
-    }, 800);
+    }, 400);
   }, [onChange]);
 
   return (

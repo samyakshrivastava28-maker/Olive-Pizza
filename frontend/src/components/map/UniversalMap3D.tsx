@@ -241,7 +241,7 @@ const UniversalMap3D = forwardRef<UniversalMap3DRef, UniversalMap3DProps>(
       const initialPitch = mode === 'delivery' ? 45 : 0;
       const map = new maplibregl.Map({
         container: containerRef.current,
-        style: TILE_STYLE,
+        style: OSM_RASTER_STYLE,
         center: [initialCenter.lng, initialCenter.lat],
         zoom,
         pitch: initialPitch,

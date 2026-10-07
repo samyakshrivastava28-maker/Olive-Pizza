@@ -4,10 +4,11 @@ import { X, CreditCard, Banknote, Wallet, Smartphone, ShieldCheck } from 'lucide
 
 export default function PaymentMethodOverlay({ onClose, onSelect, total }: any) {
   const methods = [
-    { id: 'upi', name: 'UPI', desc: 'Google Pay, PhonePe, Paytm', icon: Smartphone, color: 'text-purple-400', bg: 'bg-purple-500/10' },
-    { id: 'card', name: 'Credit / Debit Card', desc: 'Visa, Mastercard, RuPay', icon: CreditCard, color: 'text-blue-400', bg: 'bg-blue-500/10' },
-    { id: 'wallet', name: 'Wallets', desc: 'Amazon Pay, Paytm', icon: Wallet, color: 'text-orange-400', bg: 'bg-orange-500/10' },
-    { id: 'cash', name: 'Cash on Delivery', desc: 'Pay at your doorstep', icon: Banknote, color: 'text-green-400', bg: 'bg-green-500/10' },
+    { id: 'upi_phonepe', name: 'PhonePe UPI', desc: 'Instant UPI via PhonePe app', icon: Smartphone, color: 'text-purple-600', bg: 'bg-purple-50' },
+    { id: 'upi_gpay', name: 'Google Pay', desc: 'Instant UPI via Google Pay', icon: Smartphone, color: 'text-blue-600', bg: 'bg-blue-50' },
+    { id: 'upi_paytm', name: 'Paytm UPI', desc: 'Paytm UPI & Wallet', icon: Smartphone, color: 'text-sky-600', bg: 'bg-sky-50' },
+    { id: 'card', name: 'Credit / Debit Card', desc: 'Visa, Mastercard, RuPay', icon: CreditCard, color: 'text-indigo-600', bg: 'bg-indigo-50' },
+    { id: 'cod', name: 'Cash on Delivery', desc: 'Pay cash or UPI at your doorstep', icon: Banknote, color: 'text-emerald-600', bg: 'bg-emerald-50' },
   ];
 
   return (
@@ -17,7 +18,7 @@ export default function PaymentMethodOverlay({ onClose, onSelect, total }: any) 
     >
       <motion.div 
         initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-        className="w-full max-w-md bg-white border border-slate-200 rounded-t-3xl sm:rounded-3xl px-6 pt-6 pb-safe sm:pb-6 shadow-2xl text-slate-900"
+        className="w-full max-w-md bg-white border border-slate-200 rounded-t-3xl sm:rounded-3xl px-6 pt-6 pb-safe sm:pb-6 shadow-2xl text-slate-900 max-h-[85vh] overflow-y-auto"
       >
         <div className="flex justify-between items-center mb-6">
           <div>
@@ -38,7 +39,7 @@ export default function PaymentMethodOverlay({ onClose, onSelect, total }: any) 
                 onClick={() => onSelect(m.id)}
                 className="w-full flex items-center gap-4 p-4 rounded-2xl bg-[#FAF8F5] border border-slate-200 hover:border-primary-500 hover:bg-primary-50/30 transition-all active:scale-[0.98] group cursor-pointer text-left"
               >
-                <div className="p-3 rounded-xl bg-primary-100 text-primary-700 group-hover:bg-primary-600 group-hover:text-champagne transition-colors">
+                <div className={`p-3 rounded-xl ${m.bg} ${m.color} group-hover:bg-primary-600 group-hover:text-champagne transition-colors`}>
                   <Icon className="w-6 h-6" />
                 </div>
                 <div className="text-left flex-1">

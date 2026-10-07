@@ -47,6 +47,7 @@ export default function Login() {
   const [isTruecallerNative, setIsTruecallerNative] = useState(false);
   const [qrModalOpen, setQrModalOpen] = useState(false);
   const [webSession, setWebSession] = useState<{ deepLink: string; requestId: string; bridgeUrl?: string } | null>(null);
+  const [phoneIntel, setPhoneIntel] = useState<{ carrier?: string; region?: string; valid?: boolean } | null>(null);
 
   // Common UI state
   const [loading, setLoading] = useState(false);
@@ -888,11 +889,41 @@ export default function Login() {
                         required
                         maxLength={10}
                         value={phone}
-                        onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/\D/g, '').slice(0, 10);
+                          setPhone(val);
+                          if (val.length === 10) {
+                            fetchApi('/api/phone/intel-verify', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ phone: `+91${val}` })
+                            })
+                            .then(res => res.json())
+                            .then(d => {
+                              if (d?.success && d?.data) {
+                                setPhoneIntel({
+                                  carrier: d.data.carrier,
+                                  region: d.data.phone_region,
+                                  valid: d.data.phone_valid
+                                });
+                              }
+                            })
+                            .catch(() => {});
+                          } else {
+                            setPhoneIntel(null);
+                          }
+                        }}
                         placeholder="98765 43210"
                         className="w-full pl-14 pr-4 py-3.5 bg-[#FAF8F5] border border-slate-200 focus:border-primary-600 focus:bg-white rounded-2xl text-slate-900 text-sm font-medium focus:outline-none transition-all"
                       />
                     </div>
+                    {phoneIntel && phoneIntel.carrier && (
+                      <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-emerald-700 font-semibold px-2 py-1 rounded-lg bg-emerald-50 border border-emerald-200/60 animate-fade-in">
+                        <span>📡</span>
+                        <span>{phoneIntel.carrier}</span>
+                        {phoneIntel.region && <span>• {phoneIntel.region}</span>}
+                      </div>
+                    )}
                   </div>
 
                   <button

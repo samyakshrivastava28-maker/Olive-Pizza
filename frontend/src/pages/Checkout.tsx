@@ -721,7 +721,11 @@ export default function Checkout() {
                     <CreditCard className="w-5 h-5" />
                   </div>
                   <span className="font-bold text-primary-950 uppercase text-xs sm:text-sm">
-                    {selectedPayment === 'card' ? 'Credit / Debit Card' : selectedPayment === 'upi' ? 'UPI' : selectedPayment === 'wallet' ? 'Wallets' : 'Cash on Delivery'}
+                    {selectedPayment === 'card' ? 'Credit / Debit Card' : 
+                     selectedPayment === 'upi_phonepe' ? 'PhonePe UPI' :
+                     selectedPayment === 'upi_gpay' ? 'Google Pay' :
+                     selectedPayment === 'upi_paytm' ? 'Paytm UPI' :
+                     selectedPayment === 'upi' ? 'UPI' : 'Cash on Delivery'}
                   </span>
                 </div>
                 <button 

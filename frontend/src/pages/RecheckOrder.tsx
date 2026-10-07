@@ -19,8 +19,7 @@ export default function RecheckOrder() {
     if (!items || items.length === 0) {
       navigate('/checkout', { replace: true });
     } else {
-      // Simulate validation animation
-      setTimeout(() => setValidating(false), 2500);
+      setValidating(false);
     }
   }, [items, navigate]);
 
