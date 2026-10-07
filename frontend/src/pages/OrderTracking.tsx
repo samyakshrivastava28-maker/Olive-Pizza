@@ -653,6 +653,23 @@ export default function OrderTracking() {
               return;
             }
           } catch {}
+
+          // Fallback: Check PostgreSQL canonical archive via backend REST API
+          try {
+            const token = await auth.currentUser?.getIdToken();
+            const res = await fetchApi(`/api/orders/${orderId}`, {
+              headers: token ? { Authorization: `Bearer ${token}` } : {}
+            });
+            if (res.ok) {
+              const data = await res.json();
+              const histOrder = data?.order || data;
+              if (histOrder && (histOrder.id || histOrder.orderId)) {
+                setOrder(histOrder);
+                return;
+              }
+            }
+          } catch {}
+
           setOrderNotFound(true);
         }
       },

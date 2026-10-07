@@ -104,20 +104,36 @@ export default function CustomerDashboard() {
         const uid = auth.currentUser.uid;
         const phone = user?.phone;
 
-        // 1. Query orders by customer UID or phone
-        const ordersRef = collection(db, "orders");
-        let qOrders = query(ordersRef, where("customerId", "==", uid));
-        let snap = await getDocs(qOrders);
-
-        if (snap.empty && phone) {
-          qOrders = query(ordersRef, where("customerPhone", "==", phone));
-          snap = await getDocs(qOrders);
+        // 1. Fetch orders from backend API (unions live Firestore + archived PostgreSQL orders)
+        let loadedOrders: Order[] = [];
+        try {
+          const token = await auth.currentUser.getIdToken();
+          const apiRes = await fetchApi('/api/orders', {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (apiRes.ok) {
+            loadedOrders = await apiRes.json();
+          }
+        } catch (apiErr) {
+          console.warn("[CustomerDashboard] API order fetch notice:", apiErr);
         }
 
-        const loadedOrders: Order[] = snap.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as Order[];
+        // Fallback / merge with Firestore live orders if API call yielded no orders
+        if (!loadedOrders || loadedOrders.length === 0) {
+          const ordersRef = collection(db, "orders");
+          let qOrders = query(ordersRef, where("customerId", "==", uid));
+          let snap = await getDocs(qOrders);
+
+          if (snap.empty && phone) {
+            qOrders = query(ordersRef, where("customerPhone", "==", phone));
+            snap = await getDocs(qOrders);
+          }
+
+          loadedOrders = snap.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          })) as Order[];
+        }
 
         // Sort descending by date
         loadedOrders.sort((a: any, b: any) => {
