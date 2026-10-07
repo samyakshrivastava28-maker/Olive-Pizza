@@ -149,6 +149,14 @@ export default function Checkout() {
       navigator.geolocation.getCurrentPosition(
         async (position) => {
           const { latitude, longitude } = position.coords;
+          // Validate before blindly overwriting map center
+          const distFromHq = calculateDistance(latitude, longitude, RESTAURANT_LOCATION.lat, RESTAURANT_LOCATION.lng);
+          if (distFromHq > 25) {
+            console.warn('[Checkout] Browser IP geolocation placed outside Rajnandgaon (' + distFromHq.toFixed(1) + ' km). Preserving Rajnandgaon HQ.');
+            setMapCenter({ lat: RESTAURANT_LOCATION.lat, lng: RESTAURANT_LOCATION.lng });
+            setAddress(RESTAURANT_LOCATION.address);
+            return;
+          }
           setMapCenter({ lat: latitude, lng: longitude });
           try {
             const res = await fetchApi(`/api/location/reverse-geocode?lat=${latitude}&lng=${longitude}`);
@@ -157,7 +165,11 @@ export default function Checkout() {
             if (addr) setAddress(addr);
           } catch (err) {}
         },
-        () => {}
+        () => {
+          // If denied, fallback to Rajnandgaon HQ
+          setMapCenter({ lat: RESTAURANT_LOCATION.lat, lng: RESTAURANT_LOCATION.lng });
+          setAddress(RESTAURANT_LOCATION.address);
+        }
       );
     }
   }, [user]);
@@ -600,10 +612,21 @@ export default function Checkout() {
                        navigator.geolocation.getCurrentPosition(
                          async (pos) => {
                            const { latitude, longitude } = pos.coords;
+                           const distFromHq = calculateDistance(latitude, longitude, RESTAURANT_LOCATION.lat, RESTAURANT_LOCATION.lng);
+                           if (distFromHq > 25) {
+                             toast.error(`Your device GPS (${distFromHq.toFixed(1)} km away) is outside Rajnandgaon delivery radius.`, { id: t, duration: 4000 });
+                             return;
+                           }
                            setMapCenter({lat: latitude, lng: longitude});
-                           toast.success('Location found!', { id: t });
+                           try {
+                             const res = await fetchApi(`/api/location/reverse-geocode?lat=${latitude}&lng=${longitude}`);
+                             const data = await res.json();
+                             const addr = data?.location?.displayName || data?.display_name;
+                             if (addr) setAddress(addr);
+                           } catch (err) {}
+                           toast.success('Location updated via GPS!', { id: t });
                          },
-                         () => toast.error('Location access denied', { id: t })
+                         () => toast.error('Location access denied or unavailable', { id: t })
                        );
                     } else {
                       toast.error('Geolocation not supported');
