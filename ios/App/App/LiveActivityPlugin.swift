@@ -95,7 +95,7 @@ public class LiveActivityPlugin: CAPPlugin, CAPBridgedPlugin {
             // Listen for push token updates from ActivityKit
             Task {
                 for await pushTokenData in activity.pushTokenUpdates {
-                    let tokenString = pushTokenData.map { String(format: "%02x", ) }.joined()
+                    let tokenString = pushTokenData.map { String(format: "%02x", $0) }.joined()
                     self.notifyListeners("pushTokenReceived", data: [
                         "orderId": orderId,
                         "activityId": activity.id,
