@@ -257,15 +257,6 @@ export default function PushNotificationManager() {
       if (res.ok) {
         setTokenRegistered(true);
         console.log('[PushManager] ✅ FCM token registered in backend (multi-device safe)');
-
-        // Forward auth token to Service Worker for web quick actions
-        if (!Capacitor.isNativePlatform() && navigator.serviceWorker.controller) {
-          navigator.serviceWorker.controller.postMessage({
-            type: 'STORE_AUTH_TOKEN',
-            uid,
-            token: authToken,
-          });
-        }
       } else {
         console.error('[PushManager] Backend token registration failed:', res.status);
       }
@@ -647,19 +638,6 @@ export default function PushNotificationManager() {
           } else if (notifPermission === 'default') {
             setTimeout(() => setShowNotifPrompt(true), 3000);
           }
-        }
-
-        // Auto-refresh auth token in SW every 50 minutes
-        if (!Capacitor.isNativePlatform()) {
-          const refreshTokenInSW = async () => {
-            const freshToken = await auth.currentUser?.getIdToken(true);
-            if (freshToken && navigator.serviceWorker.controller) {
-              navigator.serviceWorker.controller.postMessage({
-                type: 'STORE_AUTH_TOKEN', uid, token: freshToken,
-              });
-            }
-          };
-          tokenRefreshTimerRef.current = setInterval(refreshTokenInSW, 50 * 60 * 1000);
         }
       } catch (err) {
         // Init errors are NEVER fatal

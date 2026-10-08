@@ -11,11 +11,14 @@ export interface ApiFetchOptions {
   forceRefresh?: boolean;
 }
 
-// In-flight GET promises map for request deduplication
+// In-flight GET promises map for request deduplication (keyed by uid:endpoint)
 const inFlightRequests = new Map<string, Promise<any>>();
 
-// In-memory hot cache with TTL
+// In-memory hot cache with TTL (user-isolated)
 const memoryCache = new Map<string, CacheEntry<any>>();
+
+// Endpoints containing private, financial, or state-mutating user data must never be cached
+const SENSITIVE_ENDPOINTS_REGEX = /\/(cart|checkout|payment|auth|user|profile|orders\/my|my-orders)/i;
 
 function getOrGenerateDeviceId(): string {
   try {
@@ -31,11 +34,12 @@ function getOrGenerateDeviceId(): string {
 }
 
 /**
- * Builds a deterministic cache key for a GET request
+ * Builds a deterministic, user-isolated cache key for a GET request
  */
-function buildCacheKey(endpoint: string, headers?: HeadersInit): string {
+function buildCacheKey(endpoint: string, uid?: string): string {
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-  return `GET:${cleanEndpoint}`;
+  const userPrefix = uid ? `user:${uid}` : 'anon';
+  return `GET:${userPrefix}:${cleanEndpoint}`;
 }
 
 /**
@@ -54,12 +58,30 @@ export function invalidateApiCache(pattern?: string | RegExp): void {
 }
 
 /**
+ * Completely purges both in-memory cache and in-flight request deduplication maps
+ */
+export function purgeApiCache(): void {
+  memoryCache.clear();
+  inFlightRequests.clear();
+}
+
+// Listen to auth changes to immediately purge private user data on login/logout
+if (typeof window !== 'undefined' && auth) {
+  try {
+    auth.onAuthStateChanged(() => {
+      purgeApiCache();
+    });
+  } catch {}
+}
+
+/**
  * Resilient JSON Fetch helper with:
  * 1. Request deduplication (identical in-flight GET requests share the same promise)
- * 2. In-memory TTL caching (configurable ttlMs, e.g. 30s menu, 60s store config)
- * 3. Automatic Bearer auth token injection
- * 4. Automatic hardware device fingerprint header
- * 5. Transparent fallback to direct backend URL if proxy fails
+ * 2. In-memory TTL caching with strict user-isolation (user:uid:endpoint)
+ * 3. Automatic bypass of cache for sensitive endpoints (cart, checkout, payment, auth)
+ * 4. Automatic Bearer auth token injection
+ * 5. Automatic hardware device fingerprint header
+ * 6. Transparent fallback to direct backend URL if proxy fails
  */
 export async function fetchApiJson<T = any>(
   endpoint: string,
@@ -68,12 +90,17 @@ export async function fetchApiJson<T = any>(
 ): Promise<T> {
   const method = (init?.method || 'GET').toUpperCase();
   const isGet = method === 'GET';
-  const cacheKey = buildCacheKey(endpoint, init?.headers);
-  const ttlMs = options?.ttlMs ?? 0;
-  const forceRefresh = options?.forceRefresh ?? false;
+  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  const currentUserUid = auth.currentUser?.uid;
+  const isSensitive = SENSITIVE_ENDPOINTS_REGEX.test(cleanEndpoint);
 
-  // 1. Return from in-memory TTL cache if valid GET and not forcing refresh
-  if (isGet && !forceRefresh && ttlMs > 0) {
+  // Sensitive endpoints NEVER use cache
+  const effectiveTtlMs = isSensitive ? 0 : (options?.ttlMs ?? 0);
+  const forceRefresh = options?.forceRefresh ?? false;
+  const cacheKey = buildCacheKey(cleanEndpoint, currentUserUid);
+
+  // 1. Return from in-memory TTL cache if valid GET, not forcing refresh, and not sensitive
+  if (isGet && !forceRefresh && !isSensitive && effectiveTtlMs > 0) {
     const cached = memoryCache.get(cacheKey);
     if (cached && Date.now() < cached.expiresAt) {
       return cached.data as T;
@@ -137,11 +164,11 @@ export async function fetchApiJson<T = any>(
 
       const data = await res.json();
 
-      // Store in TTL cache if applicable
-      if (isGet && ttlMs > 0) {
+      // Store in TTL cache if applicable and not sensitive
+      if (isGet && !isSensitive && effectiveTtlMs > 0) {
         memoryCache.set(cacheKey, {
           data,
-          expiresAt: Date.now() + ttlMs,
+          expiresAt: Date.now() + effectiveTtlMs,
         });
       }
 
@@ -226,4 +253,3 @@ export async function fetchTrackingBootstrap(orderId: string): Promise<TrackingB
     forceRefresh: true,
   });
 }
-

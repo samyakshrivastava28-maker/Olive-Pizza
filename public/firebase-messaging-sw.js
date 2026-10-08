@@ -36,14 +36,14 @@ const BADGE = 'https://res.cloudinary.com/dxmlvkff1/image/upload/v1782376898/oli
 function openDB() {
   return new Promise((resolve, reject) => {
     try {
-      const req = indexedDB.open('olive_sw', 2);
+      const req = indexedDB.open('olive_sw', 3);
       req.onupgradeneeded = e => {
         const db = e.target.result;
         if (!db.objectStoreNames.contains('offlineActions')) {
           db.createObjectStore('offlineActions', { keyPath: 'id', autoIncrement: true });
         }
-        if (!db.objectStoreNames.contains('authTokens')) {
-          db.createObjectStore('authTokens', { keyPath: 'uid' });
+        if (db.objectStoreNames.contains('authTokens')) {
+          db.deleteObjectStore('authTokens');
         }
       };
       req.onsuccess = e => resolve(e.target.result);
@@ -95,15 +95,6 @@ async function getAndClearOfflineActions() {
   });
 }
 
-async function getCachedAuthToken() {
-  const db = await openDB();
-  return new Promise((resolve) => {
-    const tx = db.transaction('authTokens', 'readonly');
-    const req = tx.objectStore('authTokens').getAll();
-    req.onsuccess = () => resolve(req.result[0]?.token || null);
-    req.onerror = () => resolve(null);
-  });
-}
 
 // ─── Background Message Handler ────────────────────────────────────────────────
 messaging.onBackgroundMessage(async (payload) => {
@@ -269,61 +260,20 @@ self.addEventListener('notificationclick', event => {
   event.waitUntil(performQuickAction(action, orderId, stage, queueId));
 });
 
-// ─── Quick Action — Authenticated API Call ────────────────────────────────────
+// ─── Quick Action — Authenticated Window Delegation (Zero Token Leak) ────────
 async function performQuickAction(action, orderId, stage, queueId) {
-  const token = await getCachedAuthToken();
-
-  const body = JSON.stringify({ orderId, action, currentStage: stage });
-  const headers = {
-    'Content-Type': 'application/json',
-    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-  };
-
-  // Try to send the action
-  try {
-    const response = await fetch(`${API_BASE}/notifications/action`, {
-      method: 'POST',
-      headers,
-      body,
-    });
-
-    if (response.ok) {
-      const result = await response.json();
-      // Acknowledge action
-      if (queueId) {
-        fetch(`${API_BASE}/notifications/track`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ queueId, stage: 'action_performed', orderId })
-        }).catch(() => {});
-      }
-      
-      // If the action was stop_alert, we can just broadcast that too
-      if (action === 'stop_alert') {
-        BROADCAST.postMessage({ type: 'STOP_ALERT', orderId });
-      } else {
-        // Broadcast success to open tabs
-        BROADCAST.postMessage({ type: 'ACTION_SUCCESS', action, orderId, newStatus: result.newStatus });
-      }
-    } else if (response.status === 401) {
-      // Auth expired — save to offline queue and show a window for re-auth
-      await saveOfflineAction({ action, orderId, stage, queueId, savedAt: Date.now() });
-      openWindow(`/login?redirect=/order/${orderId}`);
-    } else {
-      throw new Error(`Action failed: ${response.status}`);
-    }
-  } catch (err) {
-    // Offline — queue the action for sync when back online
-    console.warn('[SW] Quick action failed, queuing for Background Sync:', err.message);
-    await saveOfflineAction({ action, orderId, stage, queueId, savedAt: Date.now() });
-
-    // Register background sync task
-    try {
-      await self.registration.sync.register('olive_action_sync');
-    } catch (syncErr) {
-      console.warn('[SW] Background Sync not supported:', syncErr.message);
-    }
+  if (action === 'stop_alert') {
+    BROADCAST.postMessage({ type: 'STOP_ALERT', orderId });
+    return;
   }
+
+  const allClients = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+  if (allClients && allClients.length > 0) {
+    BROADCAST.postMessage({ type: 'PERFORM_ACTION', action, orderId, stage, queueId });
+    return;
+  }
+
+  await openWindow(`/order/${orderId}?action=${action}`);
 }
 
 // ─── Background Sync Handler (auto-retry when back online) ──────────────────
@@ -337,37 +287,10 @@ async function flushOfflineActions() {
   const actions = await getAndClearOfflineActions();
   if (actions.length === 0) return;
 
-  const token = await getCachedAuthToken();
-  const headers = {
-    'Content-Type': 'application/json',
-    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-  };
-
-  console.log(`[SW] Syncing ${actions.length} offline actions`);
-
-  for (const item of actions) {
-    try {
-      const response = await fetch(`${API_BASE}/notifications/action`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          orderId: item.orderId,
-          action: item.action,
-          currentStage: item.stage,
-        }),
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        BROADCAST.postMessage({ type: 'SYNC_ACTION_SUCCESS', ...item, newStatus: result.newStatus });
-        console.log(`[SW] Synced offline action: ${item.action} for order ${item.orderId}`);
-      } else {
-        // If still failing, re-save for next sync
-        await saveOfflineAction(item);
-      }
-    } catch (err) {
-      // Still offline — re-save
-      await saveOfflineAction(item);
+  const allClients = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+  if (allClients && allClients.length > 0) {
+    for (const item of actions) {
+      BROADCAST.postMessage({ type: 'PERFORM_ACTION', ...item });
     }
   }
 }
@@ -397,14 +320,8 @@ async function openWindow(url) {
   return clients.openWindow(url);
 }
 
-// ─── Message from App (store auth token for Quick Actions) ────────────────────
+// ─── Message from App ──────────────────────────────────────────────────────────
 self.addEventListener('message', async event => {
-  if (event.data?.type === 'STORE_AUTH_TOKEN') {
-    const db = await openDB();
-    const tx = db.transaction('authTokens', 'readwrite');
-    tx.objectStore('authTokens').put({ uid: event.data.uid, token: event.data.token });
-  }
-
   if (event.data?.type === 'SKIP_WAITING') {
     self.skipWaiting();
   }
