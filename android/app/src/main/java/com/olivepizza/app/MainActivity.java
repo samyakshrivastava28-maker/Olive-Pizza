@@ -79,10 +79,31 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(TruecallerPlugin.class);
         registerPlugin(DeliveryPlugin.class);
         registerPlugin(com.olivepizza.app.plugins.AlarmPermissionPlugin.class);
+        registerPlugin(com.olivepizza.app.plugins.LiveOrderNotificationPlugin.class);
         super.onCreate(savedInstanceState);
+
+        // Handle initial cold-start deep link intent if present
+        handleDeepLinkIntent(getIntent());
 
         // 2. Register FCM token natively.
         registerFcmTokenNatively();
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        handleDeepLinkIntent(intent);
+    }
+
+    private void handleDeepLinkIntent(Intent intent) {
+        if (intent == null) return;
+        String url = intent.getStringExtra("url");
+        if (url != null && !url.trim().isEmpty()) {
+            if (intent.getData() == null) {
+                intent.setData(Uri.parse("olivepizza://app" + url));
+            }
+        }
     }
 
     @Override

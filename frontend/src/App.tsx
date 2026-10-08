@@ -86,6 +86,7 @@ import { OwnerGuard, CustomerGuard, AuthGuard } from './components/auth/RouteGua
 import LocationPrompt from './components/ui/LocationPrompt';
 import OrderCancelledModal from './components/customer/OrderCancelledModal';
 import PushNotificationManager from './components/PushNotificationManager';
+import ActiveOrderLiveNotificationSync from './components/ActiveOrderLiveNotificationSync';
 import PizzaLoader from './components/ui/PizzaLoader';
 import { RouteErrorBoundary } from './components/RouteErrorBoundary';
 
@@ -216,6 +217,7 @@ function AppContent() {
       <NativeAppUpdater />
       <CartSyncManager />
       <PushNotificationManager />
+      <ActiveOrderLiveNotificationSync />
       <AutoUpdater />
       <NotificationDiagnosticsOverlay />
       <AnimatePresence mode="wait">

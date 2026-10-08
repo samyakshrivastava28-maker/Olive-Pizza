@@ -17,7 +17,7 @@ export default function FloatingOrderTracker() {
     const q = query(
       collection(db, 'orders'),
       where('userId', '==', user.uid),
-      where('status', 'in', ['accepted', 'preparing', 'ready', 'partner_assigned', 'picked_up', 'out_for_delivery'])
+      where('status', 'in', ['pending', 'placed', 'accepted', 'preparing', 'ready', 'partner_assigned', 'picked_up', 'out_for_delivery'])
     );
     const unsub = onSnapshot(q, (snap) => {
       if (!snap.empty) {
@@ -48,6 +48,7 @@ export default function FloatingOrderTracker() {
           itemsSummary,
           totalAmount: Number(activeOrder.totalAmount || 0),
           etaMinutes: activeOrder.estimatedDeliveryMinutes || (activeOrder.eta ? parseInt(activeOrder.eta) : 25),
+          etaText: activeOrder.eta ? String(activeOrder.eta) : undefined,
           riderName: activeOrder.deliveryPartnerName || '',
           riderPhone: activeOrder.deliveryPartnerPhone || '',
           restaurantName: 'Olive Pizza',
@@ -57,6 +58,9 @@ export default function FloatingOrderTracker() {
 
   const getStatusInfo = (status: string) => {
      switch (status) {
+        case 'pending':
+        case 'placed':
+           return { title: 'Order Placed', icon: CheckCircle, color: 'text-amber-400', bg: 'bg-amber-500/20' };
         case 'accepted':
            return { title: 'Order Accepted', icon: CheckCircle, color: 'text-blue-400', bg: 'bg-blue-500/20' };
         case 'preparing':
