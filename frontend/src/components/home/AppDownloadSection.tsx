@@ -13,8 +13,8 @@ interface PlatformTab {
 }
 
 export default function AppDownloadSection() {
-  const DEFAULT_APK_URL = "https://github.com/samyakshrivastava28-maker/Olive-Pizza/releases/download/latest/olivepizza-customer-383.apk";
-  const DEFAULT_IPA_URL = "https://github.com/samyakshrivastava28-maker/Olive-Pizza/releases/download/latest/olivepizza-customer-383.ipa";
+  const DEFAULT_APK_URL = "https://github.com/samyakshrivastava28-maker/Olive-Pizza/releases/download/latest/olivepizza-customer.apk";
+  const DEFAULT_IPA_URL = "https://github.com/samyakshrivastava28-maker/Olive-Pizza/releases/download/latest/olivepizza-customer.ipa";
 
   const [selectedPlatform, setSelectedPlatform] = useState<"android" | "ios">("android");
   const [platforms, setPlatforms] = useState<Record<string, { url: string; size: string | null }>>({
@@ -169,7 +169,7 @@ export default function AppDownloadSection() {
                   href={currentPlatformInfo.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  download={selectedPlatform === "ios" ? "olivepizza-customer-383.ipa" : "olivepizza-customer-383.apk"}
+                  download={selectedPlatform === "ios" ? "olivepizza-customer.ipa" : "olivepizza-customer.apk"}
                   className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-gradient-to-r from-primary-500 to-amber-500 hover:from-primary-600 hover:to-amber-600 text-white font-extrabold text-sm sm:text-base flex items-center justify-center gap-3 shadow-xl shadow-primary-500/30 transition-all hover:scale-105 active:scale-95"
                 >
                   <Download className="w-5 h-5 animate-bounce" />

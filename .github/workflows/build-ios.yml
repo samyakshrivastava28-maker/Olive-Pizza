@@ -182,11 +182,13 @@ jobs:
           gh release view latest --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1 || \
             gh release create latest --repo "${GITHUB_REPOSITORY}" --title "Olive Pizza Customer — Latest Release" --notes "Latest official builds for Olive Pizza Customer."
 
-          # Delete ANY old iOS assets from 'latest' release so only the latest commit file exists
+          # Delete old commit-specific iOS assets from 'latest' release, preserving canonical
           OLD_IOS=$(gh release view latest --repo "${GITHUB_REPOSITORY}" --json assets --jq '.assets[] | select(.name | test("(\\.(ipa|zip)$)|xcarchive")) | .name')
           for old in $OLD_IOS; do
-            echo "Deleting old release asset: ${old}"
-            gh release delete-asset latest "${old}" --repo "${GITHUB_REPOSITORY}" --yes || true
+            if [ "$old" != "olivepizza-customer.ipa" ] && [ "$old" != "${IPA_NAME}" ]; then
+              echo "Deleting old release asset: ${old}"
+              gh release delete-asset latest "${old}" --repo "${GITHUB_REPOSITORY}" --yes || true
+            fi
           done
 
           # Purge any unrequested desktop assets (.exe, .dmg) to enforce mobile-only matrix
@@ -196,9 +198,11 @@ jobs:
             gh release delete-asset latest "${forbidden}" --repo "${GITHUB_REPOSITORY}" --yes || true
           done
 
-          # Upload the new commit's IPA
+          # Upload the new commit's IPA and canonical IPA
           if [ -f "release-ios/${IPA_NAME}" ]; then
+            cp -f "release-ios/${IPA_NAME}" "release-ios/olivepizza-customer.ipa"
             gh release upload latest "release-ios/${IPA_NAME}" --repo "${GITHUB_REPOSITORY}" --clobber
+            gh release upload latest "release-ios/olivepizza-customer.ipa" --repo "${GITHUB_REPOSITORY}" --clobber
           fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
