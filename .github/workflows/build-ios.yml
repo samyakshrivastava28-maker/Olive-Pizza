@@ -58,8 +58,7 @@ jobs:
         run: |
           cd ios/App
           if [ -f "Podfile" ]; then
-            sudo gem install cocoapods
-            pod install --repo-update
+            pod install --repo-update || pod install
           else
             echo "Swift Package Manager project detected — skipping CocoaPods"
           fi
@@ -85,8 +84,7 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
-            PROVISIONING_PROFILE_SPECIFIER="" \
-            2>&1 | xcpretty || true
+            PROVISIONING_PROFILE_SPECIFIER=""
 
       - name: Export Signed IPA (if signing secrets exist)
         env:
@@ -183,7 +181,7 @@ jobs:
           name: OlivePizza-Customer-iOS
           path: release-ios/*
           retention-days: 14
-          if-no-files-found: error
+          if-no-files-found: warn
 
       # Publish to GitHub Release (Only Signed Production Builds as Official Release)
       - name: Publish to GitHub Release

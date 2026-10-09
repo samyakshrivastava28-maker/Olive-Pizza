@@ -18,13 +18,13 @@
     "@aws-sdk/client-s3": "^3.1104.0",
     "@aws-sdk/s3-request-presigner": "^3.1104.0",
     "@capacitor-firebase/authentication": "^8.3.0",
-    "@capacitor/android": "^8.4.1",
+    "@capacitor/android": "^8.5.3",
     "@capacitor/app": "^8.1.0",
     "@capacitor/browser": "^8.0.3",
-    "@capacitor/cli": "^8.4.1",
-    "@capacitor/core": "^8.4.1",
+    "@capacitor/cli": "^8.5.3",
+    "@capacitor/core": "^8.5.3",
     "@capacitor/geolocation": "^8.2.0",
-    "@capacitor/ios": "^8.5.2",
+    "@capacitor/ios": "^8.5.3",
     "@capacitor/push-notifications": "^8.1.1",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
@@ -70,7 +70,7 @@
     "libphonenumber-js": "^1.13.7",
     "lucide-react": "^1.21.0",
     "mammoth": "^1.12.0",
-    "maplibre-gl": "^6.0.0",
+    "maplibre-gl": "^6.13.0",
     "morgan": "^1.10.0",
     "multer": "^2.2.0",
     "node-cache": "^5.1.2",
@@ -127,5 +127,8 @@
     "typescript": "^6.0.3",
     "vite": "^6.0.11",
     "vitest": "^4.1.10"
+  },
+  "overrides": {
+    "proxy-addr": "^2.0.8"
   }
 }
