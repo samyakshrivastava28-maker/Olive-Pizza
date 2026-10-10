@@ -256,6 +256,10 @@ export default function PushNotificationManager() {
 
       if (res.ok) {
         setTokenRegistered(true);
+        try {
+          localStorage.setItem('olive_fcm_token', token);
+          localStorage.setItem('fcm_token', token);
+        } catch {}
         console.log('[PushManager] ✅ FCM token registered in backend (multi-device safe)');
       } else {
         console.error('[PushManager] Backend token registration failed:', res.status);
@@ -291,6 +295,13 @@ export default function PushNotificationManager() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ queueId: data.queueId, stage: 'delivered', orderId: data.orderId }),
           }).catch(() => {});
+        }
+
+        // Account isolation guard: ignore notifications if logged out or meant for another user
+        if (!user) return;
+        const notifUserId = data.userId || data.targetUserId || data.recipientId;
+        if (notifUserId && user?.uid && notifUserId !== user.uid) {
+          return;
         }
 
         // Customer app must never receive or play new order alarms or continuous alarms
@@ -386,8 +397,16 @@ export default function PushNotificationManager() {
     const unsub = onMessage(messaging, async (payload) => {
       const { notification, data } = payload;
 
+      // Account isolation guard: skip if logged out or if notification belongs to another account
+      if (!user) return;
+      const notifUserId = data?.userId || data?.targetUserId || data?.recipientId || data?.customerUid;
+      if (notifUserId && user?.uid && notifUserId !== user.uid) {
+        console.warn('[PushManager] Dropped notification intended for user', notifUserId, 'current user:', user.uid);
+        return;
+      }
+
       const targetRole = data?.targetRole || data?.role;
-      const category = data?.category;
+      const category = data?.category || data?.stage;
 
       // Role isolation guard: skip if notification belongs to another role
       if (targetRole && targetRole !== userRole) return;
@@ -596,6 +615,23 @@ export default function PushNotificationManager() {
       if (tokenRefreshTimerRef.current) clearInterval(tokenRefreshTimerRef.current);
       foregroundListenerSetupRef.current = false;
       setTokenRegistered(false);
+
+      stopContinuousAlert();
+      toast.dismiss();
+
+      try {
+        const cachedToken = localStorage.getItem('olive_fcm_token') || localStorage.getItem('fcm_token');
+        fetchApi('/api/notifications/token/deregister', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: cachedToken || 'all' }),
+        }).catch(() => {});
+        localStorage.removeItem('activeOrderId');
+        localStorage.removeItem('lastPlacedOrderId');
+        localStorage.removeItem('lastPlacedOrderNumber');
+        localStorage.removeItem('olive_fcm_token');
+        localStorage.removeItem('fcm_token');
+      } catch {}
       return;
     }
 

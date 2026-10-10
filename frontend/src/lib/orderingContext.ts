@@ -156,7 +156,8 @@ export class OrderingContextService {
         body: JSON.stringify(params)
       });
       const data = await res.json();
-      if (!res.ok || !data.serviceable) {
+      const isServiceable = data.serviceable ?? data.isServiceable;
+      if (!res.ok || !isServiceable) {
         return {
           serviceable: false,
           error: data.error || "We currently don't deliver to this location.",

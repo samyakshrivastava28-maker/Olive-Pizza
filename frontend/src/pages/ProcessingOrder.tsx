@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { auth, db } from '../lib/firebase';
-import { doc, setDoc } from 'firebase/firestore';
-import { useCartStore } from '../lib/store';
+import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { useCartStore, useAuthStore } from '../lib/store';
 import { fetchApi } from '../lib/config';
 import toast from 'react-hot-toast';
 import ProcessingOverlay, { CheckoutStep } from '../components/checkout/ProcessingOverlay';
@@ -31,7 +31,18 @@ export default function ProcessingOrder() {
         setStep('preparing');
         const token = await auth.currentUser?.getIdToken();
         const currentUser = auth.currentUser;
-        const customerPhone = currentUser?.phoneNumber || (currentUser as any)?.phone;
+        const storeUser = useAuthStore.getState().user;
+        let customerPhone = currentUser?.phoneNumber || storeUser?.phone || (currentUser as any)?.phone;
+
+        if ((!customerPhone || customerPhone === '9999999999') && currentUser?.uid) {
+          try {
+            const uSnap = await getDoc(doc(db, 'users', currentUser.uid));
+            if (uSnap.exists()) {
+              const uData = uSnap.data();
+              if (uData?.phone) customerPhone = uData.phone;
+            }
+          } catch {}
+        }
         
         if (!customerPhone || customerPhone === '9999999999' || customerPhone.replace(/\D/g, '').length < 10) {
           throw new Error('A verified mobile number is required to place an order. Please complete your phone profile.');

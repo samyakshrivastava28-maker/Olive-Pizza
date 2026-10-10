@@ -15,6 +15,8 @@ export const useAppStore = create<AppState>((set) => ({
 
 // Authentication Store
 import { useDataStore } from './dataStore';
+import { auth } from './firebase';
+import { fetchApi } from './config';
 
 interface AuthState {
   user: any | null;
@@ -66,6 +68,32 @@ export const useAuthStore = create<AuthState>()(
         }
       },
       logout: () => {
+        try {
+          const cachedToken = localStorage.getItem('olive_fcm_token') || localStorage.getItem('fcm_token');
+          const authUser = auth.currentUser;
+          if (authUser) {
+            authUser.getIdToken().then((idToken) => {
+              if (idToken) {
+                fetchApi('/api/notifications/token/deregister', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${idToken}`,
+                  },
+                  body: JSON.stringify({ token: cachedToken || 'all' }),
+                }).catch(() => {});
+              }
+            }).catch(() => {});
+          }
+        } catch {}
+        try {
+          localStorage.removeItem('activeOrderId');
+          localStorage.removeItem('lastPlacedOrderId');
+          localStorage.removeItem('lastPlacedOrderNumber');
+          localStorage.removeItem('olive_fcm_token');
+          localStorage.removeItem('fcm_token');
+          sessionStorage.clear();
+        } catch {}
         useDataStore.getState().cleanup();
         set({ user: null, role: null, isAuthenticated: false, isLoading: false });
       },
@@ -102,56 +130,68 @@ interface CartState {
   clearCart: () => void;
 }
 
-export const useCartStore = create<CartState>((set) => ({
-  items: [],
-  total: 0,
-  franchiseId: null,
-  setFranchiseId: (franchiseId) => set({ franchiseId }),
-  addItem: (item, franchiseId) => set((state) => {
-    if (useAppStore.getState().updateAvailable) {
-      toast.error(
-        (t) => (
-          <div className="flex flex-col gap-2 pointer-events-auto">
-            <p className="font-bold">Update Required</p>
-            <p className="text-sm">You are using an old version which does not support the current version.</p>
-            <button 
-              onClick={() => {
-                toast.dismiss(t.id);
-                window.dispatchEvent(new Event('trigger-pwa-update'));
-              }}
-              className="bg-primary-600 text-white px-3 py-1.5 rounded-lg text-sm font-bold mt-1"
-            >
-              Update Now
-            </button>
-          </div>
-        ),
-        { duration: 8000 }
-      );
-      return state;
-    }
+export const useCartStore = create<CartState>()(
+  persist(
+    (set) => ({
+      items: [],
+      total: 0,
+      franchiseId: null,
+      setFranchiseId: (franchiseId) => set({ franchiseId }),
+      addItem: (item, franchiseId) => set((state) => {
+        if (useAppStore.getState().updateAvailable) {
+          toast.error(
+            (t) => (
+              <div className="flex flex-col gap-2 pointer-events-auto">
+                <p className="font-bold">Update Required</p>
+                <p className="text-sm">You are using an old version which does not support the current version.</p>
+                <button 
+                  onClick={() => {
+                    toast.dismiss(t.id);
+                    window.dispatchEvent(new Event('trigger-pwa-update'));
+                  }}
+                  className="bg-primary-600 text-white px-3 py-1.5 rounded-lg text-sm font-bold mt-1"
+                >
+                  Update Now
+                </button>
+              </div>
+            ),
+            { duration: 8000 }
+          );
+          return state;
+        }
 
-    const existing = state.items.find(i => i.id === item.id);
-    let newItems;
-    if (existing) {
-      newItems = state.items.map(i => i.id === item.id ? { ...i, quantity: i.quantity + item.quantity } : i);
-    } else {
-      newItems = [...state.items, item];
+        const existing = state.items.find(i => i.id === item.id);
+        let newItems;
+        if (existing) {
+          newItems = state.items.map(i => i.id === item.id ? { ...i, quantity: i.quantity + item.quantity } : i);
+        } else {
+          newItems = [...state.items, item];
+        }
+        const total = newItems.reduce((acc, curr) => acc + (curr.price * curr.quantity), 0);
+        return { items: newItems, total, franchiseId: franchiseId || state.franchiseId || (item as any).franchiseId || null };
+      }),
+      removeItem: (id) => set((state) => {
+        const newItems = state.items.filter(i => i.id !== id);
+        const total = newItems.reduce((acc, curr) => acc + (curr.price * curr.quantity), 0);
+        return { items: newItems, total, franchiseId: newItems.length === 0 ? null : state.franchiseId };
+      }),
+      updateQuantity: (id, quantity) => set((state) => {
+        const newItems = state.items.map(i => i.id === id ? { ...i, quantity } : i);
+        const total = newItems.reduce((acc, curr) => acc + (curr.price * curr.quantity), 0);
+        return { items: newItems, total };
+      }),
+      clearCart: () => set({ items: [], total: 0, franchiseId: null }),
+    }),
+    {
+      name: 'olive-cart-store',
+      partialize: (state) => ({
+        items: state.items,
+        total: state.total,
+        franchiseId: state.franchiseId
+      })
     }
-    const total = newItems.reduce((acc, curr) => acc + (curr.price * curr.quantity), 0);
-    return { items: newItems, total, franchiseId: franchiseId || state.franchiseId || (item as any).franchiseId || null };
-  }),
-  removeItem: (id) => set((state) => {
-    const newItems = state.items.filter(i => i.id !== id);
-    const total = newItems.reduce((acc, curr) => acc + (curr.price * curr.quantity), 0);
-    return { items: newItems, total, franchiseId: newItems.length === 0 ? null : state.franchiseId };
-  }),
-  updateQuantity: (id, quantity) => set((state) => {
-    const newItems = state.items.map(i => i.id === id ? { ...i, quantity } : i);
-    const total = newItems.reduce((acc, curr) => acc + (curr.price * curr.quantity), 0);
-    return { items: newItems, total };
-  }),
-  clearCart: () => set({ items: [], total: 0, franchiseId: null }),
-}));
+  )
+);
 
 // Owner POS Alert Settings Store
 interface OwnerSettingsState {

@@ -875,7 +875,7 @@ export default function Checkout() {
              </button>
            ) : (
              <button 
-               onClick={handlePlaceOrder}
+               data-testid="confirm-place-order-btn" onClick={handlePlaceOrder}
                className="flex-1 bg-champagne hover:bg-champagne/90 text-primary-950 font-black rounded-2xl shadow-md active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 py-3.5 text-xs sm:text-sm cursor-pointer transition-transform"
              >
                Confirm & Place Order • ₹{finalTotal} <ChevronLeft className="w-4 h-4 rotate-180 text-primary-950" />

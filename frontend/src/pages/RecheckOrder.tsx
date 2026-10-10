@@ -142,7 +142,7 @@ export default function RecheckOrder() {
            </button>
            <button 
              disabled={validating || isPaused}
-             onClick={handleConfirm}
+             data-testid="confirm-order-btn" onClick={handleConfirm}
              className="flex-1 bg-gradient-to-r from-primary-600 to-primary-500 text-white font-black text-lg rounded-2xl shadow-[0_0_20px_rgba(85,119,90,0.3)] hover:shadow-[0_0_30px_rgba(85,119,90,0.5)] transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 disabled:grayscale py-4 overflow-hidden relative group"
            >
              <div className="absolute inset-0 bg-white/20 translate-y-[100%] group-hover:translate-y-0 transition-transform duration-300" />

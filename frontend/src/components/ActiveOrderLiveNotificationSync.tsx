@@ -4,6 +4,7 @@ import { db, auth } from '../lib/firebase';
 import { doc, onSnapshot, collection, query, where, getDocs } from 'firebase/firestore';
 import { useAuthStore } from '../lib/store';
 import { useLiveOrderTracking } from '../hooks/useLiveOrderTracking';
+import { LiveOrderNotificationService } from '../services/LiveOrderNotificationService';
 import { Capacitor } from '@capacitor/core';
 import { App as CapApp } from '@capacitor/app';
 
@@ -69,6 +70,20 @@ export default function ActiveOrderLiveNotificationSync() {
       return;
     }
 
+    const currentUid = user?.uid || auth.currentUser?.uid;
+
+    // Strict account isolation: if not authenticated, detach listener and clear active order immediately
+    if (!isAuthenticated || !currentUid) {
+      if (activeOrderIdRef.current || activeOrder) {
+        if (activeOrderIdRef.current) {
+          LiveOrderNotificationService.clearLiveOrderNotification(activeOrderIdRef.current).catch(() => {});
+        }
+        setActiveOrder(null);
+        activeOrderIdRef.current = null;
+      }
+      return;
+    }
+
     let unsubDoc: (() => void) | null = null;
 
     const attachDocListener = (orderId: string) => {
@@ -90,6 +105,24 @@ export default function ActiveOrderLiveNotificationSync() {
           }
 
           const data = { id: snap.id, ...(snap.data() as any) };
+
+          // Cross-Account Isolation: strictly verify order belongs to current user
+          const orderUserId = data.userId || data.customerId;
+          if (orderUserId && orderUserId !== currentUid) {
+            console.warn('[ActiveOrderLiveSync] Order belongs to another account, dropping listener:', snap.id);
+            try {
+              localStorage.removeItem('activeOrderId');
+              localStorage.removeItem('lastPlacedOrderId');
+            } catch {}
+            setActiveOrder(null);
+            activeOrderIdRef.current = null;
+            if (unsubDoc) {
+              unsubDoc();
+              unsubDoc = null;
+            }
+            return;
+          }
+
           const status = (data.status || '').toLowerCase();
 
           // Active order or freshly transitioned terminal state
@@ -126,23 +159,20 @@ export default function ActiveOrderLiveNotificationSync() {
     }
 
     // Step B: Query active order of authenticated user from Firestore
-    const currentUid = user?.uid || auth.currentUser?.uid;
-    if (currentUid && isAuthenticated) {
-      const q = query(
-        collection(db, 'orders'),
-        where('userId', '==', currentUid),
-        where('status', 'in', ['pending', 'placed', 'accepted', 'preparing', 'ready', 'partner_assigned', 'picked_up', 'out_for_delivery'])
-      );
+    const q = query(
+      collection(db, 'orders'),
+      where('userId', '==', currentUid),
+      where('status', 'in', ['pending', 'placed', 'accepted', 'preparing', 'ready', 'partner_assigned', 'picked_up', 'out_for_delivery'])
+    );
 
-      getDocs(q).then((snap) => {
-        if (!snap.empty) {
-          const docItem = snap.docs[0];
-          attachDocListener(docItem.id);
-        }
-      }).catch(err => {
-        console.warn('[ActiveOrderLiveSync] Failed to query user active orders:', err);
-      });
-    }
+    getDocs(q).then((snap) => {
+      if (!snap.empty) {
+        const docItem = snap.docs[0];
+        attachDocListener(docItem.id);
+      }
+    }).catch(err => {
+      console.warn('[ActiveOrderLiveSync] Failed to query user active orders:', err);
+    });
 
     return () => {
       if (unsubDoc) unsubDoc();

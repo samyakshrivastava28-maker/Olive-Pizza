@@ -454,6 +454,14 @@ export default function OrderTracking() {
     return order.items.map((i: any) => typeof i === 'string' ? i : `${i.quantity || 1}× ${i.name || 'Item'}`).join(', ');
   }, [order?.items]);
 
+  const mapCenter = useMemo(() => {
+    if (partnerLocation) return partnerLocation;
+    if (order?.deliveryAddress?.lat && order?.deliveryAddress?.lng) {
+      return { lat: Number(order.deliveryAddress.lat), lng: Number(order.deliveryAddress.lng) };
+    }
+    return { lat: RESTAURANT_LOCATION.lat, lng: RESTAURANT_LOCATION.lng };
+  }, [partnerLocation, order?.deliveryAddress]);
+
   useLiveOrderTracking(
     order
       ? {
@@ -1128,14 +1136,6 @@ export default function OrderTracking() {
 
   const stageIndex = getStageIndex(order.status);
   const statusLabel = order.status === "accepted" ? "Order Accepted" : order.status === "preparing" ? "Preparing Your Pizza" : order.status === "ready" || order.status === "partner_assigned" || order.status === "picked_up" ? "Packing Your Order" : order.status === "out_for_delivery" ? "On the Way" : "Processing";
-
-  const mapCenter = useMemo(() => {
-    if (partnerLocation) return partnerLocation;
-    if (order?.deliveryAddress?.lat && order?.deliveryAddress?.lng) {
-      return { lat: Number(order.deliveryAddress.lat), lng: Number(order.deliveryAddress.lng) };
-    }
-    return { lat: RESTAURANT_LOCATION.lat, lng: RESTAURANT_LOCATION.lng };
-  }, [partnerLocation, order?.deliveryAddress]);
 
   return (
     <>

@@ -104,6 +104,18 @@ messaging.onBackgroundMessage(async (payload) => {
     return;
   }
 
+  // Customer application must never display operational restaurant new-order alarms
+  if (
+    data.category === 'owner_orders' ||
+    data.category === 'alarm_actionable' ||
+    data.category === 'new_order' ||
+    data.stage === 'new_order' ||
+    data.type === 'NEW_ORDER'
+  ) {
+    console.log('[SW] Dropped operational restaurant alarm from customer SW');
+    return;
+  }
+
   console.log('[SW] Background message:', data.tag || 'no-tag');
 
   const tag = data.tag || `notification_${Date.now()}`;
