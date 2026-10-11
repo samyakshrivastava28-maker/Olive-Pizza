@@ -13,8 +13,8 @@ interface PlatformTab {
 }
 
 export default function AppDownloadSection() {
-  const DEFAULT_APK_URL = "https://github.com/samyakshrivastava28-maker/Olive-Pizza/releases/download/latest/olivepizza-customer.apk";
-  const DEFAULT_IPA_URL = "https://github.com/samyakshrivastava28-maker/Olive-Pizza/releases/download/latest/olivepizza-customer.ipa";
+  const DEFAULT_APK_URL = "/api/github/download-apk?app=customer";
+  const DEFAULT_IPA_URL = "/api/github/download-ipa?app=customer";
 
   const [selectedPlatform, setSelectedPlatform] = useState<"android" | "ios">("android");
   const [platforms, setPlatforms] = useState<Record<string, { url: string; size: string | null }>>({
