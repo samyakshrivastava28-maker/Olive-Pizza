@@ -1,4 +1,5 @@
 import { fetchApi } from './config';
+import { invalidateMenuCache, invalidateBootstrapCache } from './api';
 
 export interface CustomerOrderingContext {
   customerId: string;
@@ -47,10 +48,15 @@ export class OrderingContextService {
   }
 
   public static setCachedContext(context: CustomerOrderingContext): void {
+    const previousBranchId = this.cachedContext?.branchId;
     this.cachedContext = context;
     try {
       localStorage.setItem(CONTEXT_STORAGE_KEY, JSON.stringify(context));
     } catch (e) {}
+    if (previousBranchId !== context.branchId) {
+      invalidateMenuCache(context.branchId);
+      invalidateBootstrapCache();
+    }
   }
 
   public static clearCachedContext(): void {
@@ -58,6 +64,7 @@ export class OrderingContextService {
     try {
       localStorage.removeItem(CONTEXT_STORAGE_KEY);
     } catch (e) {}
+    invalidateBootstrapCache();
   }
 
   /**

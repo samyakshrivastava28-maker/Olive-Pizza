@@ -4,6 +4,7 @@ import { get, set, del } from 'idb-keyval';
 import { db } from './firebase';
 import { collection, onSnapshot, query, where, doc } from 'firebase/firestore';
 import { isItemActiveAndValid } from './scheduling';
+import { fetchMenuBootstrap, fetchRestaurantStatus } from './api';
 
 interface DataState {
   products: any[];
@@ -172,6 +173,25 @@ export const useDataStore = create<DataState>()(
           unsubscribers.push(unsubSettingsGlobal, unsubSettingsStore);
         };
         setupSettings();
+
+        // Immediate 0ms/fast bootstrap from Redis-cached API while Firestore listeners connect
+        fetchRestaurantStatus().then((res) => {
+          if (res?.success && (res.status || res.restaurantStatus)) {
+            const currentStatus = get().storeStatus;
+            if (currentStatus?.isLoading) {
+              applySettingsData(res.status || res.restaurantStatus);
+            }
+          }
+        }).catch(() => {});
+
+        fetchMenuBootstrap().then((res) => {
+          if (res?.success && Array.isArray(res.products) && res.products.length > 0) {
+            const currentProducts = get().products;
+            if (!currentProducts || currentProducts.length === 0) {
+              set({ products: res.products });
+            }
+          }
+        }).catch(() => {});
 
         const toTimeMs = (val: any): number => {
           if (!val) return 0;
