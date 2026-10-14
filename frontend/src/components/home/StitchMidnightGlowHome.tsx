@@ -17,7 +17,7 @@ import ProductCard from "../ProductCard";
 import ProductCustomizationModal from "../menu/ProductCustomizationModal";
 import LiveCoupons from "./LiveCoupons";
 import LiveAdvertisements from "./LiveAdvertisements";
-import CategoryDiscoveryRail from "./CategoryDiscoveryRail";
+import CravingCategoriesSection from "./CravingCategoriesSection";
 import toast from "react-hot-toast";
 
 // ── Canonical Fallback Menu Items (Guarantees zero-blank screen if network/IDB lags) ──
@@ -462,8 +462,11 @@ export default function StitchMidnightGlowHome() {
         </div>
       </header>
 
-      {/* ── 3. Visual Category Discovery Rail ───────────────────────── */}
-      <CategoryDiscoveryRail />
+      {/* ── 3. Protected shared category rail — identical to every custom homepage */}
+      <CravingCategoriesSection config={{
+        headline: "WHAT'S YOUR CRAVING TODAY?",
+        subtitle: 'Handcrafted fresh to order in Rajnandgaon.',
+      }} />
 
       {/* ── 4. Kitchen Spotlight Hero Card (Food is Hero) ───────────── */}
       {heroProduct && (
