@@ -159,8 +159,13 @@ const getDefaultHomepageSchema = (): PageSchema => {
 
 const readCachedHomepageSchema = (): PageSchema | null => {
   const cached = clientDataCache.get<{ success?: boolean; config?: unknown }>(HOMEPAGE_LIVE_CACHE_KEY);
-  if (cached?.success && isValidPageSchema(cached.config)) return cached.config;
-  return isValidPageSchema(cachedPageSchema) ? cachedPageSchema : null;
+  // The bundled default is code-level fallback, not a "custom homepage" cache entry.
+  if (cached?.success && isValidPageSchema(cached.config) && cached.config.pageId !== 'default') {
+    return cached.config;
+  }
+  return isValidPageSchema(cachedPageSchema) && cachedPageSchema.pageId !== 'default'
+    ? cachedPageSchema
+    : null;
 };
 
 // ─── Main Component ───────────────────────────────────────────────────────────
@@ -185,7 +190,13 @@ export default function Home() {
       if (fallbackTimer) clearTimeout(fallbackTimer);
       cachedPageSchema = schema;
       setPageSchema(schema);
-      clientDataCache.set(HOMEPAGE_LIVE_CACHE_KEY, { success: true, config: schema }, 60 * 1000, true);
+      if (schema.pageId === 'default') {
+        // The default is always available in the bundle; don't cache it as if it were
+        // a custom page or allow it to suppress an online refresh for 60 seconds.
+        clientDataCache.invalidate(HOMEPAGE_LIVE_CACHE_KEY);
+      } else {
+        clientDataCache.set(HOMEPAGE_LIVE_CACHE_KEY, { success: true, config: schema }, 60 * 1000, true);
+      }
     };
 
     const applyServerPayload = (payload: { success?: boolean; config?: unknown } | null | undefined) => {
