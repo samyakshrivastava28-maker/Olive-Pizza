@@ -43,6 +43,28 @@ window.fetch = async (...args) => {
 // 2. Validate env vars (logs warnings only, never throws)
 validateEnvironment();
 
+// 2.1 Register the existing FCM worker at the app root for bounded offline shell caching.
+// This is deliberately web-only: Capacitor apps already ship the shell inside the native bundle.
+// It runs after page load and never blocks first render. The same worker continues handling FCM.
+const registerOfflineAppShell = () => {
+  if (!import.meta.env.PROD || typeof window === 'undefined' ||
+      !('serviceWorker' in navigator) || !window.isSecureContext ||
+      Capacitor.isNativePlatform()) return;
+
+  if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') return;
+
+  navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' })
+    .catch(() => {
+      // Offline support must be best-effort and must never prevent the storefront from opening.
+    });
+};
+
+if (document.readyState === 'complete') {
+  registerOfflineAppShell();
+} else {
+  window.addEventListener('load', registerOfflineAppShell, { once: true });
+}
+
 // 3. Lazy-start version manager to not block initial render
 import('./lib/versionManager').then(({ initVersionManager }) => {
   try { initVersionManager(); } catch { /* non-fatal */ }
