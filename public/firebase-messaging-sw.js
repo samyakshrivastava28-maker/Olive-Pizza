@@ -369,11 +369,40 @@ async function cacheShellResponse(response) {
 
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
-    // Best effort only: a first-ever install while offline has no shell to save.
+    // Pre-cache the shell plus its entry scripts/styles before controlling the page.
+    // This means the very first successful online visit prepares the basics for the next
+    // offline reload, instead of waiting until a later navigation to cache the JS bundle.
     try {
       const response = await fetch('/', { cache: 'reload' });
-      await cacheShellResponse(response);
-    } catch (_) {}
+      if (response && response.ok) {
+        await cacheShellResponse(response);
+        const html = await response.clone().text();
+        const referencedAssets = new Set();
+        const assetPattern = /(?:src|href)=["']([^"'#]+\.(?:m?js|css|woff2?|ttf|otf)(?:\?[^"']*)?)["']/gi;
+        let match;
+        while ((match = assetPattern.exec(html)) !== null) {
+          try {
+            const assetUrl = new URL(match[1], self.location.origin);
+            if (assetUrl.origin === self.location.origin &&
+                /\.(?:m?js|css|woff2?|ttf|otf)$/i.test(assetUrl.pathname)) {
+              referencedAssets.add(assetUrl.href);
+            }
+          } catch (_) {}
+        }
+        const staticCache = await caches.open(OP_STATIC_CACHE);
+        await Promise.all(Array.from(referencedAssets).map(async (assetUrl) => {
+          try {
+            const assetResponse = await fetch(assetUrl);
+            if (assetResponse && assetResponse.ok) {
+              await staticCache.put(assetUrl, assetResponse.clone());
+            }
+          } catch (_) {}
+        }));
+        await trimCache(OP_STATIC_CACHE, OP_STATIC_CACHE_LIMIT);
+      }
+    } catch (_) {
+      // An offline first installation cannot pre-cache files; keep install best-effort.
+    }
     await self.skipWaiting();
   })());
 });
