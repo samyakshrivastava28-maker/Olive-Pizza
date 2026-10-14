@@ -34,6 +34,7 @@ import LoyaltyRewards from "../components/customer/dashboard/LoyaltyRewards";
 import AddressBook from "../components/customer/AddressBook";
 import PhoneUpdateModal from "../components/customer/dashboard/PhoneUpdateModal";
 import PrivacyCenter from "../components/customer/privacy/PrivacyCenter";
+import AccountSettings from "../components/customer/dashboard/AccountSettings";
 import SEO from "../components/SEO";
 import { fetchApi } from "../lib/config";
 import toast from "react-hot-toast";
@@ -83,6 +84,13 @@ export default function CustomerDashboard() {
   const [activeTab, setActiveTab] = useState(initialTab);
   const navigate = useNavigate();
   const { user, setUser, logout } = useAuthStore();
+
+  useEffect(() => {
+    const tabFromUrl = searchParams.get('tab');
+    if (tabFromUrl && tabFromUrl !== activeTab) {
+      setActiveTab(tabFromUrl);
+    }
+  }, [searchParams, activeTab]);
 
   // Profile Edit State
   const [nameInput, setNameInput] = useState(user?.name || "");
@@ -564,7 +572,7 @@ export default function CustomerDashboard() {
             </motion.div>
           )}
 
-          {/* TAB: ACCOUNT & SECURITY */}
+          {/* TAB: ACCOUNT & SETTINGS */}
           {activeTab === "account" && (
             <motion.div
               key="account"
@@ -572,53 +580,8 @@ export default function CustomerDashboard() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.25 }}
-              className="bg-white rounded-3xl p-6 sm:p-8 border border-orange-100/90 shadow-sm space-y-6"
             >
-              <div>
-                <h3 className="text-lg font-black text-slate-900">
-                  Account Settings
-                </h3>
-                <p className="text-xs text-slate-500 mt-1">
-                  Manage session credentials and security
-                </p>
-              </div>
-
-              <div className="pt-4 border-t border-slate-100 space-y-4">
-                <div className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-200/70">
-                  <div>
-                    <h5 className="text-sm font-bold text-slate-800">
-                      Sign Out
-                    </h5>
-                    <p className="text-xs text-slate-500">
-                      Safely log out of your session on this device
-                    </p>
-                  </div>
-                  <button
-                    onClick={handleLogout}
-                    className="px-4 py-2 bg-white border border-red-200 text-red-600 hover:bg-red-50 font-bold text-xs rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
-                  >
-                    <LogOut className="w-3.5 h-3.5" />
-                    <span>Sign Out</span>
-                  </button>
-                </div>
-
-                <div className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-200/70">
-                  <div>
-                    <h5 className="text-sm font-bold text-slate-800">
-                      Delete Account Data
-                    </h5>
-                    <p className="text-xs text-slate-500">
-                      Permanently request removal of your account
-                    </p>
-                  </div>
-                  <Link
-                    to="/delete-account"
-                    className="px-4 py-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 font-bold text-xs rounded-xl transition-colors"
-                  >
-                    Manage
-                  </Link>
-                </div>
-              </div>
+              <AccountSettings />
             </motion.div>
           )}
         </AnimatePresence>

@@ -1166,16 +1166,27 @@ export default function OrderTracking() {
               </span>
             </div>
 
-            <button
-              onClick={() => {
-                navigator.clipboard.writeText(window.location.href);
-                toast.success("Tracking link copied! 📋");
-              }}
-              aria-label="Share Link"
-              className="w-10 h-10 flex items-center justify-center bg-white hover:bg-slate-50 border border-slate-200 rounded-2xl text-slate-700 hover:text-slate-900 transition-all active:scale-95 shadow-xs cursor-pointer"
-            >
-              <Share2 className="w-4 h-4 text-primary-600" />
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => navigate(`/bill/${order.billReference || order.id || orderId}`)}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-[#064E3B] hover:bg-[#064E3B]/90 text-champagne text-xs font-bold shadow-xs transition-all active:scale-95 cursor-pointer border border-champagne/30"
+                title="View Official Bill"
+              >
+                <Receipt className="w-3.5 h-3.5 text-champagne" />
+                <span className="hidden sm:inline">View Bill</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(window.location.href);
+                  toast.success("Tracking link copied! 📋");
+                }}
+                aria-label="Share Link"
+                className="w-10 h-10 flex items-center justify-center bg-white hover:bg-slate-50 border border-slate-200 rounded-2xl text-slate-700 hover:text-slate-900 transition-all active:scale-95 shadow-xs cursor-pointer"
+              >
+                <Share2 className="w-4 h-4 text-primary-600" />
+              </button>
+            </div>
           </div>
 
           {/* ── Responsive Grid: Left Column (Status & Details) / Right Column (Map) ── */}
@@ -1212,6 +1223,13 @@ export default function OrderTracking() {
                         ? 'Your order has been collected and is actively en-route to your address.'
                         : 'Your order is confirmed and scheduled for instant preparation.'}
                     </p>
+                    <button
+                      onClick={() => navigate(`/bill/${order.billReference || order.id || orderId}`)}
+                      className="mt-3 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-champagne hover:bg-champagne/90 text-[#064E3B] font-bold text-xs shadow-xs transition-all active:scale-95 cursor-pointer"
+                    >
+                      <Receipt className="w-3.5 h-3.5 text-[#064E3B]" />
+                      <span>View Official Bill</span>
+                    </button>
                   </div>
 
                   {/* Timing & Distance Pill */}

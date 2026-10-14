@@ -264,6 +264,13 @@ self.addEventListener('notificationclick', event => {
     return;
   }
 
+  // View Bill
+  if (action === 'view_bill') {
+    const billRef = notifData.billReference || notifData.billNumber || orderId;
+    event.waitUntil(openWindow(billRef ? `/bill/${billRef}` : '/'));
+    return;
+  }
+
   // Rate or Reorder
   if (action === 'rate') { event.waitUntil(openWindow(`/dashboard?rate=${orderId}`)); return; }
   if (action === 'reorder') { event.waitUntil(openWindow(`/menu?reorder=${orderId}`)); return; }

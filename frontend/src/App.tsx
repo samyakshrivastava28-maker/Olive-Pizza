@@ -264,6 +264,9 @@ function AppContent() {
                   <Route element={<Suspense fallback={<PizzaLoader />}><OnboardingGuard /></Suspense>}>
                     <Route path="/dashboard" element={<CustomerDashboard />} />
                     <Route path="/profile" element={<CustomerDashboard />} />
+                    <Route path="/settings" element={<Navigate to="/profile?tab=account" replace />} />
+                    <Route path="/account-settings" element={<Navigate to="/profile?tab=account" replace />} />
+                    <Route path="/account" element={<Navigate to="/profile?tab=account" replace />} />
                     <Route path="/privacy-center" element={<Navigate to="/profile?tab=privacy" replace />} />
                     <Route path="/privacy" element={<Navigate to="/profile?tab=privacy" replace />} />
                   </Route>

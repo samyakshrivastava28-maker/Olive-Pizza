@@ -35,7 +35,11 @@ import { NOTIFICATION_CHANNELS, NOTIFICATION_ACTION_TYPES } from '../lib/notific
 import { fetchApi } from '../lib/config';
 const BROADCAST_CHANNEL = 'olive_pizza_notifications';
 
-function resolveCustomerUrl(url?: string, orderId?: string): string {
+function resolveCustomerUrl(url?: string, orderId?: string, actionId?: string): string {
+  if (actionId === 'view_bill' || url?.startsWith('/bill/')) {
+    if (url && url.startsWith('/bill/')) return url;
+    return orderId ? `/bill/${orderId}` : '/';
+  }
   if (url && url.startsWith('/order-cancelled/')) return url;
   if (!url) return orderId ? `/order-tracking/${orderId}` : '/';
   if (
@@ -370,9 +374,15 @@ export default function PushNotificationManager() {
       // Handle notification tap (app open / brought to foreground)
       const actionHandler = PushNotifications.addListener('pushNotificationActionPerformed', (notification) => {
         const data = notification.notification.data || {};
+        const actionId = (notification as any).actionId || data.actionId || data.action;
         stopContinuousAlert();
-        const targetUrl = resolveCustomerUrl(data.url, data.orderId);
-        navigate(targetUrl);
+        if (actionId === 'view_bill') {
+          const billRef = data.billReference || data.billNumber || data.orderId;
+          navigate(billRef ? `/bill/${billRef}` : '/');
+        } else {
+          const targetUrl = resolveCustomerUrl(data.url, data.orderId, actionId);
+          navigate(targetUrl);
+        }
 
         if (data.queueId) {
           fetchApi('/api/notifications/track', {
