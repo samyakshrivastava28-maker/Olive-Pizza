@@ -1,0 +1,54 @@
+name: Homepage regression checks
+
+on:
+  pull_request:
+    paths:
+      - 'frontend/src/pages/Home.tsx'
+      - 'frontend/src/main.tsx'
+      - 'public/firebase-messaging-sw.js'
+      - 'frontend/src/components/home/**'
+      - '.github/workflows/homepage-regression-checks.yml'
+      - 'frontend/src/types/PageSchema.ts'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig.json'
+      - 'vite.config.ts'
+      - '.github/workflows/homepage-regression-checks.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: homepage-checks-customer-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web-check:
+    name: Type-check, tests, and production build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Check service-worker syntax
+        run: node --check public/firebase-messaging-sw.js
+
+      - name: Install locked dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Type-check
+        run: npm run lint
+
+      - name: Homepage and application tests
+        run: npm test
+
+      - name: Production build
+        run: npm run build

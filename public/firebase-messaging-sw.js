@@ -339,7 +339,169 @@ self.addEventListener('message', async event => {
   }
 });
 
+// ─── Lightweight offline homepage/app-shell cache ─────────────────────────────
+// This shares the existing FCM worker file and does not cache API or account data.
+// LocalStorage in the app stores the last-known-good homepage schema; this cache
+// keeps the SPA shell and already-viewed public assets available for reloads offline.
+const OP_HOME_SHELL_CACHE = 'olive-home-shell-v1';
+const OP_STATIC_CACHE = 'olive-static-assets-v1';
+const OP_PUBLIC_IMAGE_CACHE = 'olive-public-images-v1';
+const OP_STATIC_CACHE_LIMIT = 120;
+const OP_IMAGE_CACHE_LIMIT = 60;
+
+async function trimCache(cacheName, maxEntries) {
+  try {
+    const cache = await caches.open(cacheName);
+    const keys = await cache.keys();
+    const excess = keys.length - maxEntries;
+    if (excess > 0) await Promise.all(keys.slice(0, excess).map((key) => cache.delete(key)));
+  } catch (_) {
+    // Caching is an enhancement. Quota/privacy-mode failures must never break the app.
+  }
+}
+
+async function cacheShellResponse(response) {
+  if (!response || !response.ok) return;
+  const cache = await caches.open(OP_HOME_SHELL_CACHE);
+  const rootUrl = new URL('/', self.location.origin).href;
+  const indexUrl = new URL('/index.html', self.location.origin).href;
+  await cache.put(rootUrl, response.clone());
+  await cache.put(indexUrl, response.clone());
+}
+
+self.addEventListener('install', (event) => {
+  event.waitUntil((async () => {
+    // Pre-cache the shell plus its entry scripts/styles before controlling the page.
+    // This means the very first successful online visit prepares the basics for the next
+    // offline reload, instead of waiting until a later navigation to cache the JS bundle.
+    try {
+      const response = await fetch('/', { cache: 'reload' });
+      if (response && response.ok) {
+        await cacheShellResponse(response);
+        const html = await response.clone().text();
+        const referencedAssets = new Set();
+        const assetPattern = /(?:src|href)=["']([^"'#]+\.(?:m?js|css|woff2?|ttf|otf)(?:\?[^"']*)?)["']/gi;
+        let match;
+        while ((match = assetPattern.exec(html)) !== null) {
+          try {
+            const assetUrl = new URL(match[1], self.location.origin);
+            if (assetUrl.origin === self.location.origin &&
+                /\.(?:m?js|css|woff2?|ttf|otf)$/i.test(assetUrl.pathname)) {
+              referencedAssets.add(assetUrl.href);
+            }
+          } catch (_) {}
+        }
+        const staticCache = await caches.open(OP_STATIC_CACHE);
+        await Promise.all(Array.from(referencedAssets).map(async (assetUrl) => {
+          try {
+            const assetResponse = await fetch(assetUrl);
+            if (assetResponse && assetResponse.ok) {
+              await staticCache.put(assetUrl, assetResponse.clone());
+            }
+          } catch (_) {}
+        }));
+        await trimCache(OP_STATIC_CACHE, OP_STATIC_CACHE_LIMIT);
+      }
+    } catch (_) {
+      // An offline first installation cannot pre-cache files; keep install best-effort.
+    }
+    await self.skipWaiting();
+  })());
+});
+
+self.addEventListener('fetch', (event) => {
+  const request = event.request;
+  if (request.method !== 'GET') return;
+
+  const url = new URL(request.url);
+  const sameOrigin = url.origin === self.location.origin;
+  const path = url.pathname;
+
+  // Never cache business APIs or personal/transactional data.
+  if (sameOrigin && (
+    path.startsWith('/api/') ||
+    path.startsWith('/website-manager/') ||
+    path.startsWith('/auth/') ||
+    path.startsWith('/checkout/') ||
+    path.startsWith('/payments/')
+  )) return;
+
+  if (request.mode === 'navigate' && sameOrigin) {
+    event.respondWith((async () => {
+      try {
+        const response = await fetch(request);
+        if (response && response.ok) {
+          try { await cacheShellResponse(response); } catch (_) {}
+        }
+        return response;
+      } catch (_) {
+        let cached = null;
+        try {
+          const cache = await caches.open(OP_HOME_SHELL_CACHE);
+          cached = await cache.match(request) ||
+            await cache.match(new URL('/', self.location.origin).href) ||
+            await cache.match(new URL('/index.html', self.location.origin).href);
+        } catch (_) {}
+        return cached || new Response(
+          '<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Olive Pizza</title><body style="font-family:system-ui;padding:24px"><h1>Olive Pizza</h1><p>You are offline and this device has not cached the app yet. Reconnect once to save the homepage for offline use.</p></body></html>',
+          { headers: { 'Content-Type': 'text/html; charset=utf-8' }, status: 200 }
+        );
+      }
+    })());
+    return;
+  }
+
+  const isSameOriginStatic = sameOrigin && /\.(?:js|css|woff2?|ttf|otf|svg|png|webp|avif|ico)$/i.test(path);
+  const isPublicImage = !sameOrigin &&
+    ['res.cloudinary.com', 'images.unsplash.com'].includes(url.hostname) &&
+    (request.destination === 'image' || /\.(?:jpe?g|png|webp|avif)(?:$|\?)/i.test(url.href));
+
+  if (!isSameOriginStatic && !isPublicImage) return;
+
+  const cacheName = isPublicImage ? OP_PUBLIC_IMAGE_CACHE : OP_STATIC_CACHE;
+  const maxEntries = isPublicImage ? OP_IMAGE_CACHE_LIMIT : OP_STATIC_CACHE_LIMIT;
+  event.respondWith((async () => {
+    let cache;
+    let cached = null;
+    try {
+      cache = await caches.open(cacheName);
+      cached = await cache.match(request);
+    } catch (_) {
+      // If Cache Storage is unavailable, preserve the network path instead of failing the request.
+      return fetch(request).catch(() => new Response('', { status: 504, statusText: 'Offline asset unavailable' }));
+    }
+    const refresh = fetch(request).then(async (response) => {
+      if (response && (response.ok || response.type === 'opaque')) {
+        try {
+          await cache.put(request, response.clone());
+          await trimCache(cacheName, maxEntries);
+        } catch (_) {}
+      }
+      return response;
+    }).catch(() => null);
+
+    if (cached) {
+      event.waitUntil(refresh.then(() => undefined));
+      return cached;
+    }
+
+    const response = await refresh;
+    return response || new Response('', { status: 504, statusText: 'Offline asset unavailable' });
+  })());
+});
+
 // ─── Activate ─────────────────────────────────────────────────────────────────
 self.addEventListener('activate', event => {
-  event.waitUntil(clients.claim());
+  event.waitUntil((async () => {
+    const currentCaches = new Set([OP_HOME_SHELL_CACHE, OP_STATIC_CACHE, OP_PUBLIC_IMAGE_CACHE]);
+    const allCaches = await caches.keys();
+    await Promise.all(allCaches
+      .filter((name) =>
+        (name.startsWith('olive-home-shell-') ||
+         name.startsWith('olive-static-assets-') ||
+         name.startsWith('olive-public-images-')) && !currentCaches.has(name)
+      )
+      .map((name) => caches.delete(name)));
+    await clients.claim();
+  })());
 });

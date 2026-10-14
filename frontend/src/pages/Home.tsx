@@ -138,9 +138,35 @@ function PremiumSectionWrapper({
 import PizzaLoader from "../components/ui/PizzaLoader";
 import { PREDEFINED_TEMPLATES } from "../utils/HomePageTemplates";
 
-// Module-level cache for live homepage schema (prevents redundant fetches on rapid navigation)
+// Last-known-good homepage is kept in the existing persistent client cache.
+// It is intentionally read synchronously so a returning customer never sees a blank
+// screen while the network revalidates the current published homepage.
+const HOMEPAGE_LIVE_CACHE_KEY = 'public:homepage_live';
 let cachedPageSchema: PageSchema | null = null;
-let lastPageSchemaFetch = 0;
+
+const isValidPageSchema = (config: unknown): config is PageSchema => {
+  if (!config || typeof config !== 'object') return false;
+  const candidate = config as Partial<PageSchema>;
+  return typeof candidate.pageId === 'string' &&
+    Array.isArray((candidate as any).sections) &&
+    (candidate as any).sections.length > 0;
+};
+
+const getDefaultHomepageSchema = (): PageSchema => {
+  const fallback = PREDEFINED_TEMPLATES.find((template) => template.pageId === 'default') || PREDEFINED_TEMPLATES[0];
+  return fallback as PageSchema;
+};
+
+const readCachedHomepageSchema = (): PageSchema | null => {
+  const cached = clientDataCache.get<{ success?: boolean; config?: unknown }>(HOMEPAGE_LIVE_CACHE_KEY);
+  // The bundled default is code-level fallback, not a "custom homepage" cache entry.
+  if (cached?.success && isValidPageSchema(cached.config) && cached.config.pageId !== 'default') {
+    return cached.config;
+  }
+  return isValidPageSchema(cachedPageSchema) && cachedPageSchema.pageId !== 'default'
+    ? cachedPageSchema
+    : null;
+};
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function Home() {
@@ -149,57 +175,102 @@ export default function Home() {
   const addItem = useCartStore((s) => s.addItem);
   const navigate = useNavigate();
 
-  const [pageSchema, setPageSchema] = useState<PageSchema>(() => cachedPageSchema || PREDEFINED_TEMPLATES[0]);
+  const [pageSchema, setPageSchema] = useState<PageSchema | null>(() => readCachedHomepageSchema());
 
-  // Real-time synchronization with published homepage configuration
+  // A published custom page wins. The bundled hardcoded page is only the emergency
+  // fallback when no usable published/cached configuration can be obtained.
   useEffect(() => {
     let isMounted = true;
+    let hasResolvedHomepage = readCachedHomepageSchema() !== null;
+    let fallbackTimer: ReturnType<typeof setTimeout> | undefined;
 
-    const isValidSchema = (config: any): config is PageSchema => {
-      return config && typeof config === 'object' && Array.isArray(config.sections) && config.sections.length > 0;
+    const commitSchema = (schema: PageSchema) => {
+      if (!isMounted || !isValidPageSchema(schema)) return;
+      hasResolvedHomepage = true;
+      if (fallbackTimer) clearTimeout(fallbackTimer);
+      cachedPageSchema = schema;
+      setPageSchema(schema);
+      if (schema.pageId === 'default') {
+        // The default is always available in the bundle; don't cache it as if it were
+        // a custom page or allow it to suppress an online refresh for 60 seconds.
+        clientDataCache.invalidate(HOMEPAGE_LIVE_CACHE_KEY);
+      } else {
+        clientDataCache.set(HOMEPAGE_LIVE_CACHE_KEY, { success: true, config: schema }, 60 * 1000, true);
+      }
     };
 
-    // 1. Instant SWR cache fetch with fallback to resilient fetchApi (works on native Capacitor & Vercel)
-    clientDataCache.fetchWithSWR<{ success: boolean; config: any }>(
-      'public:homepage_live',
-      () => fetchApi('/api/homepage/live').then(res => res.json()),
+    const applyServerPayload = (payload: { success?: boolean; config?: unknown } | null | undefined) => {
+      if (payload && isValidPageSchema(payload.config)) {
+        commitSchema(payload.config);
+        return true;
+      }
+      // An explicit successful response with no published schema means use the
+      // built-in home. Invalid/transient data must not replace a last-known-good page.
+      if (payload?.success === true && payload.config == null) {
+        commitSchema(getDefaultHomepageSchema());
+        return true;
+      }
+      return false;
+    };
+
+    const resolveToFallbackIfNeeded = () => {
+      if (!isMounted || hasResolvedHomepage) return;
+      commitSchema(getDefaultHomepageSchema());
+    };
+
+    // On a first-ever visit, keep a lightweight loading surface while checking
+    // whether a custom homepage is published. Returning visits render their local
+    // cached version immediately and refresh it in the background.
+    if (!hasResolvedHomepage) {
+      fallbackTimer = setTimeout(resolveToFallbackIfNeeded, 3500);
+    }
+
+    // Clear any legacy cache payload that represents the bundled default or invalid data.
+    // Otherwise a fresh-but-not-custom cache entry could suppress a needed network refresh.
+    const existingHomepagePayload = clientDataCache.get<{ success?: boolean; config?: unknown }>(HOMEPAGE_LIVE_CACHE_KEY);
+    if (existingHomepagePayload && (
+      !existingHomepagePayload.success ||
+      !isValidPageSchema(existingHomepagePayload.config) ||
+      existingHomepagePayload.config.pageId === 'default'
+    )) {
+      clientDataCache.invalidate(HOMEPAGE_LIVE_CACHE_KEY);
+    }
+
+    clientDataCache.fetchWithSWR<{ success?: boolean; config?: unknown }>(
+      HOMEPAGE_LIVE_CACHE_KEY,
+      () => fetchApi('/api/homepage/live').then((res) => res.json()),
       {
         ttlMs: 60 * 1000,
-        onFreshData: (data: { success: boolean; config: any }) => {
-          if (isMounted && data && data.success && isValidSchema(data.config)) {
-            cachedPageSchema = data.config;
-            setPageSchema(data.config);
-          }
-        }
+        onFreshData: (payload) => {
+          if (isMounted) applyServerPayload(payload);
+        },
       }
-    ).then(cached => {
-      if (isMounted && cached && cached.success && isValidSchema(cached.config)) {
-        cachedPageSchema = cached.config;
-        setPageSchema(cached.config);
-      }
-    }).catch(() => {});
+    ).then((payload) => {
+      if (!isMounted) return;
+      if (!applyServerPayload(payload)) resolveToFallbackIfNeeded();
+    }).catch(() => resolveToFallbackIfNeeded());
 
-    // 2. Real-time Firestore snapshot listener for zero-delay instant updates
+    // Realtime updates are accepted only when they contain a complete, valid schema.
+    // An empty/partial Firestore document must never wipe a working cached homepage.
     const unsubscribeFirestore = onSnapshot(
       doc(db, 'settings', 'homepage'),
       (snapshot) => {
-        if (snapshot.exists()) {
-          const data = snapshot.data();
-          if (isMounted) {
-            if (isValidSchema(data?.config)) {
-              cachedPageSchema = data.config;
-              setPageSchema(data.config);
-            } else {
-              setPageSchema(PREDEFINED_TEMPLATES[0]);
-            }
-          }
-        }
+        if (!snapshot.exists()) return;
+        const data = snapshot.data();
+        // A Firestore disk-cache emission is never proof that the bundled default is
+        // the currently published page. It also must not overwrite a custom page already
+        // restored from our last-known-good cache while offline.
+        if (snapshot.metadata.fromCache && (
+          hasResolvedHomepage || data?.config?.pageId === 'default'
+        )) return;
+        if (isMounted && isValidPageSchema(data?.config)) commitSchema(data.config);
       },
       () => {}
     );
 
     return () => {
       isMounted = false;
+      if (fallbackTimer) clearTimeout(fallbackTimer);
       unsubscribeFirestore();
     };
   }, []);
@@ -249,7 +320,7 @@ export default function Home() {
           />
 
           {pageSchema ? (
-            pageSchema.pageId === 'default' ? (
+            pageSchema.pageId === 'default' && pageSchema.type === 'BUILT_IN' ? (
               <StitchMidnightGlowHome />
             ) : (
               <PageRenderer schema={pageSchema} />
