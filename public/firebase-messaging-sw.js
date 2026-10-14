@@ -363,8 +363,10 @@ async function trimCache(cacheName, maxEntries) {
 async function cacheShellResponse(response) {
   if (!response || !response.ok) return;
   const cache = await caches.open(OP_HOME_SHELL_CACHE);
-  await cache.put('/', response.clone());
-  await cache.put('/index.html', response.clone());
+  const rootUrl = new URL('/', self.location.origin).href;
+  const indexUrl = new URL('/index.html', self.location.origin).href;
+  await cache.put(rootUrl, response.clone());
+  await cache.put(indexUrl, response.clone());
 }
 
 self.addEventListener('install', (event) => {
@@ -433,8 +435,13 @@ self.addEventListener('fetch', (event) => {
         }
         return response;
       } catch (_) {
-        const cache = await caches.open(OP_HOME_SHELL_CACHE);
-        const cached = await cache.match(request) || await cache.match('/') || await cache.match('/index.html');
+        let cached = null;
+        try {
+          const cache = await caches.open(OP_HOME_SHELL_CACHE);
+          cached = await cache.match(request) ||
+            await cache.match(new URL('/', self.location.origin).href) ||
+            await cache.match(new URL('/index.html', self.location.origin).href);
+        } catch (_) {}
         return cached || new Response(
           '<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Olive Pizza</title><body style="font-family:system-ui;padding:24px"><h1>Olive Pizza</h1><p>You are offline and this device has not cached the app yet. Reconnect once to save the homepage for offline use.</p></body></html>',
           { headers: { 'Content-Type': 'text/html; charset=utf-8' }, status: 200 }
@@ -454,8 +461,15 @@ self.addEventListener('fetch', (event) => {
   const cacheName = isPublicImage ? OP_PUBLIC_IMAGE_CACHE : OP_STATIC_CACHE;
   const maxEntries = isPublicImage ? OP_IMAGE_CACHE_LIMIT : OP_STATIC_CACHE_LIMIT;
   event.respondWith((async () => {
-    const cache = await caches.open(cacheName);
-    const cached = await cache.match(request);
+    let cache;
+    let cached = null;
+    try {
+      cache = await caches.open(cacheName);
+      cached = await cache.match(request);
+    } catch (_) {
+      // If Cache Storage is unavailable, preserve the network path instead of failing the request.
+      return fetch(request).catch(() => new Response('', { status: 504, statusText: 'Offline asset unavailable' }));
+    }
     const refresh = fetch(request).then(async (response) => {
       if (response && (response.ok || response.type === 'opaque')) {
         try {
