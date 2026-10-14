@@ -256,11 +256,13 @@ export default function Home() {
       doc(db, 'settings', 'homepage'),
       (snapshot) => {
         if (!snapshot.exists()) return;
-        // Once a local/API homepage is already usable, ignore Firestore's initial
-        // disk-cache emission until the server confirms the active published version.
-        // This prevents a stale cached "default" from hiding a cached custom page offline.
-        if (snapshot.metadata.fromCache && hasResolvedHomepage) return;
         const data = snapshot.data();
+        // A Firestore disk-cache emission is never proof that the bundled default is
+        // the currently published page. It also must not overwrite a custom page already
+        // restored from our last-known-good cache while offline.
+        if (snapshot.metadata.fromCache && (
+          hasResolvedHomepage || data?.config?.pageId === 'default'
+        )) return;
         if (isMounted && isValidPageSchema(data?.config)) commitSchema(data.config);
       },
       () => {}
