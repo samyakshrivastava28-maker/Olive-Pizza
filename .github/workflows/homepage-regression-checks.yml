@@ -7,6 +7,7 @@ on:
       - 'frontend/src/main.tsx'
       - 'public/firebase-messaging-sw.js'
       - 'frontend/src/components/home/**'
+      - '.github/workflows/homepage-regression-checks.yml'
       - 'frontend/src/types/PageSchema.ts'
       - 'package.json'
       - 'package-lock.json'
