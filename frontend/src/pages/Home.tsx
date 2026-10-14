@@ -225,6 +225,17 @@ export default function Home() {
       fallbackTimer = setTimeout(resolveToFallbackIfNeeded, 3500);
     }
 
+    // Clear any legacy cache payload that represents the bundled default or invalid data.
+    // Otherwise a fresh-but-not-custom cache entry could suppress a needed network refresh.
+    const existingHomepagePayload = clientDataCache.get<{ success?: boolean; config?: unknown }>(HOMEPAGE_LIVE_CACHE_KEY);
+    if (existingHomepagePayload && (
+      !existingHomepagePayload.success ||
+      !isValidPageSchema(existingHomepagePayload.config) ||
+      existingHomepagePayload.config.pageId === 'default'
+    )) {
+      clientDataCache.invalidate(HOMEPAGE_LIVE_CACHE_KEY);
+    }
+
     clientDataCache.fetchWithSWR<{ success?: boolean; config?: unknown }>(
       HOMEPAGE_LIVE_CACHE_KEY,
       () => fetchApi('/api/homepage/live').then((res) => res.json()),
