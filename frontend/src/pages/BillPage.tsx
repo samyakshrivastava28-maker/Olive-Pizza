@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router';
 import { auth } from '../lib/firebase';
 import { useAuthStore } from '../lib/store';
@@ -7,8 +7,11 @@ import PizzaLoader from '../components/ui/PizzaLoader';
 import SEO from '../components/SEO';
 import { 
   Printer, ArrowLeft, ShieldAlert, CheckCircle2, Clock, 
-  MapPin, Phone, Receipt, AlertTriangle, Home 
+  MapPin, Phone, Receipt, AlertTriangle, Home, Download, Share2, Loader2 
 } from 'lucide-react';
+import { toJpeg } from 'html-to-image';
+import { Share } from '@capacitor/share';
+import toast from 'react-hot-toast';
 
 interface BillItem {
   name: string;
@@ -87,6 +90,10 @@ export default function BillPage() {
   const [loading, setLoading] = useState(true);
   const [errorStatus, setErrorStatus] = useState<number | null>(null);
   const [errorMessage, setErrorMessage] = useState<string>('');
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
+
+  const billRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (isAuthLoading) return;
@@ -155,6 +162,144 @@ export default function BillPage() {
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const getBillFileName = () => {
+    if (!bill) return 'OlivePizza-Bill.jpeg';
+    const identifier = bill.billNumber || bill.orderId || bill.orderNumber || 'invoice';
+    const safeIdentifier = identifier.replace(/[^a-zA-Z0-9_-]/g, '_');
+    return `OlivePizza-Bill-${safeIdentifier}.jpeg`;
+  };
+
+  const handleDownloadBill = async () => {
+    if (!billRef.current || !bill) return;
+
+    try {
+      setIsDownloading(true);
+      toast.loading('Generating high-resolution bill...', { id: 'bill-action' });
+
+      // Capture bill element at 2x pixel ratio for 300 DPI crystal clarity with pure white background
+      const dataUrl = await toJpeg(billRef.current, {
+        quality: 0.95,
+        pixelRatio: 2,
+        backgroundColor: '#ffffff',
+        cacheBust: true,
+        style: {
+          boxShadow: 'none',
+        },
+      });
+
+      const fileName = getBillFileName();
+      const link = document.createElement('a');
+      link.download = fileName;
+      link.href = dataUrl;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      toast.success('Bill downloaded as JPEG!', { id: 'bill-action' });
+    } catch (err: any) {
+      console.error('Failed to download bill:', err);
+      toast.error('Failed to download bill image. Please try again.', { id: 'bill-action' });
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  const handleShareBill = async () => {
+    if (!billRef.current || !bill) return;
+
+    try {
+      setIsSharing(true);
+      toast.loading('Preparing bill to share...', { id: 'bill-action' });
+
+      const dataUrl = await toJpeg(billRef.current, {
+        quality: 0.95,
+        pixelRatio: 2,
+        backgroundColor: '#ffffff',
+        cacheBust: true,
+        style: {
+          boxShadow: 'none',
+        },
+      });
+
+      const fileName = getBillFileName();
+      const blobRes = await fetch(dataUrl);
+      const blob = await blobRes.blob();
+      const file = new File([blob], fileName, { type: 'image/jpeg' });
+
+      // 1. Try Web Share API with File (Mobile Chrome, Safari, Android)
+      if (typeof navigator !== 'undefined' && navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({
+            files: [file],
+            title: `Olive Pizza Bill ${bill.billNumber || bill.orderId}`,
+            text: `Official Tax Invoice for Order #${bill.orderNumber || bill.billNumber} from Olive Pizza`,
+          });
+          toast.success('Bill shared successfully!', { id: 'bill-action' });
+          return;
+        } catch (shareErr: any) {
+          if (shareErr.name === 'AbortError') {
+            toast.dismiss('bill-action');
+            return;
+          }
+          console.warn('Web Share file sharing failed, falling back:', shareErr);
+        }
+      }
+
+      // 2. Try Capacitor Share Plugin (Native Android/iOS)
+      try {
+        const canShareRes = await Share.canShare();
+        if (canShareRes.value) {
+          await Share.share({
+            title: `Olive Pizza Bill ${bill.billNumber || bill.orderId}`,
+            text: `Olive Pizza Tax Invoice #${bill.billNumber || bill.orderNumber} - Total: ₹${bill.pricing.total.toFixed(2)}`,
+            url: window.location.href,
+            dialogTitle: 'Share Olive Pizza Bill',
+          });
+          toast.success('Bill shared successfully!', { id: 'bill-action' });
+          return;
+        }
+      } catch (capErr: any) {
+        if (capErr.name === 'AbortError') {
+          toast.dismiss('bill-action');
+          return;
+        }
+        console.warn('Capacitor Share failed, falling back:', capErr);
+      }
+
+      // 3. Fallback to navigator.share for URL/text if available
+      if (typeof navigator !== 'undefined' && navigator.share) {
+        try {
+          await navigator.share({
+            title: `Olive Pizza Bill ${bill.billNumber || bill.orderId}`,
+            text: `Olive Pizza Tax Invoice #${bill.billNumber || bill.orderNumber} - Total: ₹${bill.pricing.total.toFixed(2)}`,
+            url: window.location.href,
+          });
+          toast.success('Bill link shared!', { id: 'bill-action' });
+          return;
+        } catch (navErr: any) {
+          if (navErr.name === 'AbortError') {
+            toast.dismiss('bill-action');
+            return;
+          }
+        }
+      }
+
+      // 4. If sharing is not available on this browser/platform, trigger direct download
+      const link = document.createElement('a');
+      link.download = fileName;
+      link.href = dataUrl;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      toast.success('Bill downloaded! (Direct sharing not supported on this device)', { id: 'bill-action' });
+    } catch (err: any) {
+      console.error('Failed to share bill:', err);
+      toast.error('Failed to share bill. Please try downloading instead.', { id: 'bill-action' });
+    } finally {
+      setIsSharing(false);
+    }
   };
 
   if (loading || isAuthLoading) {
@@ -279,32 +424,63 @@ export default function BillPage() {
 
       <div className="min-h-screen bg-slate-950 text-slate-100 py-8 px-4 sm:px-6 lg:px-8 bill-print-container flex flex-col items-center">
         {/* Screen Action Bar (Hidden on print) */}
-        <div className="w-full max-w-2xl mb-6 flex items-center justify-between no-print">
-          <button
-            onClick={() => navigate(-1)}
-            className="flex items-center gap-2 text-xs font-bold text-slate-400 hover:text-white bg-slate-900 border border-slate-800 px-4 py-2.5 rounded-xl transition-colors shadow-sm"
-          >
-            <ArrowLeft size={16} /> Back
-          </button>
-          
-          <div className="flex items-center gap-3">
+        <div className="w-full max-w-2xl mb-6 space-y-3 no-print">
+          <div className="flex items-center justify-between">
+            <button
+              onClick={() => navigate(-1)}
+              className="flex items-center gap-2 text-xs font-bold text-slate-400 hover:text-white bg-slate-900 hover:bg-slate-800 border border-slate-800 px-3.5 py-2 rounded-xl transition-all shadow-sm active:scale-95"
+            >
+              <ArrowLeft size={16} /> Back
+            </button>
+            
             <Link
               to="/dashboard"
-              className="flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-white bg-slate-900 border border-slate-800 px-4 py-2.5 rounded-xl transition-colors shadow-sm"
+              className="flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-white bg-slate-900 hover:bg-slate-800 border border-slate-800 px-3.5 py-2 rounded-xl transition-all shadow-sm active:scale-95"
             >
               <Receipt size={15} /> All Orders
             </Link>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2 sm:flex sm:justify-end sm:gap-2.5">
+            {/* Download JPEG Button */}
+            <button
+              onClick={handleDownloadBill}
+              disabled={isDownloading}
+              className="flex items-center justify-center gap-1.5 text-xs font-black text-slate-950 bg-primary-400 hover:bg-primary-300 disabled:opacity-50 px-3 sm:px-4 py-2.5 rounded-xl transition-all shadow-md shadow-primary-500/20 hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+              title="Download high-resolution JPEG bill"
+            >
+              {isDownloading ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
+              <span className="truncate">{isDownloading ? 'Saving...' : 'Download'}</span>
+            </button>
+
+            {/* Share Button */}
+            <button
+              onClick={handleShareBill}
+              disabled={isSharing}
+              className="flex items-center justify-center gap-1.5 text-xs font-bold text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-800 border border-slate-800 disabled:opacity-50 px-3 sm:px-4 py-2.5 rounded-xl transition-all shadow-sm active:scale-[0.98] cursor-pointer"
+              title="Share bill image or link"
+            >
+              {isSharing ? <Loader2 size={15} className="animate-spin" /> : <Share2 size={15} />}
+              <span className="truncate">{isSharing ? 'Sharing...' : 'Share'}</span>
+            </button>
+
+            {/* Print Button */}
             <button
               onClick={handlePrint}
-              className="flex items-center gap-2 text-xs font-black text-slate-950 bg-primary-400 hover:bg-primary-300 px-5 py-2.5 rounded-xl transition-all shadow-md shadow-primary-500/20 hover:scale-[1.02] active:scale-[0.98]"
+              className="flex items-center justify-center gap-1.5 text-xs font-bold text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-800 border border-slate-800 px-3 sm:px-4 py-2.5 rounded-xl transition-all shadow-sm active:scale-[0.98] cursor-pointer"
+              title="Print bill"
             >
-              <Printer size={16} /> PRINT BILL
+              <Printer size={15} />
+              <span className="truncate">Print</span>
             </button>
           </div>
         </div>
 
         {/* ── Official Printable Bill Card ── */}
-        <div className="w-full max-w-2xl bg-white text-slate-900 rounded-3xl p-6 sm:p-10 shadow-2xl border border-slate-200 bill-card">
+        <div 
+          ref={billRef}
+          className="w-full max-w-2xl bg-white text-slate-900 rounded-3xl p-6 sm:p-10 shadow-2xl border border-slate-200 bill-card"
+        >
           
           {/* Header Banner */}
           <div className="text-center pb-6 border-b-2 border-dashed border-slate-300 print-border">
@@ -390,6 +566,9 @@ export default function BillPage() {
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Pickup Instructions</span>
                 <p className="font-semibold text-slate-900 mt-0.5">{bill.customer.pickupInfo.pickupCounter}</p>
                 <p className="text-slate-600 text-[11px]">{bill.customer.pickupInfo.address}</p>
+                {bill.customer.pickupInfo.contactPhone && (
+                  <p className="text-slate-500 text-[11px] mt-0.5">Phone: {bill.customer.pickupInfo.contactPhone}</p>
+                )}
               </div>
             )}
           </div>
@@ -510,11 +689,39 @@ export default function BillPage() {
 
         </div>
 
-        {/* Quick Return Link (Hidden on print) */}
-        <div className="mt-8 no-print">
+        {/* Quick Return & Bottom Actions (Hidden on print) */}
+        <div className="mt-8 no-print flex flex-col items-center gap-4 w-full max-w-2xl">
+          <div className="flex flex-wrap items-center justify-center gap-3 w-full">
+            <button
+              onClick={handleDownloadBill}
+              disabled={isDownloading}
+              className="flex-1 sm:flex-none flex items-center justify-center gap-2 text-xs font-black text-slate-950 bg-primary-400 hover:bg-primary-300 disabled:opacity-50 px-5 py-3 rounded-xl transition-all shadow-lg shadow-primary-500/20 hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+            >
+              {isDownloading ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+              <span>{isDownloading ? 'Generating JPEG...' : 'Download Bill (JPEG)'}</span>
+            </button>
+
+            <button
+              onClick={handleShareBill}
+              disabled={isSharing}
+              className="flex-1 sm:flex-none flex items-center justify-center gap-2 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 border border-slate-800 disabled:opacity-50 px-4 py-3 rounded-xl transition-all shadow-sm active:scale-[0.98] cursor-pointer"
+            >
+              {isSharing ? <Loader2 size={16} className="animate-spin" /> : <Share2 size={16} />}
+              <span>{isSharing ? 'Preparing...' : 'Share Bill'}</span>
+            </button>
+
+            <button
+              onClick={handlePrint}
+              className="flex-1 sm:flex-none flex items-center justify-center gap-2 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 border border-slate-800 px-4 py-3 rounded-xl transition-all shadow-sm active:scale-[0.98] cursor-pointer"
+            >
+              <Printer size={16} />
+              <span>Print Bill</span>
+            </button>
+          </div>
+
           <Link
             to="/dashboard"
-            className="text-xs font-bold text-slate-400 hover:text-white flex items-center gap-1.5 transition-colors"
+            className="text-xs font-bold text-slate-400 hover:text-white flex items-center gap-1.5 transition-colors pt-2"
           >
             <Home size={14} /> Back to Customer Dashboard
           </Link>
