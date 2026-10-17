@@ -127,13 +127,13 @@ if [ "$XCTESTRUN_MATCH_COUNT" -ne 1 ]; then
 fi
 
 # Check rule: contains Debug-iphoneos/
-if ! echo "$ZIP_CONTENTS" | grep -q "Debug-iphoneos/"; then
+if ! printf "%s\n" "$ZIP_CONTENTS" | grep -F "Debug-iphoneos/" >/dev/null; then
   echo "::error::Archive missing Debug-iphoneos/ directory."
   exit 1
 fi
 
 # Check rule: ensure no .ipa inside
-if echo "$ZIP_CONTENTS" | grep -q "\.ipa"; then
+if printf "%s\n" "$ZIP_CONTENTS" | grep -F ".ipa" >/dev/null; then
   echo "::error::Archive contains an IPA file! An IPA cannot be used as an XCTest package."
   exit 1
 fi
