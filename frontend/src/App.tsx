@@ -90,6 +90,8 @@ import ActiveOrderLiveNotificationSync from './components/ActiveOrderLiveNotific
 import PizzaLoader from './components/ui/PizzaLoader';
 import { RouteErrorBoundary } from './components/RouteErrorBoundary';
 
+import OrderTracking from './pages/OrderTracking';
+
 // Lazy loaded heavy components
 const AIAssistant = lazyWithRetry(() => import('./components/olive-pizza-ai/AIAssistant'));
 const UniversalAssistant = lazyWithRetry(() => import('./pages/UniversalAssistant'));
@@ -104,7 +106,6 @@ const Menu = lazyWithRetry(() => import('./pages/Menu'));
 const Cart = lazyWithRetry(() => import('./pages/Cart'));
 const Checkout = lazyWithRetry(() => import('./pages/Checkout'));
 const ProductDetail = lazyWithRetry(() => import('./pages/ProductDetail'));
-const OrderTracking = lazyWithRetry(() => import('./pages/OrderTracking'));
 const Offers = lazyWithRetry(() => import('./pages/Offers'));
 const BillPage = lazyWithRetry(() => import('./pages/BillPage'));
 const RecheckOrder = lazyWithRetry(() => import('./pages/RecheckOrder'));
