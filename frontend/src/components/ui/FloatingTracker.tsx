@@ -22,6 +22,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { MapPin, ChefHat, Package, Truck, Clock, CheckCircle2, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import OwnerAcceptedOverlay from './OwnerAcceptedOverlay';
 import DeliveredOverlay from './DeliveredOverlay';
+import { fetchApi } from '../../lib/api';
+
 
 interface ActiveOrder {
   id: string;
@@ -93,8 +95,26 @@ export default function FloatingTracker() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // ─── Firestore Listener ────────────────────────────────────────────────────
+  // ─── Authoritative Database & Firestore Listener ──────────────────────────
   const subscribeToOrders = useCallback(() => {
+    // 1. Authoritative Backend Reconciliation (PostgreSQL canonical source of truth)
+    fetchApi('/api/orders').then((apiOrders) => {
+      if (!Array.isArray(apiOrders)) return;
+      const live = apiOrders.filter((o: any) => {
+        const s = (o.status || o.orderStatus || '').toLowerCase();
+        return ACTIVE_STATUSES.includes(s);
+      });
+      if (live.length === 0) {
+        setOrders([]);
+        try {
+          localStorage.removeItem('activeOrderId');
+          localStorage.removeItem('lastPlacedOrderId');
+        } catch {}
+      } else {
+        setOrders(live as ActiveOrder[]);
+      }
+    }).catch(() => {});
+
     if (!auth.currentUser) {
       const cachedId = localStorage.getItem('lastPlacedOrderId') || localStorage.getItem('activeOrderId');
       if (cachedId) {
@@ -115,6 +135,7 @@ export default function FloatingTracker() {
       }
       return () => {};
     }
+
 
     const q = query(
       collection(db, 'orders'),

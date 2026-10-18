@@ -194,6 +194,7 @@ export async function fetchApiJson<T = any>(
   init?: RequestInit,
   options?: ApiFetchOptions
 ): Promise<T> {
+
   const method = (init?.method || 'GET').toUpperCase();
   const isGet = method === 'GET';
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
@@ -305,7 +306,10 @@ export async function fetchApiJson<T = any>(
   return executionPromise;
 }
 
+export const fetchApi = fetchApiJson;
+
 export { memoryCache, inFlightRequests };
+
 
 // ─── TYPED SMART BOOTSTRAP API CLIENT HELPERS ─────────────────────────────────
 

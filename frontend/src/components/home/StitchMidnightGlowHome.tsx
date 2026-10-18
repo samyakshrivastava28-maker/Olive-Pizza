@@ -19,6 +19,8 @@ import LiveCoupons from "./LiveCoupons";
 import LiveAdvertisements from "./LiveAdvertisements";
 import CategoryDiscoveryRail from "./CategoryDiscoveryRail";
 import toast from "react-hot-toast";
+import { fetchApi } from "../../lib/api";
+
 
 // ── Canonical Fallback Menu Items (Guarantees zero-blank screen if network/IDB lags) ──
 const CANONICAL_ITEMS: any[] = [
@@ -144,6 +146,26 @@ export default function StitchMidnightGlowHome() {
       setActiveOrder(null);
       return;
     }
+
+    let isMounted = true;
+
+    // Check backend API for authoritative customer orders
+    fetchApi('/api/orders').then((orders) => {
+      if (!isMounted || !Array.isArray(orders)) return;
+      const activeFromApi = orders.find((o: any) => {
+        const s = (o.status || o.orderStatus || '').toLowerCase();
+        return !['delivered', 'cancelled', 'rejected', 'failed'].includes(s);
+      });
+      if (!activeFromApi) {
+        setActiveOrder(null);
+        try {
+          localStorage.removeItem('activeOrderId');
+        } catch {}
+      } else {
+        setActiveOrder(activeFromApi);
+      }
+    }).catch(() => {});
+
     const q = query(collection(db, "orders"), where("userId", "==", user.uid));
     const unsub = onSnapshot(
       q,
@@ -160,8 +182,12 @@ export default function StitchMidnightGlowHome() {
       },
       () => {}
     );
-    return () => unsub();
+    return () => {
+      isMounted = false;
+      unsub();
+    };
   }, [user?.uid]);
+
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();

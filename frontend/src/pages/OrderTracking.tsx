@@ -493,14 +493,49 @@ export default function OrderTracking() {
       return;
     }
 
-    // 1. Check local storage
+    // 1. Reconcile with authoritative backend API first
+    fetchApi('/api/orders')
+      .then(async (res) => {
+        if (res.ok) {
+          const data = await res.json();
+          const ordersList: any[] = Array.isArray(data) ? data : (data?.orders || []);
+          // Active orders in authoritative backend
+          const activeBackendOrder = ordersList.find((o: any) => 
+            TRACKABLE_STATUSES.has(o.status || o.order_status?.toLowerCase()) || 
+            ['pending', 'accepted', 'preparing', 'ready', 'partner_assigned'].includes(o.status || o.order_status?.toLowerCase())
+          );
+
+          if (activeBackendOrder) {
+            setResolvedOrderId(activeBackendOrder.id);
+            localStorage.setItem('activeOrderId', activeBackendOrder.id);
+            setIsResolving(false);
+            return;
+          } else {
+            // No active orders in backend: clean up any stale activeOrderId in storage
+            localStorage.removeItem('activeOrderId');
+            localStorage.removeItem('lastPlacedOrderId');
+            if (ordersList.length > 0) {
+              setUserOrders(ordersList.slice(0, 5));
+              // If user has orders but none active, set resolved to the most recent one for review
+              setResolvedOrderId(ordersList[0].id);
+              setIsResolving(false);
+              return;
+            }
+          }
+        }
+      })
+      .catch((e) => {
+        console.warn("[OrderTracking] Backend reconcile check:", e);
+      });
+
+    // 2. Check local storage
     const cachedId = localStorage.getItem('activeOrderId') || localStorage.getItem('lastPlacedOrderId');
     if (cachedId) {
       setResolvedOrderId(cachedId);
       setIsResolving(false);
     }
 
-    // 2. Fetch authenticated user's recent orders
+    // 3. Fetch authenticated user's recent orders
     const currentUser = auth.currentUser || useAuthStore.getState().user;
     if (currentUser?.uid) {
       const q = query(
@@ -613,6 +648,27 @@ export default function OrderTracking() {
           prevOrderStatusRef.current = data.status;
           setOrder(data);
 
+          // Check backend REST API to verify if canonical database has newer/terminal status
+          fetchApi(`/api/orders/${orderId}`)
+            .then(async (res) => {
+              if (res.ok) {
+                const bData = await res.json();
+                const canon = bData?.order || bData;
+                if (canon && canon.status) {
+                  const canonStatus = (canon.status || canon.order_status || '').toLowerCase();
+                  if (canonStatus === 'delivered' || canonStatus === 'cancelled') {
+                    localStorage.removeItem('activeOrderId');
+                    localStorage.removeItem('lastPlacedOrderId');
+                    data.status = canonStatus;
+                    data.lifecycleStatus = 'COMPLETED';
+                    setOrder({ ...data, ...canon, status: canonStatus });
+                    return;
+                  }
+                }
+              }
+            })
+            .catch(() => {});
+
           // Populate sanitized partner details from order snapshot
           if (data.deliveryPartnerDetails) {
             setPartnerDetails(data.deliveryPartnerDetails);
@@ -682,8 +738,19 @@ export default function OrderTracking() {
           setOrderNotFound(true);
         }
       },
-      (err) => {
-        console.error("[OrderTracking] Snapshot error:", err);
+      async (err) => {
+        console.warn("[OrderTracking] Snapshot error, falling back to backend REST API:", err);
+        try {
+          const res = await fetchApi(`/api/orders/${orderId}`);
+          if (res.ok) {
+            const data = await res.json();
+            const histOrder = data?.order || data;
+            if (histOrder && (histOrder.id || histOrder.orderId)) {
+              setOrder(histOrder);
+              return;
+            }
+          }
+        } catch {}
         setOrderError("Unable to load order. Please verify your internet connection.");
       }
     );
