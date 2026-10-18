@@ -27,7 +27,8 @@ import {
   MessageCircle,
   PhoneCall,
   ShieldCheck,
-  Package
+  Package,
+  Receipt
 } from "lucide-react";
 import OrderHistory from "../components/customer/dashboard/OrderHistory";
 import LoyaltyRewards from "../components/customer/dashboard/LoyaltyRewards";
@@ -335,6 +336,7 @@ export default function CustomerDashboard() {
           {[
             { id: "profile", label: "Profile & Addresses", icon: User },
             { id: "orders", label: "My Orders", icon: History },
+            { id: "bills", label: "Invoices & Bills", icon: Receipt },
             { id: "loyalty", label: "Rewards & Points", icon: Award },
             { id: "privacy", label: "Privacy & Data", icon: ShieldCheck },
             { id: "support", label: "Help & Support", icon: HelpCircle },
@@ -454,6 +456,105 @@ export default function CustomerDashboard() {
               className="bg-white rounded-3xl p-6 sm:p-8 border border-orange-100/90 shadow-sm"
             >
               <OrderHistory orders={orders} />
+            </motion.div>
+          )}
+
+          {/* TAB: INVOICES & BILLS */}
+          {activeTab === "bills" && (
+            <motion.div
+              key="bills"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.25 }}
+              className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-xs space-y-6"
+            >
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
+                <div>
+                  <h3 className="text-lg sm:text-xl font-black text-slate-900 flex items-center gap-2">
+                    <Receipt className="w-5 h-5 text-primary-600" />
+                    Official Invoices & Tax Bills
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    View, print, and download computer-generated tax invoices for all your past and ongoing orders.
+                  </p>
+                </div>
+                <Link
+                  to="/bill"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-champagne font-bold text-xs rounded-xl shadow-xs transition-all active:scale-95"
+                >
+                  <Receipt size={14} /> Open Invoice Viewer
+                </Link>
+              </div>
+
+              {orders.length === 0 ? (
+                <div className="text-center py-12 px-4 rounded-2xl bg-[#FAF8F5] border border-slate-200 text-slate-500">
+                  <Receipt className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+                  <p className="font-bold text-slate-700 text-sm">No Bills Generated Yet</p>
+                  <p className="text-xs text-slate-400 mt-1">Once you complete an order, your official tax bill will appear here.</p>
+                  <Link
+                    to="/menu"
+                    className="mt-4 inline-block px-5 py-2.5 bg-primary-600 text-champagne text-xs font-bold rounded-xl shadow-xs"
+                  >
+                    Browse Menu
+                  </Link>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {orders.map((ord: any) => {
+                    const billRef = ord.billReference || ord.id;
+                    const billLabel = ord.billNumber || (ord.permanentBillNo ? `#${ord.permanentBillNo}` : (ord.orderNumber || `#${ord.id?.slice(-6).toUpperCase()}`));
+                    const billDate = ord.createdAt 
+                      ? new Date(ord.createdAt).toLocaleDateString('en-IN', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) 
+                      : 'Recent';
+                    const amount = ord.totalAmount || ord.finalTotal || (ord.pricing?.total) || 0;
+                    const itemsSummary = Array.isArray(ord.items) 
+                      ? ord.items.map((it: any) => `${it.quantity || 1}× ${it.name || 'Pizza'}`).join(', ')
+                      : 'Artisan Pizza';
+
+                    return (
+                      <div
+                        key={ord.id}
+                        className="p-5 rounded-2xl border border-slate-200 hover:border-primary-400/50 bg-[#FAF8F5]/60 hover:bg-white transition-all shadow-xs flex flex-col justify-between gap-4"
+                      >
+                        <div className="space-y-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-black text-slate-900 text-base">{billLabel}</span>
+                                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                  {ord.paymentStatus || 'PAID'}
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-slate-500 mt-0.5">{billDate}</p>
+                            </div>
+                            <span className="font-black text-lg text-primary-700">₹{amount}</span>
+                          </div>
+
+                          <p className="text-xs text-slate-600 font-medium line-clamp-2">
+                            {itemsSummary}
+                          </p>
+                        </div>
+
+                        <div className="flex items-center justify-between gap-2 pt-3 border-t border-slate-200/60 text-xs">
+                          <span className="text-[11px] text-slate-400 capitalize">
+                            {(ord.paymentMethod || 'COD').toUpperCase()} · {ord.status?.replace(/_/g, ' ') || 'Completed'}
+                          </span>
+
+                          <div className="flex items-center gap-2">
+                            <Link
+                              to={`/bill/${billRef}`}
+                              className="px-3.5 py-1.5 rounded-lg bg-primary-600 hover:bg-primary-700 text-champagne font-bold text-xs transition-all active:scale-95 shadow-xs flex items-center gap-1.5"
+                            >
+                              <Receipt size={13} /> View Bill
+                            </Link>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </motion.div>
           )}
 

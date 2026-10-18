@@ -93,14 +93,54 @@ export default function BillPage() {
   const [isDownloading, setIsDownloading] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
 
-  const billRef = useRef<HTMLDivElement>(null);
+  const [allOrders, setAllOrders] = useState<any[]>([]);
+  const [activeReference, setActiveReference] = useState<string>(billReference || '');
+
+  useEffect(() => {
+    if (billReference) {
+      setActiveReference(billReference);
+    }
+  }, [billReference]);
 
   useEffect(() => {
     if (isAuthLoading) return;
 
     if (!isAuthenticated) {
       // Redirect to login preserving destination
-      navigate(`/login?redirect=/bill/${billReference}`, { replace: true });
+      navigate(`/login?redirect=${billReference ? `/bill/${billReference}` : '/bill'}`, { replace: true });
+      return;
+    }
+
+    const fetchAllOrders = async () => {
+      try {
+        const token = await auth.currentUser?.getIdToken();
+        const res = await fetchApi('/api/orders', {
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+        });
+        if (res.ok) {
+          const list: any[] = await res.json();
+          setAllOrders(Array.isArray(list) ? list : []);
+          // If no specific billReference provided in URL and orders exist, default to the most recent bill
+          if (!billReference && list.length > 0) {
+            const firstRef = list[0].billReference || list[0].id;
+            setActiveReference(firstRef);
+          }
+        }
+      } catch (err) {
+        console.warn('Could not fetch all customer orders for bill list:', err);
+      }
+    };
+
+    fetchAllOrders();
+  }, [isAuthenticated, isAuthLoading, billReference, navigate]);
+
+  useEffect(() => {
+    if (isAuthLoading) return;
+    if (!isAuthenticated) return;
+    if (!activeReference) {
+      if (allOrders.length === 0 && !loading) {
+        setLoading(false);
+      }
       return;
     }
 
@@ -117,7 +157,7 @@ export default function BillPage() {
           return;
         }
 
-        const res = await fetchApi(`/api/orders/bill/${billReference}`, {
+        const res = await fetchApi(`/api/orders/bill/${activeReference}`, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
@@ -155,10 +195,8 @@ export default function BillPage() {
       }
     };
 
-    if (billReference) {
-      fetchBill();
-    }
-  }, [billReference, isAuthenticated, isAuthLoading, navigate]);
+    fetchBill();
+  }, [activeReference, isAuthenticated, isAuthLoading]);
 
   const handlePrint = () => {
     window.print();
@@ -350,23 +388,39 @@ export default function BillPage() {
     );
   }
 
-  // 404 / 500 Generic Error View
+  // 404 / 500 / Empty Orders View
   if (errorStatus || !bill) {
+    const hasZeroOrders = allOrders.length === 0;
+
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
-        <SEO title="Bill Error | Olive Pizza" description="Bill Unavailable" />
+        <SEO title="My Bills | Olive Pizza" description="Customer Invoices & Bills" />
         <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-8 text-center shadow-xl">
-          <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center mx-auto mb-5">
-            <AlertTriangle size={32} />
+          <div className="w-16 h-16 rounded-2xl bg-primary-500/10 border border-primary-500/20 text-primary-400 flex items-center justify-center mx-auto mb-5">
+            <Receipt size={32} />
           </div>
-          <h2 className="text-xl font-bold text-white mb-2">Bill Not Found</h2>
-          <p className="text-slate-400 text-sm mb-6">{errorMessage || 'The requested order bill could not be retrieved.'}</p>
-          <button
-            onClick={() => navigate('/dashboard')}
-            className="w-full py-3 rounded-xl bg-primary-600 hover:bg-primary-500 text-white font-bold text-sm transition-all"
-          >
-            Return to Order History
-          </button>
+          <h2 className="text-xl font-bold text-white mb-2">
+            {hasZeroOrders ? 'No Bills Found' : 'Bill Not Available'}
+          </h2>
+          <p className="text-slate-400 text-sm mb-6 leading-relaxed">
+            {hasZeroOrders 
+              ? 'You do not have any bills or past orders yet. Place your first order to generate an official tax invoice!'
+              : (errorMessage || 'The requested order bill could not be retrieved.')}
+          </p>
+          <div className="flex gap-3">
+            <Link
+              to="/menu"
+              className="flex-1 py-3 rounded-xl bg-primary-600 hover:bg-primary-500 text-slate-950 font-bold text-xs uppercase tracking-wider transition-all text-center"
+            >
+              Order Pizza
+            </Link>
+            <Link
+              to="/dashboard"
+              className="flex-1 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs uppercase tracking-wider transition-all text-center"
+            >
+              Dashboard
+            </Link>
+          </div>
         </div>
       </div>
     );
@@ -424,11 +478,11 @@ export default function BillPage() {
 
       <div className="min-h-screen bg-slate-950 text-slate-100 py-8 px-4 sm:px-6 lg:px-8 bill-print-container flex flex-col items-center">
         {/* Screen Action Bar (Hidden on print) */}
-        <div className="w-full max-w-2xl mb-6 space-y-3 no-print">
+        <div className="w-full max-w-2xl mb-6 space-y-4 no-print">
           <div className="flex items-center justify-between">
             <button
               onClick={() => navigate(-1)}
-              className="flex items-center gap-2 text-xs font-bold text-slate-400 hover:text-white bg-slate-900 hover:bg-slate-800 border border-slate-800 px-3.5 py-2 rounded-xl transition-all shadow-sm active:scale-95"
+              className="flex items-center gap-2 text-xs font-bold text-slate-400 hover:text-white bg-slate-900 hover:bg-slate-800 border border-slate-800 px-3.5 py-2 rounded-xl transition-all shadow-sm active:scale-95 cursor-pointer"
             >
               <ArrowLeft size={16} /> Back
             </button>
@@ -440,6 +494,56 @@ export default function BillPage() {
               <Receipt size={15} /> All Orders
             </Link>
           </div>
+
+          {/* All Bills of Customer Carousel / Selector */}
+          {allOrders.length > 0 && (
+            <div className="bg-slate-900/90 border border-slate-800/80 rounded-2xl p-3.5 backdrop-blur-md">
+              <div className="flex items-center justify-between gap-2 mb-2 px-1">
+                <span className="text-[11px] font-black uppercase tracking-wider text-primary-400 flex items-center gap-1.5">
+                  <Receipt size={13} /> Your Invoices & Bills ({allOrders.length})
+                </span>
+                <span className="text-[10px] text-slate-500 font-semibold">
+                  Tap any bill to view
+                </span>
+              </div>
+
+              <div className="flex gap-2 overflow-x-auto pb-1 pt-0.5 scrollbar-thin scrollbar-thumb-slate-700">
+                {allOrders.map((ord: any) => {
+                  const refKey = ord.billReference || ord.id;
+                  const isSelected = activeReference === refKey || activeReference === ord.id;
+                  const billLabel = ord.billNumber || (ord.permanentBillNo ? `#${ord.permanentBillNo}` : (ord.orderNumber || `#${ord.id?.slice(-4).toUpperCase()}`));
+                  const billDate = ord.createdAt ? new Date(ord.createdAt).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }) : '';
+                  const total = ord.totalAmount || ord.finalTotal || (ord.pricing?.total) || 0;
+
+                  return (
+                    <button
+                      key={ord.id}
+                      onClick={() => {
+                        setActiveReference(refKey);
+                        navigate(`/bill/${refKey}`, { replace: true });
+                      }}
+                      className={`flex-shrink-0 flex items-center gap-2.5 px-3.5 py-2 rounded-xl text-left border transition-all cursor-pointer ${
+                        isSelected
+                          ? 'bg-primary-500/20 border-primary-500/60 text-white shadow-sm'
+                          : 'bg-slate-950/70 hover:bg-slate-800/80 border-slate-800 text-slate-300 hover:text-white'
+                      }`}
+                    >
+                      <div className={`w-2 h-2 rounded-full ${isSelected ? 'bg-primary-400' : 'bg-slate-600'}`} />
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-black tracking-tight">{billLabel}</span>
+                          <span className="text-[11px] font-bold text-primary-400">₹{total}</span>
+                        </div>
+                        <div className="text-[10px] text-slate-500">
+                          {billDate} · <span className="capitalize">{ord.status?.replace(/_/g, ' ') || 'Order'}</span>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-3 gap-2 sm:flex sm:justify-end sm:gap-2.5">
             {/* Download JPEG Button */}
