@@ -104,23 +104,11 @@ messaging.onBackgroundMessage(async (payload) => {
     return;
   }
 
-  // Customer application must never display operational restaurant new-order alarms
-  if (
-    data.category === 'owner_orders' ||
-    data.category === 'alarm_actionable' ||
-    data.category === 'new_order' ||
-    data.stage === 'new_order' ||
-    data.type === 'NEW_ORDER'
-  ) {
-    console.log('[SW] Dropped operational restaurant alarm from customer SW');
-    return;
-  }
-
   console.log('[SW] Background message:', data.tag || 'no-tag');
 
   const tag = data.tag || `notification_${Date.now()}`;
-  const notifTitle = payload.notification?.title || 'Olive Pizza';
-  const notifBody = payload.notification?.body || '';
+  const notifTitle = payload.notification?.title || data.title || 'Olive Pizza';
+  const notifBody = payload.notification?.body || data.body || '';
   const stage = data.stage || '';
   const orderId = data.orderId;
   const queueId = data.queueId;
@@ -141,6 +129,18 @@ messaging.onBackgroundMessage(async (payload) => {
   // ── Build actions based on stage/role ────────────────────────────────────
   const actions = buildActions(stage, data.role);
 
+  // ── Parse Data Strings ───────────────────────────────────────────────────
+  let parsedActions = actions;
+  if (data.actions) {
+    try { parsedActions = JSON.parse(data.actions); } catch (e) {}
+  }
+  let requireInteraction = priority === 'critical' || stage === 'new_order' || stage === 'delivery_assigned';
+  if (data.requireInteraction === 'true') requireInteraction = true;
+  let vibratePattern = priority === 'critical' ? [300, 200, 300, 200, 300] : [200, 100, 200];
+  if (data.vibrate) {
+    try { vibratePattern = JSON.parse(data.vibrate); } catch (e) {}
+  }
+
   // ── Notification options ─────────────────────────────────────────────────
   const options = {
     body: notifBody,
@@ -148,10 +148,10 @@ messaging.onBackgroundMessage(async (payload) => {
     badge: BADGE,
     tag,                // Live Card — replaces existing notification with same tag
     renotify: true,     // Re-alert user (sound + vibration) even on update
-    requireInteraction: priority === 'critical' || stage === 'new_order' || stage === 'delivery_assigned',
+    requireInteraction,
     silent: false,
-    vibrate: priority === 'critical' ? [300, 200, 300, 200, 300] : [200, 100, 200],
-    actions,
+    vibrate: vibratePattern,
+    actions: parsedActions,
     data: {
       url,
       orderId,
@@ -171,7 +171,7 @@ messaging.onBackgroundMessage(async (payload) => {
   }
 
   // ── Data-only silent update (GPS/countdown) — update existing notification ─
-  if (!payload.notification && payload.data) {
+  if (!payload.notification && data.updatedBody && !data.title) {
     // Silent background update — update existing notification in-place
     const existingNotifications = await self.registration.getNotifications({ tag });
     if (existingNotifications.length > 0) {
@@ -264,6 +264,13 @@ self.addEventListener('notificationclick', event => {
     return;
   }
 
+  // View Bill
+  if (action === 'view_bill') {
+    const billRef = notifData.billReference || notifData.billNumber || orderId;
+    event.waitUntil(openWindow(billRef ? `/bill/${billRef}` : '/'));
+    return;
+  }
+
   // Rate or Reorder
   if (action === 'rate') { event.waitUntil(openWindow(`/dashboard?rate=${orderId}`)); return; }
   if (action === 'reorder') { event.waitUntil(openWindow(`/menu?reorder=${orderId}`)); return; }
@@ -307,16 +314,38 @@ async function flushOfflineActions() {
   }
 }
 
-// ─── Push Event (for non-Firebase message handling fallback) ─────────────────
+// ─── Push Event (for Apple/Safari raw Web Push fallback) ───────────────────────
+// We ONLY process this if the payload is missing standard FCM structure 
+// to prevent duplicate notifications with firebase-messaging-compat.
 self.addEventListener('push', event => {
-  // Firebase compat SDK handles this, but we catch any raw pushes as fallback
   if (!event.data) return;
+  
   try {
     const data = event.data.json();
-    if (data.notification) return; // Already handled by Firebase SDK
-    // Data-only message
-    BROADCAST.postMessage({ type: 'DATA_PUSH', data });
-  } catch {}
+    
+    // Check if it's already handled by FCM wrapper (has fcmOptions or similar)
+    if (data.fcmOptions || (data.data && data.data['fcm_options'])) {
+       // Let firebase-messaging-compat handle it
+       return;
+    }
+
+    if (data.notification || data.title) {
+      const title = data.notification?.title || data.title || 'Olive Pizza';
+      const options = {
+        body: data.notification?.body || data.body || '',
+        icon: data.notification?.icon || ICON,
+        badge: data.notification?.badge || BADGE,
+        data: data.data || {},
+        vibrate: [200, 100, 200]
+      };
+      event.waitUntil(self.registration.showNotification(title, options));
+    } else {
+      // Data-only message
+      BROADCAST.postMessage({ type: 'DATA_PUSH', data });
+    }
+  } catch (err) {
+    console.error('[SW] Raw push event error:', err);
+  }
 });
 
 // ─── Window Focus Helper ──────────────────────────────────────────────────────
@@ -339,7 +368,11 @@ self.addEventListener('message', async event => {
   }
 });
 
-// ─── Activate ─────────────────────────────────────────────────────────────────
+// ─── Install & Activate ─────────────────────────────────────────────────────────
+self.addEventListener('install', event => {
+  self.skipWaiting();
+});
+
 self.addEventListener('activate', event => {
   event.waitUntil(clients.claim());
 });

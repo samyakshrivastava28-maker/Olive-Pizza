@@ -6,8 +6,12 @@
 		"androidScheme": "https",
 		"iosScheme": "https",
 		"allowNavigation": [
+			"*.olivepizza.in",
 			"*.firebaseapp.com",
 			"*.googleapis.com",
+			"*.gstatic.com",
+			"*.google.com",
+			"challenges.cloudflare.com",
 			"*.onrender.com",
 			"*.cloudinary.com",
 			"res.cloudinary.com"
@@ -17,11 +21,10 @@
 		"contentInset": "always"
 	},
 	"android": {
-		"allowMixedContent": false,
+		"allowMixedContent": true,
 		"captureInput": true,
-		"webContentsDebuggingEnabled": false,
-		"backgroundColor": "#0B0F14",
-		"overrideUserAgent": "Mozilla/5.0 (Linux; Android 13; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36"
+		"webContentsDebuggingEnabled": true,
+		"backgroundColor": "#0B0F14"
 	},
 	"plugins": {
 		"SplashScreen": {

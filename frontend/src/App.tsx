@@ -52,12 +52,15 @@ const lazyWithRetry = <T extends ComponentType<any>>(
         }
         
         // Try to bust the cache by adding a timestamp
-        window.location.href = window.location.pathname + '?v=' + new Date().getTime();
-        return new Promise<{ default: T }>(() => {});
+        try {
+          window.location.href = window.location.pathname + '?v=' + new Date().getTime();
+        } catch {
+          window.location.reload();
+        }
       }
       
-      // If we already refreshed recently, fail gracefully instead of crashing the app
-      console.error('Component load failed after forced refresh. Returning fallback.', error);
+      // If we already refreshed recently or while navigation is pending, fail gracefully instead of crashing or hanging the app
+      console.error('Component load failed. Returning fallback UI.', error);
       return {
         default: () => (
           <div className="flex flex-col items-center justify-center p-8 bg-dark-900 border border-dark-800 rounded-2xl m-4 text-center">
@@ -228,6 +231,7 @@ function AppContent() {
               {/* Public Routes */}
               <Route element={<MainLayout />}>
                 <Route path="/" element={<Home />} />
+                <Route path="/index.html" element={<Home />} />
                 <Route path="/menu" element={<Menu />} />
                 <Route path="/product/:productId" element={<ProductDetail />} />
                 <Route path="/cart" element={<Cart />} />

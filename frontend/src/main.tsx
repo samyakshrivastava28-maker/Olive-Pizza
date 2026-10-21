@@ -1,6 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { BrowserRouter } from 'react-router';
+import { BrowserRouter, HashRouter } from 'react-router';
 import './index.css';
 import App from './App.tsx';
 
@@ -48,12 +48,27 @@ import('./lib/versionManager').then(({ initVersionManager }) => {
   try { initVersionManager(); } catch { /* non-fatal */ }
 }).catch(() => { /* non-fatal if versionManager fails to load */ });
 
+const isHashRouterNeeded =
+  typeof window !== 'undefined' && (
+    window.location.protocol === 'file:' ||
+    window.location.protocol === 'capacitor:' ||
+    window.location.protocol === 'ionic:' ||
+    (window.location.hostname === 'localhost' && (!window.location.port || window.location.port === '80' || window.location.port === '443')) ||
+    navigator.userAgent.includes('Electron') ||
+    Capacitor.isNativePlatform() ||
+    Boolean((window as any).Capacitor?.isNativePlatform?.()) ||
+    (window as any).Capacitor?.getPlatform?.() === 'android' ||
+    (window as any).Capacitor?.getPlatform?.() === 'ios'
+  );
+
+const Router = isHashRouterNeeded ? HashRouter : BrowserRouter;
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <GlobalErrorBoundary>
-      <BrowserRouter>
+      <Router>
         <App />
-      </BrowserRouter>
+      </Router>
     </GlobalErrorBoundary>
   </StrictMode>,
 );
