@@ -87,7 +87,7 @@ export const fetchApi = async (endpoint: string, init?: RequestInit): Promise<Re
   try {
     const currentUser = auth.currentUser;
     if (currentUser && !headers.has('Authorization')) {
-      const token = await currentUser.getIdToken();
+      const token = await currentUser.getIdToken(false);
       if (token) {
         headers.set('Authorization', `Bearer ${token}`);
       }
@@ -96,21 +96,37 @@ export const fetchApi = async (endpoint: string, init?: RequestInit): Promise<Re
     console.warn('[fetchApi] Could not attach bearer token:', err);
   }
 
-  const mergedInit = { ...init, headers };
+  const method = (init?.method || 'GET').toUpperCase();
+  const isIdempotent = ['GET', 'HEAD', 'OPTIONS'].includes(method);
+
+  const controller = new AbortController();
+  const timeoutMs = 20000;
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  if (init?.signal) {
+    init.signal.addEventListener('abort', () => controller.abort());
+  }
+
+  const mergedInit = { ...init, headers, signal: controller.signal };
   
   try {
     const res = await fetch(primaryUrl, mergedInit);
-    // If the response is OK, or not a relative proxy URL, or a valid HTTP client status (400, 401, 403, 429), return it directly
+    clearTimeout(timeoutId);
+
+    // If response is OK, or not relative, or an expected client status (400, 401, 403, 429), return it directly
     if (res.ok || !primaryUrl.startsWith('/') || (res.status < 500 && res.status !== 404)) {
       return res;
     }
-    // If relative fetch failed with gateway errors (502/503/504) or missing route (404), try direct production Render backend
-    const directUrl = `${PRODUCTION_BACKEND_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
-    return await fetch(directUrl, mergedInit);
-  } catch (err) {
-    if (primaryUrl.startsWith('/')) {
+    // Only retry against direct production backend if the request is idempotent (never replay non-idempotent POST)
+    if (primaryUrl.startsWith('/') && isIdempotent) {
       const directUrl = `${PRODUCTION_BACKEND_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
-      return await fetch(directUrl, mergedInit);
+      return await fetch(directUrl, { ...mergedInit, signal: undefined });
+    }
+    return res;
+  } catch (err) {
+    clearTimeout(timeoutId);
+    if (primaryUrl.startsWith('/') && isIdempotent) {
+      const directUrl = `${PRODUCTION_BACKEND_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+      return await fetch(directUrl, { ...mergedInit, signal: undefined });
     }
     throw err;
   }

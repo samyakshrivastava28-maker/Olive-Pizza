@@ -80,11 +80,15 @@ export const useDataStore = create<DataState>()(
         unsubscribers.forEach((unsub) => unsub());
         unsubscribers = [];
 
-        import('./config').then(({ OPENING_HOUR, CLOSING_HOUR }) => {
-          const currentHour = new Date().getHours();
-          const isWithinHours = currentHour >= OPENING_HOUR && currentHour < CLOSING_HOUR;
-          set((state) => ({ storeStatus: { ...state.storeStatus, isWithinBusinessHours: isWithinHours } }));
-        });
+        // Initialize business hours dynamically from persisted store status
+        const currentHour = new Date().getHours();
+        const initStatus = get().storeStatus;
+        const openH = initStatus?.openingHour ?? 0;
+        const closeH = initStatus?.closingHour ?? 24;
+        const isWithinHours = openH <= closeH
+          ? (currentHour >= openH && currentHour < closeH)
+          : (currentHour >= openH || currentHour < closeH);
+        set((state) => ({ storeStatus: { ...state.storeStatus, isWithinBusinessHours: isWithinHours } }));
 
         // Filter any cached items from IDB to purge expired items immediately
         const state = get();

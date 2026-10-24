@@ -95,9 +95,8 @@ export function OwnerGuard() {
   const { isAuthenticated, user, role, isLoading } = useAuthStore();
   const location = useLocation();
 
-  const AUTHORIZED_INTERNAL_EMAILS = ['olivepizzarjn@gmail.com', 'webhub2811@gmail.com'];
-  const emailOk = user?.email && AUTHORIZED_INTERNAL_EMAILS.includes(user.email.toLowerCase());
-  const isAllowed = role === 'owner' || role === 'admin' || (role as string) === 'developer' || emailOk;
+  // Privileged access enforced strictly through server-verified role tokens
+  const isAllowed = role === 'owner' || role === 'admin' || (role as string) === 'developer';
   const isUnauthorized = !isAuthenticated || !isAllowed;
 
   React.useEffect(() => {
@@ -126,9 +125,8 @@ export function AdminGuard() {
   const { isAuthenticated, user, role, isLoading } = useAuthStore();
   const location = useLocation();
 
-  const AUTHORIZED_INTERNAL_EMAILS = ['olivepizzarjn@gmail.com', 'webhub2811@gmail.com'];
-  const emailOk = user?.email && AUTHORIZED_INTERNAL_EMAILS.includes(user.email.toLowerCase());
-  const isAllowed = role === 'admin' || role === 'owner' || (role as string) === 'developer' || emailOk;
+  // Admin access enforced strictly through server-verified role tokens
+  const isAllowed = role === 'admin' || role === 'owner' || (role as string) === 'developer';
   const isUnauthorized = !isAuthenticated || !isAllowed;
 
   React.useEffect(() => {
@@ -161,7 +159,8 @@ export function DeveloperGuard() {
     return <div className="h-screen flex items-center justify-center text-slate-400 text-sm font-bold bg-dark-950">Verifying developer access...</div>;
   }
 
-  const isDevUser = user?.email?.toLowerCase() === 'webhub2811@gmail.com' || role === 'developer';
+  // Developer access enforced strictly through server-verified developer role token
+  const isDevUser = role === 'developer';
 
   if (!isAuthenticated || !isDevUser) {
     if (isAuthenticated && user) {

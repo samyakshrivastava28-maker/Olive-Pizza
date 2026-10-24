@@ -36,15 +36,8 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
           }
 
           if (firebaseUser) {
-            const emailLower = (firebaseUser.email || '').toLowerCase().trim();
-            const isAuthorizedOwner = ['olivepizzarjn@gmail.com', 'webhub2811@gmail.com'].includes(emailLower);
-            const fallbackRole = isAuthorizedOwner ? 'owner' : 'customer';
             const existingUser = useAuthStore.getState().user;
-
-            let safeInitialRole = existingUser?.role || fallbackRole;
-            if (!isAuthorizedOwner && (safeInitialRole === 'owner' || safeInitialRole === 'admin' || safeInitialRole === 'developer')) {
-              safeInitialRole = 'customer';
-            }
+            const safeInitialRole = existingUser?.role || 'customer';
 
             // 1. Immediately set basic user state & unlock UI without waiting for remote Firestore I/O
             setUser(
@@ -95,11 +88,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
                       earnings: data.earnings,
                       metrics: data.metrics,
                     },
-                    (data.role === 'delivery' ? 'delivery_partner' : (
-                      (!isAuthorizedOwner && (data.role === 'owner' || data.role === 'admin' || data.role === 'developer'))
-                        ? 'customer'
-                        : (data.role || fallbackRole)
-                    ))
+                    (data.role === 'delivery' ? 'delivery_partner' : (data.role || 'customer'))
                   );
 
                   // Silently verify / sync push tokens for already-granted sessions

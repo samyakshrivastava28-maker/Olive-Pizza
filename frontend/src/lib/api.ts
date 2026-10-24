@@ -250,16 +250,27 @@ export async function fetchApiJson<T = any>(
       const mergedInit: RequestInit = { ...init, headers };
 
       let res: Response;
+      const isIdempotent = ['GET', 'HEAD', 'OPTIONS'].includes(method);
+      const controller = new AbortController();
+      const timeoutMs = 20000;
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+      if (init?.signal) {
+        init.signal.addEventListener('abort', () => controller.abort());
+      }
+      const safeInit: RequestInit = { ...mergedInit, signal: controller.signal };
+
       try {
-        res = await fetch(primaryUrl, mergedInit);
-        if (!res.ok && primaryUrl.startsWith('/') && (res.status >= 500 || res.status === 404)) {
+        res = await fetch(primaryUrl, safeInit);
+        clearTimeout(timeoutId);
+        if (!res.ok && primaryUrl.startsWith('/') && isIdempotent && (res.status >= 500 || res.status === 404)) {
           const directUrl = `${PRODUCTION_BACKEND_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
-          res = await fetch(directUrl, mergedInit);
+          res = await fetch(directUrl, { ...safeInit, signal: undefined });
         }
       } catch (networkErr) {
-        if (primaryUrl.startsWith('/')) {
+        clearTimeout(timeoutId);
+        if (primaryUrl.startsWith('/') && isIdempotent) {
           const directUrl = `${PRODUCTION_BACKEND_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
-          res = await fetch(directUrl, mergedInit);
+          res = await fetch(directUrl, { ...safeInit, signal: undefined });
         } else {
           throw networkErr;
         }
