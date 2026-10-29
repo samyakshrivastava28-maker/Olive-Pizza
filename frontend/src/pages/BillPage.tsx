@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+﻿import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router';
 import { auth } from '../lib/firebase';
 import { useAuthStore } from '../lib/store';
@@ -85,6 +85,7 @@ export default function BillPage() {
   const { billReference } = useParams<{ billReference: string }>();
   const navigate = useNavigate();
   const { user, isAuthenticated, isLoading: isAuthLoading } = useAuthStore();
+  const billRef = useRef<HTMLDivElement>(null);
 
   const [bill, setBill] = useState<BillData | null>(null);
   const [loading, setLoading] = useState(true);
