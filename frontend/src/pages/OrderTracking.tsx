@@ -10,9 +10,9 @@ import { useAuthStore } from "../lib/store";
 import { auth, db } from "../lib/firebase";
 import { doc, getDoc, onSnapshot, collection, getDocs, query, where } from "firebase/firestore";
 import { useNotificationDebugger } from "../hooks/useNotificationDebugger";
-import { supabase } from "../lib/supabase";
-import type { RealtimeChannel } from "@supabase/supabase-js";
-import { RESTAURANT_LOCATION, fetchApi } from "../lib/config";
+// Realtime connection via central WebSocket
+
+import { RESTAURANT_LOCATION, fetchApi, getWebSocketUrl } from "../lib/config";
 import { motion, AnimatePresence, PanInfo } from "framer-motion";
 import {
   ChevronLeft,
@@ -481,7 +481,7 @@ export default function OrderTracking() {
   );
 
   // Refs
-  const channelRef = useRef<RealtimeChannel | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
   const offlineTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const trackingLockedRef = useRef(false);
 
@@ -583,9 +583,9 @@ export default function OrderTracking() {
     setPartnerHeading(0);
     setEta(null);
     setDistance(null);
-    if (channelRef.current) {
-      supabase.removeChannel(channelRef.current);
-      channelRef.current = null;
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
     }
     if (offlineTimerRef.current) clearTimeout(offlineTimerRef.current);
   }, []);
@@ -806,20 +806,22 @@ export default function OrderTracking() {
       .catch(() => {});
   }, [orderId, order?.deliveryPartnerId, order?.deliveryPartnerDetails, order?.deliveryPartnerName, order?.status, partnerLocation]);
 
-  // ── SUPABASE REALTIME: GPS (Instant Second Channel) ──
+// ── LIVE RIDER GPS TRACKING (Central Realtime WebSocket Channel) ──
   useEffect(() => {
     if (!order?.deliveryPartnerId || !orderId) return;
     if (!TRACKABLE_STATUSES.has(order.status) || (order.status !== "out_for_delivery" && order.status !== "picked_up")) {
-      if (channelRef.current) { supabase.removeChannel(channelRef.current); channelRef.current = null; }
+      if (wsRef.current) { wsRef.current.close(); wsRef.current = null; }
       return;
     }
 
     const partnerId = order.deliveryPartnerId;
 
-    // Initial position from Supabase
-    Promise.resolve(supabase.from("delivery_locations").select("latitude,longitude,heading,speed").eq("delivery_partner_id", partnerId).single())
-      .then(({ data, error }) => {
-        if (error || trackingLockedRef.current) return;
+    // 1. Initial position from backend Redis-backed tracking API
+    fetchApi('/api/v1/tracking/location/' + partnerId)
+      .then(async (res) => {
+        if (!res.ok || trackingLockedRef.current) return;
+        const json = await res.json();
+        const data = json.data;
         if (data && data.latitude && data.longitude) {
           const lat = Number(data.latitude);
           const lng = Number(data.longitude);
@@ -837,31 +839,56 @@ export default function OrderTracking() {
       })
       .catch(() => {});
 
-    // Realtime subscription
-    const channel = supabase.channel(`tracking-${orderId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "delivery_locations", filter: `delivery_partner_id=eq.${partnerId}` }, (payload) => {
-        if (trackingLockedRef.current) return;
-        const row = payload.new as any;
-        if (!row?.latitude || !row?.longitude) return;
+    // 2. Realtime subscription via Central WebSocket Server
+    let ws: WebSocket | null = null;
+    try {
+      ws = new WebSocket(getWebSocketUrl());
+      wsRef.current = ws;
 
-        const lat = Number(row.latitude);
-        const lng = Number(row.longitude);
-        setPartnerLocation({ lat, lng });
-        setPartnerHeading(Number(row.heading || 0));
-        resetOfflineTimer();
-
-        if (order?.deliveryAddress?.lat && order?.deliveryAddress?.lng) {
-          const dist = haversine(lat, lng, order.deliveryAddress.lat, order.deliveryAddress.lng);
-          const speedKmh = row.speed ? row.speed * 3.6 : 25;
-          setDistance(Math.round(dist * 10) / 10);
-          setEta(Math.max(1, Math.ceil((dist / speedKmh) * 60)));
+      ws.onopen = async () => {
+        try {
+          const token = await auth.currentUser?.getIdToken();
+          if (token) {
+            ws?.send(JSON.stringify({ type: 'auth', token }));
+          }
+          ws?.send(JSON.stringify({ type: 'subscribe_order', orderId }));
+        } catch (authErr) {
+          console.warn('[OrderTracking] WS auth notice:', authErr);
         }
-      }).subscribe();
+      };
 
-    channelRef.current = channel;
+      ws.onmessage = (event) => {
+        if (trackingLockedRef.current) return;
+        try {
+          const payload = JSON.parse(event.data);
+          if (payload.type === 'driver.location_update' && payload.data) {
+            const row = payload.data;
+            if (!row?.lat || !row?.lng) return;
+
+            const lat = Number(row.lat);
+            const lng = Number(row.lng);
+            setPartnerLocation({ lat, lng });
+            setPartnerHeading(Number(row.heading || 0));
+            resetOfflineTimer();
+
+            if (order?.deliveryAddress?.lat && order?.deliveryAddress?.lng) {
+              const dist = haversine(lat, lng, order.deliveryAddress.lat, order.deliveryAddress.lng);
+              const speedKmh = row.speed ? row.speed * 3.6 : 25;
+              setDistance(Math.round(dist * 10) / 10);
+              setEta(Math.max(1, Math.ceil((dist / speedKmh) * 60)));
+            }
+          }
+        } catch {}
+      };
+    } catch (wsErr) {
+      console.warn('[OrderTracking] WebSocket connection error:', wsErr);
+    }
+
     return () => {
-      supabase.removeChannel(channel);
-      channelRef.current = null;
+      if (ws) {
+        ws.close();
+        if (wsRef.current === ws) wsRef.current = null;
+      }
       if (offlineTimerRef.current) clearTimeout(offlineTimerRef.current);
     };
   }, [order?.deliveryPartnerId, order?.status, orderId, resetOfflineTimer]);
