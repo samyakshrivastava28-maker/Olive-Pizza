@@ -53,11 +53,15 @@ export default function Checkout() {
     availabilityStatus: 'AVAILABLE' | 'HIGH_DEMAND' | 'NO_RIDERS' | 'CLOSED';
     availabilityMessage: string;
     isRestaurantOpen: boolean;
+    deliveryFee?: number;
+    freeDeliveryThreshold?: number;
   }>({
     canAcceptDeliveries: true,
     availabilityStatus: 'AVAILABLE',
     availabilityMessage: 'Delivery available',
     isRestaurantOpen: true,
+    deliveryFee: 40,
+    freeDeliveryThreshold: 500,
   });
 
   const getInitialCoords = () => {
@@ -216,6 +220,8 @@ export default function Checkout() {
             availabilityStatus: availStatus,
             availabilityMessage: data.availabilityMessage || (data.canAcceptDeliveries ? 'Delivery available' : 'Delivery unavailable'),
             isRestaurantOpen: data.isRestaurantOpen ?? true,
+            deliveryFee: data.deliveryFee != null ? Number(data.deliveryFee) : 40,
+            freeDeliveryThreshold: data.freeDeliveryThreshold != null ? Number(data.freeDeliveryThreshold) : 500,
           });
           if (!data.canAcceptDeliveries && data.isRestaurantOpen) {
             setDeliveryType('pickup');
@@ -300,7 +306,11 @@ export default function Checkout() {
       ? Math.round(total * (appliedPromo.value / 100))
       : appliedPromo.value
     : 0;
-  const deliveryFee = deliveryType === 'delivery' ? 40 : 0;
+  const baseDeliveryFee = deliveryAvailability.deliveryFee ?? 40;
+  const freeThreshold = deliveryAvailability.freeDeliveryThreshold ?? 500;
+  const deliveryFee = deliveryType === 'delivery' 
+    ? (freeThreshold > 0 && total >= freeThreshold ? 0 : baseDeliveryFee) 
+    : 0;
   const taxes = Math.round(total * 0.05);
   const finalTotal = Math.max(0, total - discountAmount) + deliveryFee + taxes;
 

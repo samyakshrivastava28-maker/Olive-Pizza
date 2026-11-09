@@ -420,6 +420,7 @@ export default function OrderTracking() {
   const { orderId: paramOrderId } = useParams();
   const [searchParams] = useSearchParams();
   const queryOrderId = searchParams.get('orderId') || searchParams.get('id');
+  const queryTrackingToken = searchParams.get('trackingToken') || searchParams.get('token');
   const navigate = useNavigate();
 
   // Active tracking target ID
@@ -783,7 +784,7 @@ export default function OrderTracking() {
     if (!orderId || !order?.deliveryPartnerId) return;
     if (order.deliveryPartnerDetails) return;
 
-    fetchApi(`/api/tracking/order/${orderId}`)
+    fetchApi(queryTrackingToken ? `/api/tracking/order/${orderId}?trackingToken=${encodeURIComponent(queryTrackingToken)}` : `/api/tracking/order/${orderId}`)
       .then(async (res) => {
         if (res.ok) {
           const data = await res.json();
@@ -851,7 +852,11 @@ export default function OrderTracking() {
           if (token) {
             ws?.send(JSON.stringify({ type: 'auth', token }));
           }
-          ws?.send(JSON.stringify({ type: 'subscribe_order', orderId }));
+          ws?.send(JSON.stringify({ 
+            type: 'subscribe_order', 
+            orderId,
+            ...(queryTrackingToken ? { trackingToken: queryTrackingToken } : {})
+          }));
         } catch (authErr) {
           console.warn('[OrderTracking] WS auth notice:', authErr);
         }
