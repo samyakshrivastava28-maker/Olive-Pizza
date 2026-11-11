@@ -100,7 +100,7 @@ export const fetchApi = async (endpoint: string, init?: RequestInit): Promise<Re
   const isIdempotent = ['GET', 'HEAD', 'OPTIONS'].includes(method);
 
   const controller = new AbortController();
-  const timeoutMs = 20000;
+  const timeoutMs = isIdempotent ? 20000 : 45000;
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   if (init?.signal) {
     init.signal.addEventListener('abort', () => controller.abort());

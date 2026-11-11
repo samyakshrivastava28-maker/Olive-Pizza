@@ -16,6 +16,9 @@ export default function ProcessingOrder() {
   const [step, setStep] = useState<CheckoutStep>('preparing');
   const [errorMessage, setErrorMessage] = useState<string>('');
   const isExecutingRef = useRef(false);
+  const idempotencyKeyRef = useRef<string>(
+    `ord_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
+  );
 
   useEffect(() => {
     if (!items || items.length === 0) {
@@ -29,8 +32,20 @@ export default function ProcessingOrder() {
     const placeOrder = async () => {
       try {
         setStep('preparing');
-        const token = await auth.currentUser?.getIdToken();
-        const currentUser = auth.currentUser;
+
+        let currentUser = auth.currentUser;
+        if (!currentUser && typeof (auth as any).authStateReady === 'function') {
+          try {
+            await (auth as any).authStateReady();
+            currentUser = auth.currentUser;
+          } catch {}
+        }
+
+        if (!currentUser) {
+          throw new Error('Please sign in to complete your order.');
+        }
+
+        const token = await currentUser.getIdToken();
         const storeUser = useAuthStore.getState().user;
         let customerPhone = currentUser?.phoneNumber || storeUser?.phone || (currentUser as any)?.phone;
 
@@ -122,7 +137,11 @@ export default function ProcessingOrder() {
         setStep('submitting');
         const res = await fetchApi('/api/orders', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + token,
+            'Idempotency-Key': idempotencyKeyRef.current
+          },
           body: JSON.stringify({
             items: items.map((item: any) => ({
               menuItemId: item.menuItemId || item.id || item._id,

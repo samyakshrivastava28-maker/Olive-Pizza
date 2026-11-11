@@ -16,7 +16,6 @@ const LocationPicker3D = React.lazy(() => import('../components/map/LocationPick
 import { fetchRoute } from '../services/navigationRouting.service';
 import { RESTAURANT_LOCATION, MAX_DELIVERY_RADIUS_KM, fetchApi } from '../lib/config';
 import { OrderingContextService } from '../lib/orderingContext';
-import { calculateDistance } from '../lib/utils';
 import { useDataStore } from '../lib/dataStore';
 import SEO from '../components/SEO';
 
@@ -153,12 +152,21 @@ export default function Checkout() {
       navigator.geolocation.getCurrentPosition(
         async (position) => {
           const { latitude, longitude } = position.coords;
-          // Validate before blindly overwriting map center
-          const distFromHq = calculateDistance(latitude, longitude, RESTAURANT_LOCATION.lat, RESTAURANT_LOCATION.lng);
-          if (distFromHq > 25) {
-            console.warn('[Checkout] Browser IP geolocation placed outside Rajnandgaon (' + distFromHq.toFixed(1) + ' km). Preserving Rajnandgaon HQ.');
-            setMapCenter({ lat: RESTAURANT_LOCATION.lat, lng: RESTAURANT_LOCATION.lng });
-            setAddress(RESTAURANT_LOCATION.address);
+          const resolved = await OrderingContextService.resolveContext({
+            lat: latitude,
+            lng: longitude,
+            customerId: user?.uid
+          });
+          if (!resolved.isServiceable || !resolved.context) {
+            console.warn('[Checkout] Browser geolocation placed outside all active delivery zones. Preserving cached/HQ context.');
+            const cachedCtx = OrderingContextService.getCachedContext();
+            if (cachedCtx?.location?.lat && cachedCtx?.location?.lng) {
+              setMapCenter({ lat: cachedCtx.location.lat, lng: cachedCtx.location.lng });
+              if (cachedCtx.location.addressLine) setAddress(cachedCtx.location.addressLine);
+            } else {
+              setMapCenter({ lat: RESTAURANT_LOCATION.lat, lng: RESTAURANT_LOCATION.lng });
+              setAddress(RESTAURANT_LOCATION.address);
+            }
             return;
           }
           setMapCenter({ lat: latitude, lng: longitude });
@@ -170,9 +178,15 @@ export default function Checkout() {
           } catch (err) {}
         },
         () => {
-          // If denied, fallback to Rajnandgaon HQ
-          setMapCenter({ lat: RESTAURANT_LOCATION.lat, lng: RESTAURANT_LOCATION.lng });
-          setAddress(RESTAURANT_LOCATION.address);
+          // If denied, fallback to cached branch context or Rajnandgaon HQ
+          const cachedCtx = OrderingContextService.getCachedContext();
+          if (cachedCtx?.location?.lat && cachedCtx?.location?.lng) {
+            setMapCenter({ lat: cachedCtx.location.lat, lng: cachedCtx.location.lng });
+            if (cachedCtx.location.addressLine) setAddress(cachedCtx.location.addressLine);
+          } else {
+            setMapCenter({ lat: RESTAURANT_LOCATION.lat, lng: RESTAURANT_LOCATION.lng });
+            setAddress(RESTAURANT_LOCATION.address);
+          }
         }
       );
     }
@@ -187,17 +201,42 @@ export default function Checkout() {
     const checkCustomerActiveOrder = async () => {
       try {
         setCheckingActiveOrder(true);
-        const q = query(collection(db, 'orders'), where('userId', '==', user.uid));
-        const snap = await getDocs(q);
-        const active = snap.docs.find(doc => {
-          const s = (doc.data().status || '').toLowerCase();
-          return !['delivered', 'cancelled', 'rejected', 'failed'].includes(s);
-        });
-        if (active) {
-          setActiveOrder({ id: active.id, ...active.data() });
-        } else {
-          setActiveOrder(null);
+        const terminalStatuses = ['delivered', 'cancelled', 'rejected', 'failed', 'completed'];
+        let foundActive: any = null;
+
+        try {
+          const q = query(collection(db, 'orders'), where('userId', '==', user.uid));
+          const snap = await getDocs(q);
+          const activeDoc = snap.docs.find(d => {
+            const s = (d.data().status || '').toLowerCase();
+            return !terminalStatuses.includes(s);
+          });
+          if (activeDoc) {
+            foundActive = { id: activeDoc.id, ...activeDoc.data() };
+          }
+        } catch (fsErr) {
+          console.warn('[Checkout] Firestore active order query notice:', fsErr);
         }
+
+        // Canonical PG fallback/verification when Firestore returned nothing or errored
+        try {
+          const res = await fetchApi('/api/orders?limit=20');
+          if (res.ok) {
+            const payload = await res.json().catch(() => ({}));
+            const apiOrders = Array.isArray(payload) ? payload : payload?.orders || [];
+            const apiActive = apiOrders.find((o: any) => {
+              const s = (o?.status || o?.order_status || '').toLowerCase();
+              return s && !terminalStatuses.includes(s);
+            });
+            if (apiActive) {
+              foundActive = { ...(foundActive || {}), ...apiActive, id: apiActive.id || apiActive.orderId || foundActive?.id };
+            } else if (foundActive && apiOrders.some((o: any) => (o.id || o.orderId) === foundActive.id && terminalStatuses.includes((o.status || '').toLowerCase()))) {
+              foundActive = null;
+            }
+          }
+        } catch {}
+
+        setActiveOrder(foundActive);
       } catch (err) {
         console.warn('[Checkout] Active order check notice:', err);
       } finally {
@@ -622,9 +661,13 @@ export default function Checkout() {
                        navigator.geolocation.getCurrentPosition(
                          async (pos) => {
                            const { latitude, longitude } = pos.coords;
-                           const distFromHq = calculateDistance(latitude, longitude, RESTAURANT_LOCATION.lat, RESTAURANT_LOCATION.lng);
-                           if (distFromHq > 25) {
-                             toast.error(`Your device GPS (${distFromHq.toFixed(1)} km away) is outside Rajnandgaon delivery radius.`, { id: t, duration: 4000 });
+                           const resolved = await OrderingContextService.resolveContext({
+                             lat: latitude,
+                             lng: longitude,
+                             customerId: user?.uid
+                           });
+                           if (!resolved.isServiceable || !resolved.context) {
+                             toast.error(resolved.error || 'Your device GPS is outside active Olive Pizza delivery zones.', { id: t, duration: 4000 });
                              return;
                            }
                            setMapCenter({lat: latitude, lng: longitude});
@@ -634,7 +677,7 @@ export default function Checkout() {
                              const addr = data?.location?.displayName || data?.display_name;
                              if (addr) setAddress(addr);
                            } catch (err) {}
-                           toast.success('Location updated via GPS!', { id: t });
+                           toast.success(`Location updated (${resolved.context.branchName})!`, { id: t });
                          },
                          () => toast.error('Location access denied or unavailable', { id: t })
                        );

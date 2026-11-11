@@ -21,6 +21,9 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
       if (!authResolved && mounted) {
         console.warn('[AuthProvider] Watchdog safety timeout triggered: clearing initial auth loading state');
         authResolved = true;
+        if (!auth.currentUser && useAuthStore.getState().isAuthenticated) {
+          useAuthStore.getState().logout();
+        }
         setLoading(false);
       }
     }, 1200);

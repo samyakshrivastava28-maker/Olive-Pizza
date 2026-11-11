@@ -615,6 +615,86 @@ export default function OrderTracking() {
       localStorage.setItem('activeOrderId', orderId);
     } catch {}
 
+    let isTerminalFromApi = false;
+    let pollTimer: ReturnType<typeof setInterval> | null = null;
+
+    const applyCanonicalOrder = (canon: any, fallbackData?: any) => {
+      if (!canon || !(canon.id || canon.orderId || canon.status)) return;
+      const canonStatus = (canon.status || canon.order_status || fallbackData?.status || '').toLowerCase();
+      if (!canonStatus) return;
+
+      if (prevOrderStatusRef.current && prevOrderStatusRef.current !== canonStatus) {
+        const soundType = statusToSoundType(canonStatus);
+        if (soundType) playNotificationSound(soundType);
+      }
+      if (prevOrderStatusRef.current === 'pending' && (canonStatus === 'accepted' || canonStatus === 'preparing')) {
+        setShowAccepted(true);
+      }
+      prevOrderStatusRef.current = canonStatus;
+
+      if (canonStatus === 'delivered' || canonStatus === 'cancelled' || canonStatus === 'rejected') {
+        isTerminalFromApi = true;
+        try {
+          localStorage.removeItem('activeOrderId');
+          localStorage.removeItem('lastPlacedOrderId');
+        } catch {}
+        if (pollTimer) {
+          clearInterval(pollTimer);
+          pollTimer = null;
+        }
+      }
+
+      if (canon.deliveryPartnerDetails) {
+        setPartnerDetails(canon.deliveryPartnerDetails);
+      } else if (canon.deliveryPartnerName) {
+        setPartnerDetails((prev: any) => ({
+          ...prev,
+          name: canon.deliveryPartnerName,
+          phone: canon.deliveryPartnerPhone || prev?.phone,
+          vehicleType: canon.deliveryPartnerVehicleType || prev?.vehicleType || 'Scooter'
+        }));
+      }
+
+      setOrder((prev: any) => ({
+        ...(prev || {}),
+        ...(fallbackData || {}),
+        ...canon,
+        id: canon.id || canon.orderId || fallbackData?.id || prev?.id || orderId,
+        status: canonStatus,
+        ...(canonStatus === 'delivered' || canonStatus === 'cancelled' ? { lifecycleStatus: 'COMPLETED' } : {})
+      }));
+
+      if (LOCKED_STATUSES.has(canonStatus)) {
+        lockTracking();
+      }
+    };
+
+    const syncFromBackendApi = async (fallbackData?: any) => {
+      if (isTerminalFromApi) return false;
+      try {
+        if (!auth.currentUser && typeof (auth as any).authStateReady === 'function') {
+          await (auth as any).authStateReady().catch(() => {});
+        }
+        const token = auth.currentUser ? await auth.currentUser.getIdToken().catch(() => null) : null;
+        const res = await fetchApi(`/api/orders/${orderId}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        });
+        if (!res.ok) return false;
+        const bData = await res.json().catch(() => null);
+        const canon = bData?.order || bData;
+        if (canon && (canon.id || canon.orderId || canon.status)) {
+          applyCanonicalOrder(canon, fallbackData);
+          return true;
+        }
+      } catch {}
+      return false;
+    };
+
+    syncFromBackendApi();
+    pollTimer = setInterval(() => {
+      syncFromBackendApi();
+    }, 5000);
+
     const unsub = onSnapshot(
       doc(db, "orders", orderId),
       async (docSnap) => {
@@ -643,32 +723,14 @@ export default function OrderTracking() {
             const soundType = statusToSoundType(data.status);
             if (soundType) playNotificationSound(soundType);
           }
-          if (prevOrderStatusRef.current === 'pending' && data.status === 'accepted') {
+          if (prevOrderStatusRef.current === 'pending' && (data.status === 'accepted' || data.status === 'preparing')) {
             setShowAccepted(true);
           }
           prevOrderStatusRef.current = data.status;
-          setOrder(data);
+          setOrder((prev: any) => ({ ...(prev || {}), ...data }));
 
-          // Check backend REST API to verify if canonical database has newer/terminal status
-          fetchApi(`/api/orders/${orderId}`)
-            .then(async (res) => {
-              if (res.ok) {
-                const bData = await res.json();
-                const canon = bData?.order || bData;
-                if (canon && canon.status) {
-                  const canonStatus = (canon.status || canon.order_status || '').toLowerCase();
-                  if (canonStatus === 'delivered' || canonStatus === 'cancelled') {
-                    localStorage.removeItem('activeOrderId');
-                    localStorage.removeItem('lastPlacedOrderId');
-                    data.status = canonStatus;
-                    data.lifecycleStatus = 'COMPLETED';
-                    setOrder({ ...data, ...canon, status: canonStatus });
-                    return;
-                  }
-                }
-              }
-            })
-            .catch(() => {});
+          // Check backend REST API so canonical PG updates (status, prep time, rider) always win
+          await syncFromBackendApi(data);
 
           // Populate sanitized partner details from order snapshot
           if (data.deliveryPartnerDetails) {
@@ -741,22 +803,19 @@ export default function OrderTracking() {
       },
       async (err) => {
         console.warn("[OrderTracking] Snapshot error, falling back to backend REST API:", err);
-        try {
-          const res = await fetchApi(`/api/orders/${orderId}`);
-          if (res.ok) {
-            const data = await res.json();
-            const histOrder = data?.order || data;
-            if (histOrder && (histOrder.id || histOrder.orderId)) {
-              setOrder(histOrder);
-              return;
-            }
-          }
-        } catch {}
+        const recovered = await syncFromBackendApi();
+        if (recovered) return;
         setOrderError("Unable to load order. Please verify your internet connection.");
       }
     );
 
-    return () => unsub();
+    return () => {
+      if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+      }
+      unsub();
+    };
   }, [orderId, isResolving, lockTracking, resetOfflineTimer]);
 
   // ── ROUTE POLYLINE (OSRM Driving Road Path) ──
