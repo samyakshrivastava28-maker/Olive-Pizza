@@ -78,7 +78,10 @@ export default function ProcessingOrder() {
 
         // 2. Validate Cart & Create Payment Intent
         setStep('validating');
-        const isCod = !paymentMethod || paymentMethod.toLowerCase() === 'cod';
+        if (!paymentMethod) {
+          throw new Error('Please select a payment method to complete your order.');
+        }
+        const isCod = paymentMethod.toLowerCase() === 'cod';
         let verifiedPaymentId: string | null = isCod ? 'COD' : null;
 
         if (!isCod) {
@@ -153,7 +156,7 @@ export default function ProcessingOrder() {
               image: item.image || '',
               addons: item.addons || []
             })),
-            paymentMethod: paymentMethod || 'cod',
+            paymentMethod: paymentMethod,
             paymentId: verifiedPaymentId,
             deliveryType: deliveryType || 'delivery',
             address: deliveryType === 'delivery' ? address : 'Pickup',

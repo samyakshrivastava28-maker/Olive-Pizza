@@ -16,12 +16,12 @@ export default function RecheckOrder() {
 
   // If missing state, send back
   useEffect(() => {
-    if (!items || items.length === 0) {
+    if (!items || items.length === 0 || !paymentMethod) {
       navigate('/checkout', { replace: true });
     } else {
       setValidating(false);
     }
-  }, [items, navigate]);
+  }, [items, paymentMethod, navigate]);
 
   const handleConfirm = () => {
     if (validating || isPaused) return;

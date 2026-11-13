@@ -148,59 +148,6 @@ export default function Cart() {
     };
     
     fetchRecommendations();
-
-    const savedCoupon = localStorage.getItem('olive_applied_coupon');
-    if (savedCoupon && savedCoupon.toUpperCase() !== "BEST50") {
-      const code = savedCoupon.toUpperCase();
-      const { coupons } = useDataStore.getState();
-      const matching = coupons?.find((c: any) => (c.code || '').toUpperCase() === code);
-      let discount = 30;
-      if (matching) {
-        if (matching.discountType === 'percentage') {
-          discount = Math.round(total * (Number(matching.discountValue) / 100));
-          if (matching.maxDiscountAmount && discount > matching.maxDiscountAmount) {
-            discount = matching.maxDiscountAmount;
-          }
-        } else {
-          discount = Number(matching.discountValue) || 50;
-        }
-      } else if (code === "OLIVE20") {
-        discount = Math.round(total * 0.2);
-      }
-      setAppliedCoupon({ code, discount });
-      setCouponCode(code);
-    } else if (savedCoupon?.toUpperCase() === "BEST50") {
-      localStorage.removeItem('olive_applied_coupon');
-    }
-
-    const handleCouponAppliedEvent = (e: any) => {
-      const code = e.detail || localStorage.getItem('olive_applied_coupon');
-      if (code && typeof code === 'string') {
-        const uppercaseCode = code.toUpperCase();
-        const { coupons } = useDataStore.getState();
-        const matching = coupons?.find((c: any) => (c.code || '').toUpperCase() === uppercaseCode);
-        let discount = 30;
-        if (matching) {
-          if (matching.discountType === 'percentage') {
-            discount = Math.round(total * (Number(matching.discountValue) / 100));
-            if (matching.maxDiscountAmount && discount > matching.maxDiscountAmount) {
-              discount = matching.maxDiscountAmount;
-            }
-          } else {
-            discount = Number(matching.discountValue) || 50;
-          }
-        } else if (uppercaseCode === "BEST50") {
-          discount = 50;
-        } else if (uppercaseCode === "OLIVE20") {
-          discount = Math.round(total * 0.2);
-        }
-        setAppliedCoupon({ code: uppercaseCode, discount });
-        setCouponCode(uppercaseCode);
-      }
-    };
-
-    window.addEventListener('coupon-applied', handleCouponAppliedEvent);
-    return () => window.removeEventListener('coupon-applied', handleCouponAppliedEvent);
   }, [items]);
 
   const handleApplyCoupon = () => {
@@ -211,45 +158,35 @@ export default function Cart() {
       ? coupons.find((c: any) => (c.code || '').toUpperCase() === code && c.isActive !== false)
       : null;
 
-    if (matchingCoupon) {
-      if (matchingCoupon.minOrderAmount && total < matchingCoupon.minOrderAmount) {
-        toast.error(`Minimum order amount of ₹${matchingCoupon.minOrderAmount} required for ${code}`);
-        return;
-      }
-      let discount = 0;
-      if (matchingCoupon.discountType === 'percentage') {
-        discount = Math.round(total * (Number(matchingCoupon.discountValue) / 100));
-        if (matchingCoupon.maxDiscountAmount && discount > matchingCoupon.maxDiscountAmount) {
-          discount = matchingCoupon.maxDiscountAmount;
-        }
-      } else {
-        discount = Number(matchingCoupon.discountValue) || 50;
-      }
-      setAppliedCoupon({ code, discount });
-      localStorage.setItem('olive_applied_coupon', code);
-      setShowCouponInput(false);
-      toast.success(`Coupon ${code} applied! Saved ₹${discount}`);
+    if (!matchingCoupon) {
+      toast.error(`Coupon "${code}" is invalid, expired, or not available.`);
       return;
     }
 
-    if (code === "BEST50") {
-      if (total < 349) {
-        toast.error("Minimum order of ₹349 required for BEST50");
-        return;
-      }
-      setAppliedCoupon({ code: "BEST50", discount: 50 });
-      localStorage.setItem('olive_applied_coupon', "BEST50");
-      setShowCouponInput(false);
-      toast.success("Coupon BEST50 applied! Saved ₹50");
-    } else if (code === "OLIVE20") {
-      const discount = Math.round(total * 0.2);
-      setAppliedCoupon({ code: "OLIVE20", discount });
-      localStorage.setItem('olive_applied_coupon', "OLIVE20");
-      setShowCouponInput(false);
-      toast.success(`Coupon OLIVE20 applied! Saved ₹${discount}`);
-    } else {
-      toast.error("Invalid coupon code");
+    if (matchingCoupon.minOrderAmount && total < matchingCoupon.minOrderAmount) {
+      toast.error(`Minimum order amount of ₹${matchingCoupon.minOrderAmount} required for ${code}`);
+      return;
     }
+
+    const now = new Date();
+    if (matchingCoupon.expiresAt && new Date(matchingCoupon.expiresAt) < now) {
+      toast.error(`Coupon ${code} has expired.`);
+      return;
+    }
+
+    let discount = 0;
+    if (matchingCoupon.discountType === 'percentage' || matchingCoupon.type === 'percentage') {
+      discount = Math.round(total * (Number(matchingCoupon.discountValue) / 100));
+      if (matchingCoupon.maxDiscountAmount && discount > matchingCoupon.maxDiscountAmount) {
+        discount = matchingCoupon.maxDiscountAmount;
+      }
+    } else {
+      discount = Number(matchingCoupon.discountValue) || 50;
+    }
+
+    setAppliedCoupon({ code, discount });
+    setShowCouponInput(false);
+    toast.success(`Coupon ${code} applied! Saved ₹${discount}`);
   };
 
   const handleRemoveCoupon = () => {

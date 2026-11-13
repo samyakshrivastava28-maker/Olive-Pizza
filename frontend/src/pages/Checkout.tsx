@@ -308,25 +308,37 @@ export default function Checkout() {
     fetchPromos();
   }, [isAuthenticated, items, navigate]);
 
-  const handleApplyPromo = () => {
-    if (!promoInput.trim()) return;
-    const code = promoInput.trim().toUpperCase();
+  const handleApplyPromo = (explicitCode?: string) => {
+    const code = (typeof explicitCode === 'string' ? explicitCode : promoInput).trim().toUpperCase();
+    if (!code) return;
     let foundCoupon: any = null;
 
-    const standaloneMatch = standaloneCoupons.find((c) => c.code === code);
+    const standaloneMatch = standaloneCoupons.find((c) => (c.code || '').toUpperCase() === code && c.isActive !== false);
     if (standaloneMatch) {
+      if (standaloneMatch.minOrderAmount && total < Number(standaloneMatch.minOrderAmount)) {
+        toast.error(`Minimum order amount of ₹${standaloneMatch.minOrderAmount} required for ${code}`);
+        return;
+      }
+      if (standaloneMatch.expiresAt && new Date(standaloneMatch.expiresAt) < new Date()) {
+        toast.error(`Coupon ${code} has expired.`);
+        return;
+      }
       foundCoupon = {
         code: standaloneMatch.code,
-        type: standaloneMatch.type === 'percentage' ? 'percent' : 'flat',
-        value: standaloneMatch.discountValue,
+        type: standaloneMatch.type === 'percentage' || standaloneMatch.discountType === 'percentage' ? 'percent' : 'flat',
+        value: Number(standaloneMatch.discountValue) || 0,
+        maxDiscount: standaloneMatch.maxDiscountAmount || standaloneMatch.maxDiscount,
       };
     }
     
     if (!foundCoupon) {
       for (const event of activeEvents) {
-        if (event.coupons) {
-          const match = event.coupons.find((c: any) => c.code === code);
-          if (match) { foundCoupon = match; break; }
+        if (event.coupons && event.isActive !== false) {
+          const match = event.coupons.find((c: any) => (c.code || '').toUpperCase() === code && c.isActive !== false);
+          if (match) {
+            foundCoupon = match;
+            break;
+          }
         }
       }
     }
@@ -337,13 +349,14 @@ export default function Checkout() {
       return;
     }
     setAppliedPromo(foundCoupon);
-    toast.success('Coupon applied!');
+    setPromoInput(code);
+    toast.success(`Coupon ${code} applied!`);
   };
 
   const discountAmount = appliedPromo
     ? appliedPromo.type === 'percent'
-      ? Math.round(total * (appliedPromo.value / 100))
-      : appliedPromo.value
+      ? Math.min(Math.round(total * (appliedPromo.value / 100)), appliedPromo.maxDiscount || Infinity)
+      : Math.min(appliedPromo.value, total)
     : 0;
   const baseDeliveryFee = deliveryAvailability.deliveryFee ?? 40;
   const freeThreshold = deliveryAvailability.freeDeliveryThreshold ?? 500;
@@ -374,12 +387,19 @@ export default function Checkout() {
       return;
     }
 
-    if (!address.trim() && deliveryType === 'delivery') {
-      toast.error('Please enter a delivery address');
-      return;
-    }
-
     if (deliveryType === 'delivery') {
+      if (!address.trim() || !mapCenter.lat || !mapCenter.lng || isNaN(mapCenter.lat) || isNaN(mapCenter.lng)) {
+        toast.error('Please verify your delivery address and location on the map before placing an order.');
+        openLocationModal();
+        return;
+      }
+
+      if (!isServiceableLocation) {
+        toast.error(serviceAreaNotice || "We currently don't deliver to this location. Please select a serviceable location.");
+        openLocationModal();
+        return;
+      }
+
       // Enforcement Point 3: Cart / checkout start (re-verify)
       const checkoutVal = await OrderingContextService.validateCheckout({
         lat: mapCenter.lat,
@@ -390,11 +410,18 @@ export default function Checkout() {
 
       if (!checkoutVal.serviceable) {
         toast.error(checkoutVal.error || "We currently don't deliver to this location.");
+        openLocationModal();
         return;
       }
     }
 
-    const effectivePayment = selectedPayment || 'cod';
+    if (!selectedPayment) {
+      toast.error('Please select a payment method (UPI, Cards, or Cash on Delivery) to proceed.');
+      setShowPayment(true);
+      return;
+    }
+
+    const effectivePayment = selectedPayment;
     
     navigate('/recheck-order', {
       state: {
@@ -829,6 +856,60 @@ export default function Checkout() {
               </motion.div>
             )}
           </AnimatePresence>
+
+          {/* Available Offers List (Manual Apply Only) */}
+          {standaloneCoupons.filter(c => c && c.isActive !== false).length > 0 && (
+            <div className="mt-4 pt-4 border-t border-slate-100 space-y-2">
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Available Coupons</span>
+              <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                {standaloneCoupons
+                  .filter(c => c && c.isActive !== false)
+                  .map((c) => {
+                    const isApplied = appliedPromo?.code === c.code;
+                    const isEligible = !c.minOrderAmount || total >= Number(c.minOrderAmount);
+                    return (
+                      <div 
+                        key={c.id || c.code} 
+                        className={`p-3 rounded-2xl border transition-all flex items-center justify-between gap-3 ${
+                          isApplied ? 'bg-emerald-50 border-emerald-300' : 'bg-[#FAF8F5] border-slate-200'
+                        }`}
+                      >
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono font-bold text-xs bg-primary-100 text-primary-800 px-2 py-0.5 rounded-lg border border-primary-200">{c.code}</span>
+                            <span className="text-xs font-bold text-slate-800">
+                              {c.discountType === 'percentage' || c.type === 'percentage' ? `${c.discountValue}% OFF` : `₹${c.discountValue} FLAT OFF`}
+                            </span>
+                          </div>
+                          {c.minOrderAmount > 0 && (
+                            <p className="text-[10px] text-slate-500 mt-1">Min. order ₹{c.minOrderAmount}</p>
+                          )}
+                          {c.description && (
+                            <p className="text-[11px] text-slate-600 truncate mt-0.5">{c.description}</p>
+                          )}
+                        </div>
+                        {isApplied ? (
+                          <span className="text-xs font-bold text-emerald-600 shrink-0">Applied ✓</span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleApplyPromo(c.code)}
+                            disabled={!isEligible}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 transition-all cursor-pointer ${
+                              isEligible
+                                ? 'bg-primary-600 hover:bg-primary-700 text-white shadow-xs active:scale-95'
+                                : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                            }`}
+                          >
+                            Apply
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+          )}
         </motion.div>
 
         {/* Order Summary */}
