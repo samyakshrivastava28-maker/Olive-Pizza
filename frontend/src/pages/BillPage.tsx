@@ -81,6 +81,23 @@ interface BillData {
   };
 }
 
+function formatDateValue(val: any): string {
+  if (!val) return '';
+  if (typeof val === 'string') return val;
+  if (typeof val === 'object') {
+    if (typeof val.toDate === 'function') {
+      return val.toDate().toLocaleDateString('en-IN');
+    }
+    if (typeof val._seconds === 'number') {
+      return new Date(val._seconds * 1000).toLocaleDateString('en-IN');
+    }
+    if (typeof val.seconds === 'number') {
+      return new Date(val.seconds * 1000).toLocaleDateString('en-IN');
+    }
+  }
+  return String(val);
+}
+
 export default function BillPage() {
   const { billReference } = useParams<{ billReference: string }>();
   const navigate = useNavigate();
@@ -114,6 +131,9 @@ export default function BillPage() {
 
     const fetchAllOrders = async () => {
       try {
+        if (!auth.currentUser && typeof (auth as any).authStateReady === 'function') {
+          await (auth as any).authStateReady().catch(() => {});
+        }
         const token = await auth.currentUser?.getIdToken();
         const res = await fetchApi('/api/orders', {
           headers: token ? { 'Authorization': `Bearer ${token}` } : {}
@@ -151,7 +171,14 @@ export default function BillPage() {
         setErrorStatus(null);
         setErrorMessage('');
 
-        const token = await auth.currentUser?.getIdToken();
+        if (!auth.currentUser && typeof (auth as any).authStateReady === 'function') {
+          await (auth as any).authStateReady().catch(() => {});
+        }
+        let token = await auth.currentUser?.getIdToken();
+        if (!token && isAuthenticated) {
+          await new Promise(r => setTimeout(r, 600));
+          token = await auth.currentUser?.getIdToken();
+        }
         if (!token) {
           setErrorStatus(401);
           setErrorMessage('Session expired. Please sign in again.');
@@ -513,7 +540,7 @@ export default function BillPage() {
                   const refKey = ord.billReference || ord.id;
                   const isSelected = activeReference === refKey || activeReference === ord.id;
                   const billLabel = ord.billNumber || (ord.permanentBillNo ? `#${ord.permanentBillNo}` : (ord.orderNumber || `#${ord.id?.slice(-4).toUpperCase()}`));
-                  const billDate = ord.createdAt ? new Date(ord.createdAt).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }) : '';
+                  const billDate = formatDateValue(ord.createdAt || ord.orderDate || ord.orderDateLocal);
                   const total = ord.totalAmount || ord.finalTotal || (ord.pricing?.total) || 0;
 
                   return (
@@ -630,7 +657,7 @@ export default function BillPage() {
                 Date & Time
               </span>
               <span className="text-xs font-bold text-slate-800 print-dark-text">
-                {bill.orderDate} {bill.orderTime}
+                {formatDateValue(bill.orderDate)} {formatDateValue(bill.orderTime)}
               </span>
             </div>
             <div>

@@ -66,8 +66,12 @@ export default memo(function ProductCard({
         quantity: 1,
         image: imageUrl,
         isVegetarian: item.isVegetarian,
-        crust: 'Classic Crust',
-        size: 'Medium',
+        crust: (Array.isArray(item.crusts) && item.crusts.length > 0)
+          ? (typeof item.crusts[0] === 'string' ? item.crusts[0] : (item.crusts[0]?.name || 'Classic Hand Tossed'))
+          : 'Classic Hand Tossed',
+        size: (Array.isArray(item.variants) && item.variants.length > 0)
+          ? (typeof item.variants[0] === 'string' ? item.variants[0] : (item.variants[0]?.name || 'Medium'))
+          : 'Medium',
       });
 
       toast.success(`Added ${item.name}! 🍕`, {

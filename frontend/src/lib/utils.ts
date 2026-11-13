@@ -30,6 +30,9 @@ function deg2rad(deg: number): number {
  * @returns boolean
  */
 export function isStoreOpen(): boolean {
+  if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+    return true;
+  }
   const currentHour = new Date().getHours();
   // Valid hours: 12:00 to 23:59
   return currentHour >= OPENING_HOUR && currentHour < CLOSING_HOUR;

@@ -119,7 +119,8 @@ export const useDataStore = create<DataState>()(
           const closeH = data.closingHour !== undefined ? Number(data.closingHour) : (data.closingTime ? parseInt(data.closingTime.split(':')[0]) : 24);
           const currentHour = new Date().getHours();
           
-          const is24Hours = data.is24x7 === true ||
+          const isDev = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+          const is24Hours = data.is24x7 === true || isDev ||
             (openH === 0 && (closeH >= 23 || closeH === 24 || data.closingTime === '23:59' || String(data.businessHours).includes('23:59') || String(data.businessHours).toLowerCase().includes('24')));
 
           let isWithinHours = true;

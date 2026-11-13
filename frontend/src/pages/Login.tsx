@@ -132,6 +132,15 @@ export default function Login() {
       setEmailStep('enter_code');
       setEmailCooldown(60);
       toast.success("4-digit code sent to your email!");
+      if (data?.demoCode) {
+        const demoStr = String(data.demoCode);
+        setEmailCode(demoStr.split(''));
+        toast(`[DEV MODE] Auto-verifying code: ${demoStr}`, { icon: '🔑' });
+        // Automatically trigger verification in development
+        setTimeout(() => {
+          handleVerifyEmailCodeWithDigits(demoStr);
+        }, 300);
+      }
       setTimeout(() => emailInputRefs.current[0]?.focus(), 100);
     } catch (err: any) {
       setError(err.message || "Failed to send code. Please try again.");

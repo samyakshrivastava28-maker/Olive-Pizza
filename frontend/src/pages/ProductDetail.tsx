@@ -110,7 +110,7 @@ export default function ProductDetail() {
               ? []
               : data.category === 'pizza'
               ? (data.crusts && data.crusts.length > 0)
-                ? data.crusts
+                ? data.crusts.map((cr: any) => typeof cr === 'string' ? { name: cr, price: cr.toLowerCase().includes('cheese burst') ? 60 : 0 } : cr)
                 : [
                     { name: "Classic Hand Tossed", price: 0 },
                     { name: "Cheese Burst", price: 99 },
