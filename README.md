@@ -1,4 +1,4 @@
-# 🍕 Olive Pizza Customer App (v2.2.0)
+# 🍕 Olive Pizza Customer App (v2.3.0)
 
 [![React](https://img.shields.io/badge/React-19.0-61DAFB?logo=react&logoColor=black)](https://react.dev/)
 [![Vite](https://img.shields.io/badge/Vite-6.0-646CFF?logo=vite&logoColor=white)](https://vitejs.dev/)
@@ -41,7 +41,7 @@
 
 ---
 
-## 📦 Latest Release Downloads (v2.2.0)
+## 📦 Latest Release Downloads (v2.3.0)
 
 All production release binaries are pre-compiled and staged in `C:\Users\RYZEN\Downloads\OlivePizza_Release_Binaries`:
 - **Android APK**: `OlivePizza_Customer_v2.2.0_Release.apk` (25.68 MB)
