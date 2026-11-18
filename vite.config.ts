@@ -21,21 +21,45 @@ export default defineConfig({
     outDir: 'dist/client',
     sourcemap: false,
     cssCodeSplit: true,
+    target: 'esnext',
+    minify: 'esbuild',
+    chunkSizeWarningLimit: 1200,
     rollupOptions: {
       output: {
-        manualChunks: {
-          'vendor-react': ['react', 'react-dom', 'react-router'],
-          'vendor-firebase': ['firebase/app', 'firebase/firestore', 'firebase/auth'],
-          'vendor-motion': ['framer-motion'],
-          'vendor-leaflet': ['leaflet', 'react-leaflet'],
-          'vendor-maplibre': ['maplibre-gl'],
-          'vendor-supabase': ['@supabase/supabase-js'],
-          'vendor-ui': ['lucide-react', 'react-hot-toast'],
-          'vendor-state': ['zustand'],
-          'vendor-three': ['three', '@react-three/fiber', '@react-three/drei'],
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('three') || id.includes('@react-three')) {
+              return 'vendor-three';
+            }
+            if (id.includes('maplibre-gl')) {
+              return 'vendor-maplibre';
+            }
+            if (id.includes('leaflet') || id.includes('react-leaflet')) {
+              return 'vendor-leaflet';
+            }
+            if (id.includes('firebase')) {
+              return 'vendor-firebase';
+            }
+            if (id.includes('framer-motion')) {
+              return 'vendor-motion';
+            }
+            if (id.includes('react-router') || id.includes('react-dom') || id.includes('react/') || id.includes('scheduler') || id.includes('zustand')) {
+              return 'vendor-react';
+            }
+            if (id.includes('lucide-react') || id.includes('react-hot-toast')) {
+              return 'vendor-ui';
+            }
+            if (id.includes('idb-keyval')) {
+              return 'vendor-utils';
+            }
+          }
         }
       }
     }
+  },
+  esbuild: {
+    legalComments: 'none',
+    drop: process.env.NODE_ENV === 'production' ? ['console', 'debugger'] : [],
   },
   plugins: [
     react(),

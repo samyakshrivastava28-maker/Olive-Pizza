@@ -4,6 +4,7 @@ import { doc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { db } from './firebase';
 import { isCapacitorNative, getPushCompatibility } from './platform';
 import { fetchApi } from './config';
+import { useVersionStore } from './versionManager';
 
 let messageListenerUnsubscribe: (() => void) | null = null;
 
@@ -105,16 +106,14 @@ export async function verifyAndRefreshTokens(userId?: string): Promise<string | 
 
         // App update push
         if (payload.data?.type === 'APP_UPDATE') {
-          import('./versionManager').then(({ useVersionStore }) => {
-            useVersionStore.getState().setUpdateAvailable(
-              true,
-              (payload.data!.mode as any) || 'optional',
-              {
-                latestVersion: payload.data!.version || 'latest',
-                releaseNotes: payload.data!.releaseNotes
-              }
-            );
-          });
+          useVersionStore.getState().setUpdateAvailable(
+            true,
+            (payload.data!.mode as any) || 'optional',
+            {
+              latestVersion: payload.data!.version || 'latest',
+              releaseNotes: payload.data!.releaseNotes
+            }
+          );
         }
       });
 

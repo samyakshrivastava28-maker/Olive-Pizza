@@ -7,6 +7,7 @@ import App from './App.tsx';
 import { GlobalErrorBoundary } from './components/GlobalErrorBoundary';
 import { validateEnvironment } from './lib/envValidator';
 import { initCrashLogger } from './lib/crashLogger';
+import { initVersionManager } from './lib/versionManager';
 
 // 1. Init crash logger FIRST — must suppress non-fatal rejections before anything else runs
 initCrashLogger();
@@ -43,10 +44,8 @@ window.fetch = async (...args) => {
 // 2. Validate env vars (logs warnings only, never throws)
 validateEnvironment();
 
-// 3. Lazy-start version manager to not block initial render
-import('./lib/versionManager').then(({ initVersionManager }) => {
-  try { initVersionManager(); } catch { /* non-fatal */ }
-}).catch(() => { /* non-fatal if versionManager fails to load */ });
+// 3. Start version manager
+try { initVersionManager(); } catch { /* non-fatal */ }
 
 const isHashRouterNeeded =
   typeof window !== 'undefined' && (

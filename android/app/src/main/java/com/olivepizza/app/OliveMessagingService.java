@@ -77,15 +77,38 @@ public class OliveMessagingService extends MessagingService {
                 String category = data.get("category");
                 String stage = data.get("stage");
                 String action = data.get("action");
+                String title = data.get("title");
+                String body = data.get("body");
+                String type = data.get("type");
+                String targetApp = data.get("targetApp");
 
-                // Customer app must never trigger new order alarms or wake screen for staff alerts
+                // 1. Customer app must NEVER receive or display staff/rider/operational alerts
                 if ("alarm_actionable".equalsIgnoreCase(category) || 
                     "new_order".equalsIgnoreCase(stage) ||
-                    "NEW_ORDER".equalsIgnoreCase(data.get("type")) ||
+                    "NEW_ORDER".equalsIgnoreCase(type) ||
+                    "NO_RIDER_PENDING_QUEUE".equalsIgnoreCase(type) ||
+                    "NO_RIDER".equalsIgnoreCase(type) ||
                     "NEW_ORDER".equalsIgnoreCase(data.get("eventType")) ||
-                    "continuous".equalsIgnoreCase(alert)) {
-                    Log.d(TAG, "Ignoring staff new order alert in customer app");
+                    "continuous".equalsIgnoreCase(alert) ||
+                    ("restaurant".equalsIgnoreCase(targetApp) || "delivery".equalsIgnoreCase(targetApp) || "owner".equalsIgnoreCase(targetApp) || "pos".equalsIgnoreCase(targetApp) || "franchise".equalsIgnoreCase(targetApp)) ||
+                    (title != null && (title.contains("Rider Pending") || title.contains("Delivery Rider") || title.contains("No Rider") || title.contains("New Order"))) ||
+                    (body != null && (body.contains("no riders") || body.contains("requires delivery but no riders") || body.contains("auto-retrying")))) {
+                    Log.d(TAG, "Ignoring staff/operational alert in customer app: " + title);
                     return;
+                }
+
+                // 2. Strict Customer Account Match: drop if notification belongs to a different customer
+                try {
+                    FirebaseUser currentUser = FirebaseAuth.getInstance().getCurrentUser();
+                    String notifUserId = data.get("recipientUid");
+                    if (notifUserId == null) notifUserId = data.get("customerUid");
+                    if (notifUserId == null) notifUserId = data.get("userId");
+                    if (notifUserId != null && currentUser != null && !currentUser.getUid().equals(notifUserId)) {
+                        Log.d(TAG, "Dropping notification for other user: " + notifUserId + ", current: " + currentUser.getUid());
+                        return;
+                    }
+                } catch (Exception authCheckErr) {
+                    // Safe catch
                 }
 
                 if ("stop_alert".equals(action)) {

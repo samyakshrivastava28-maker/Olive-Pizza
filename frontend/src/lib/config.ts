@@ -107,6 +107,75 @@ export const fetchApi = async (endpoint: string, init?: RequestInit): Promise<Re
   }
 
   const mergedInit = { ...init, headers, signal: controller.signal };
+
+  // Support Native Capacitor HTTP execution to eliminate CORS & Cleartext blocks on Android/iOS
+  const isNative = typeof window !== 'undefined' && (
+    Capacitor.isNativePlatform() ||
+    Boolean((window as any).Capacitor?.isNativePlatform?.()) ||
+    Boolean((window as any).Capacitor?.Plugins?.CapacitorHttp)
+  );
+
+  if (isNative && (window as any).Capacitor?.Plugins?.CapacitorHttp) {
+    const capHttp = (window as any).Capacitor.Plugins.CapacitorHttp;
+    try {
+      const capHeaders: Record<string, string> = {};
+      headers.forEach((val, key) => { capHeaders[key] = val; });
+
+      let parsedData: any = undefined;
+      if (init?.body) {
+        if (typeof init.body === 'string') {
+          try {
+            parsedData = JSON.parse(init.body);
+          } catch {
+            parsedData = init.body;
+          }
+        } else {
+          parsedData = init.body;
+        }
+      }
+
+      // Try primaryUrl
+      let capRes = await capHttp.request({
+        url: primaryUrl,
+        method,
+        headers: capHeaders,
+        data: parsedData,
+        connectTimeout: timeoutMs,
+        readTimeout: timeoutMs
+      });
+
+      // If primaryUrl returned 404 or >= 500 or failed, try localhost:5000 or production backend
+      if (!capRes || capRes.status === 404 || capRes.status >= 500) {
+        const altUrl = primaryUrl.includes('localhost:5000')
+          ? `${PRODUCTION_BACKEND_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`
+          : `http://localhost:5000${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+        try {
+          const altRes = await capHttp.request({
+            url: altUrl,
+            method,
+            headers: capHeaders,
+            data: parsedData,
+            connectTimeout: 8000,
+            readTimeout: 8000
+          });
+          if (altRes && (altRes.status < 400 || (altRes.status < 500 && altRes.status !== 404))) {
+            capRes = altRes;
+          }
+        } catch {}
+      }
+
+      clearTimeout(timeoutId);
+
+      const bodyText = typeof capRes.data === 'string' ? capRes.data : JSON.stringify(capRes.data ?? {});
+      return new Response(bodyText, {
+        status: capRes.status || 200,
+        statusText: capRes.status === 200 ? 'OK' : String(capRes.status || ''),
+        headers: new Headers(capRes.headers || { 'content-type': 'application/json' })
+      });
+    } catch (capErr: any) {
+      console.warn('[fetchApi] Native CapacitorHttp notice:', capErr?.message || capErr);
+    }
+  }
   
   try {
     const res = await fetch(primaryUrl, mergedInit);

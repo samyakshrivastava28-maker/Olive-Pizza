@@ -33,6 +33,7 @@ import { Capacitor } from '@capacitor/core';
 import { PushNotifications } from '@capacitor/push-notifications';
 import { NOTIFICATION_CHANNELS, NOTIFICATION_ACTION_TYPES } from '../lib/notificationChannels';
 import { fetchApi } from '../lib/config';
+import { sanitizeAndHumanizeNotification, Customer3DNotificationCard } from './notifications/Customer3DNotification';
 const BROADCAST_CHANNEL = 'olive_pizza_notifications';
 
 function resolveCustomerUrl(url?: string, orderId?: string, actionId?: string): string {
@@ -302,21 +303,22 @@ export default function PushNotificationManager() {
         }
 
         // Account isolation guard: ignore notifications if logged out or meant for another user
-        if (!user) return;
-        const notifUserId = data.userId || data.targetUserId || data.recipientId;
-        if (notifUserId && user?.uid && notifUserId !== user.uid) {
+        if (!user || !user.uid) return;
+        const notifUserId = data.userId || data.targetUserId || data.recipientId || data.customerUid || data.recipientUid;
+        if (notifUserId && notifUserId !== user.uid) {
+          console.warn('[PushManager] Native push dropped: recipient UID mismatch (intended for', notifUserId, 'current:', user.uid, ')');
           return;
         }
 
-        // Customer app must never receive or play new order alarms or continuous alarms
-        if (
-          data.alert === 'continuous' ||
-          data.category === 'new_order' ||
-          data.category === 'alarm_actionable' ||
-          data.category === 'owner_orders' ||
-          data.stage === 'new_order' ||
-          data.type === 'NEW_ORDER'
-        ) {
+        // Target app guard: strictly deliver ONLY notifications meant for the customer app
+        if (data.targetApp && data.targetApp !== 'customer') {
+          return;
+        }
+
+        // Sanitize and humanize into 3D customer copy (hard-drops any internal operational alerts)
+        const sanitized = sanitizeAndHumanizeNotification(title, body, data);
+        if (sanitized.isDrop) {
+          console.log('[PushManager] Dropped operational/staff notification:', title);
           return;
         }
 
@@ -325,49 +327,29 @@ export default function PushNotificationManager() {
           playNotificationSound(data.sound);
         }
 
-        // Show in-app toast
-        toast(
+        // Show 3D Alive Customer In-App Notification
+        toast.custom(
           (t) => (
-            <div className="flex flex-col gap-2 relative">
-              <button
-                onClick={() => toast.dismiss(t.id)}
-                className="absolute -top-1 -right-1 text-slate-400 hover:text-white p-1 bg-slate-800 rounded-full"
-              >
-                <X className="w-3 h-3" />
-              </button>
-              <div className="flex gap-3">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center shrink-0">
-                  <Bell className="w-5 h-5 text-white" />
-                </div>
-                <div
-                  className="flex-1 cursor-pointer pr-4"
-                  onClick={() => {
-                    const targetUrl = resolveCustomerUrl(data.url, data.orderId);
-                    navigate(targetUrl);
-                    toast.dismiss(t.id);
-                    stopContinuousAlert();
-                  }}
-                >
-                  <p className="font-bold text-white text-sm">{title}</p>
-                  <p className="text-slate-300 text-xs mt-0.5 whitespace-pre-wrap leading-tight">{body}</p>
-                </div>
-              </div>
-              {data.alert === 'continuous' && (
-                <div className="flex justify-end mt-1">
-                  <button
-                    onClick={() => { stopContinuousAlert(); toast.dismiss(t.id); }}
-                    className="px-3 py-1 bg-red-500/20 text-red-500 hover:bg-red-500/30 rounded text-xs font-bold"
-                  >
-                    Stop Alert
-                  </button>
-                </div>
-              )}
-            </div>
+            <Customer3DNotificationCard
+              title={sanitized.title}
+              body={sanitized.body}
+              iconType={sanitized.iconType}
+              stepIndex={sanitized.stepIndex}
+              badgeText={sanitized.badgeText}
+              actionUrl={sanitized.actionUrl}
+              onTrack={() => {
+                toast.dismiss(t.id);
+                stopContinuousAlert();
+                const targetUrl = resolveCustomerUrl(sanitized.actionUrl || data.url, data.orderId);
+                navigate(targetUrl);
+              }}
+              onDismiss={() => {
+                toast.dismiss(t.id);
+                stopContinuousAlert();
+              }}
+            />
           ),
-          {
-            duration: data.alert === 'continuous' ? Infinity : 5000,
-            style: { background: '#1e293b', color: '#fff', border: '1px solid #334155' },
-          }
+          { duration: 7000 }
         );
       });
 
@@ -409,9 +391,14 @@ export default function PushNotificationManager() {
 
       // Account isolation guard: skip if logged out or if notification belongs to another account
       if (!user) return;
-      const notifUserId = data?.userId || data?.targetUserId || data?.recipientId || data?.customerUid;
+      const notifUserId = data?.userId || data?.targetUserId || data?.recipientId || data?.customerUid || data?.recipientUid;
       if (notifUserId && user?.uid && notifUserId !== user.uid) {
         console.warn('[PushManager] Dropped notification intended for user', notifUserId, 'current user:', user.uid);
+        return;
+      }
+
+      // Target app guard: never display notifications meant for other apps
+      if (data?.targetApp && data.targetApp !== 'customer') {
         return;
       }
 
@@ -420,24 +407,19 @@ export default function PushNotificationManager() {
 
       // Role isolation guard: skip if notification belongs to another role
       if (targetRole && targetRole !== userRole) return;
-      if (
-        data?.alert === 'continuous' ||
-        category === 'alarm_actionable' ||
-        category === 'owner_orders' ||
-        category === 'new_order' ||
-        data?.stage === 'new_order' ||
-        data?.type === 'NEW_ORDER'
-      ) {
-        return; // Customer app never receives or alerts on new orders
-      }
-      if (category === 'delivery' && userRole !== 'delivery_partner') return;
-      if (category === 'customer' && userRole !== 'customer') return;
 
-      const title = notification?.title || 'Olive Pizza';
-      const body = notification?.body || '';
+      const title = notification?.title || data?.title || 'Olive Pizza';
+      const body = notification?.body || data?.body || '';
       const url = data?.url || '/';
       const queueId = data?.queueId;
       const orderId = data?.orderId;
+
+      // Sanitize and humanize into 3D customer copy (hard-drops any internal operational alerts)
+      const sanitized = sanitizeAndHumanizeNotification(title, body, data);
+      if (sanitized.isDrop) {
+        console.log('[PushManager] Dropped operational/staff notification:', title);
+        return;
+      }
 
       if (queueId) {
         fetchApi('/api/notifications/track', {
@@ -456,14 +438,14 @@ export default function PushNotificationManager() {
       ) {
         try {
           const swReg = await navigator.serviceWorker.ready;
-          swReg.showNotification(title, {
-            body,
+          swReg.showNotification(sanitized.title, {
+            body: sanitized.body,
             icon: '/logo-transparent.png',
             tag: data?.tag || `fg_${Date.now()}`,
             // @ts-ignore
             renotify: true,
             vibrate: [200, 100, 200],
-            data: { url, orderId, queueId },
+            data: { url: sanitized.actionUrl || url, orderId, queueId },
           });
         } catch {}
       }
@@ -472,18 +454,20 @@ export default function PushNotificationManager() {
         playNotificationSound(data.sound);
       }
 
-      // Premium in-app toast
+      // Show 3D Alive Customer In-App Notification
       toast.custom(
         (t) => (
-          <motion.div
-            initial={{ opacity: 0, y: -20, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -20, scale: 0.95 }}
-            className="max-w-sm w-full"
-            onClick={() => {
-              if (data?.alert === 'continuous') return;
+          <Customer3DNotificationCard
+            title={sanitized.title}
+            body={sanitized.body}
+            iconType={sanitized.iconType}
+            stepIndex={sanitized.stepIndex}
+            badgeText={sanitized.badgeText}
+            actionUrl={sanitized.actionUrl}
+            onTrack={() => {
               toast.dismiss(t.id);
-              const targetUrl = resolveCustomerUrl(url, orderId);
+              stopContinuousAlert();
+              const targetUrl = resolveCustomerUrl(sanitized.actionUrl || url, orderId);
               navigate(targetUrl);
               if (queueId) {
                 fetchApi('/api/notifications/track', {
@@ -493,73 +477,13 @@ export default function PushNotificationManager() {
                 }).catch(() => {});
               }
             }}
-            style={{ cursor: data?.alert === 'continuous' ? 'default' : 'pointer' }}
-          >
-            <div
-              className="rounded-2xl p-4 flex flex-col gap-3 shadow-2xl"
-              style={{
-                background: 'rgba(10,10,10,0.95)',
-                backdropFilter: 'blur(20px)',
-                border: '1px solid rgba(249,115,22,0.3)',
-                boxShadow: '0 20px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(249,115,22,0.1)',
-              }}
-            >
-              <div className="flex items-start gap-3">
-                <div
-                  className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-                  style={{ background: 'linear-gradient(135deg, #f97316, #ea580c)' }}
-                >
-                  <Bell className="w-5 h-5 text-white" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-white font-black text-sm leading-snug">{title}</p>
-                  <p className="text-slate-400 text-xs mt-0.5 leading-relaxed line-clamp-2 whitespace-pre-line">
-                    {body}
-                  </p>
-                </div>
-                {data?.alert !== 'continuous' && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); toast.dismiss(t.id); }}
-                    className="text-slate-500 hover:text-slate-300 flex-shrink-0"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
-              {data?.alert === 'continuous' && (
-                <div className="flex gap-2 mt-1">
-                  <button
-                    onClick={async (e) => {
-                      e.stopPropagation();
-                      stopContinuousAlert();
-                      const token = await auth.currentUser?.getIdToken();
-                      fetchApi('/api/notifications/action', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                        body: JSON.stringify({ orderId, action: 'stop_alert', currentStage: data.stage }),
-                      }).catch(() => {});
-                    }}
-                    className="flex-1 bg-white/10 hover:bg-white/15 border border-white/10 text-white text-xs font-bold py-2 rounded-lg"
-                  >
-                    ðŸ”• Stop Alert
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toast.dismiss(t.id);
-                      const targetUrl = resolveCustomerUrl(url, orderId);
-                      navigate(targetUrl);
-                    }}
-                    className="flex-1 bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold py-2 rounded-lg"
-                  >
-                    📊 Open Order
-                  </button>
-                </div>
-              )}
-            </div>
-          </motion.div>
+            onDismiss={() => {
+              toast.dismiss(t.id);
+              stopContinuousAlert();
+            }}
+          />
         ),
-        { duration: data?.alert === 'continuous' ? 60000 : 8000, position: 'top-center' }
+        { duration: 7000, position: 'top-center' }
       );
     });
 
@@ -569,10 +493,19 @@ export default function PushNotificationManager() {
   // â”€â”€â”€ Web Permission Request â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const requestWebPermission = useCallback(async (uid: string): Promise<void> => {
     try {
-      // Only for web — native is handled inside registerToken
       if (Capacitor.isNativePlatform()) {
         setShowNotifPrompt(false);
-        await registerToken(uid);
+        const reqResult = await PushNotifications.requestPermissions();
+        if (reqResult.receive === 'granted') {
+          await registerToken(uid);
+          setupForegroundListener(null);
+          toast.success("Notifications enabled! You'll get live pizza tracking alerts.");
+        } else {
+          // Gracefully back off for 48 hours to preserve customer UX
+          try {
+            localStorage.setItem('olive_notif_prompt_cooldown', (Date.now() + 48 * 3600 * 1000).toString());
+          } catch {}
+        }
         return;
       }
 
@@ -650,11 +583,27 @@ export default function PushNotificationManager() {
     const init = async () => {
       try {
         if (Capacitor.isNativePlatform()) {
-          // NATIVE: register immediately without showing custom prompt
-          if (!tokenRegistered) {
-            await registerToken(uid);
+          // NATIVE: check current notification permission
+          const permStatus = await PushNotifications.checkPermissions();
+          if (permStatus.receive === 'granted') {
+            if (!tokenRegistered) {
+              await registerToken(uid);
+            }
+            setupForegroundListener(null);
+          } else {
+            // Customer hasn't granted notifications yet. Check polite in-between prompt cadence:
+            try {
+              const openCount = Number(localStorage.getItem('olive_app_open_notif_count') || '0') + 1;
+              localStorage.setItem('olive_app_open_notif_count', String(openCount));
+              const lastCooldown = Number(localStorage.getItem('olive_notif_prompt_cooldown') || '0');
+              const isCoolingDown = lastCooldown > Date.now();
+
+              // Prompt gently after at least 1 previous session, respecting 48h cooldown
+              if (!isCoolingDown && openCount >= 2) {
+                setTimeout(() => setShowNotifPrompt(true), 5000);
+              }
+            } catch {}
           }
-          setupForegroundListener(null);
 
           // Check battery optimization for owners (advisory, one-time)
           if (userRole === 'owner') {
@@ -682,7 +631,15 @@ export default function PushNotificationManager() {
               setupForegroundListener(messaging);
             }
           } else if (notifPermission === 'default') {
-            setTimeout(() => setShowNotifPrompt(true), 3000);
+            try {
+              const lastCooldown = localStorage.getItem('olive_notif_prompt_cooldown');
+              const isCoolingDown = lastCooldown && Number(lastCooldown) > Date.now();
+              if (!isCoolingDown) {
+                setTimeout(() => setShowNotifPrompt(true), 4000);
+              }
+            } catch {
+              setTimeout(() => setShowNotifPrompt(true), 4000);
+            }
           }
         }
       } catch (err) {
@@ -785,8 +742,15 @@ export default function PushNotificationManager() {
           >
             <div className="absolute top-0 left-0 right-0 h-0.5 rounded-full"
               style={{ background: 'linear-gradient(90deg, #f97316, #fbbf24, #f97316)' }} />
-            <button onClick={() => setShowNotifPrompt(false)}
-              className="absolute top-4 right-4 text-slate-500 hover:text-slate-300">
+            <button 
+              onClick={() => {
+                setShowNotifPrompt(false);
+                try {
+                  localStorage.setItem('olive_notif_prompt_cooldown', (Date.now() + 5 * 86400000).toString());
+                } catch {}
+              }}
+              className="absolute top-4 right-4 text-slate-500 hover:text-slate-300"
+            >
               <X size={16} />
             </button>
             <div className="flex items-start gap-4">
@@ -808,7 +772,12 @@ export default function PushNotificationManager() {
                     Enable
                   </button>
                   <button
-                    onClick={() => setShowNotifPrompt(false)}
+                    onClick={() => {
+                      setShowNotifPrompt(false);
+                      try {
+                        localStorage.setItem('olive_notif_prompt_cooldown', (Date.now() + 5 * 86400000).toString());
+                      } catch {}
+                    }}
                     className="px-4 text-slate-400 text-sm font-bold py-2.5 rounded-xl border border-white/10 hover:bg-white/5"
                   >
                     Later

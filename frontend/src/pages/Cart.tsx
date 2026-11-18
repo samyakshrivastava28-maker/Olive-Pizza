@@ -23,7 +23,7 @@ import { getOptimizedImageUrl } from "../lib/imageOptimizer";
 
 export default function Cart() {
   const { items, total, addItem, removeItem, updateQuantity, clearCart, franchiseId: cartFranchiseId, setFranchiseId } = useCartStore();
-  const { user } = useAuthStore();
+  const { user, isAuthenticated } = useAuthStore();
   const storeStatus = useStoreStatus();
   const navigate = useNavigate();
 
@@ -203,8 +203,13 @@ export default function Cart() {
   const finalTotal = Math.max(0, subtotal - couponDiscount) + deliveryFee + taxes;
 
   const handleProceed = () => {
+    if (!isAuthenticated) {
+      toast('Please sign in to continue to checkout', { icon: '🔒' });
+      navigate('/login?redirect=/checkout');
+      return;
+    }
     if (isOutsideDeliveryZone) {
-      toast.error("We currently don't deliver to this location.");
+      toast.error("We currently don't deliver to this location. Available for Takeaway!");
       return;
     }
     if (showFranchiseMismatch) {

@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router';
 import { auth, db } from '../lib/firebase';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { useCartStore, useAuthStore } from '../lib/store';
+import { OrderingContextService } from '../lib/orderingContext';
 import { fetchApi } from '../lib/config';
 import toast from 'react-hot-toast';
 import ProcessingOverlay, { CheckoutStep } from '../components/checkout/ProcessingOverlay';
@@ -84,6 +85,24 @@ export default function ProcessingOrder() {
         const isCod = paymentMethod.toLowerCase() === 'cod';
         let verifiedPaymentId: string | null = isCod ? 'COD' : null;
 
+        // Resolve authoritative coordinates
+        let effectiveCoords = orderLocation && !isNaN(orderLocation.lat) && !isNaN(orderLocation.lng) ? orderLocation : null;
+        if (!effectiveCoords) {
+          try {
+            const stored = localStorage.getItem('op_active_location');
+            if (stored) {
+              const parsed = JSON.parse(stored);
+              if (parsed?.lat && parsed?.lng && !isNaN(Number(parsed.lat)) && !isNaN(Number(parsed.lng))) {
+                effectiveCoords = { lat: Number(parsed.lat), lng: Number(parsed.lng) };
+              }
+            }
+          } catch {}
+        }
+
+        if (deliveryType === 'delivery' && (!effectiveCoords || isNaN(effectiveCoords.lat) || isNaN(effectiveCoords.lng))) {
+          throw new Error('Your delivery GPS coordinates could not be detected. Please return to Checkout and confirm your location on the map.');
+        }
+
         if (!isCod) {
           const intentRes = await fetchApi('/api/payment/create-intent', {
             method: 'POST',
@@ -106,14 +125,9 @@ export default function ProcessingOrder() {
             })
           });
 
-          if (!intentRes.ok) {
-            const errData = await intentRes.json().catch(() => null);
-            throw new Error(errData?.error || 'Failed to initiate secure payment gateway session.');
-          }
-
-          const intentData = await intentRes.json();
-          if (!intentData?.paymentId) {
-            throw new Error('Payment gateway did not return a valid payment ID.');
+          const intentData = typeof (intentRes as any)?.json === 'function' ? await (intentRes as any).json().catch(() => null) : intentRes;
+          if (!intentRes?.ok || !intentData?.paymentId) {
+            throw new Error(intentData?.error || 'Failed to initiate secure payment gateway session.');
           }
           verifiedPaymentId = intentData.paymentId;
 
@@ -129,8 +143,8 @@ export default function ProcessingOrder() {
               })
             });
 
-            const verifyData = await verifyRes.json().catch(() => null);
-            if (!verifyRes.ok || !verifyData?.verified) {
+            const verifyData = typeof (verifyRes as any)?.json === 'function' ? await (verifyRes as any).json().catch(() => null) : verifyRes;
+            if (!verifyRes?.ok || !verifyData?.verified) {
               throw new Error(verifyData?.error || 'Online payment could not be verified. Your card was not charged.');
             }
           }
@@ -161,19 +175,23 @@ export default function ProcessingOrder() {
             deliveryType: deliveryType || 'delivery',
             address: deliveryType === 'delivery' ? address : 'Pickup',
             addressDetails,
-            location: orderLocation,
+            location: effectiveCoords || undefined,
+            lat: effectiveCoords?.lat,
+            lng: effectiveCoords?.lng,
             contactPhone: customerPhone,
             orderSource: 'ONLINE',
-            franchiseId: cartFranchiseId || undefined,
+            franchiseId: OrderingContextService.getCachedContext()?.franchiseId || cartFranchiseId || undefined,
+            branchId: OrderingContextService.getCachedContext()?.branchId || undefined,
             // Send couponCode so server can independently verify and compute discount.
             // Client-side discountAmount is intentionally NOT sent � server recalculates it.
             couponCode: couponCode || (appliedPromo?.code || null)
           })
         });
 
-        const data = await res.json();
-        if (!res.ok || !data.orderId) {
-          throw new Error(data.error || 'Failed to place order on server');
+        const data = typeof (res as any)?.json === 'function' ? await (res as any).json().catch(() => null) : res;
+        if (!res?.ok || !data?.orderId) {
+          const errMsg = data?.error || (data?.code === 'OUT_OF_DELIVERY_ZONE' ? "We currently don't deliver to this location. Please choose a nearby serviceable area or select store pickup." : 'Failed to place order on server');
+          throw new Error(errMsg);
         }
 
         // 5. Backend confirmed successfully
@@ -195,7 +213,23 @@ export default function ProcessingOrder() {
       } catch (err: any) {
         console.error('[ProcessingOrder] Order failed:', err);
         setStep('failed');
-        setErrorMessage(err.message || 'Order submission could not be completed.');
+
+        let customerMsg = err.message || 'Order submission could not be completed.';
+
+        // Humanize and translate technical issues into actionable customer-friendly explanations
+        if (customerMsg.includes('Invalid size') || customerMsg.includes('size requested')) {
+          customerMsg = "Please re-select your pizza size or crust in the cart. The menu variant has been refreshed.";
+        } else if (customerMsg.includes('OUT_OF_DELIVERY_ZONE') || customerMsg.includes('delivery radius') || customerMsg.includes("don't deliver")) {
+          customerMsg = "Your delivery location is outside our standard delivery zone. You can still choose Takeaway or Store Pickup!";
+        } else if (customerMsg.includes('STORE_CLOSED') || customerMsg.includes('closed')) {
+          customerMsg = "Our kitchen is currently closed (Opens daily at 12:00 PM). Please check back during operational hours.";
+        } else if (customerMsg.includes('RESOURCE_EXHAUSTED') || customerMsg.includes('Failed to fetch') || customerMsg.includes('NetworkError')) {
+          customerMsg = "Could not reach the kitchen terminal due to a momentary network hiccup. Please tap Retry to securely confirm your order.";
+        } else if (customerMsg.includes('verified mobile number') || customerMsg.includes('phone profile')) {
+          customerMsg = "A valid 10-digit phone number is required so our rider can deliver smoothly. Please update your profile in Checkout.";
+        }
+
+        setErrorMessage(customerMsg);
         isExecutingRef.current = false;
       }
     };

@@ -282,10 +282,33 @@ export async function fetchApiJson<T = any>(
         const error: any = new Error(message);
         error.status = res.status;
         error.data = errJson;
+        error.ok = false;
+        error.code = errJson?.code || `HTTP_${res.status}`;
+        if (typeof errJson === 'object' && errJson !== null) {
+          Object.assign(error, errJson);
+        }
         throw error;
       }
 
       const data = await res.json();
+
+      // Ensure backward-compatibility with callers treating fetchApi as native fetch (res.ok, res.json())
+      if (typeof data === 'object' && data !== null) {
+        try {
+          if (!('ok' in data)) {
+            Object.defineProperty(data, 'ok', { value: true, enumerable: false, writable: true });
+          }
+          if (!('status' in data)) {
+            Object.defineProperty(data, 'status', { value: res.status, enumerable: false, writable: true });
+          }
+          if (!('json' in data)) {
+            Object.defineProperty(data, 'json', { value: async () => data, enumerable: false, writable: true });
+          }
+          if (!('text' in data)) {
+            Object.defineProperty(data, 'text', { value: async () => JSON.stringify(data), enumerable: false, writable: true });
+          }
+        } catch {}
+      }
 
       // Store in memory and persistent cache if applicable
       if (isGet && !isSensitive && effectiveTtlMs > 0) {

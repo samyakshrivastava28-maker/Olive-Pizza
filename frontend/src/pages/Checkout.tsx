@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MapPin, Clock, CreditCard, ChevronLeft, Ticket, Navigation, Star, TrendingUp, CheckCircle, ShieldCheck, Receipt, AlertTriangle, AlertCircle, ShoppingBag, Bike } from 'lucide-react';
+import { MapPin, Clock, CreditCard, ChevronLeft, Ticket, Navigation, Star, TrendingUp, CheckCircle, ShieldCheck, Receipt, AlertTriangle, AlertCircle, ShoppingBag, Bike, Banknote } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { useAuthStore, useCartStore } from '../lib/store';
 import { auth, db } from '../lib/firebase';
@@ -26,6 +26,14 @@ export default function Checkout() {
   const storeStatus = useStoreStatus();
   const navigate = useNavigate();
   const { isOffline } = usePWA();
+
+  // Strict User Verification: Customers must log in before connecting to a local restaurant branch
+  useEffect(() => {
+    if (!isAuthenticated && !user) {
+      toast('Please sign in to connect to your local Olive Pizza branch and verify delivery radius', { icon: '🔒' });
+      navigate('/login?redirect=/checkout', { replace: true });
+    }
+  }, [isAuthenticated, user, navigate]);
 
   const [address, setAddress] = useState(user?.fullAddress || '');
   const [houseNumber, setHouseNumber] = useState('');
@@ -106,6 +114,9 @@ export default function Checkout() {
       } else {
         setIsServiceableLocation(true);
         setServiceAreaNotice('');
+        if (res.context?.franchiseId) {
+          useCartStore.getState().setFranchiseId(res.context.franchiseId);
+        }
       }
     };
     verifyRadius();
@@ -415,15 +426,13 @@ export default function Checkout() {
       }
     }
 
-    if (!selectedPayment) {
-      toast.error('Please select a payment method (UPI, Cards, or Cash on Delivery) to proceed.');
-      setShowPayment(true);
-      return;
+    let effectivePayment = selectedPayment;
+    if (!effectivePayment) {
+      effectivePayment = 'cod';
+      setSelectedPayment('cod');
     }
-
-    const effectivePayment = selectedPayment;
     
-    navigate('/recheck-order', {
+    navigate('/processing-order', {
       state: {
         items,
         address,
@@ -816,12 +825,32 @@ export default function Checkout() {
                 </button>
              </div>
            ) : (
-             <button 
-              onClick={() => setShowPayment(true)} 
-              className="w-full py-4 border-2 border-dashed border-slate-300 rounded-2xl text-slate-700 hover:border-primary-600 hover:text-primary-700 hover:bg-primary-50/50 transition-all flex items-center justify-center gap-2 font-bold text-sm cursor-pointer"
-             >
-                <CreditCard className="w-5 h-5 text-primary-600" /> Select Payment Method (UPI, Cards, COD)
-             </button>
+             <div className="space-y-3">
+               <div className="grid grid-cols-2 gap-2">
+                 <button
+                   type="button"
+                   data-testid="select-cod-quick-btn"
+                   onClick={() => handlePaymentSelect('cod')}
+                   className="py-3 px-3 rounded-2xl border-2 border-emerald-500/40 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 font-bold text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-98 shadow-xs"
+                 >
+                   <Banknote className="w-4 h-4 text-emerald-700" /> Cash on Delivery
+                 </button>
+                 <button
+                   type="button"
+                   data-testid="select-upi-quick-btn"
+                   onClick={() => handlePaymentSelect('upi')}
+                   className="py-3 px-3 rounded-2xl border-2 border-primary-500/40 bg-primary-50 hover:bg-primary-100 text-primary-900 font-bold text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-98 shadow-xs"
+                 >
+                   <CreditCard className="w-4 h-4 text-primary-700" /> Pay via UPI
+                 </button>
+               </div>
+               <button 
+                 onClick={() => setShowPayment(true)} 
+                 className="w-full py-3.5 border-2 border-dashed border-slate-300 rounded-2xl text-slate-700 hover:border-primary-600 hover:text-primary-700 hover:bg-primary-50/50 transition-all flex items-center justify-center gap-2 font-bold text-xs sm:text-sm cursor-pointer"
+               >
+                 <CreditCard className="w-4 h-4 text-primary-600" /> More Options (Cards / Wallets)
+               </button>
+             </div>
            )}
         </motion.div>
 
@@ -839,7 +868,7 @@ export default function Checkout() {
               className="flex-1 bg-[#FAF8F5] border border-slate-300 rounded-xl px-3.5 py-2.5 text-xs uppercase text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-primary-600 focus:bg-white transition-colors"
             />
             <button
-              onClick={handleApplyPromo}
+              onClick={() => handleApplyPromo()}
               className="bg-primary-600 hover:bg-primary-700 text-champagne px-5 rounded-xl font-bold text-xs transition-all active:scale-95 cursor-pointer shadow-xs"
             >
               Apply

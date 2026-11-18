@@ -80,6 +80,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(DeliveryPlugin.class);
         registerPlugin(com.olivepizza.app.plugins.AlarmPermissionPlugin.class);
         registerPlugin(com.olivepizza.app.plugins.LiveOrderNotificationPlugin.class);
+        registerPlugin(io.capawesome.capacitorjs.plugins.firebase.authentication.FirebaseAuthenticationPlugin.class);
         super.onCreate(savedInstanceState);
 
         // Handle initial cold-start deep link intent if present

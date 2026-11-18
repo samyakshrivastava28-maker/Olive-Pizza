@@ -82,37 +82,62 @@ export default function FloatingOrderTracker() {
     <AnimatePresence>
       {activeOrder && (
         <motion.div
-          initial={{ y: 100, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          exit={{ y: 100, opacity: 0 }}
+          initial={{ y: 100, opacity: 0, scale: 0.95 }}
+          animate={{ y: 0, opacity: 1, scale: 1 }}
+          exit={{ y: 100, opacity: 0, scale: 0.95 }}
+          transition={{ type: "spring", stiffness: 400, damping: 28 }}
           className="fixed bottom-20 md:bottom-6 left-4 right-4 md:left-1/2 md:-translate-x-1/2 md:w-full md:max-w-md z-40 pointer-events-none"
         >
           <div
             onClick={() => navigate(`/order-tracking/${activeOrder.id}`)}
-            className="w-full bg-dark-950/90 backdrop-blur-xl rounded-3xl p-4 shadow-2xl border border-white/10 flex flex-col pointer-events-auto cursor-pointer active:scale-[0.98] transition-transform overflow-hidden relative"
+            className="w-full bg-slate-900/95 backdrop-blur-xl rounded-3xl p-4 shadow-[0_20px_50px_rgba(0,0,0,0.8),0_0_25px_rgba(245,158,11,0.2)] border border-amber-500/30 flex flex-col pointer-events-auto cursor-pointer active:scale-[0.98] transition-transform overflow-hidden relative group"
           >
-            <div className="flex items-center justify-between mb-3">
+            {/* Ambient glowing top edge with animated sweep */}
+            <div className="absolute top-0 left-0 right-0 h-1 overflow-hidden rounded-t-3xl">
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-amber-400 to-transparent opacity-80 shadow-[0_0_10px_rgba(251,191,36,0.8)]" />
+              <motion.div
+                animate={{ x: ['-100%', '200%'] }}
+                transition={{ repeat: Infinity, duration: 2.4, ease: "linear" }}
+                className="w-1/2 h-full bg-gradient-to-r from-transparent via-white to-transparent opacity-90 blur-[1px]"
+              />
+            </div>
+
+            {/* Specular glass reflection overlay */}
+            <div className="absolute inset-0 bg-gradient-to-tr from-white/10 via-transparent to-white/5 pointer-events-none rounded-3xl" />
+
+            <div className="flex items-center justify-between mb-3 relative z-10">
                <div className="flex items-center gap-3">
-                  <div className={`p-2.5 rounded-xl ${getStatusInfo(activeOrder.status).bg}`}>
+                  <div className={`p-2.5 rounded-xl border border-white/10 shadow-md ${getStatusInfo(activeOrder.status).bg}`}>
                      {React.createElement(getStatusInfo(activeOrder.status).icon, { className: `w-5 h-5 ${getStatusInfo(activeOrder.status).color}` })}
                   </div>
                   <div>
-                     <p className="font-bold text-white">{getStatusInfo(activeOrder.status).title}</p>
-                     <p className="text-xs text-white/50">ETA: {activeOrder.eta || 'Calculating...'}</p>
+                     <p className="font-extrabold text-white text-sm tracking-tight group-hover:text-amber-300 transition-colors">
+                       {getStatusInfo(activeOrder.status).title}
+                     </p>
+                     <p className="text-xs text-amber-200/70 font-medium">ETA: {activeOrder.eta || 'Calculating...'}</p>
                   </div>
                </div>
-               <div className="bg-white/10 text-white text-[10px] font-bold px-3 py-1.5 rounded-full uppercase tracking-wider">
+               <div className="flex items-center gap-1.5 bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-extrabold px-3 py-1.5 rounded-full uppercase tracking-wider shadow-sm shadow-amber-500/20">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                  </span>
                   Live
                </div>
             </div>
             
-            {/* Minimal Progress Bar */}
-            <div className="w-full h-1.5 bg-dark-800 rounded-full overflow-hidden">
+            {/* 3D Glowing Progress Bar */}
+            <div className="w-full h-1.5 bg-slate-800/80 rounded-full overflow-hidden p-0.5 border border-white/5 relative z-10">
                <motion.div 
                  initial={{ width: 0 }} 
-                 animate={{ width: activeOrder.status === 'accepted' ? '33%' : activeOrder.status === 'preparing' ? '66%' : '100%' }}
-                 transition={{ duration: 0.5 }}
-                 className={`h-full ${activeOrder.status === 'out_for_delivery' ? 'bg-primary-500' : 'bg-blue-500'}`}
+                 animate={{
+                   width: activeOrder.status === 'placed' || activeOrder.status === 'pending' ? '20%' :
+                          activeOrder.status === 'accepted' ? '40%' :
+                          activeOrder.status === 'preparing' ? '60%' :
+                          activeOrder.status === 'ready' ? '80%' : '100%'
+                 }}
+                 transition={{ duration: 0.8, ease: "easeOut" }}
+                 className="h-full bg-gradient-to-r from-orange-500 via-amber-400 to-yellow-400 rounded-full shadow-[0_0_8px_rgba(251,191,36,0.6)]"
                />
             </div>
           </div>

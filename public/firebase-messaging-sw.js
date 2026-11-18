@@ -104,6 +104,32 @@ messaging.onBackgroundMessage(async (payload) => {
     return;
   }
 
+  const titleLower = (payload.notification?.title || data.title || '').toLowerCase();
+  const bodyLower = (payload.notification?.body || data.body || '').toLowerCase();
+  const typeLower = (data.type || '').toLowerCase();
+  const catLower = (data.category || '').toLowerCase();
+  const targetAppLower = (data.targetApp || '').toLowerCase();
+
+  // HARD DROP: Any operational, kitchen, rider dispatch, or store management alarms in Customer App
+  if (
+    typeLower === 'no_rider_pending_queue' ||
+    typeLower === 'no_rider' ||
+    typeLower === 'new_order' ||
+    catLower === 'alarm_actionable' ||
+    catLower === 'owner_orders' ||
+    (targetAppLower && targetAppLower !== 'customer') ||
+    titleLower.includes('rider pending') ||
+    titleLower.includes('delivery rider') ||
+    titleLower.includes('no rider') ||
+    titleLower.includes('new order') ||
+    bodyLower.includes('no riders') ||
+    bodyLower.includes('requires delivery but no riders') ||
+    bodyLower.includes('auto-retrying')
+  ) {
+    console.log('[SW] Suppressed operational/staff notification in customer app:', titleLower);
+    return;
+  }
+
   console.log('[SW] Background message:', data.tag || 'no-tag');
 
   const tag = data.tag || `notification_${Date.now()}`;
