@@ -1,11 +1,11 @@
 export const RESTAURANT_LOCATION = {
   address: "Dongargaon Rd, near Saraswati school, Gokul Nagar, Rajnandgaon, Chhattisgarh 491441",
   phone: "7771000000",
-  lat: 21.0810244,
-  lng: 81.0123793
+  lat: 21.0974,
+  lng: 81.0347
 };
 
-export const MAX_DELIVERY_RADIUS_KM = 15;
+export const MAX_DELIVERY_RADIUS_KM = 12;
 export const OPENING_HOUR = 12; // 12 PM (noon)
 export const CLOSING_HOUR = 24; // 12 AM (midnight)
 
@@ -23,15 +23,16 @@ export const getApiBaseUrl = (): string => {
       (window.location.hostname === 'localhost' && window.location.port === '')
     ))
   ) {
-    return "https://olivepizza-owner.onrender.com";
+    return "https://olive-pizza-backend.onrender.com";
   }
   if (import.meta.env.DEV) {
     return "";
   }
-  return "https://olivepizza-owner.onrender.com";
+  return "https://olive-pizza-backend.onrender.com";
 };
 
-export const PRODUCTION_BACKEND_URL = getApiBaseUrl() || "https://olivepizza-owner.onrender.com";
+export const FALLBACK_BACKEND_URL = "https://olive-pizza-backend.onrender.com";
+export const PRODUCTION_BACKEND_URL = "https://olive-pizza-backend.onrender.com";
 
 /**
  * Canonical API URL resolver:
@@ -53,7 +54,7 @@ export const getWebSocketUrl = (): string => {
     const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     return `${proto}//${window.location.host}/ws`;
   }
-  return 'wss://olivepizza-owner.onrender.com/ws';
+  return 'wss://olive-pizza-backend.onrender.com/ws';
 };
 
 function getOrGenerateDeviceId(): string {

@@ -1,4 +1,4 @@
-import { fetchApi, RESTAURANT_LOCATION } from './config';
+import { fetchApi, RESTAURANT_LOCATION, MAX_DELIVERY_RADIUS_KM } from './config';
 import { invalidateMenuCache, invalidateBootstrapCache } from './api';
 import { GeohashService } from '../services/location/GeohashService';
 
@@ -86,6 +86,27 @@ export class OrderingContextService {
   }> {
     const { lat, lng, addressLine, customerId } = params;
 
+    // Strict coordinate validation: Fail closed if coordinates are missing, non-numeric, or out of bounds (-90 to 90, -180 to 180)
+    if (
+      lat == null ||
+      lng == null ||
+      typeof lat !== 'number' ||
+      typeof lng !== 'number' ||
+      isNaN(lat) ||
+      isNaN(lng) ||
+      lat < -90 ||
+      lat > 90 ||
+      lng < -180 ||
+      lng > 180
+    ) {
+      this.clearCachedContext();
+      return {
+        isServiceable: false,
+        error: 'Invalid coordinates provided for delivery location resolution.',
+        code: 'INVALID_COORDINATES'
+      };
+    }
+
     try {
       let res: any;
       try {
@@ -124,20 +145,26 @@ export class OrderingContextService {
       const isServiceable = Boolean(data?.isServiceable ?? data?.serviceable ?? data?.success);
 
       if (!isServiceable) {
-        // If server explicitly verified that customer is outside all active delivery radii:
-        if (data?.code === 'OUT_OF_DELIVERY_ZONE' || data?.error?.includes('away from') || data?.error?.includes('radius')) {
-          this.clearCachedContext();
-          return {
-            isServiceable: false,
-            error: data.error || "We currently don't deliver to this location. Available for Takeaway!",
-            code: 'OUT_OF_DELIVERY_ZONE'
-          };
-        }
-        // Otherwise, server failure/glitch -> let resilient Haversine fallback verify!
-        throw new Error(data?.error || "We currently don't deliver to this location.");
+        // Fail closed if server explicitly declares location outside delivery zone or unserviceable
+        this.clearCachedContext();
+        return {
+          isServiceable: false,
+          error: data?.error || "We currently don't deliver to this location. Available for Takeaway!",
+          code: data?.code || 'OUT_OF_DELIVERY_ZONE'
+        };
       }
 
       const context: CustomerOrderingContext = data.context || data;
+      // Fail closed if branch resolution fails or branch is missing
+      if (!context || !context.branchId || !context.franchiseId) {
+        this.clearCachedContext();
+        return {
+          isServiceable: false,
+          error: 'Branch resolution failed. No active operational branch resolved for this location.',
+          code: 'BRANCH_RESOLUTION_FAILED'
+        };
+      }
+
       if (!context.geohash) {
         context.geohash = GeohashService.encode(lat, lng, 6);
       }
@@ -150,16 +177,57 @@ export class OrderingContextService {
     } catch (err: any) {
       console.warn('[OrderingContext] Network resolution notice:', err?.message || err);
 
+      // Fail closed if coordinates are out of bounds or invalid
+      if (
+        lat == null ||
+        lng == null ||
+        typeof lat !== 'number' ||
+        typeof lng !== 'number' ||
+        isNaN(lat) ||
+        isNaN(lng) ||
+        lat < -90 ||
+        lat > 90 ||
+        lng < -180 ||
+        lng > 180
+      ) {
+        this.clearCachedContext();
+        return {
+          isServiceable: false,
+          error: 'Invalid coordinates provided for delivery location resolution.',
+          code: 'INVALID_COORDINATES'
+        };
+      }
+
+      // Dynamic Geofencing: Use configured active branch delivery radius (12 km canonical)
+      const activeRadiusKm = MAX_DELIVERY_RADIUS_KM || 12;
+
       // Resilient Client-Side Geohash & Haversine Distance Fallback
-      // Never falsely declare out-of-delivery-zone on network glitches or Render cold-starts
+      // Never use hardcoded 25 km; uses configured active branch delivery radius (12 km canonical)
       const KNOWN_BRANCHES = [
-        { id: 'branch_rjn_main', franchiseId: 'fra_rajnandgaon', name: 'Olive Pizza (Rajnandgaon HQ)', lat: 21.0974, lng: 81.0347, maxRadiusKm: 25 }
+        {
+          id: 'branch_rjn_main',
+          franchiseId: 'fra_rajnandgaon',
+          name: 'Olive Pizza (Rajnandgaon HQ)',
+          lat: RESTAURANT_LOCATION.lat,
+          lng: RESTAURANT_LOCATION.lng,
+          maxRadiusKm: activeRadiusKm
+        }
       ];
 
-      let closestBranch = KNOWN_BRANCHES[0];
+      if (!KNOWN_BRANCHES || KNOWN_BRANCHES.length === 0) {
+        this.clearCachedContext();
+        return {
+          isServiceable: false,
+          error: 'Branch resolution failed. No active delivery branch found.',
+          code: 'BRANCH_RESOLUTION_FAILED'
+        };
+      }
+
+      let closestBranch: (typeof KNOWN_BRANCHES)[0] | null = null;
       let minDistance = Infinity;
 
       for (const branch of KNOWN_BRANCHES) {
+        if (!branch.lat || !branch.lng || isNaN(branch.lat) || isNaN(branch.lng)) continue;
         const dist = GeohashService.haversineDistanceKm(lat, lng, branch.lat, branch.lng);
         if (dist < minDistance) {
           minDistance = dist;
@@ -167,10 +235,20 @@ export class OrderingContextService {
         }
       }
 
+      // Fail closed if branch resolution fails
+      if (!closestBranch || !isFinite(minDistance)) {
+        this.clearCachedContext();
+        return {
+          isServiceable: false,
+          error: 'Branch resolution failed. Could not determine closest operational branch.',
+          code: 'BRANCH_RESOLUTION_FAILED'
+        };
+      }
+
       const clientGeohash = GeohashService.encode(lat, lng, 6);
 
       if (minDistance <= closestBranch.maxRadiusKm) {
-        // Customer IS inside serviceable radius! Deliverable!
+        // Customer IS inside configured serviceable radius! Deliverable!
         const fallbackContext: CustomerOrderingContext = {
           customerId: customerId || 'guest',
           franchiseId: closestBranch.franchiseId,
@@ -197,7 +275,8 @@ export class OrderingContextService {
         };
       }
 
-      // Truly outside delivery zone
+      // Outside delivery zone - fail closed
+      this.clearCachedContext();
       const safeError = `Your location is ${Math.round(minDistance * 10) / 10} km from ${closestBranch.name} (delivery available up to ${closestBranch.maxRadiusKm} km). Store pickup and takeaway are available!`;
       return {
         isServiceable: false,
@@ -222,6 +301,26 @@ export class OrderingContextService {
     error?: string;
     code?: string;
   }> {
+    // Fail closed if coordinates are missing, non-numeric, or out of bounds (-90 to 90, -180 to 180)
+    if (
+      params.lat == null ||
+      params.lng == null ||
+      typeof params.lat !== 'number' ||
+      typeof params.lng !== 'number' ||
+      isNaN(params.lat) ||
+      isNaN(params.lng) ||
+      params.lat < -90 ||
+      params.lat > 90 ||
+      params.lng < -180 ||
+      params.lng > 180
+    ) {
+      return {
+        serviceable: false,
+        error: 'Invalid coordinates provided for delivery location resolution.',
+        code: 'INVALID_COORDINATES'
+      };
+    }
+
     try {
       const res: any = await fetchApi('/api/orders/validate-checkout', {
         method: 'POST',
@@ -237,8 +336,13 @@ export class OrderingContextService {
         };
       }
 
-      // If server explicitly declared location out of zone
-      if (data?.code === 'OUT_OF_DELIVERY_ZONE' || (!res?.ok && res?.status === 400 && data?.error)) {
+      // If server explicitly declared location out of zone or resolution failed
+      if (
+        data?.code === 'OUT_OF_DELIVERY_ZONE' ||
+        data?.code === 'BRANCH_RESOLUTION_FAILED' ||
+        data?.code === 'INVALID_COORDINATES' ||
+        (!res?.ok && res?.status === 400 && data?.error)
+      ) {
         return {
           serviceable: false,
           error: data?.error || "We currently don't deliver to this location.",

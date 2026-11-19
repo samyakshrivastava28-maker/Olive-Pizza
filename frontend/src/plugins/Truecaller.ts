@@ -104,7 +104,7 @@ export const TruecallerService = {
     // If local proxy failed, directly contact production Render backend
     if (!res || !res.ok) {
       try {
-        res = await fetch('https://olivepizza-owner.onrender.com/api/phone/truecaller/session', {
+        res = await fetch('https://olive-pizza-backend.onrender.com/api/phone/truecaller/session', {
           method: 'POST',
           headers,
           body: JSON.stringify({ expectedPhone })
@@ -136,7 +136,7 @@ export const TruecallerService = {
     let res = await fetchApi(`/api/phone/truecaller/session/${requestId}`).catch(() => null);
     if (!res || !res.ok) {
       try {
-        res = await fetch(`https://olivepizza-owner.onrender.com/api/phone/truecaller/session/${requestId}`);
+        res = await fetch(`https://olive-pizza-backend.onrender.com/api/phone/truecaller/session/${requestId}`);
       } catch {}
     }
 
