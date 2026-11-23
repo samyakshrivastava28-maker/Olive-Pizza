@@ -9,7 +9,8 @@
     "build:frontend": "vite build",
     "preview": "vite preview --port 3000",
     "lint": "tsc --noEmit",
-    "test": "vitest run --coverage"
+    "test": "vitest run --coverage",
+    "test:e2e": "tsx tests/e2e/runner.ts"
   },
   "engines": {
     "node": ">=24 <25"

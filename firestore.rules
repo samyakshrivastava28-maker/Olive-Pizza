@@ -109,6 +109,11 @@ service cloud.firestore {
     match /products/{productId} {
       allow read: if true;
       allow write: if hasFullAccess();
+
+      match /{allSubcollections=**} {
+        allow read: if true;
+        allow write: if hasFullAccess();
+      }
     }
 
     match /menu_items/{itemId} {
@@ -125,10 +130,20 @@ service cloud.firestore {
       allow read: if true;
       allow write: if hasFullAccess();
     }
+
+    match /special_categories/{categoryId} {
+      allow read: if true;
+      allow write: if hasFullAccess();
+    }
     
     match /combos/{comboId} {
       allow read: if true;
       allow write: if hasFullAccess();
+
+      match /{allSubcollections=**} {
+        allow read: if true;
+        allow write: if hasFullAccess();
+      }
     }
 
     match /offers/{offerId} {
@@ -142,7 +157,7 @@ service cloud.firestore {
     }
     
     match /coupons/{couponId} {
-      allow read: if isSignedIn() || hasFullAccess();
+      allow read: if true;
       allow write: if hasFullAccess();
     }
 
