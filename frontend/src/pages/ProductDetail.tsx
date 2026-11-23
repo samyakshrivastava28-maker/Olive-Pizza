@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { useParams, useNavigate } from "react-router";
 import { motion, AnimatePresence } from "framer-motion";
 import { db } from "../lib/firebase";
@@ -15,6 +15,9 @@ import SEO from "../components/SEO";
 import { generateProductSchema } from "../lib/schema";
 import { getOptimizedImageUrl } from "../lib/imageOptimizer";
 import NotFound from "./NotFound";
+
+// Lazy-load Three.js 3D Product Scene (falls back to 2D image)
+const ProductScene3D = lazy(() => import("../components/product/ProductScene3D"));
 
 function ProductSkeleton() {
   return (
@@ -125,7 +128,7 @@ export default function ProductDetail() {
               ? [
                   { name: "Extra Cheese", price: 40 },
                   { name: "Black Olives", price: 30 },
-                  { name: "Jalapeños", price: 30 },
+                  { name: "JalapeÃ±os", price: 30 },
                   { name: "Sweet Corn", price: 20 },
                   { name: "Paneer", price: 50 },
                 ]
@@ -251,7 +254,7 @@ export default function ProductDetail() {
         addons: selectedAddOns,
       });
 
-      toast.success("Added to Cart!", { icon: "✨" });
+      toast.success("Added to Cart!", { icon: "âœ¨" });
     });
 
     setTimeout(() => {
@@ -263,7 +266,7 @@ export default function ProductDetail() {
   if (notFound) {
     return (
       <NotFound 
-        title="Oops! This item got lost in the oven. 🍕"
+        title="Oops! This item got lost in the oven. ðŸ•"
         subtitle="The pizza, combo, or treat you're looking for doesn't exist, may have been retired, or is temporarily off our menu."
         isProductNotFound={true}
       />
@@ -323,60 +326,56 @@ export default function ProductDetail() {
             <div className="absolute top-6 left-6 z-20 flex gap-2">
               <span className="text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-md border shadow-xs backdrop-blur-md bg-dark-950/70">
                 {item.category === "combo" ? (
-                  <span className="text-champagne border-champagne/30">COMBO 🚀</span>
+                  <span className="text-champagne border-champagne/30">COMBO ðŸš€</span>
                 ) : item.isVegetarian ? (
-                  <span className="text-emerald-400 border-emerald-500/30">VEG 🌿</span>
+                  <span className="text-emerald-400 border-emerald-500/30">VEG ðŸŒ¿</span>
                 ) : (
-                  <span className="text-rose-400 border-rose-500/30">NON-VEG 🍗</span>
+                  <span className="text-rose-400 border-rose-500/30">NON-VEG ðŸ—</span>
                 )}
               </span>
             </div>
 
             <motion.div
               key={`size-${selectedSize}`}
-              initial={{ scale: sizeScale * 0.85, rotateX: 0, rotateY: 0 }}
-              animate={{
-                scale: sizeScale,
-              }}
+              initial={{ scale: sizeScale * 0.85 }}
+              animate={{ scale: sizeScale }}
               transition={{
                 type: "spring",
                 stiffness: 260,
                 damping: 18,
                 mass: 0.7,
               }}
-              className="relative z-10 w-3/4 h-3/4 flex items-center justify-center pointer-events-none"
-              style={{ rotateX, rotateY, transformStyle: "preserve-3d" }}
+              className="relative z-10 w-full h-full flex items-center justify-center min-h-[340px]"
             >
-              {/* Ground shadow — scales with pizza */}
-              <motion.div
-                className="absolute -bottom-8 w-3/4 h-8 bg-black/60 blur-2xl rounded-[100%]"
-                animate={{
-                  scaleX: sizeScale,
-                  scaleY: sizeScale * 0.6,
-                  opacity: 0.6,
-                }}
-                transition={{ type: "spring", stiffness: 260, damping: 18 }}
-              />
-
-              {/* Emerald/Champagne glow pulse on size change */}
-              <motion.div
-                key={`glow-${selectedSize}`}
-                className="absolute inset-0 rounded-full pointer-events-none"
-                initial={{ opacity: 0.7, scale: 1.1 }}
-                animate={{ opacity: 0, scale: 1.6 }}
-                transition={{ duration: 0.55, ease: 'easeOut' }}
-                style={{ background: 'radial-gradient(circle, rgba(248,231,201,0.3) 0%, transparent 70%)' }}
-              />
-
-              <img
-                ref={pizzaImageRef}
-                src={getOptimizedImageUrl(item.image, { preset: 'detail', width: 900 })}
-                alt={item.name}
-                loading="eager"
-                decoding="async"
-                className="w-full h-full object-contain drop-shadow-2xl"
-                style={{ transform: "translateZ(50px)" }}
-              />
+              <Suspense
+                fallback={
+                  <motion.div className="relative w-3/4 h-3/4 flex items-center justify-center pointer-events-none" style={{ rotateX, rotateY, transformStyle: "preserve-3d" }}>
+                    <motion.div
+                      className="absolute -bottom-8 w-3/4 h-8 bg-black/60 blur-2xl rounded-[100%]"
+                      animate={{
+                        scaleX: sizeScale,
+                        scaleY: sizeScale * 0.6,
+                        opacity: 0.6,
+                      }}
+                      transition={{ type: "spring", stiffness: 260, damping: 18 }}
+                    />
+                    <img
+                      ref={pizzaImageRef}
+                      src={getOptimizedImageUrl(item.image, { preset: 'detail', width: 900 })}
+                      alt={item.name}
+                      loading="eager"
+                      decoding="async"
+                      className="w-full h-full object-contain drop-shadow-2xl"
+                      style={{ transform: "translateZ(50px)" }}
+                    />
+                  </motion.div>
+                }
+              >
+                <ProductScene3D
+                  imageUrl={getOptimizedImageUrl(item.image, { preset: 'detail', width: 900 })}
+                  productName={item.name}
+                />
+              </Suspense>
             </motion.div>
           </div>
 
@@ -388,7 +387,7 @@ export default function ProductDetail() {
                   {item.category?.toUpperCase() || "PIZZA"}
                 </span>
                 <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
-                  Wood-Fired 450°C
+                  Wood-Fired 450Â°C
                 </span>
               </div>
               <h1 className="text-3xl lg:text-4xl font-black text-slate-900 tracking-tight">
@@ -432,7 +431,7 @@ export default function ProductDetail() {
                           }`}
                           style={{ width: circleSize, height: circleSize }}
                         >
-                          <span style={{ fontSize: circleSize * 0.5 }}>🍕</span>
+                          <span style={{ fontSize: circleSize * 0.5 }}>ðŸ•</span>
                         </motion.div>
 
                         <span className="text-xs leading-none">{v.name}</span>
@@ -443,7 +442,7 @@ export default function ProductDetail() {
                           <span className={`text-[10px] font-black ${
                             isActive ? 'text-champagne' : 'text-primary-700'
                           }`}>
-                            +₹{v.price}
+                            +â‚¹{v.price}
                           </span>
                         )}
 
@@ -479,7 +478,7 @@ export default function ProductDetail() {
                     >
                       <span className="text-xs sm:text-sm">{c.name}</span>
                       {c.price > 0 && (
-                        <span className="text-xs text-primary-700 font-black">+₹{c.price}</span>
+                        <span className="text-xs text-primary-700 font-black">+â‚¹{c.price}</span>
                       )}
                     </button>
                   ))}
@@ -527,7 +526,7 @@ export default function ProductDetail() {
                         </div>
                         <span>{addon.name}</span>
                         <span className="text-[10px] text-slate-500">
-                          +₹{addon.price}
+                          +â‚¹{addon.price}
                         </span>
                       </button>
                     );
@@ -543,14 +542,14 @@ export default function ProductDetail() {
               <div className="flex flex-col">
                 {item.discountPercentage && item.discountPercentage > 0 ? (
                   <>
-                    <span className="text-xs text-slate-400 line-through font-medium">₹{item.basePrice}</span>
+                    <span className="text-xs text-slate-400 line-through font-medium">â‚¹{item.basePrice}</span>
                     <span className="text-2xl md:text-4xl font-black text-primary-700 tracking-tight">
-                      ₹{calculateTotal()}
+                      â‚¹{calculateTotal()}
                     </span>
                   </>
                 ) : (
                   <span className="text-2xl md:text-4xl font-black text-primary-700 tracking-tight">
-                    ₹{calculateTotal()}
+                    â‚¹{calculateTotal()}
                   </span>
                 )}
               </div>

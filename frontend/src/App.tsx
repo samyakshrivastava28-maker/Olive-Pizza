@@ -108,6 +108,7 @@ const Home = lazyWithRetry(() => import('./pages/Home'));
 const Menu = lazyWithRetry(() => import('./pages/Menu'));
 const Cart = lazyWithRetry(() => import('./pages/Cart'));
 const Checkout = lazyWithRetry(() => import('./pages/Checkout'));
+const OnlinePaymentPage = lazyWithRetry(() => import('./pages/OnlinePaymentPage'));
 const ProductDetail = lazyWithRetry(() => import('./pages/ProductDetail'));
 const Offers = lazyWithRetry(() => import('./pages/Offers'));
 const BillPage = lazyWithRetry(() => import('./pages/BillPage'));
@@ -237,6 +238,7 @@ function AppContent() {
                 <Route path="/cart" element={<Cart />} />
                 <Route path="/offers" element={<Offers />} />
                 <Route path="/checkout" element={<Checkout />} />
+                <Route path="/online-payment" element={<Suspense fallback={<PizzaLoader />}><OnlinePaymentPage /></Suspense>} />
                 <Route path="/recheck-order" element={<RecheckOrder />} />
                 <Route path="/processing-order" element={<ProcessingOrder />} />
                 <Route path="/order-success/:orderId" element={<OrderSuccessScreen />} />
