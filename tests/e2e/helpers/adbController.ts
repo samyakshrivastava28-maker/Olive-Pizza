@@ -32,7 +32,7 @@ export class AdbController {
   private connectedSerial: string | null = null;
   private lastCheckTime = 0;
   private isCachedOnline = false;
-  private cacheTtlMs = 30000; // 30s cache
+  private cacheTtlMs = 5000; // 5s cache
 
   constructor() {
     this.adbPath = this.resolveAdbPath();
@@ -71,16 +71,12 @@ export class AdbController {
       }
     }
 
-    // Check cached offline state
-    if (Date.now() - this.lastCheckTime < this.cacheTtlMs && !this.isCachedOnline) {
-      return null;
-    }
-
-    const candidateIps = [this.primaryIp, this.secondaryIp];
+    // First try connecting to secondary (LAN) IP, then primary (Wi-Fi Direct)
+    const candidateIps = [this.secondaryIp, this.primaryIp];
 
     for (const ip of candidateIps) {
       try {
-        const connectOut = this.exec(`connect ${ip}`, 2000);
+        const connectOut = this.exec(`connect ${ip}`, 3000);
         if (connectOut.includes('connected to') || connectOut.includes('already connected to')) {
           const state = this.exec(`-s ${ip} get-state`, 1500);
           if (state === 'device') {
@@ -96,7 +92,7 @@ export class AdbController {
       }
     }
 
-    // Check if any USB or other device is connected
+    // Check if device is attached in devices list
     const devicesOut = this.exec('devices', 1500);
     const lines = devicesOut.split('\n').slice(1);
     for (const line of lines) {

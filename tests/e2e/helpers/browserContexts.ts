@@ -101,6 +101,38 @@ export class BrowserContextManager {
   }
 
   /**
+   * Helper that creates an isolated context and page, executes an action, and guarantees cleanup
+   */
+  public async withPage<T>(
+    action: (page: Page) => Promise<T>,
+    options?: {
+      viewport?: ViewportDefinition;
+      account?: TestUserAccount;
+      url?: string;
+    }
+  ): Promise<T> {
+    const { context, page } = await this.createAppContext({
+      viewport: options?.viewport,
+      account: options?.account,
+    });
+    try {
+      if (options?.url) {
+        await page.goto(options.url, { timeout: 15000, waitUntil: 'domcontentloaded' });
+      }
+      return await action(page);
+    } finally {
+      try {
+        await page.close();
+      } catch {}
+      try {
+        await context.close();
+      } catch {}
+      const idx = this.activeContexts.indexOf(context);
+      if (idx !== -1) this.activeContexts.splice(idx, 1);
+    }
+  }
+
+  /**
    * Closes all active contexts and browser session
    */
   public async closeAll(): Promise<void> {

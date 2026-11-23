@@ -1,32 +1,32 @@
 {
   "project": "Olive Pizza Multi-Repository Platform",
-  "timestamp": "2026-11-23T16:39:31.313Z",
+  "timestamp": "2026-11-23T19:20:12.806Z",
   "summary": {
     "total": 341,
-    "passed": 331,
+    "passed": 341,
     "failed": 0,
     "skipped": 0,
-    "notTested": 10,
-    "durationMs": 4165
+    "notTested": 0,
+    "durationMs": 27059
   },
   "tiers": {
     "tier1_feature_coverage": {
       "total": 155,
-      "passed": 151,
+      "passed": 155,
       "failed": 0,
-      "notTested": 4
+      "notTested": 0
     },
     "tier2_boundary_corner": {
       "total": 155,
-      "passed": 150,
+      "passed": 155,
       "failed": 0,
-      "notTested": 5
+      "notTested": 0
     },
     "tier3_cross_feature": {
       "total": 21,
-      "passed": 20,
+      "passed": 21,
       "failed": 0,
-      "notTested": 1
+      "notTested": 0
     },
     "tier4_real_world_application": {
       "total": 10,
@@ -38,8 +38,8 @@
   "classifications": {
     "automated": 331,
     "localhost_browser": 0,
-    "physical_phone": 0,
-    "not_tested": 10
+    "physical_phone": 10,
+    "not_tested": 0
   },
   "testCases": [
     {
@@ -58,7 +58,7 @@
       "title": "Verify git working trees have package.json manifests",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 2
     },
     {
       "id": "T1-F01-03",
@@ -85,7 +85,7 @@
       "title": "Verify git commit message structure standard compliance",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 0
     },
     {
       "id": "T1-F02-01",
@@ -94,7 +94,7 @@
       "title": "Verify backend postgres.ts parses sslmode=verify-full",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1
     },
     {
       "id": "T1-F02-02",
@@ -139,7 +139,7 @@
       "title": "Verify Customer app package.json has test and dev scripts",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 0
     },
     {
       "id": "T1-F03-02",
@@ -148,7 +148,7 @@
       "title": "Verify Backend package.json has test execution scripts",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1
     },
     {
       "id": "T1-F03-03",
@@ -166,7 +166,7 @@
       "title": "Verify Restaurant Manager test suites exist in src/tests",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1
     },
     {
       "id": "T1-F03-05",
@@ -202,7 +202,7 @@
       "title": "Verify catalog bootstrap route reads from Firestore catalog",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 3
     },
     {
       "id": "T1-F04-04",
@@ -220,7 +220,7 @@
       "title": "Verify inactive products are filtered from active menu displays",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1
     },
     {
       "id": "T1-F05-01",
@@ -229,7 +229,7 @@
       "title": "Verify backend order routes do not rely on pg menu_products",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 2
     },
     {
       "id": "T1-F05-02",
@@ -238,7 +238,7 @@
       "title": "Verify catalog bootstrap caching header stale-while-revalidate",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 0
     },
     {
       "id": "T1-F05-03",
@@ -274,7 +274,7 @@
       "title": "Verify OrderPersistenceArchiveService defines canonical_orders table",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 2
     },
     {
       "id": "T1-F06-02",
@@ -292,7 +292,7 @@
       "title": "Verify payments table record links to order_id",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 3
     },
     {
       "id": "T1-F06-04",
@@ -337,7 +337,7 @@
       "title": "Verify size_variant and crust columns in item persistence",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1
     },
     {
       "id": "T1-F07-04",
@@ -373,7 +373,7 @@
       "title": "Verify AuthProvider component in customer frontend",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1
     },
     {
       "id": "T1-F08-03",
@@ -391,7 +391,7 @@
       "title": "Verify email signin route handles demo verification codes in dev",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 2
     },
     {
       "id": "T1-F08-05",
@@ -427,7 +427,7 @@
       "title": "Verify Firestore products onSnapshot streaming setup",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1
     },
     {
       "id": "T1-F09-04",
@@ -454,7 +454,7 @@
       "title": "Verify /product/:productId route exists in App.tsx",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1
     },
     {
       "id": "T1-F10-02",
@@ -463,7 +463,7 @@
       "title": "Verify ProductDetail page component exists",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 0
     },
     {
       "id": "T1-F10-03",
@@ -472,7 +472,7 @@
       "title": "Verify ProductDetail dynamic pricing calculation",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1
     },
     {
       "id": "T1-F10-04",
@@ -481,7 +481,7 @@
       "title": "Verify add to cart commitment in ProductDetail",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1
     },
     {
       "id": "T1-F10-05",
@@ -499,7 +499,7 @@
       "title": "Verify Three.js packages installed in Customer app",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 0
     },
     {
       "id": "T1-F11-02",
@@ -517,7 +517,7 @@
       "title": "Verify 3D Pizza Canvas component exists in frontend",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1
     },
     {
       "id": "T1-F11-04",
@@ -526,7 +526,7 @@
       "title": "Verify WebGL context support check in 3D loader",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 0
     },
     {
       "id": "T1-F11-05",
@@ -553,7 +553,7 @@
       "title": "Verify prefers-reduced-motion CSS support in Tailwind",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1
     },
     {
       "id": "T1-F12-03",
@@ -562,7 +562,7 @@
       "title": "Verify Cloudinary image fallback URL builder",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 0
     },
     {
       "id": "T1-F12-04",
@@ -589,7 +589,7 @@
       "title": "Verify ProductCard component links to /product/:id",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1
     },
     {
       "id": "T1-F13-02",
@@ -607,7 +607,7 @@
       "title": "Verify quick add button adds item to cart without navigating",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1
     },
     {
       "id": "T1-F13-04",
@@ -634,7 +634,7 @@
       "title": "Verify cart subtotal calculation across multiple items",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 0
     },
     {
       "id": "T1-F14-02",
@@ -679,7 +679,7 @@
       "title": "Verify /checkout route defined in Customer App.tsx",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1
     },
     {
       "id": "T1-F15-02",
@@ -715,7 +715,7 @@
       "title": "Verify back button navigation safety preserves cart state",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 0
     },
     {
       "id": "T1-F16-01",
@@ -778,7 +778,7 @@
       "title": "Verify Mock payment provider handles create-intent and verify",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1
     },
     {
       "id": "T1-F17-03",
@@ -805,7 +805,7 @@
       "title": "Verify payment capture transition (INTENT_CREATED -> PAYMENT_CAPTURED)",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 0
     },
     {
       "id": "T1-F18-01",
@@ -904,7 +904,7 @@
       "title": "Verify OwnerAlarmManager exists in Owner repository",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1
     },
     {
       "id": "T1-F20-02",
@@ -949,7 +949,7 @@
       "title": "Verify WebSocket server forbids tokens in URL query string (code 1008)",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 2
     },
     {
       "id": "T1-F21-02",
@@ -958,7 +958,7 @@
       "title": "Verify in-band auth message structure ({ type: \"auth\", token })",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 0
     },
     {
       "id": "T1-F21-03",
@@ -967,7 +967,7 @@
       "title": "Verify register_branch requires prior authenticated session",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1
     },
     {
       "id": "T1-F21-04",
@@ -994,7 +994,7 @@
       "title": "Verify broadcastToBranch method exists in WebSocketServer",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 0
     },
     {
       "id": "T1-F22-02",
@@ -1039,7 +1039,7 @@
       "title": "Verify POS offline queue test suite exists in POS repo",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1
     },
     {
       "id": "T1-F23-02",
@@ -1048,7 +1048,7 @@
       "title": "Verify POS print claim atomic locking mechanism",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1
     },
     {
       "id": "T1-F23-03",
@@ -1066,7 +1066,7 @@
       "title": "Verify POS stable client UUID generation for walk-in orders",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 0
     },
     {
       "id": "T1-F23-05",
@@ -1084,7 +1084,7 @@
       "title": "Verify Capacitor Geolocation package in Delivery app",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1
     },
     {
       "id": "T1-F24-02",
@@ -1093,7 +1093,7 @@
       "title": "Verify LocationService single-watcher pattern in Delivery app",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 3
     },
     {
       "id": "T1-F24-03",
@@ -1102,7 +1102,7 @@
       "title": "Verify rider delivery state machine transitions",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 0
     },
     {
       "id": "T1-F24-04",
@@ -1129,7 +1129,7 @@
       "title": "Verify FranchiseScopeService exists in Backend",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1
     },
     {
       "id": "T1-F25-02",
@@ -1156,7 +1156,7 @@
       "title": "Verify Franchise app HashRouter configuration in App.tsx",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 23
     },
     {
       "id": "T1-F25-05",
@@ -1174,7 +1174,7 @@
       "title": "Verify SoundAlertEngine exists in Restaurant Manager",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1
     },
     {
       "id": "T1-F26-02",
@@ -1183,7 +1183,7 @@
       "title": "Verify Web Audio API synthesis fallback chime implementation",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 21
     },
     {
       "id": "T1-F26-03",
@@ -1192,7 +1192,7 @@
       "title": "Verify user gesture audio unlock method (unlockAudio)",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1
     },
     {
       "id": "T1-F26-04",
@@ -1237,7 +1237,7 @@
       "title": "Verify test accounts configuration includes all 6 roles",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 0
     },
     {
       "id": "T1-F27-04",
@@ -1246,7 +1246,7 @@
       "title": "Verify ADB controller helper module exists",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1
     },
     {
       "id": "T1-F27-05",
@@ -1309,47 +1309,43 @@
       "title": "Verify ADB tool binary availability on host system",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1
     },
     {
       "id": "T1-F29-02",
       "featureId": 29,
       "tier": 1,
       "title": "Verify Customer Capacitor Android package installed on device or configured",
-      "classification": "NOT TESTED",
-      "status": "NOT_TESTED",
-      "durationMs": 4108,
-      "error": "Physical phone offline via Wi-Fi ADB: DEVICE_OFFLINE: Samsung Galaxy S21 FE 5G not currently reachable via Wi-Fi ADB"
+      "classification": "PHYSICAL PHONE",
+      "status": "PASS",
+      "durationMs": 7721
     },
     {
       "id": "T1-F29-03",
       "featureId": 29,
       "tier": 1,
       "title": "Verify Restaurant Manager Capacitor package installed or configured",
-      "classification": "NOT TESTED",
-      "status": "NOT_TESTED",
-      "durationMs": 1,
-      "error": "Physical phone offline via Wi-Fi ADB: DEVICE_OFFLINE: Samsung Galaxy S21 FE 5G not currently reachable via Wi-Fi ADB"
+      "classification": "PHYSICAL PHONE",
+      "status": "PASS",
+      "durationMs": 4657
     },
     {
       "id": "T1-F29-04",
       "featureId": 29,
       "tier": 1,
       "title": "Verify Delivery Partner Capacitor package installed or configured",
-      "classification": "NOT TESTED",
-      "status": "NOT_TESTED",
-      "durationMs": 0,
-      "error": "Physical phone offline via Wi-Fi ADB: DEVICE_OFFLINE: Samsung Galaxy S21 FE 5G not currently reachable via Wi-Fi ADB"
+      "classification": "PHYSICAL PHONE",
+      "status": "PASS",
+      "durationMs": 3060
     },
     {
       "id": "T1-F29-05",
       "featureId": 29,
       "tier": 1,
       "title": "Verify device keep-awake enforcement capability",
-      "classification": "NOT TESTED",
-      "status": "NOT_TESTED",
-      "durationMs": 0,
-      "error": "Physical phone offline via Wi-Fi ADB: DEVICE_OFFLINE: Samsung Galaxy S21 FE 5G not currently reachable via Wi-Fi ADB"
+      "classification": "PHYSICAL PHONE",
+      "status": "PASS",
+      "durationMs": 1641
     },
     {
       "id": "T1-F30-01",
@@ -1439,7 +1435,7 @@
       "title": "Verify canonical JSON test report schema conformance",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1
     },
     {
       "id": "T2-F01-01",
@@ -1475,7 +1471,7 @@
       "title": "Submodule / worktree skew detection",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1
     },
     {
       "id": "T2-F01-05",
@@ -1484,7 +1480,7 @@
       "title": "Network drop during git fetch retry logic",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 0
     },
     {
       "id": "T2-F02-01",
@@ -1547,7 +1543,7 @@
       "title": "Unhandled promise rejection captured & flagged as failure",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1
     },
     {
       "id": "T2-F03-03",
@@ -1610,7 +1606,7 @@
       "title": "Concurrency write conflict optimistic versioning",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 0
     },
     {
       "id": "T2-F04-05",
@@ -1673,7 +1669,7 @@
       "title": "Duplicate primary key on order insert triggers idempotent update",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1
     },
     {
       "id": "T2-F06-02",
@@ -1727,7 +1723,7 @@
       "title": "100 custom toppings array persists within JSONB row budget",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 0
     },
     {
       "id": "T2-F07-03",
@@ -1781,7 +1777,7 @@
       "title": "Malformed Bearer header rejected (empty, basic, malformed base64)",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1
     },
     {
       "id": "T2-F08-04",
@@ -1799,7 +1795,7 @@
       "title": "Phone number normalization (+91, 91, 0 prefixes to 10 digits)",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 0
     },
     {
       "id": "T2-F09-01",
@@ -1862,7 +1858,7 @@
       "title": "Rapid 20-click customization toggling calculates correct final price",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 0
     },
     {
       "id": "T2-F10-03",
@@ -1898,7 +1894,7 @@
       "title": "WEBGL_lose_context simulation recovers or transitions to 2.5D tilt",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1
     },
     {
       "id": "T2-F11-02",
@@ -1988,7 +1984,7 @@
       "title": "Middle click / open in new tab preserves valid href link",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 0
     },
     {
       "id": "T2-F13-02",
@@ -2114,7 +2110,7 @@
       "title": "Missing delivery address in checkout state redirects to step 1",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 0
     },
     {
       "id": "T2-F16-01",
@@ -2132,7 +2128,7 @@
       "title": "Deactivated item submitted 1s prior rejected with HTTP 400",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1
     },
     {
       "id": "T2-F16-03",
@@ -2276,7 +2272,7 @@
       "title": "Payment captured with failed order write triggers recovery saga",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 0
     },
     {
       "id": "T2-F19-04",
@@ -2357,7 +2353,7 @@
       "title": "Expired token auth message closed with 4003",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1
     },
     {
       "id": "T2-F21-03",
@@ -2420,7 +2416,7 @@
       "title": "Malformed JSON frame ignored without dropping connection",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 30
     },
     {
       "id": "T2-F22-05",
@@ -2429,7 +2425,7 @@
       "title": "Network latency spike (5,000ms) ping/pong heartbeat detects zombie socket",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1
     },
     {
       "id": "T2-F23-01",
@@ -2519,7 +2515,7 @@
       "title": "Background GPS throttling on Android handled via foreground service",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1
     },
     {
       "id": "T2-F25-01",
@@ -2618,7 +2614,7 @@
       "title": "Transient network drop retry logic (up to 3 retries)",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 0
     },
     {
       "id": "T2-F27-02",
@@ -2645,7 +2641,7 @@
       "title": "Parallel worker isolation prevents cross-test race conditions",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1
     },
     {
       "id": "T2-F27-05",
@@ -2706,50 +2702,45 @@
       "featureId": 29,
       "tier": 2,
       "title": "Phone Wi-Fi drop flags test as [NOT TESTED (DEVICE_OFFLINE)] gracefully",
-      "classification": "NOT TESTED",
-      "status": "NOT_TESTED",
-      "durationMs": 0,
-      "error": "Physical phone offline via Wi-Fi ADB: DEVICE_OFFLINE: Samsung Galaxy S21 FE 5G is not reachable via Wi-Fi ADB (offline)"
+      "classification": "PHYSICAL PHONE",
+      "status": "PASS",
+      "durationMs": 2137
     },
     {
       "id": "T2-F29-02",
       "featureId": 29,
       "tier": 2,
       "title": "Screen auto-lock prevented by keep-awake daemon",
-      "classification": "NOT TESTED",
-      "status": "NOT_TESTED",
-      "durationMs": 0,
-      "error": "Physical phone offline via Wi-Fi ADB: DEVICE_OFFLINE: Samsung Galaxy S21 FE 5G is not reachable via Wi-Fi ADB (offline)"
+      "classification": "PHYSICAL PHONE",
+      "status": "PASS",
+      "durationMs": 1645
     },
     {
       "id": "T2-F29-03",
       "featureId": 29,
       "tier": 2,
       "title": "Low battery mode (<15%) app execution stability check",
-      "classification": "NOT TESTED",
-      "status": "NOT_TESTED",
-      "durationMs": 0,
-      "error": "Physical phone offline via Wi-Fi ADB: DEVICE_OFFLINE: Samsung Galaxy S21 FE 5G is not reachable via Wi-Fi ADB (offline)"
+      "classification": "PHYSICAL PHONE",
+      "status": "PASS",
+      "durationMs": 83
     },
     {
       "id": "T2-F29-04",
       "featureId": 29,
       "tier": 2,
       "title": "Native crash captures Android logcat stack trace",
-      "classification": "NOT TESTED",
-      "status": "NOT_TESTED",
-      "durationMs": 0,
-      "error": "Physical phone offline via Wi-Fi ADB: DEVICE_OFFLINE: Samsung Galaxy S21 FE 5G is not reachable via Wi-Fi ADB (offline)"
+      "classification": "PHYSICAL PHONE",
+      "status": "PASS",
+      "durationMs": 2155
     },
     {
       "id": "T2-F29-05",
       "featureId": 29,
       "tier": 2,
       "title": "90-degree screen rotation preserves form state",
-      "classification": "NOT TESTED",
-      "status": "NOT_TESTED",
-      "durationMs": 0,
-      "error": "Physical phone offline via Wi-Fi ADB: DEVICE_OFFLINE: Samsung Galaxy S21 FE 5G is not reachable via Wi-Fi ADB (offline)"
+      "classification": "PHYSICAL PHONE",
+      "status": "PASS",
+      "durationMs": 74
     },
     {
       "id": "T2-F30-01",
@@ -2803,7 +2794,7 @@
       "title": "Large git diff exceeding context window split into per-repo sections",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 0
     },
     {
       "id": "T2-F31-02",
@@ -2830,7 +2821,7 @@
       "title": "UTF-8 encoding preserved across report",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1
     },
     {
       "id": "T2-F31-05",
@@ -2911,7 +2902,7 @@
       "title": "Restaurant Manager sends in-band auth, disconnects, reconnects with sync_request, and receives missed order events",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1
     },
     {
       "id": "T3-X09",
@@ -2990,10 +2981,9 @@
       "featureId": 29,
       "tier": 3,
       "title": "Capacitor Customer app on Samsung Galaxy S21 FE communicates with localhost backend API",
-      "classification": "NOT TESTED",
-      "status": "NOT_TESTED",
-      "durationMs": 0,
-      "error": "Physical phone offline via Wi-Fi ADB: DEVICE_OFFLINE: Samsung Galaxy S21 FE 5G is not reachable via Wi-Fi ADB"
+      "classification": "PHYSICAL PHONE",
+      "status": "PASS",
+      "durationMs": 3728
     },
     {
       "id": "T3-X18",
@@ -3056,7 +3046,7 @@
       "title": "Item Out of Stock & Manager Kitchen Rejection with Automated Refund",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 0
     },
     {
       "id": "T4-SCN-04",
@@ -3083,7 +3073,7 @@
       "title": "Rider Mid-Transit Breakdown & Saga Reassignment",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1
     },
     {
       "id": "T4-SCN-07",
