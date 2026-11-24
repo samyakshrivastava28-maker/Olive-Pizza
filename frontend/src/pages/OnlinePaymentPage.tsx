@@ -264,7 +264,7 @@ export default function OnlinePaymentPage() {
   // ── Mount Guard ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (!orderContext || !orderContext.orderId || !orderContext.serverValidatedAmount) {
-      navigate('/checkout', { replace: true });
+      navigate('/cart', { replace: true });
       return;
     }
 
@@ -499,16 +499,30 @@ export default function OnlinePaymentPage() {
         }),
       });
 
+      if (!res || !(res as any).ok) {
+        const errData =
+          typeof (res as any)?.json === 'function'
+            ? await (res as any).json().catch(() => null)
+            : null;
+        throw new Error(
+          errData?.error || 'Order placement failed on server. Cart preserved.'
+        );
+      }
+
       const data =
         typeof (res as any)?.json === 'function'
           ? await (res as any).json().catch(() => null)
           : res;
+
+      if (!data?.orderId) {
+        throw new Error('Order ID was not returned by server. Cart preserved.');
+      }
+
       useCartStore.getState().clearCart();
-      return (data?.orderId as string) || orderContext!.orderId;
-    } catch (err) {
-      console.warn('[OnlinePaymentPage] /api/orders sync notice:', err);
-      useCartStore.getState().clearCart();
-      return orderContext!.orderId;
+      return data.orderId as string;
+    } catch (err: any) {
+      console.warn('[OnlinePaymentPage] /api/orders sync error:', err);
+      throw err;
     }
   };
 
@@ -521,22 +535,30 @@ export default function OnlinePaymentPage() {
     const mockProviderPaymentId = 'mock_pay_' + Date.now();
 
     // Verify on backend to confirm PostgreSQL capture
-    try {
-      if (intentData?.paymentId) {
-        await fetchApi('/api/payment/verify', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            paymentId: intentData.paymentId,
-            providerPaymentId: mockProviderPaymentId,
-          }),
-        });
+    if (intentData?.paymentId) {
+      const verifyRes = await fetchApi('/api/payment/verify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          paymentId: intentData.paymentId,
+          providerPaymentId: mockProviderPaymentId,
+          status: 'captured',
+        }),
+      });
+
+      const verifyData =
+        typeof (verifyRes as any)?.json === 'function'
+          ? await (verifyRes as any).json().catch(() => ({}))
+          : verifyRes;
+
+      if (!verifyRes?.ok || !verifyData?.verified) {
+        throw new Error(
+          verifyData?.error || 'Mock payment verification failed at backend.'
+        );
       }
-    } catch (vErr) {
-      console.warn('[OnlinePaymentPage] Mock payment verify note:', vErr);
     }
 
     const confirmedOrderId = await completeOrderSubmission(
@@ -619,6 +641,8 @@ export default function OnlinePaymentPage() {
               body: JSON.stringify({
                 paymentId: intentData.paymentId,
                 providerPaymentId: response.razorpay_payment_id,
+                providerTransactionId: response.razorpay_payment_id,
+                providerSignature: response.razorpay_signature,
                 razorpayOrderId: response.razorpay_order_id,
                 razorpaySignature: response.razorpay_signature,
               }),
@@ -831,20 +855,22 @@ export default function OnlinePaymentPage() {
                     {activeMethod}
                   </span>
                 </div>
-                <div className="grid grid-cols-4 gap-1.5">
+                <div className="grid grid-cols-4 gap-1.5" role="tablist" aria-label="Payment Gateway Selector">
                   {[
                     { id: 'razorpay', label: 'Razorpay', emoji: '💳' },
                     { id: 'phonepe', label: 'PhonePe', emoji: '📱' },
                     { id: 'cashfree', label: 'Cashfree', emoji: '💸' },
-                    { id: 'mock', label: 'Test Mode', emoji: '🧪' },
+                    { id: 'mock', label: 'Mock Gateway', emoji: '🧪' },
                   ].map((gw) => {
                     const isSelected = activeMethod === gw.id;
                     return (
                       <button
                         key={gw.id}
                         type="button"
+                        role="tab"
+                        aria-selected={isSelected}
                         onClick={() => setActiveMethod(gw.id)}
-                        className={`flex flex-col items-center justify-center p-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        className={`flex flex-col items-center justify-center p-2 rounded-xl text-xs font-bold transition-all cursor-pointer min-h-[44px] ${
                           isSelected
                             ? 'bg-champagne/20 text-champagne border border-champagne/50 shadow-sm'
                             : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white border border-transparent'
