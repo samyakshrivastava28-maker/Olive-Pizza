@@ -1,26 +1,26 @@
 {
   "project": "Olive Pizza Multi-Repository Platform",
-  "timestamp": "2026-11-23T19:20:12.806Z",
+  "timestamp": "2026-11-24T16:08:12.356Z",
   "summary": {
     "total": 341,
-    "passed": 341,
-    "failed": 0,
+    "passed": 332,
+    "failed": 1,
     "skipped": 0,
-    "notTested": 0,
-    "durationMs": 27059
+    "notTested": 8,
+    "durationMs": 3166444
   },
   "tiers": {
     "tier1_feature_coverage": {
       "total": 155,
-      "passed": 155,
-      "failed": 0,
-      "notTested": 0
+      "passed": 151,
+      "failed": 1,
+      "notTested": 3
     },
     "tier2_boundary_corner": {
       "total": 155,
-      "passed": 155,
+      "passed": 150,
       "failed": 0,
-      "notTested": 0
+      "notTested": 5
     },
     "tier3_cross_feature": {
       "total": 21,
@@ -36,10 +36,10 @@
     }
   },
   "classifications": {
-    "automated": 331,
-    "localhost_browser": 0,
-    "physical_phone": 10,
-    "not_tested": 0
+    "automated": 192,
+    "localhost_browser": 139,
+    "physical_phone": 2,
+    "not_tested": 8
   },
   "testCases": [
     {
@@ -49,103 +49,103 @@
       "title": "Verify multi-repo root directories exist across platform",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 2
+      "durationMs": 4
     },
     {
       "id": "T1-F01-02",
       "featureId": 1,
       "tier": 1,
-      "title": "Verify git working trees have package.json manifests",
+      "title": "Verify package.json manifests across all 7 platform applications",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 2
+      "durationMs": 8
     },
     {
       "id": "T1-F01-03",
       "featureId": 1,
       "tier": 1,
-      "title": "Verify feature branch convention naming pattern",
+      "title": "Inspect current git branch name via git CLI in main workspace",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 380
     },
     {
       "id": "T1-F01-04",
       "featureId": 1,
       "tier": 1,
-      "title": "Verify git ignore rules protect environment secrets",
+      "title": "Verify git ignore rules protect secrets and node_modules",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1
     },
     {
       "id": "T1-F01-05",
       "featureId": 1,
       "tier": 1,
-      "title": "Verify git commit message structure standard compliance",
+      "title": "Verify git commit log contains valid semantic structure",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 281
     },
     {
       "id": "T1-F02-01",
       "featureId": 2,
       "tier": 1,
-      "title": "Verify backend postgres.ts parses sslmode=verify-full",
+      "title": "Query backend live health check endpoint for PostgreSQL status",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 97
     },
     {
       "id": "T1-F02-02",
       "featureId": 2,
       "tier": 1,
-      "title": "Verify connection pool configuration specifies rejectUnauthorized",
+      "title": "Verify backend postgres.ts configures SSL configuration",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 2
     },
     {
       "id": "T1-F02-03",
       "featureId": 2,
       "tier": 1,
-      "title": "Verify Layerbase database URL port 47226 contract",
+      "title": "Verify backend environment specifies authoritative Layerbase URL",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 4
     },
     {
       "id": "T1-F02-04",
       "featureId": 2,
       "tier": 1,
-      "title": "Verify database safety guards for test mutation",
+      "title": "Verify backend database pool handles concurrent queries without crash",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 14775
     },
     {
       "id": "T1-F02-05",
       "featureId": 2,
       "tier": 1,
-      "title": "Verify database pool idle timeout and max connection limits",
+      "title": "Verify backend health latency is under acceptable operational threshold",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 14
     },
     {
       "id": "T1-F03-01",
       "featureId": 3,
       "tier": 1,
-      "title": "Verify Customer app package.json has test and dev scripts",
+      "title": "Verify master test runner entry point exists",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1
     },
     {
       "id": "T1-F03-02",
       "featureId": 3,
       "tier": 1,
-      "title": "Verify Backend package.json has test execution scripts",
+      "title": "Verify ports configuration matches all 7 platform applications",
       "classification": "AUTOMATED",
       "status": "PASS",
       "durationMs": 1
@@ -154,16 +154,16 @@
       "id": "T1-F03-03",
       "featureId": 3,
       "tier": 1,
-      "title": "Verify POS package.json has offline queue test script",
+      "title": "Verify mobile viewports configuration includes Samsung Galaxy S21 FE",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 0
     },
     {
       "id": "T1-F03-04",
       "featureId": 3,
       "tier": 1,
-      "title": "Verify Restaurant Manager test suites exist in src/tests",
+      "title": "Verify backend package.json defines npm run test:e2e:api script",
       "classification": "AUTOMATED",
       "status": "PASS",
       "durationMs": 1
@@ -172,178 +172,178 @@
       "id": "T1-F03-05",
       "featureId": 3,
       "tier": 1,
-      "title": "Verify native test runner execution capability with tsx",
+      "title": "Verify frontend package.json defines npm run test:e2e script",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 2
     },
     {
       "id": "T1-F04-01",
       "featureId": 4,
       "tier": 1,
-      "title": "Verify Firestore rules protect catalog collections",
+      "title": "Fetch live menu bootstrap and verify HTTP 200 response",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 27464
     },
     {
       "id": "T1-F04-02",
       "featureId": 4,
       "tier": 1,
-      "title": "Verify write authorization rules require administrative privileges",
+      "title": "Verify menu bootstrap payload contains valid categories array",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 17617
     },
     {
       "id": "T1-F04-03",
       "featureId": 4,
       "tier": 1,
-      "title": "Verify catalog bootstrap route reads from Firestore catalog",
+      "title": "Verify menu bootstrap payload contains valid products array",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 3
+      "durationMs": 1788
     },
     {
       "id": "T1-F04-04",
       "featureId": 4,
       "tier": 1,
-      "title": "Verify catalog product entity schema requires basePrice and name",
+      "title": "Verify catalog items conform to required schema (id, name, basePrice)",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 2006
     },
     {
       "id": "T1-F04-05",
       "featureId": 4,
       "tier": 1,
-      "title": "Verify inactive products are filtered from active menu displays",
+      "title": "Verify prod_margherita exists in authoritative catalog",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 2216
     },
     {
       "id": "T1-F05-01",
       "featureId": 5,
       "tier": 1,
-      "title": "Verify backend order routes do not rely on pg menu_products",
+      "title": "Fetch home bootstrap and verify unified catalog response",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 2
+      "durationMs": 30223
     },
     {
       "id": "T1-F05-02",
       "featureId": 5,
       "tier": 1,
-      "title": "Verify catalog bootstrap caching header stale-while-revalidate",
+      "title": "Verify home bootstrap contains featured products matching menu prices",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 17883
     },
     {
       "id": "T1-F05-03",
       "featureId": 5,
       "tier": 1,
-      "title": "Verify menu product item IDs conform to prod_ prefix format",
+      "title": "Verify branch-specific price query for branch_rjn_main",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 24855
     },
     {
       "id": "T1-F05-04",
       "featureId": 5,
       "tier": 1,
-      "title": "Verify catalog price differential calculation logic",
+      "title": "Verify catalog items have zero negative or NaN prices",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 15366
     },
     {
       "id": "T1-F05-05",
       "featureId": 5,
       "tier": 1,
-      "title": "Verify absence of SQL injection vulnerabilities in product catalog queries",
+      "title": "Verify category names in catalog match standard categories",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1423
     },
     {
       "id": "T1-F06-01",
       "featureId": 6,
       "tier": 1,
-      "title": "Verify OrderPersistenceArchiveService defines canonical_orders table",
+      "title": "Fetch cart bootstrap configuration for statutory taxes and charges",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 2
+      "durationMs": 26211
     },
     {
       "id": "T1-F06-02",
       "featureId": 6,
       "tier": 1,
-      "title": "Verify canonical_bills schema requires net_amount and tax_amount",
+      "title": "Verify delivery fee tiers configuration in cart bootstrap",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1051
     },
     {
       "id": "T1-F06-03",
       "featureId": 6,
       "tier": 1,
-      "title": "Verify payments table record links to order_id",
+      "title": "Verify canonical orders endpoint enforces authentication",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 3
+      "durationMs": 25
     },
     {
       "id": "T1-F06-04",
       "featureId": 6,
       "tier": 1,
-      "title": "Verify outbox_events schema exists for transactional event delivery",
+      "title": "Verify OrderPersistenceArchiveService defines PostgreSQL synchronization",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 4
     },
     {
       "id": "T1-F06-05",
       "featureId": 6,
       "tier": 1,
-      "title": "Verify app_users entity definition contains RBAC allowed_apps",
+      "title": "Verify statutory sequence generator permanent_bill_seq schema specification",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1
     },
     {
       "id": "T1-F07-01",
       "featureId": 7,
       "tier": 1,
-      "title": "Verify canonical_order_items stores frozen unit_price",
+      "title": "Verify canonical_order_items schema requires immutable item snapshot columns",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 10
     },
     {
       "id": "T1-F07-02",
       "featureId": 7,
       "tier": 1,
-      "title": "Verify addons_json column persists JSONB topping details",
-      "classification": "AUTOMATED",
-      "status": "PASS",
-      "durationMs": 0
-    },
-    {
-      "id": "T1-F07-03",
-      "featureId": 7,
-      "tier": 1,
-      "title": "Verify size_variant and crust columns in item persistence",
+      "title": "Verify snapshot schema enforces addons_json JSONB field",
       "classification": "AUTOMATED",
       "status": "PASS",
       "durationMs": 1
     },
     {
+      "id": "T1-F07-03",
+      "featureId": 7,
+      "tier": 1,
+      "title": "Verify order routes enforce address and coordinate requirement",
+      "classification": "AUTOMATED",
+      "status": "PASS",
+      "durationMs": 15
+    },
+    {
       "id": "T1-F07-04",
       "featureId": 7,
       "tier": 1,
-      "title": "Verify line_total calculation integrity (unit_price * quantity)",
+      "title": "Verify order price calculation adheres to 5% GST and packaging charge",
       "classification": "AUTOMATED",
       "status": "PASS",
       "durationMs": 0
@@ -352,683 +352,683 @@
       "id": "T1-F07-05",
       "featureId": 7,
       "tier": 1,
-      "title": "Verify immutable snapshot prevents post-purchase price changes",
+      "title": "Verify order projection service validates immutable fields",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 2
     },
     {
       "id": "T1-F08-01",
       "featureId": 8,
       "tier": 1,
-      "title": "Verify token generation script exists in backend",
+      "title": "POST /api/phone/send-otp sends verification OTP in development mode",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 6
     },
     {
       "id": "T1-F08-02",
       "featureId": 8,
       "tier": 1,
-      "title": "Verify AuthProvider component in customer frontend",
+      "title": "POST /api/phone/verify-otp verifies OTP for test customer phone",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 4
     },
     {
       "id": "T1-F08-03",
       "featureId": 8,
       "tier": 1,
-      "title": "Verify customer test account fixture validity",
+      "title": "POST /api/auth/email/send-code generates verification code in dev mode",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 14872
     },
     {
       "id": "T1-F08-04",
       "featureId": 8,
       "tier": 1,
-      "title": "Verify email signin route handles demo verification codes in dev",
+      "title": "POST /api/auth/authorize-app validates RBAC app permissions",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 2
+      "durationMs": 21431
     },
     {
       "id": "T1-F08-05",
       "featureId": 8,
       "tier": 1,
-      "title": "Verify authorize-app endpoint enforces role permissions",
+      "title": "Verify unauthenticated request without token receives HTTP 401",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 14213
     },
     {
       "id": "T1-F09-01",
       "featureId": 9,
       "tier": 1,
-      "title": "Verify dataStore catalog store implementation in frontend",
+      "title": "Connect genuine WebSocket client to ws://localhost:5000/ws",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 24
     },
     {
       "id": "T1-F09-02",
       "featureId": 9,
       "tier": 1,
-      "title": "Verify initial bootstrap catalog cache fallback in dataStore",
+      "title": "Verify WebSocket responds to ping with pong frame",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 36
     },
     {
       "id": "T1-F09-03",
       "featureId": 9,
       "tier": 1,
-      "title": "Verify Firestore products onSnapshot streaming setup",
+      "title": "Verify connection rejected when token is provided in URL query string (code 1008)",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 10
     },
     {
       "id": "T1-F09-04",
       "featureId": 9,
       "tier": 1,
-      "title": "Verify category grouping logic preserves sort order",
+      "title": "Verify anonymous WebSocket defaults to role: customer",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 6
     },
     {
       "id": "T1-F09-05",
       "featureId": 9,
       "tier": 1,
-      "title": "Verify catalog item stock availability flag handling",
+      "title": "Verify WebSocket closes cleanly without unhandled server exception",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 5
     },
     {
       "id": "T1-F10-01",
       "featureId": 10,
       "tier": 1,
-      "title": "Verify /product/:productId route exists in App.tsx",
-      "classification": "AUTOMATED",
+      "title": "Launch mobile browser on Customer app (:3000) and verify page title",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 6903
     },
     {
       "id": "T1-F10-02",
       "featureId": 10,
       "tier": 1,
-      "title": "Verify ProductDetail page component exists",
-      "classification": "AUTOMATED",
+      "title": "Verify #root application container renders in DOM",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 121
     },
     {
       "id": "T1-F10-03",
       "featureId": 10,
       "tier": 1,
-      "title": "Verify ProductDetail dynamic pricing calculation",
-      "classification": "AUTOMATED",
+      "title": "Verify mobile viewport 412x915 maintains mobile-first layout",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 0
     },
     {
       "id": "T1-F10-04",
       "featureId": 10,
       "tier": 1,
-      "title": "Verify add to cart commitment in ProductDetail",
-      "classification": "AUTOMATED",
+      "title": "Verify pizza menu items or cards render in customer catalog",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 1037
     },
     {
       "id": "T1-F10-05",
       "featureId": 10,
       "tier": 1,
-      "title": "Verify deterministic config hash for customized pizza",
-      "classification": "AUTOMATED",
+      "title": "Verify navigation header or logo exists in customer DOM",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 13
     },
     {
       "id": "T1-F11-01",
       "featureId": 11,
       "tier": 1,
-      "title": "Verify Three.js packages installed in Customer app",
-      "classification": "AUTOMATED",
+      "title": "Verify WebGL context support evaluation in mobile browser context",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1214
     },
     {
       "id": "T1-F11-02",
       "featureId": 11,
       "tier": 1,
-      "title": "Verify @react-three/drei helper package installed",
-      "classification": "AUTOMATED",
+      "title": "Verify 3D canvas or animated visual element renders in hero section",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 122
     },
     {
       "id": "T1-F11-03",
       "featureId": 11,
       "tier": 1,
-      "title": "Verify 3D Pizza Canvas component exists in frontend",
-      "classification": "AUTOMATED",
+      "title": "Verify CSS transforms and motion styles are active in DOM",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 4
     },
     {
       "id": "T1-F11-04",
       "featureId": 11,
       "tier": 1,
-      "title": "Verify WebGL context support check in 3D loader",
-      "classification": "AUTOMATED",
+      "title": "Verify mobile device pixel ratio is correctly applied (dpr: 2.6)",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 3
     },
     {
       "id": "T1-F11-05",
       "featureId": 11,
       "tier": 1,
-      "title": "Verify Framer Motion 3D tilt coordinates calculation",
-      "classification": "AUTOMATED",
+      "title": "Verify page does not emit unhandled WebGL context errors to console",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 504
     },
     {
       "id": "T1-F12-01",
       "featureId": 12,
       "tier": 1,
-      "title": "Verify 2.5D perspective tilt fallback CSS implementation",
-      "classification": "AUTOMATED",
+      "title": "Verify pizza item images possess non-empty alt text for screen readers",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 5
     },
     {
       "id": "T1-F12-02",
       "featureId": 12,
       "tier": 1,
-      "title": "Verify prefers-reduced-motion CSS support in Tailwind",
-      "classification": "AUTOMATED",
+      "title": "Verify interactive buttons have accessible text or aria-label",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 37
     },
     {
       "id": "T1-F12-03",
       "featureId": 12,
       "tier": 1,
-      "title": "Verify Cloudinary image fallback URL builder",
-      "classification": "AUTOMATED",
+      "title": "Verify touch target minimum size on mobile navigation elements",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 34
     },
     {
       "id": "T1-F12-04",
       "featureId": 12,
       "tier": 1,
-      "title": "Verify accessibility ARIA labels on variant selection buttons",
-      "classification": "AUTOMATED",
+      "title": "Verify reduced-motion CSS media query is respected",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 9
     },
     {
       "id": "T1-F12-05",
       "featureId": 12,
       "tier": 1,
-      "title": "Verify keyboard tabIndex navigation on topping checkboxes",
-      "classification": "AUTOMATED",
+      "title": "Verify HTML lang attribute is set for international accessibility",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 5
     },
     {
       "id": "T1-F13-01",
       "featureId": 13,
       "tier": 1,
-      "title": "Verify ProductCard component links to /product/:id",
-      "classification": "AUTOMATED",
+      "title": "Verify category filter elements exist in DOM",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 30
     },
     {
       "id": "T1-F13-02",
       "featureId": 13,
       "tier": 1,
-      "title": "Verify router navigation helper resolves product routes",
-      "classification": "AUTOMATED",
+      "title": "Tap category button and verify DOM updates active state",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 30076
     },
     {
       "id": "T1-F13-03",
       "featureId": 13,
       "tier": 1,
-      "title": "Verify quick add button adds item to cart without navigating",
-      "classification": "AUTOMATED",
+      "title": "Verify product price tags are formatted in Indian Rupee currency (₹)",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 16
     },
     {
       "id": "T1-F13-04",
       "featureId": 13,
       "tier": 1,
-      "title": "Verify browser history state preservation during menu navigation",
-      "classification": "AUTOMATED",
+      "title": "Verify floating cart icon or add-to-cart buttons exist",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 18
     },
     {
       "id": "T1-F13-05",
       "featureId": 13,
       "tier": 1,
-      "title": "Verify 404 page handling for non-existent product ID",
-      "classification": "AUTOMATED",
+      "title": "Verify page scrolling smoothly navigates catalog items",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 361
     },
     {
       "id": "T1-F14-01",
       "featureId": 14,
       "tier": 1,
-      "title": "Verify cart subtotal calculation across multiple items",
-      "classification": "AUTOMATED",
+      "title": "Load customer page with Rajnandgaon geolocation (21.0974, 81.0347)",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 3
     },
     {
       "id": "T1-F14-02",
       "featureId": 14,
       "tier": 1,
-      "title": "Verify coupon discount calculation with maximum cap",
-      "classification": "AUTOMATED",
+      "title": "Verify cart badge is initialized",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 5
     },
     {
       "id": "T1-F14-03",
       "featureId": 14,
       "tier": 1,
-      "title": "Verify 5% GST calculation (2.5% CGST + 2.5% SGST)",
-      "classification": "AUTOMATED",
+      "title": "Verify localStorage stores customer cart persistence",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 7
     },
     {
       "id": "T1-F14-04",
       "featureId": 14,
       "tier": 1,
-      "title": "Verify geofencing distance calculation (Haversine formula)",
-      "classification": "AUTOMATED",
+      "title": "Verify delivery fee calculation logic handles standard radius",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 4
     },
     {
       "id": "T1-F14-05",
       "featureId": 14,
       "tier": 1,
-      "title": "Verify free delivery threshold exemption (₹499)",
-      "classification": "AUTOMATED",
+      "title": "Verify customer checkout trigger or cart drawer opens",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 30036
     },
     {
       "id": "T1-F15-01",
       "featureId": 15,
       "tier": 1,
-      "title": "Verify /checkout route defined in Customer App.tsx",
-      "classification": "AUTOMATED",
+      "title": "Navigate to /checkout route and verify checkout container renders",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 2231
     },
     {
       "id": "T1-F15-02",
       "featureId": 15,
       "tier": 1,
-      "title": "Verify direct access guard without active cart session",
-      "classification": "AUTOMATED",
+      "title": "Verify direct navigation to /checkout/payment without order session handles safely",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 887
     },
     {
       "id": "T1-F15-03",
       "featureId": 15,
       "tier": 1,
-      "title": "Verify payment options display UPI, Cards, and Net Banking",
-      "classification": "AUTOMATED",
+      "title": "Verify payment options include Cash On Delivery (COD) and Online Payment",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 22
     },
     {
       "id": "T1-F15-04",
       "featureId": 15,
       "tier": 1,
-      "title": "Verify payable total display matches checkout intent amount",
-      "classification": "AUTOMATED",
+      "title": "Verify checkout form input fields (Name, Phone, Address)",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 14
     },
     {
       "id": "T1-F15-05",
       "featureId": 15,
       "tier": 1,
-      "title": "Verify back button navigation safety preserves cart state",
-      "classification": "AUTOMATED",
+      "title": "Verify place order button is visible in checkout view",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 41
     },
     {
       "id": "T1-F16-01",
       "featureId": 16,
       "tier": 1,
-      "title": "Verify PaymentService implements recalculateServerTotal",
+      "title": "POST /api/payment/create-intent with valid item returns server-calculated total",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 94806
     },
     {
       "id": "T1-F16-02",
       "featureId": 16,
       "tier": 1,
-      "title": "Verify client-submitted prices are overridden by authoritative rates",
+      "title": "POST /api/payment/create-intent rejects client price tampering attempt",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 37657
     },
     {
       "id": "T1-F16-03",
       "featureId": 16,
       "tier": 1,
-      "title": "Verify expired coupon rejection with HTTP 400",
+      "title": "POST /api/payment/create-intent rejects empty items array with HTTP 400",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 13801
     },
     {
       "id": "T1-F16-04",
       "featureId": 16,
       "tier": 1,
-      "title": "Verify topping price validation against authoritative catalog",
+      "title": "POST /api/payment/create-intent rejects invalid/non-existent item with HTTP 400",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 52719
     },
     {
       "id": "T1-F16-05",
       "featureId": 16,
       "tier": 1,
-      "title": "Verify currency INR enforcement on payment intents",
+      "title": "Verify server calculated total includes packaging and 5% GST",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 59367
     },
     {
       "id": "T1-F17-01",
       "featureId": 17,
       "tier": 1,
-      "title": "Verify PaymentStateMachine defines exactly 15 formal states",
+      "title": "Create mock sandbox payment intent and acquire genuine paymentId",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 155150
     },
     {
       "id": "T1-F17-02",
       "featureId": 17,
       "tier": 1,
-      "title": "Verify Mock payment provider handles create-intent and verify",
+      "title": "Verify payment transaction capture via POST /api/payment/verify",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 40377
     },
     {
       "id": "T1-F17-03",
       "featureId": 17,
       "tier": 1,
-      "title": "Verify payment cancellation transition (PAYMENT_PENDING -> CANCELLED)",
+      "title": "Verify verify endpoint rejects non-existent payment ID with HTTP 404",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 29556
     },
     {
       "id": "T1-F17-04",
       "featureId": 17,
       "tier": 1,
-      "title": "Verify payment timeout transition (PAYMENT_PENDING -> EXPIRED)",
+      "title": "Verify PaymentStateMachine strictly enforces 15 canonical states",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 5
     },
     {
       "id": "T1-F17-05",
       "featureId": 17,
       "tier": 1,
-      "title": "Verify payment capture transition (INTENT_CREATED -> PAYMENT_CAPTURED)",
+      "title": "Verify duplicate verification is idempotent and handles gracefully",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 27526
     },
     {
       "id": "T1-F18-01",
       "featureId": 18,
       "tier": 1,
-      "title": "Verify idempotency key support in backend orders route",
-      "classification": "AUTOMATED",
+      "title": "Verify checkout submit button disabled state during submission in mobile browser",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 196
     },
     {
       "id": "T1-F18-02",
       "featureId": 18,
       "tier": 1,
-      "title": "Verify checkout button debouncing prevents multiple clicks",
-      "classification": "AUTOMATED",
+      "title": "Verify browser back button during processing triggers navigation safety",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 323
     },
     {
       "id": "T1-F18-03",
       "featureId": 18,
       "tier": 1,
-      "title": "Verify duplicate idempotency replay returns original order ID",
-      "classification": "AUTOMATED",
+      "title": "Verify idempotency key generation logic format",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 21
     },
     {
       "id": "T1-F18-04",
       "featureId": 18,
       "tier": 1,
-      "title": "Verify checkout_locks prevents race conditions on cart",
-      "classification": "AUTOMATED",
+      "title": "Verify form validation prevents empty submissions",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 15
     },
     {
       "id": "T1-F18-05",
       "featureId": 18,
       "tier": 1,
-      "title": "Verify browser refresh recovery via session token",
-      "classification": "AUTOMATED",
+      "title": "Verify customer session storage maintains cart contents",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 10
     },
     {
       "id": "T1-F19-01",
       "featureId": 19,
       "tier": 1,
-      "title": "Verify /order-success/:orderId route exists in Customer App.tsx",
-      "classification": "AUTOMATED",
+      "title": "Verify customer tracking route layout renders in mobile browser",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 7028
     },
     {
       "id": "T1-F19-02",
       "featureId": 19,
       "tier": 1,
-      "title": "Verify OrderSuccessScreen component exists in frontend",
-      "classification": "AUTOMATED",
+      "title": "Verify order lifecycle status step labels (Placed, Preparing, Out for Delivery, Delivered)",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 2
     },
     {
       "id": "T1-F19-03",
       "featureId": 19,
       "tier": 1,
-      "title": "Verify server payment capture required before success confirmation",
-      "classification": "AUTOMATED",
+      "title": "Verify live order delivery estimate UI badge exists",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 32
     },
     {
       "id": "T1-F19-04",
       "featureId": 19,
       "tier": 1,
-      "title": "Verify permanent bill number allocation format (BILL-XXXXX)",
-      "classification": "AUTOMATED",
+      "title": "Verify order details invoice breakdown structure in customer layout",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1
     },
     {
       "id": "T1-F19-05",
       "featureId": 19,
       "tier": 1,
-      "title": "Verify customer cart clearing upon order success",
-      "classification": "AUTOMATED",
+      "title": "Verify support contact button or call store action in customer DOM",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 21
     },
     {
       "id": "T1-F20-01",
       "featureId": 20,
       "tier": 1,
-      "title": "Verify OwnerAlarmManager exists in Owner repository",
-      "classification": "AUTOMATED",
+      "title": "Launch Owner Portal (:5174) in mobile browser and verify title",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 4832
     },
     {
       "id": "T1-F20-02",
       "featureId": 20,
       "tier": 1,
-      "title": "Verify sound alert asset order_alert.mp3 exists in Owner public/sounds",
-      "classification": "AUTOMATED",
+      "title": "Verify OwnerAlarmManager sound loop service exists in owner codebase",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 6
     },
     {
       "id": "T1-F20-03",
       "featureId": 20,
       "tier": 1,
-      "title": "Verify continuous audio loop configuration for pending alarm",
-      "classification": "AUTOMATED",
+      "title": "Verify audio notification file exists in Owner public assets",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 5
     },
     {
       "id": "T1-F20-04",
       "featureId": 20,
       "tier": 1,
-      "title": "Verify manual dismiss button halts audio alarm",
-      "classification": "AUTOMATED",
+      "title": "Verify user interaction unlock handling for audio playback in owner DOM",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 24
     },
     {
       "id": "T1-F20-05",
       "featureId": 20,
       "tier": 1,
-      "title": "Verify visual alarm badge accompanies sound playback",
-      "classification": "AUTOMATED",
+      "title": "Verify sound toggle / mute control exists in owner settings",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 140
     },
     {
       "id": "T1-F21-01",
       "featureId": 21,
       "tier": 1,
-      "title": "Verify WebSocket server forbids tokens in URL query string (code 1008)",
+      "title": "Unauthenticated WebSocket register_branch request is rejected with error",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 2
+      "durationMs": 38
     },
     {
       "id": "T1-F21-02",
       "featureId": 21,
       "tier": 1,
-      "title": "Verify in-band auth message structure ({ type: \"auth\", token })",
+      "title": "In-band authentication message with invalid token returns auth_error",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 22
     },
     {
       "id": "T1-F21-03",
       "featureId": 21,
       "tier": 1,
-      "title": "Verify register_branch requires prior authenticated session",
+      "title": "WebSocketServer.ts enforces in-band auth before branch registration",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 4
     },
     {
       "id": "T1-F21-04",
       "featureId": 21,
       "tier": 1,
-      "title": "Verify auth_success response payload contains role and uid",
+      "title": "WebSocket monotonic sequence ring buffer allocates contiguous sequence numbers",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1
     },
     {
       "id": "T1-F21-05",
       "featureId": 21,
       "tier": 1,
-      "title": "Verify ring buffer monotonic sequence number initialization",
+      "title": "WebSocket sync_request returns sync_response with missed events",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1
     },
     {
       "id": "T1-F22-01",
       "featureId": 22,
       "tier": 1,
-      "title": "Verify broadcastToBranch method exists in WebSocketServer",
-      "classification": "AUTOMATED",
+      "title": "Launch Restaurant Manager (:5176) in mobile browser and verify title",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 4630
     },
     {
       "id": "T1-F22-02",
       "featureId": 22,
       "tier": 1,
-      "title": "Verify order.created broadcast event payload structure",
-      "classification": "AUTOMATED",
+      "title": "Verify Restaurant Manager live orders container renders",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 68
     },
     {
       "id": "T1-F22-03",
       "featureId": 22,
       "tier": 1,
-      "title": "Verify order.status_changed event carries new status",
-      "classification": "AUTOMATED",
+      "title": "Verify connection status indicator renders in Restaurant Manager DOM",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 31
     },
     {
       "id": "T1-F22-04",
       "featureId": 22,
       "tier": 1,
-      "title": "Verify sequenced event ring buffer stores up to 200 events",
-      "classification": "AUTOMATED",
+      "title": "Verify order action transition buttons (Accept, Preparing, Ready, Out for Delivery)",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1
     },
     {
       "id": "T1-F22-05",
       "featureId": 22,
       "tier": 1,
-      "title": "Verify sync_request reconciliation logic for dropped connections",
-      "classification": "AUTOMATED",
+      "title": "Verify kitchen display prep time selector elements",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
       "durationMs": 0
     },
@@ -1036,196 +1036,196 @@
       "id": "T1-F23-01",
       "featureId": 23,
       "tier": 1,
-      "title": "Verify POS offline queue test suite exists in POS repo",
-      "classification": "AUTOMATED",
+      "title": "Launch POS app (:5178) in mobile browser and verify title",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 1576
     },
     {
       "id": "T1-F23-02",
       "featureId": 23,
       "tier": 1,
-      "title": "Verify POS print claim atomic locking mechanism",
-      "classification": "AUTOMATED",
+      "title": "Verify POS billing numpad / catalog grid renders in DOM",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 66
     },
     {
       "id": "T1-F23-03",
       "featureId": 23,
       "tier": 1,
-      "title": "Verify 80mm thermal receipt line width formatting (48 columns)",
-      "classification": "AUTOMATED",
+      "title": "Verify ThermalPrinterService exists in POS codebase",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1
     },
     {
       "id": "T1-F23-04",
       "featureId": 23,
       "tier": 1,
-      "title": "Verify POS stable client UUID generation for walk-in orders",
-      "classification": "AUTOMATED",
+      "title": "Verify POS bill generation idempotency header support",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 4
     },
     {
       "id": "T1-F23-05",
       "featureId": 23,
       "tier": 1,
-      "title": "Verify thermal print duplicate prevention flag",
-      "classification": "AUTOMATED",
+      "title": "Verify POS cash tender and change calculation logic",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 31
     },
     {
       "id": "T1-F24-01",
       "featureId": 24,
       "tier": 1,
-      "title": "Verify Capacitor Geolocation package in Delivery app",
-      "classification": "AUTOMATED",
+      "title": "Launch Delivery app (:5177) in mobile browser and verify title",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 1279
     },
     {
       "id": "T1-F24-02",
       "featureId": 24,
       "tier": 1,
-      "title": "Verify LocationService single-watcher pattern in Delivery app",
-      "classification": "AUTOMATED",
+      "title": "Verify rider active toggle element (Online / Offline status)",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 3
+      "durationMs": 57
     },
     {
       "id": "T1-F24-03",
       "featureId": 24,
       "tier": 1,
-      "title": "Verify rider delivery state machine transitions",
-      "classification": "AUTOMATED",
+      "title": "Verify delivery state machine stages (assigned -> picked_up -> delivered)",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 3
     },
     {
       "id": "T1-F24-04",
       "featureId": 24,
       "tier": 1,
-      "title": "Verify Redis delivery partner location stream coordinate format",
-      "classification": "AUTOMATED",
+      "title": "Verify Geolocation coordinates tracking watcher in mobile browser context",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 6
     },
     {
       "id": "T1-F24-05",
       "featureId": 24,
       "tier": 1,
-      "title": "Verify customer FloatingTracker progress stepper values",
-      "classification": "AUTOMATED",
+      "title": "Verify customer call action telephone protocol (tel:) format",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1
     },
     {
       "id": "T1-F25-01",
       "featureId": 25,
       "tier": 1,
-      "title": "Verify FranchiseScopeService exists in Backend",
-      "classification": "AUTOMATED",
+      "title": "Launch Franchise app (:5175) in mobile browser and verify title",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 2003
     },
     {
       "id": "T1-F25-02",
       "featureId": 25,
       "tier": 1,
-      "title": "Verify assertFranchiseAccess asserts matching franchise ID",
-      "classification": "AUTOMATED",
+      "title": "Verify branch isolation scoping service in backend codebase",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 4
     },
     {
       "id": "T1-F25-03",
       "featureId": 25,
       "tier": 1,
-      "title": "Verify sound asset exists in Franchise public/sounds",
-      "classification": "AUTOMATED",
+      "title": "Verify branch selector or branch indicator in Franchise DOM",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 90
     },
     {
       "id": "T1-F25-04",
       "featureId": 25,
       "tier": 1,
-      "title": "Verify Franchise app HashRouter configuration in App.tsx",
-      "classification": "AUTOMATED",
+      "title": "Verify Franchise Google Sheets sync service existence",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 23
+      "durationMs": 1
     },
     {
       "id": "T1-F25-05",
       "featureId": 25,
       "tier": 1,
-      "title": "Verify branch revenue aggregation query groups by branch_id",
-      "classification": "AUTOMATED",
+      "title": "Verify cross-branch data boundary security in API order routes",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 5
     },
     {
       "id": "T1-F26-01",
       "featureId": 26,
       "tier": 1,
-      "title": "Verify SoundAlertEngine exists in Restaurant Manager",
-      "classification": "AUTOMATED",
+      "title": "Verify Web Audio API AudioContext support in mobile browser context",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 661
     },
     {
       "id": "T1-F26-02",
       "featureId": 26,
       "tier": 1,
-      "title": "Verify Web Audio API synthesis fallback chime implementation",
-      "classification": "AUTOMATED",
+      "title": "Verify SoundAlertEngine exists in Restaurant Manager codebase",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 21
+      "durationMs": 72
     },
     {
       "id": "T1-F26-03",
       "featureId": 26,
       "tier": 1,
-      "title": "Verify user gesture audio unlock method (unlockAudio)",
-      "classification": "AUTOMATED",
+      "title": "Verify user interaction banner for audio autoplay unlock in Manager DOM",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 11
     },
     {
       "id": "T1-F26-04",
       "featureId": 26,
       "tier": 1,
-      "title": "Verify volume control scaling (0.0 to 1.0)",
-      "classification": "AUTOMATED",
+      "title": "Verify audio notification MP3 file exists in Restaurant Manager public assets",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 4
     },
     {
       "id": "T1-F26-05",
       "featureId": 26,
       "tier": 1,
-      "title": "Verify audio diagnostic status reporting state",
-      "classification": "AUTOMATED",
+      "title": "Verify volume control and sound muting settings in Manager app",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1
     },
     {
       "id": "T1-F27-01",
       "featureId": 27,
       "tier": 1,
-      "title": "Verify E2E test runner configuration ports file exists",
+      "title": "Verify Tier 1 spec file exists with 155 test cases",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1
     },
     {
       "id": "T1-F27-02",
       "featureId": 27,
       "tier": 1,
-      "title": "Verify mobile viewports configuration includes Galaxy S21",
+      "title": "Verify Tier 2 spec file exists with 155 boundary test cases",
       "classification": "AUTOMATED",
       "status": "PASS",
       "durationMs": 0
@@ -1234,25 +1234,25 @@
       "id": "T1-F27-03",
       "featureId": 27,
       "tier": 1,
-      "title": "Verify test accounts configuration includes all 6 roles",
-      "classification": "AUTOMATED",
-      "status": "PASS",
-      "durationMs": 0
-    },
-    {
-      "id": "T1-F27-04",
-      "featureId": 27,
-      "tier": 1,
-      "title": "Verify ADB controller helper module exists",
+      "title": "Verify Tier 3 spec file exists with 21 cross-feature tests",
       "classification": "AUTOMATED",
       "status": "PASS",
       "durationMs": 1
     },
     {
+      "id": "T1-F27-04",
+      "featureId": 27,
+      "tier": 1,
+      "title": "Verify Tier 4 spec file exists with 10 real-world scenarios",
+      "classification": "AUTOMATED",
+      "status": "PASS",
+      "durationMs": 0
+    },
+    {
       "id": "T1-F27-05",
       "featureId": 27,
       "tier": 1,
-      "title": "Verify Playwright multi-app browser context helper exists",
+      "title": "Verify total test inventory equals 341 test cases (11 * 31)",
       "classification": "AUTOMATED",
       "status": "PASS",
       "durationMs": 0
@@ -1261,35 +1261,35 @@
       "id": "T1-F28-01",
       "featureId": 28,
       "tier": 1,
-      "title": "Verify port allocation uniqueness across all 7 local servers",
-      "classification": "AUTOMATED",
+      "title": "Concurrently launch Customer (:3000) and Restaurant Manager (:5176) via Playwright",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 11
     },
     {
       "id": "T1-F28-02",
       "featureId": 28,
       "tier": 1,
-      "title": "Verify Customer dev port assignment is 3000",
-      "classification": "AUTOMATED",
+      "title": "Verify independent localStorage isolation across localhost origins (3000 vs 5176)",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 9
     },
     {
       "id": "T1-F28-03",
       "featureId": 28,
       "tier": 1,
-      "title": "Verify Backend dev port assignment is 5000",
-      "classification": "AUTOMATED",
+      "title": "Verify backend CORS headers allow requests from all 6 frontend ports",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 17
     },
     {
       "id": "T1-F28-04",
       "featureId": 28,
       "tier": 1,
-      "title": "Verify Operational app ports (5174, 5175, 5176, 5177, 5178)",
-      "classification": "AUTOMATED",
+      "title": "Verify zero port collision across all 7 applications",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
       "durationMs": 0
     },
@@ -1297,1240 +1297,1244 @@
       "id": "T1-F28-05",
       "featureId": 28,
       "tier": 1,
-      "title": "Verify CORS allowed origins include all local dev ports",
-      "classification": "AUTOMATED",
+      "title": "Verify concurrent backend responsiveness during multiple client requests",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 31519
     },
     {
       "id": "T1-F29-01",
       "featureId": 29,
       "tier": 1,
-      "title": "Verify ADB tool binary availability on host system",
-      "classification": "AUTOMATED",
-      "status": "PASS",
-      "durationMs": 1
+      "title": "Verify Wi-Fi ADB connection to Samsung Galaxy S21 FE 5G (SM_G990E)",
+      "classification": "NOT TESTED",
+      "status": "NOT_TESTED",
+      "durationMs": 7006,
+      "error": "Physical phone offline via Wi-Fi ADB: DEVICE_OFFLINE: Device not reachable via ADB"
     },
     {
       "id": "T1-F29-02",
       "featureId": 29,
       "tier": 1,
-      "title": "Verify Customer Capacitor Android package installed on device or configured",
-      "classification": "PHYSICAL PHONE",
-      "status": "PASS",
-      "durationMs": 7721
+      "title": "Query device model via adb shell getprop ro.product.model",
+      "classification": "NOT TESTED",
+      "status": "NOT_TESTED",
+      "durationMs": 7808,
+      "error": "Physical phone offline via Wi-Fi ADB: DEVICE_OFFLINE: Device not reachable via ADB"
     },
     {
       "id": "T1-F29-03",
       "featureId": 29,
       "tier": 1,
-      "title": "Verify Restaurant Manager Capacitor package installed or configured",
-      "classification": "PHYSICAL PHONE",
-      "status": "PASS",
-      "durationMs": 4657
+      "title": "Query device Android version via adb shell getprop ro.build.version.release",
+      "classification": "NOT TESTED",
+      "status": "NOT_TESTED",
+      "durationMs": 8458,
+      "error": "Physical phone offline via Wi-Fi ADB: DEVICE_OFFLINE: Device not reachable via ADB"
     },
     {
       "id": "T1-F29-04",
       "featureId": 29,
       "tier": 1,
-      "title": "Verify Delivery Partner Capacitor package installed or configured",
+      "title": "Query device battery level via adb shell dumpsys battery",
       "classification": "PHYSICAL PHONE",
-      "status": "PASS",
-      "durationMs": 3060
+      "status": "FAIL",
+      "durationMs": 9625,
+      "error": "adbController.getBatteryLevel is not a function"
     },
     {
       "id": "T1-F29-05",
       "featureId": 29,
       "tier": 1,
-      "title": "Verify device keep-awake enforcement capability",
+      "title": "Enforce device keep-awake via adb shell svc power stayon true",
       "classification": "PHYSICAL PHONE",
       "status": "PASS",
-      "durationMs": 1641
+      "durationMs": 2218
     },
     {
       "id": "T1-F30-01",
       "featureId": 30,
       "tier": 1,
-      "title": "Verify JWT tampered payload cryptographic rejection",
+      "title": "Adversarial SQL injection probe in menu category query is properly escaped",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 16715
     },
     {
       "id": "T1-F30-02",
       "featureId": 30,
       "tier": 1,
-      "title": "Verify negative price input rejection by schema validator",
+      "title": "Adversarial XSS payload in phone field is rejected or sanitized",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 512
     },
     {
       "id": "T1-F30-03",
       "featureId": 30,
       "tier": 1,
-      "title": "Verify rate limiting protection against OTP brute force (5 attempts)",
+      "title": "Adversarial oversized JSON payload is rejected by Express body parser",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 824
     },
     {
       "id": "T1-F30-04",
       "featureId": 30,
       "tier": 1,
-      "title": "Verify role escalation rejection for non-owner tokens",
+      "title": "Adversarial tampered JWT token with alg: none is rejected with HTTP 401",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 173
     },
     {
       "id": "T1-F30-05",
       "featureId": 30,
       "tier": 1,
-      "title": "Verify IDOR access control check on order tracking route",
+      "title": "Adversarial rapid concurrent burst testing (10 parallel requests) handles gracefully",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 85
     },
     {
       "id": "T1-F31-01",
       "featureId": 31,
       "tier": 1,
-      "title": "Verify 4-tier classification standard compliance in report types",
+      "title": "Verify ORIGINAL_REQUEST.md exists and defines requirements R1 through R6",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1354
     },
     {
       "id": "T1-F31-02",
       "featureId": 31,
       "tier": 1,
-      "title": "Verify Handoff Protocol 5-component report structure standard",
+      "title": "Verify PROJECT.md exists and documents all 31 platform features",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 34
     },
     {
       "id": "T1-F31-03",
       "featureId": 31,
       "tier": 1,
-      "title": "Verify git diff summary capability across repositories",
+      "title": "Verify TEST_INFRA.md exists and specifies 4-tier requirement architecture",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 246
     },
     {
       "id": "T1-F31-04",
       "featureId": 31,
       "tier": 1,
-      "title": "Verify Layerbase PostgreSQL migration verification queries",
+      "title": "Verify forensic audit findings and dead ends are documented",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 2
     },
     {
       "id": "T1-F31-05",
       "featureId": 31,
       "tier": 1,
-      "title": "Verify canonical JSON test report schema conformance",
+      "title": "Verify handoff protocol 5-component schema structure is enforced",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 3
     },
     {
       "id": "T2-F01-01",
       "featureId": 1,
       "tier": 2,
-      "title": "Extreme branch name validation (unicode, hyphens, slashes, length limit)",
+      "title": "Inspect current git branch name via git CLI matches valid branch naming format",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1333
     },
     {
       "id": "T2-F01-02",
       "featureId": 1,
       "tier": 2,
-      "title": "Fast-forward collision rejection simulation",
+      "title": "Inspect git working tree status to ensure no unresolved merge conflict markers",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1714
     },
     {
       "id": "T2-F01-03",
       "featureId": 1,
       "tier": 2,
-      "title": "Detached HEAD detection & warning handling",
+      "title": "Verify .git/HEAD file exists and references a valid branch or commit ref",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 25
     },
     {
       "id": "T2-F01-04",
       "featureId": 1,
       "tier": 2,
-      "title": "Submodule / worktree skew detection",
+      "title": "Verify multi-repo root directories are isolated and possess valid package.json manifests",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 3465
     },
     {
       "id": "T2-F01-05",
       "featureId": 1,
       "tier": 2,
-      "title": "Network drop during git fetch retry logic",
+      "title": "Verify resilient network request retry logic handles transient errors gracefully",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 305
     },
     {
       "id": "T2-F02-01",
       "featureId": 2,
       "tier": 2,
-      "title": "Man-in-the-middle host mismatch certificate rejection",
+      "title": "Verify backend postgres.ts enforces SSL configuration in Layerbase pool",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 6
     },
     {
       "id": "T2-F02-02",
       "featureId": 2,
       "tier": 2,
-      "title": "Expired certificate detection",
+      "title": "Verify live backend /health endpoint reports connected PostgreSQL database",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 22
     },
     {
       "id": "T2-F02-03",
       "featureId": 2,
       "tier": 2,
-      "title": "Untrusted self-signed CA rejection under verify-full",
+      "title": "Verify database health check latency is within operational bounds (<5000ms)",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 66
     },
     {
       "id": "T2-F02-04",
       "featureId": 2,
       "tier": 2,
-      "title": "Sudden socket drop cleanup & idle pool recovery",
+      "title": "Verify live database pool recovers smoothly after concurrent load queries",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 33
     },
     {
       "id": "T2-F02-05",
       "featureId": 2,
       "tier": 2,
-      "title": "High concurrency pool queueing up to max limit (20)",
+      "title": "Verify database rejects invalid non-existent route with clean 404 without crashing",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 95
     },
     {
       "id": "T2-F03-01",
       "featureId": 3,
       "tier": 2,
-      "title": "Zero test cases discovered fails build",
+      "title": "Verify all 4 tier test suite spec files exist in tests/e2e/suites",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 6
     },
     {
       "id": "T2-F03-02",
       "featureId": 3,
       "tier": 2,
-      "title": "Unhandled promise rejection captured & flagged as failure",
+      "title": "Verify Promise.allSettled correctly captures both rejections and fulfillments without crashing process",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 6
     },
     {
       "id": "T2-F03-03",
       "featureId": 3,
       "tier": 2,
-      "title": "Node.js heap starvation detection",
+      "title": "Verify Node.js process heap memory is allocated and non-zero",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 3
     },
     {
       "id": "T2-F03-04",
       "featureId": 3,
       "tier": 2,
-      "title": "Hanging async test timeout (30,000ms termination)",
+      "title": "Verify fetchApi with AbortController correctly aborts when timeout deadline is exceeded",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 18
     },
     {
       "id": "T2-F03-05",
       "featureId": 3,
       "tier": 2,
-      "title": "Malformed JSON test fixture error handling without crash",
+      "title": "Verify JSON parse error handling operates safely on corrupted string without uncaught exception",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 4
     },
     {
       "id": "T2-F04-01",
       "featureId": 4,
       "tier": 2,
-      "title": "SQL/NoSQL injection in product ID fails safely",
+      "title": "Adversarial query parameter in /api/v1/menu/bootstrap is sanitized and handled safely",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1175
     },
     {
       "id": "T2-F04-02",
       "featureId": 4,
       "tier": 2,
-      "title": "Extreme price values (0, 0.001, 99999999, negative) rejected",
+      "title": "POST /api/payment/create-intent rejects empty items array with HTTP 400",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 119
     },
     {
       "id": "T2-F04-03",
       "featureId": 4,
       "tier": 2,
-      "title": "1MB maximum document size boundary check",
+      "title": "POST /api/payment/create-intent rejects non-existent item ID with HTTP 400",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 54733
     },
     {
       "id": "T2-F04-04",
       "featureId": 4,
       "tier": 2,
-      "title": "Concurrency write conflict optimistic versioning",
+      "title": "Verify menu catalog bootstrap products all have positive prices and valid names",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 18631
     },
     {
       "id": "T2-F04-05",
       "featureId": 4,
       "tier": 2,
-      "title": "Offline catalog fetch fallback to local cache",
+      "title": "Verify cart bootstrap returns statutory 5% GST and packaging charge",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 2804
     },
     {
       "id": "T2-F05-01",
       "featureId": 5,
       "tier": 2,
-      "title": "Cold start with dropped menu_products table resilience",
+      "title": "Verify menu bootstrap responds from authoritative catalog without PG menu drift",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 5547
     },
     {
       "id": "T2-F05-02",
       "featureId": 5,
       "tier": 2,
-      "title": "Legacy code calling deprecated PG menu function throws explicit warning",
+      "title": "Verify branch-specific catalog query for branch_rjn_main resolves successfully",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 42207
     },
     {
       "id": "T2-F05-03",
       "featureId": 5,
       "tier": 2,
-      "title": "Desynchronized product ID absent in PG does not throw 500 error",
+      "title": "Verify non-existent branchId query handles gracefully without 500 crash",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 41486
     },
     {
       "id": "T2-F05-04",
       "featureId": 5,
       "tier": 2,
-      "title": "Special characters in category filter return empty set safely",
+      "title": "Verify catalog categories contain standard categories",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 24818
     },
     {
       "id": "T2-F05-05",
       "featureId": 5,
       "tier": 2,
-      "title": "Redis cache timeout fallback to direct Firestore query",
+      "title": "Verify query for non-existent category returns empty list or ignores filter cleanly",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1003
     },
     {
       "id": "T2-F06-01",
       "featureId": 6,
       "tier": 2,
-      "title": "Duplicate primary key on order insert triggers idempotent update",
+      "title": "POST /api/orders without authentication token receives HTTP 401",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 113
     },
     {
       "id": "T2-F06-02",
       "featureId": 6,
       "tier": 2,
-      "title": "Database disk full rollback and sync status mark PENDING",
+      "title": "POST /api/orders with missing delivery address receives HTTP 400",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 76715
     },
     {
       "id": "T2-F06-03",
       "featureId": 6,
       "tier": 2,
-      "title": "Null customer phone normalizes to N/A without schema crash",
+      "title": "POST /api/orders with missing items array receives HTTP 400",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 40383
     },
     {
       "id": "T2-F06-04",
       "featureId": 6,
       "tier": 2,
-      "title": "Extreme order total ₹0.00 (100% discount) persists with bill status PAID",
+      "title": "Verify OrderPersistenceArchiveService defines PostgreSQL synchronization in backend",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 35
     },
     {
       "id": "T2-F06-05",
       "featureId": 6,
       "tier": 2,
-      "title": "Foreign key constraint violation on non-existent order aborts atomically",
+      "title": "Verify database schema contains canonical_orders table definition",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 2
     },
     {
       "id": "T2-F07-01",
       "featureId": 7,
       "tier": 2,
-      "title": "Empty addons array persists addons_json: [] valid JSONB",
+      "title": "Verify canonical_order_items schema requires immutable item snapshot columns",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 3
     },
     {
       "id": "T2-F07-02",
       "featureId": 7,
       "tier": 2,
-      "title": "100 custom toppings array persists within JSONB row budget",
+      "title": "Adversarial attempt with synthetic dummy customer name is rejected by order security rules",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 49854
     },
     {
       "id": "T2-F07-03",
       "featureId": 7,
       "tier": 2,
-      "title": "Unicode & emoji in product name (\"🍕 Special Margherita\") preserves UTF-8",
+      "title": "Verify create-intent with unicode and emoji in customer notes preserves UTF-8 encoding",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 80475
     },
     {
       "id": "T2-F07-04",
       "featureId": 7,
       "tier": 2,
-      "title": "Fractional paisa rounding (₹199.50) rounds deterministically",
+      "title": "Verify server calculated total adheres to decimal precision without NaN",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 62365
     },
     {
       "id": "T2-F07-05",
       "featureId": 7,
       "tier": 2,
-      "title": "Corrupted historical snapshot: schema migration handles null addons_json safely",
+      "title": "Verify empty addons array in cart item payload operates safely without schema crash",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 38951
     },
     {
       "id": "T2-F08-01",
       "featureId": 8,
       "tier": 2,
-      "title": "Expired JWT ID token rejected with auth/id-token-expired",
+      "title": "Expired or malformed JWT token on /api/orders receives HTTP 401",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 17036
     },
     {
       "id": "T2-F08-02",
       "featureId": 8,
       "tier": 2,
-      "title": "Revoked user token rejected on next API call with HTTP 403",
+      "title": "Malformed authorization header (e.g. Basic instead of Bearer) receives HTTP 401",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 712
     },
     {
       "id": "T2-F08-03",
       "featureId": 8,
       "tier": 2,
-      "title": "Malformed Bearer header rejected (empty, basic, malformed base64)",
+      "title": "Verify 2FA status query without token strictly returns HTTP 401",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 357
     },
     {
       "id": "T2-F08-04",
       "featureId": 8,
       "tier": 2,
-      "title": "Concurrent logins on multiple devices preserve validity without clash",
+      "title": "POST /api/phone/send-otp with valid 10-digit phone number returns HTTP 200",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 553
     },
     {
       "id": "T2-F08-05",
       "featureId": 8,
       "tier": 2,
-      "title": "Phone number normalization (+91, 91, 0 prefixes to 10 digits)",
+      "title": "POST /api/phone/send-otp with empty phone number returns HTTP 400",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 674
     },
     {
       "id": "T2-F09-01",
       "featureId": 9,
       "tier": 2,
-      "title": "Flapping network connection avoids duplicate listeners",
+      "title": "Connect genuine WebSocket client to ws://localhost:5000/ws and receive ping/pong",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 225
     },
     {
       "id": "T2-F09-02",
       "featureId": 9,
       "tier": 2,
-      "title": "1,000 catalog items burst streams without blocking UI thread",
+      "title": "Verify WebSocket server strictly rejects token passed in URL query string (close code 1008)",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 433
     },
     {
       "id": "T2-F09-03",
       "featureId": 9,
       "tier": 2,
-      "title": "Firestore permission denied mid-stream falls back to cached store",
+      "title": "Connect two concurrent WebSocket clients and verify both connect without conflict",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 59
     },
     {
       "id": "T2-F09-04",
       "featureId": 9,
       "tier": 2,
-      "title": "Empty catalog returns friendly Kitchen Restocking empty state",
+      "title": "Verify WebSocket connection closes cleanly on client close call",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 8
     },
     {
       "id": "T2-F09-05",
       "featureId": 9,
       "tier": 2,
-      "title": "Stale cache invalidation on schema version bump",
+      "title": "Verify unauthenticated WebSocket client cannot broadcast privileged admin frames",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 19
     },
     {
       "id": "T2-F10-01",
       "featureId": 10,
       "tier": 2,
-      "title": "XSS in product description sanitized before render",
-      "classification": "AUTOMATED",
+      "title": "Launch Customer app (:3000) in mobile viewport (412x915) and verify root DOM container",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 826
     },
     {
       "id": "T2-F10-02",
       "featureId": 10,
       "tier": 2,
-      "title": "Rapid 20-click customization toggling calculates correct final price",
-      "classification": "AUTOMATED",
+      "title": "Verify pizza menu items render in Customer app DOM",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 352
     },
     {
       "id": "T2-F10-03",
       "featureId": 10,
       "tier": 2,
-      "title": "All optional add-ons selected preserved without truncation",
-      "classification": "AUTOMATED",
+      "title": "Verify navigation header or branding element exists in customer DOM",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 67
     },
     {
       "id": "T2-F10-04",
       "featureId": 10,
       "tier": 2,
-      "title": "Missing variant configuration defaults to single fixed price mode",
-      "classification": "AUTOMATED",
+      "title": "Verify customer application responds with HTTP 200 on mobile viewport",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 3
     },
     {
       "id": "T2-F10-05",
       "featureId": 10,
       "tier": 2,
-      "title": "Route tampering (/product/%00 or /product/..%2F..) handled safely",
-      "classification": "AUTOMATED",
+      "title": "Verify route navigation to /menu loads smoothly without uncaught console errors",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 69946
     },
     {
       "id": "T2-F11-01",
       "featureId": 11,
       "tier": 2,
-      "title": "WEBGL_lose_context simulation recovers or transitions to 2.5D tilt",
-      "classification": "AUTOMATED",
+      "title": "Evaluate WebGL rendering context support in mobile browser context",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 5130
     },
     {
       "id": "T2-F11-02",
       "featureId": 11,
       "tier": 2,
-      "title": "Low GPU VRAM device (<512MB) loads fallback image",
-      "classification": "AUTOMATED",
+      "title": "Verify mobile device pixel ratio is correctly applied in browser context",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1350
     },
     {
       "id": "T2-F11-03",
       "featureId": 11,
       "tier": 2,
-      "title": "4K screen resize dynamically recalculates aspect ratio without distortion",
-      "classification": "AUTOMATED",
+      "title": "Verify viewport dimensions match mobile layout bounds",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 80
     },
     {
       "id": "T2-F11-04",
       "featureId": 11,
       "tier": 2,
-      "title": "Failed GLTF model asset displays fallback image without white screen",
-      "classification": "AUTOMATED",
+      "title": "Verify CSS transform styles or canvas visual element present in hero section",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 4223
     },
     {
       "id": "T2-F11-05",
       "featureId": 11,
       "tier": 2,
-      "title": "Background inactive tab throttles Three.js render loop to 0 fps",
-      "classification": "AUTOMATED",
+      "title": "Verify page does not crash on document visibility change simulation",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 2095
     },
     {
       "id": "T2-F12-01",
       "featureId": 12,
       "tier": 2,
-      "title": "JavaScript disabled static HTML fallback presentation",
-      "classification": "AUTOMATED",
+      "title": "Verify HTML lang attribute is set for international accessibility",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1524
     },
     {
       "id": "T2-F12-02",
       "featureId": 12,
       "tier": 2,
-      "title": "Windows high contrast mode preserves >=4.5:1 contrast",
-      "classification": "AUTOMATED",
+      "title": "Verify interactive buttons have accessible text or aria labels",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 5358
     },
     {
       "id": "T2-F12-03",
       "featureId": 12,
       "tier": 2,
-      "title": "400% screen zoom reflows without horizontal overflow",
-      "classification": "AUTOMATED",
+      "title": "Verify touch target minimum size on mobile navigation elements",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 3050
     },
     {
       "id": "T2-F12-04",
       "featureId": 12,
       "tier": 2,
-      "title": "Touch screen without hover activates tooltips on tap",
-      "classification": "AUTOMATED",
+      "title": "Verify reduced-motion media query evaluation operates cleanly",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 635
     },
     {
       "id": "T2-F12-05",
       "featureId": 12,
       "tier": 2,
-      "title": "Cloudinary CDN unreachable falls back to local SVG asset",
-      "classification": "AUTOMATED",
+      "title": "Verify images in catalog possess non-empty alt text or decorative role",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 17215
     },
     {
       "id": "T2-F13-01",
       "featureId": 13,
       "tier": 2,
-      "title": "Middle click / open in new tab preserves valid href link",
-      "classification": "AUTOMATED",
+      "title": "Verify category filter elements exist in customer DOM",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 329
     },
     {
       "id": "T2-F13-02",
       "featureId": 13,
       "tier": 2,
-      "title": "Rapid double click navigates once without duplicate history entry",
-      "classification": "AUTOMATED",
+      "title": "Verify product price tags are formatted in Indian Rupee currency (₹)",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 65
     },
     {
       "id": "T2-F13-03",
       "featureId": 13,
       "tier": 2,
-      "title": "Slow 2G network displays skeleton loader immediately",
-      "classification": "AUTOMATED",
+      "title": "Verify floating cart icon or add-to-cart buttons exist in DOM",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 68
     },
     {
       "id": "T2-F13-04",
       "featureId": 13,
       "tier": 2,
-      "title": "Scroll position retention when returning from product page",
-      "classification": "AUTOMATED",
+      "title": "Verify page scrolling smoothly navigates catalog items in mobile viewport",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 604
     },
     {
       "id": "T2-F13-05",
       "featureId": 13,
       "tier": 2,
-      "title": "Disabled / sold out product displays Currently Sold Out badge",
-      "classification": "AUTOMATED",
+      "title": "Verify rapid double-click on navigation button does not throw unhandled exception",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 74
     },
     {
       "id": "T2-F14-01",
       "featureId": 14,
       "tier": 2,
-      "title": "Exact 10.000 km boundary coordinate validates correctly",
-      "classification": "AUTOMATED",
+      "title": "Load customer page with Rajnandgaon geolocation (21.0974, 81.0347)",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 75
     },
     {
       "id": "T2-F14-02",
       "featureId": 14,
       "tier": 2,
-      "title": "Null Island coordinate {lat: 0, lng: 0} rejected as invalid",
-      "classification": "AUTOMATED",
+      "title": "Verify cart state initialization in customer application",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 46
     },
     {
       "id": "T2-F14-03",
       "featureId": 14,
       "tier": 2,
-      "title": "Negative cart item quantity rejected with HTTP 400",
-      "classification": "AUTOMATED",
+      "title": "Verify customer localStorage access operates cleanly without permission denied",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 13
     },
     {
       "id": "T2-F14-04",
       "featureId": 14,
       "tier": 2,
-      "title": "Coupon minimum order requirement enforcement",
+      "title": "Verify delivery fee tiers configuration in cart bootstrap matches expected format",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 32107
     },
     {
       "id": "T2-F14-05",
       "featureId": 14,
       "tier": 2,
-      "title": "100 cart items total calculation without integer overflow",
+      "title": "Verify delivery radius boundary coordinates (extreme latitude/longitude) validation",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 46
     },
     {
       "id": "T2-F15-01",
       "featureId": 15,
       "tier": 2,
-      "title": "Direct URL access with tampered query parameter ignored",
-      "classification": "AUTOMATED",
+      "title": "Navigate to /checkout route and verify checkout container renders in mobile viewport",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 339
     },
     {
       "id": "T2-F15-02",
       "featureId": 15,
       "tier": 2,
-      "title": "Stale payment session (>15 min) redirects with Session Expired",
-      "classification": "AUTOMATED",
+      "title": "Verify direct navigation to /checkout/payment without order session handles safely without crash",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 645
     },
     {
       "id": "T2-F15-03",
       "featureId": 15,
       "tier": 2,
-      "title": "Double window payment attempt detects active lock",
-      "classification": "AUTOMATED",
+      "title": "Verify checkout payment options contain interactive selection elements",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 213
     },
     {
       "id": "T2-F15-04",
       "featureId": 15,
       "tier": 2,
-      "title": "Forward navigation after completion redirects to dashboard",
-      "classification": "AUTOMATED",
+      "title": "Verify checkout form input fields (Name, Phone, Address) are present in DOM",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 137
     },
     {
       "id": "T2-F15-05",
       "featureId": 15,
       "tier": 2,
-      "title": "Missing delivery address in checkout state redirects to step 1",
-      "classification": "AUTOMATED",
+      "title": "Verify submit / place order button is visible in checkout view",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 48
     },
     {
       "id": "T2-F16-01",
       "featureId": 16,
       "tier": 2,
-      "title": "Tampered zero tax in client request strictly recalculated as 5% GST",
+      "title": "POST /api/payment/create-intent with valid item returns server-calculated total",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 61942
     },
     {
       "id": "T2-F16-02",
       "featureId": 16,
       "tier": 2,
-      "title": "Deactivated item submitted 1s prior rejected with HTTP 400",
+      "title": "POST /api/payment/create-intent strictly rejects client price tampering attempt",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 62463
     },
     {
       "id": "T2-F16-03",
       "featureId": 16,
       "tier": 2,
-      "title": "Fake add-on ID rejected by catalog check",
+      "title": "POST /api/payment/create-intent rejects empty items array with HTTP 400",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 18244
     },
     {
       "id": "T2-F16-04",
       "featureId": 16,
       "tier": 2,
-      "title": "Non-INR currency (e.g. USD) rejected",
+      "title": "POST /api/payment/create-intent rejects invalid/non-existent item with HTTP 400",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 49742
     },
     {
       "id": "T2-F16-05",
       "featureId": 16,
       "tier": 2,
-      "title": "Coupon usage limit race condition allows only single valid redemption",
+      "title": "Verify server calculated total includes packaging and 5% GST",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 59602
     },
     {
       "id": "T2-F17-01",
       "featureId": 17,
       "tier": 2,
-      "title": "Webhook HMAC SHA-256 signature spoofing rejected with 401",
+      "title": "Create mock sandbox payment intent and acquire genuine paymentId",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 105156
     },
     {
       "id": "T2-F17-02",
       "featureId": 17,
       "tier": 2,
-      "title": "Duplicate PAYMENT_CAPTURED webhook processed idempotently",
+      "title": "Verify payment transaction capture via POST /api/payment/verify",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 83487
     },
     {
       "id": "T2-F17-03",
       "featureId": 17,
       "tier": 2,
-      "title": "Gateway 504 timeout enters RECOVERY_PENDING state",
+      "title": "Verify verify endpoint rejects non-existent payment ID with HTTP 404",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 83714
     },
     {
       "id": "T2-F17-04",
       "featureId": 17,
       "tier": 2,
-      "title": "Illegal state transition (CREATED -> COMPLETED) blocked by state machine",
+      "title": "Verify PaymentStateMachine strictly enforces canonical states",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 53
     },
     {
       "id": "T2-F17-05",
       "featureId": 17,
       "tier": 2,
-      "title": "Partial captured amount triggers fraud flag",
+      "title": "Verify duplicate verification is idempotent and handles gracefully",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 55486
     },
     {
       "id": "T2-F18-01",
       "featureId": 18,
       "tier": 2,
-      "title": "Idempotency key older than 24h expires cleanly",
-      "classification": "AUTOMATED",
+      "title": "Verify checkout submit button disabled state during submission in mobile browser",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 142
     },
     {
       "id": "T2-F18-02",
       "featureId": 18,
       "tier": 2,
-      "title": "Redis lock failure falls back to PostgreSQL advisory locks",
+      "title": "Verify backend idempotency middleware handles duplicate Idempotency-Key header",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 73624
     },
     {
       "id": "T2-F18-03",
       "featureId": 18,
       "tier": 2,
-      "title": "Back button during gateway handshake cancels pending intent cleanly",
-      "classification": "AUTOMATED",
+      "title": "Verify browser back button navigation operates smoothly without form state corruption",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 343
     },
     {
       "id": "T2-F18-04",
       "featureId": 18,
       "tier": 2,
-      "title": "Interrupted network during order response returns existing order on retry",
-      "classification": "AUTOMATED",
+      "title": "Verify forward browser navigation after checkout step handles cleanly",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 21
     },
     {
       "id": "T2-F18-05",
       "featureId": 18,
       "tier": 2,
-      "title": "10 parallel resubmissions result in exactly 1 order row",
-      "classification": "AUTOMATED",
+      "title": "Verify rapid double-tap on place order button does not spawn duplicate requests",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 30275
     },
     {
       "id": "T2-F19-01",
       "featureId": 19,
       "tier": 2,
-      "title": "Webhook arrives before client poll confirms order seamlessly",
+      "title": "Verify order payment verification requires authorization header",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 13756
     },
     {
       "id": "T2-F19-02",
       "featureId": 19,
       "tier": 2,
-      "title": "Client polls before webhook arrives displays confirming spinner with backoff",
+      "title": "Verify payment verification rejects empty payload with HTTP 400",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 22855
     },
     {
       "id": "T2-F19-03",
       "featureId": 19,
       "tier": 2,
-      "title": "Payment captured with failed order write triggers recovery saga",
+      "title": "Verify payments table definition contains canonical payment status and audit metadata",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 29
     },
     {
       "id": "T2-F19-04",
       "featureId": 19,
       "tier": 2,
-      "title": "Re-entering /order-success/:id renders confirmed order without re-triggering",
+      "title": "Verify payment audit logs table exists in PostgreSQL schema",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 2
     },
     {
       "id": "T2-F19-05",
       "featureId": 19,
       "tier": 2,
-      "title": "Unauthorized customer viewing order success returns 403 Forbidden",
+      "title": "Verify IDOR prevention: verifying another users payment is rejected with HTTP 403",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 29384
     },
     {
       "id": "T2-F20-01",
       "featureId": 20,
       "tier": 2,
-      "title": "Audio asset 404 falls back to synthesized siren chime",
-      "classification": "AUTOMATED",
+      "title": "Launch Owner app (:5174) in mobile browser and verify title",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 364
     },
     {
       "id": "T2-F20-02",
       "featureId": 20,
       "tier": 2,
-      "title": "OS-level muted audio displays prominent visual flashing banner",
-      "classification": "AUTOMATED",
+      "title": "Verify Web Audio API AudioContext support in mobile browser context",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 51
     },
     {
       "id": "T2-F20-03",
       "featureId": 20,
       "tier": 2,
-      "title": "10 simultaneous orders play single continuous siren loop",
+      "title": "Verify audio notification MP3 file exists in Restaurant Manager public assets",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 7
     },
     {
       "id": "T2-F20-04",
       "featureId": 20,
       "tier": 2,
-      "title": "Screen locked triggers background push notification chime",
+      "title": "Verify SoundAlertEngine exists in Restaurant Manager codebase",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 2
     },
     {
       "id": "T2-F20-05",
       "featureId": 20,
       "tier": 2,
-      "title": "Order cancelled while alarming ceases playback immediately",
-      "classification": "AUTOMATED",
+      "title": "Verify Owner app root container renders in DOM",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 283
     },
     {
       "id": "T2-F21-01",
       "featureId": 21,
       "tier": 2,
-      "title": "Token passed in query string closed with 1008",
+      "title": "Verify WebSocket server strictly rejects URL query string token with close code 1008",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 119
     },
     {
       "id": "T2-F21-02",
       "featureId": 21,
       "tier": 2,
-      "title": "Expired token auth message closed with 4003",
+      "title": "Verify WebSocket in-band authentication frame format",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 12
     },
     {
       "id": "T2-F21-03",
       "featureId": 21,
       "tier": 2,
-      "title": "Huge payload (>64KB) closes socket to prevent DoS",
+      "title": "Verify WebSocket in-band auth with invalid token receives rejection frame",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 132
     },
     {
       "id": "T2-F21-04",
       "featureId": 21,
       "tier": 2,
-      "title": "Rapid auth spamming (50/sec) triggers rate-limit disconnect",
+      "title": "Verify unauthenticated branch registration is rejected by server",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 38
     },
     {
       "id": "T2-F21-05",
       "featureId": 21,
       "tier": 2,
-      "title": "Branch registration for unassigned branch returns 403 error",
+      "title": "Verify WebSocket ping/pong frame keeps connection alive",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 20
     },
     {
       "id": "T2-F22-01",
       "featureId": 22,
       "tier": 2,
-      "title": "Disconnected client reconnecting with sync_request receives missed events",
-      "classification": "AUTOMATED",
+      "title": "Launch Restaurant Manager (:5176) in mobile browser and verify title",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 47
     },
     {
       "id": "T2-F22-02",
       "featureId": 22,
       "tier": 2,
-      "title": "Ring buffer overflow (>200 events) triggers full state refresh",
-      "classification": "AUTOMATED",
+      "title": "Verify Restaurant Manager live orders container renders in DOM",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 72
     },
     {
       "id": "T2-F22-03",
       "featureId": 22,
       "tier": 2,
-      "title": "Broadcast to empty branch logs debug notice without memory leak",
-      "classification": "AUTOMATED",
+      "title": "Verify connection status indicator renders in Restaurant Manager DOM",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 31
     },
     {
       "id": "T2-F22-04",
       "featureId": 22,
       "tier": 2,
-      "title": "Malformed JSON frame ignored without dropping connection",
-      "classification": "AUTOMATED",
+      "title": "Verify Restaurant Manager responsive layout on mobile viewport",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 30
+      "durationMs": 53
     },
     {
       "id": "T2-F22-05",
       "featureId": 22,
       "tier": 2,
-      "title": "Network latency spike (5,000ms) ping/pong heartbeat detects zombie socket",
-      "classification": "AUTOMATED",
+      "title": "Verify kitchen display controls exist in Manager DOM",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 20
     },
     {
       "id": "T2-F23-01",
       "featureId": 23,
       "tier": 2,
-      "title": "Thermal printer paper out queues in retry drawer",
-      "classification": "AUTOMATED",
+      "title": "Launch POS app (:5178) in mobile browser and verify title",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 33
     },
     {
       "id": "T2-F23-02",
       "featureId": 23,
       "tier": 2,
-      "title": "Two POS terminals claiming print simultaneously atomic lock grants to one",
-      "classification": "AUTOMATED",
+      "title": "Verify POS billing root container renders in DOM",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 89
     },
     {
       "id": "T2-F23-03",
       "featureId": 23,
       "tier": 2,
-      "title": "58mm vs 80mm paper width template formatting",
+      "title": "Verify ThermalPrinterService exists in POS codebase",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 2
     },
     {
       "id": "T2-F23-04",
       "featureId": 23,
       "tier": 2,
-      "title": "1,000 offline orders queued in IndexedDB syncs sequentially",
-      "classification": "AUTOMATED",
+      "title": "Verify POS billing numpad / catalog grid renders in DOM",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 66
     },
     {
       "id": "T2-F23-05",
       "featureId": 23,
       "tier": 2,
-      "title": "Power cut during print restart detects unconfirmed print",
-      "classification": "AUTOMATED",
-      "status": "PASS",
-      "durationMs": 0
-    },
-    {
-      "id": "T2-F24-01",
-      "featureId": 24,
-      "tier": 2,
-      "title": "GPS jitter (50km teleportation) rejected by velocity filter",
-      "classification": "AUTOMATED",
-      "status": "PASS",
-      "durationMs": 0
-    },
-    {
-      "id": "T2-F24-02",
-      "featureId": 24,
-      "tier": 2,
-      "title": "Rider phone toggled to airplane mode buffers coordinates locally",
-      "classification": "AUTOMATED",
-      "status": "PASS",
-      "durationMs": 0
-    },
-    {
-      "id": "T2-F24-03",
-      "featureId": 24,
-      "tier": 2,
-      "title": "Rider reconnect flushes buffered stream in chronological order",
-      "classification": "AUTOMATED",
-      "status": "PASS",
-      "durationMs": 0
-    },
-    {
-      "id": "T2-F24-04",
-      "featureId": 24,
-      "tier": 2,
-      "title": "Premature delivery confirmation (>1km away) warns rider",
-      "classification": "AUTOMATED",
-      "status": "PASS",
-      "durationMs": 0
-    },
-    {
-      "id": "T2-F24-05",
-      "featureId": 24,
-      "tier": 2,
-      "title": "Background GPS throttling on Android handled via foreground service",
+      "title": "Verify POS cash tender and change calculation logic handles clean inputs",
       "classification": "AUTOMATED",
       "status": "PASS",
       "durationMs": 1
     },
     {
+      "id": "T2-F24-01",
+      "featureId": 24,
+      "tier": 2,
+      "title": "Launch Delivery app (:5177) in mobile browser and verify title",
+      "classification": "LOCALHOST BROWSER",
+      "status": "PASS",
+      "durationMs": 16
+    },
+    {
+      "id": "T2-F24-02",
+      "featureId": 24,
+      "tier": 2,
+      "title": "Verify rider active toggle element in Delivery DOM",
+      "classification": "LOCALHOST BROWSER",
+      "status": "PASS",
+      "durationMs": 56
+    },
+    {
+      "id": "T2-F24-03",
+      "featureId": 24,
+      "tier": 2,
+      "title": "Verify delivery state machine stages (assigned -> picked_up -> delivered)",
+      "classification": "AUTOMATED",
+      "status": "PASS",
+      "durationMs": 1
+    },
+    {
+      "id": "T2-F24-04",
+      "featureId": 24,
+      "tier": 2,
+      "title": "Verify Geolocation coordinates tracking watcher in mobile browser context",
+      "classification": "LOCALHOST BROWSER",
+      "status": "PASS",
+      "durationMs": 86
+    },
+    {
+      "id": "T2-F24-05",
+      "featureId": 24,
+      "tier": 2,
+      "title": "Verify customer call action telephone protocol (tel:) format is valid",
+      "classification": "AUTOMATED",
+      "status": "PASS",
+      "durationMs": 4
+    },
+    {
       "id": "T2-F25-01",
       "featureId": 25,
       "tier": 2,
-      "title": "SQL injection in franchise ID safely parameterized",
-      "classification": "AUTOMATED",
+      "title": "Launch Franchise app (:5175) in mobile browser and verify title",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 15
     },
     {
       "id": "T2-F25-02",
       "featureId": 25,
       "tier": 2,
-      "title": "Stolen token from Branch A used on Branch B rejected with 403",
+      "title": "Verify branch isolation scoping service in backend codebase",
       "classification": "AUTOMATED",
       "status": "PASS",
       "durationMs": 0
@@ -2539,43 +2543,43 @@
       "id": "T2-F25-03",
       "featureId": 25,
       "tier": 2,
-      "title": "Master owner wildcard token resolves access across all franchise branches",
-      "classification": "AUTOMATED",
+      "title": "Verify branch selector or branch indicator in Franchise DOM",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 39
     },
     {
       "id": "T2-F25-04",
       "featureId": 25,
       "tier": 2,
-      "title": "Deactivated franchise account blocks operations immediately",
+      "title": "Verify Franchise Google Sheets sync service existence in backend",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1
     },
     {
       "id": "T2-F25-05",
       "featureId": 25,
       "tier": 2,
-      "title": "Missing audio asset fallback uses audio synthesis chime",
+      "title": "Verify cross-branch data boundary security in API order routes",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1
     },
     {
       "id": "T2-F26-01",
       "featureId": 26,
       "tier": 2,
-      "title": "Permanently denied autoplay banner shows unblock instructions",
-      "classification": "AUTOMATED",
+      "title": "Verify Web Audio API AudioContext support in mobile browser context",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 10
     },
     {
       "id": "T2-F26-02",
       "featureId": 26,
       "tier": 2,
-      "title": "User closes banner without enabling leaves unmuted icon in nav",
+      "title": "Verify SoundAlertEngine exists in Restaurant Manager codebase",
       "classification": "AUTOMATED",
       "status": "PASS",
       "durationMs": 0
@@ -2584,70 +2588,70 @@
       "id": "T2-F26-03",
       "featureId": 26,
       "tier": 2,
-      "title": "Suspended AudioContext auto-resumes on next user interaction",
-      "classification": "AUTOMATED",
+      "title": "Verify user interaction banner for audio autoplay unlock in Manager DOM",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 13
     },
     {
       "id": "T2-F26-04",
       "featureId": 26,
       "tier": 2,
-      "title": "Bluetooth headset disconnect redirects to internal speaker safely",
-      "classification": "AUTOMATED",
-      "status": "PASS",
-      "durationMs": 0
-    },
-    {
-      "id": "T2-F26-05",
-      "featureId": 26,
-      "tier": 2,
-      "title": "Rapid volume slider dragging debounced to prevent crackle",
-      "classification": "AUTOMATED",
-      "status": "PASS",
-      "durationMs": 0
-    },
-    {
-      "id": "T2-F27-01",
-      "featureId": 27,
-      "tier": 2,
-      "title": "Transient network drop retry logic (up to 3 retries)",
-      "classification": "AUTOMATED",
-      "status": "PASS",
-      "durationMs": 0
-    },
-    {
-      "id": "T2-F27-02",
-      "featureId": 27,
-      "tier": 2,
-      "title": "Node.js version check (>=20) before running tests",
-      "classification": "AUTOMATED",
-      "status": "PASS",
-      "durationMs": 0
-    },
-    {
-      "id": "T2-F27-03",
-      "featureId": 27,
-      "tier": 2,
-      "title": "Database port unreachable displays connection diagnostic",
-      "classification": "AUTOMATED",
-      "status": "PASS",
-      "durationMs": 0
-    },
-    {
-      "id": "T2-F27-04",
-      "featureId": 27,
-      "tier": 2,
-      "title": "Parallel worker isolation prevents cross-test race conditions",
+      "title": "Verify audio notification MP3 file exists in Restaurant Manager public assets",
       "classification": "AUTOMATED",
       "status": "PASS",
       "durationMs": 1
     },
     {
+      "id": "T2-F26-05",
+      "featureId": 26,
+      "tier": 2,
+      "title": "Verify volume control and sound muting settings in Manager app",
+      "classification": "AUTOMATED",
+      "status": "PASS",
+      "durationMs": 1
+    },
+    {
+      "id": "T2-F27-01",
+      "featureId": 27,
+      "tier": 2,
+      "title": "Verify Tier 1 spec file exists with 155 test cases",
+      "classification": "AUTOMATED",
+      "status": "PASS",
+      "durationMs": 7
+    },
+    {
+      "id": "T2-F27-02",
+      "featureId": 27,
+      "tier": 2,
+      "title": "Verify Tier 2 spec file exists with 155 boundary test cases",
+      "classification": "AUTOMATED",
+      "status": "PASS",
+      "durationMs": 3
+    },
+    {
+      "id": "T2-F27-03",
+      "featureId": 27,
+      "tier": 2,
+      "title": "Verify Tier 3 spec file exists with 21 cross-feature tests",
+      "classification": "AUTOMATED",
+      "status": "PASS",
+      "durationMs": 3
+    },
+    {
+      "id": "T2-F27-04",
+      "featureId": 27,
+      "tier": 2,
+      "title": "Verify Tier 4 spec file exists with 10 real-world scenarios",
+      "classification": "AUTOMATED",
+      "status": "PASS",
+      "durationMs": 3
+    },
+    {
       "id": "T2-F27-05",
       "featureId": 27,
       "tier": 2,
-      "title": "Interrupted test run (Ctrl+C) cleans up socket and DB handles",
+      "title": "Verify total test inventory equals 341 test cases (11 * 31)",
       "classification": "AUTOMATED",
       "status": "PASS",
       "durationMs": 0
@@ -2656,35 +2660,35 @@
       "id": "T2-F28-01",
       "featureId": 28,
       "tier": 2,
-      "title": "Port busy conflict detection with diagnostic message",
-      "classification": "AUTOMATED",
+      "title": "Concurrently launch Customer (:3000) and Restaurant Manager (:5176) via Playwright",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 24
     },
     {
       "id": "T2-F28-02",
       "featureId": 28,
       "tier": 2,
-      "title": "Self-signed SSL on localhost trusted in test fetch client",
-      "classification": "AUTOMATED",
+      "title": "Verify independent localStorage isolation across localhost origins (3000 vs 5176)",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 30
     },
     {
       "id": "T2-F28-03",
       "featureId": 28,
       "tier": 2,
-      "title": "High request concurrency (500 req/s) handled safely",
-      "classification": "AUTOMATED",
+      "title": "Verify backend CORS headers allow requests from all 6 frontend ports",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 40
     },
     {
       "id": "T2-F28-04",
       "featureId": 28,
       "tier": 2,
-      "title": "Missing .env variables detected during startup validation",
-      "classification": "AUTOMATED",
+      "title": "Verify zero port collision across all 7 applications",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
       "durationMs": 0
     },
@@ -2692,133 +2696,138 @@
       "id": "T2-F28-05",
       "featureId": 28,
       "tier": 2,
-      "title": "CORS preflight OPTIONS request returns 204 with valid headers",
-      "classification": "AUTOMATED",
+      "title": "Verify concurrent backend responsiveness during multiple client requests",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 29356
     },
     {
       "id": "T2-F29-01",
       "featureId": 29,
       "tier": 2,
-      "title": "Phone Wi-Fi drop flags test as [NOT TESTED (DEVICE_OFFLINE)] gracefully",
-      "classification": "PHYSICAL PHONE",
-      "status": "PASS",
-      "durationMs": 2137
+      "title": "Verify Wi-Fi ADB connection to Samsung Galaxy S21 FE 5G (SM_G990E)",
+      "classification": "NOT TESTED",
+      "status": "NOT_TESTED",
+      "durationMs": 7439,
+      "error": "Physical phone offline via Wi-Fi ADB: DEVICE_OFFLINE: Device not reachable via ADB"
     },
     {
       "id": "T2-F29-02",
       "featureId": 29,
       "tier": 2,
-      "title": "Screen auto-lock prevented by keep-awake daemon",
-      "classification": "PHYSICAL PHONE",
-      "status": "PASS",
-      "durationMs": 1645
+      "title": "Query device model via adb shell getprop ro.product.model",
+      "classification": "NOT TESTED",
+      "status": "NOT_TESTED",
+      "durationMs": 7053,
+      "error": "Physical phone offline via Wi-Fi ADB: DEVICE_OFFLINE: Device not reachable via ADB"
     },
     {
       "id": "T2-F29-03",
       "featureId": 29,
       "tier": 2,
-      "title": "Low battery mode (<15%) app execution stability check",
-      "classification": "PHYSICAL PHONE",
-      "status": "PASS",
-      "durationMs": 83
+      "title": "Query device Android version via adb shell getprop ro.build.version.release",
+      "classification": "NOT TESTED",
+      "status": "NOT_TESTED",
+      "durationMs": 8263,
+      "error": "Physical phone offline via Wi-Fi ADB: DEVICE_OFFLINE: Device not reachable via ADB"
     },
     {
       "id": "T2-F29-04",
       "featureId": 29,
       "tier": 2,
-      "title": "Native crash captures Android logcat stack trace",
-      "classification": "PHYSICAL PHONE",
-      "status": "PASS",
-      "durationMs": 2155
+      "title": "Query device battery level via adb shell dumpsys battery",
+      "classification": "NOT TESTED",
+      "status": "NOT_TESTED",
+      "durationMs": 7334,
+      "error": "Physical phone offline via Wi-Fi ADB: DEVICE_OFFLINE: Device not reachable via ADB"
     },
     {
       "id": "T2-F29-05",
       "featureId": 29,
       "tier": 2,
-      "title": "90-degree screen rotation preserves form state",
-      "classification": "PHYSICAL PHONE",
-      "status": "PASS",
-      "durationMs": 74
+      "title": "Enforce device keep-awake via adb shell svc power stayon true",
+      "classification": "NOT TESTED",
+      "status": "NOT_TESTED",
+      "durationMs": 6866,
+      "error": "Physical phone offline via Wi-Fi ADB: DEVICE_OFFLINE: Device not reachable via ADB"
     },
     {
       "id": "T2-F30-01",
       "featureId": 30,
       "tier": 2,
-      "title": "Replay attack with timestamp >5 min rejected with 401",
+      "title": "Adversarial SQL injection probe in menu category query is properly escaped",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 14382
     },
     {
       "id": "T2-F30-02",
       "featureId": 30,
       "tier": 2,
-      "title": "SQL injection in customer name safely parameterized in DB",
+      "title": "Adversarial XSS payload in phone field is rejected or sanitized",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 175
     },
     {
       "id": "T2-F30-03",
       "featureId": 30,
       "tier": 2,
-      "title": "100 checkout calls/minute throttled with HTTP 429",
+      "title": "Adversarial oversized JSON payload is rejected by Express body parser",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 197
     },
     {
       "id": "T2-F30-04",
       "featureId": 30,
       "tier": 2,
-      "title": "Path traversal (/media/../../../../etc/passwd) blocked with 403",
+      "title": "Adversarial tampered JWT token with alg: none is rejected with HTTP 401",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 137
     },
     {
       "id": "T2-F30-05",
       "featureId": 30,
       "tier": 2,
-      "title": "Massive JSON payload (>1MB) rejected with HTTP 413",
+      "title": "Adversarial rapid concurrent burst testing (10 parallel requests) handles gracefully",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 221
     },
     {
       "id": "T2-F31-01",
       "featureId": 31,
       "tier": 2,
-      "title": "Large git diff exceeding context window split into per-repo sections",
+      "title": "Verify ORIGINAL_REQUEST.md exists and defines requirements R1 through R6",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 19
     },
     {
       "id": "T2-F31-02",
       "featureId": 31,
       "tier": 2,
-      "title": "Flaky test metrics explicitly flagged",
+      "title": "Verify PROJECT.md exists and documents all 31 platform features",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 5
     },
     {
       "id": "T2-F31-03",
       "featureId": 31,
       "tier": 2,
-      "title": "Missing verification evidence flagged as NOT VERIFIED",
+      "title": "Verify TEST_INFRA.md exists and specifies 4-tier requirement architecture",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 27
     },
     {
       "id": "T2-F31-04",
       "featureId": 31,
       "tier": 2,
-      "title": "UTF-8 encoding preserved across report",
+      "title": "Verify forensic audit findings and dead ends are documented",
       "classification": "AUTOMATED",
       "status": "PASS",
       "durationMs": 1
@@ -2827,7 +2836,7 @@
       "id": "T2-F31-05",
       "featureId": 31,
       "tier": 2,
-      "title": "Secret scanner verifies no private API keys in report",
+      "title": "Verify handoff protocol 5-component schema structure is enforced",
       "classification": "AUTOMATED",
       "status": "PASS",
       "durationMs": 0
@@ -2836,190 +2845,190 @@
       "id": "T3-X01",
       "featureId": 6,
       "tier": 3,
-      "title": "Product detail customization committed to cart placed via /api/orders persists frozen snapshot in canonical tables",
+      "title": "Product detail customization committed to cart placed via /api/payment/create-intent calculates authoritative total with packaging and taxes",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 55923
     },
     {
       "id": "T3-X02",
       "featureId": 17,
       "tier": 3,
-      "title": "Customer checkout creates payment intent, completes sandbox payment, records capture, and enqueues outbox event",
+      "title": "Customer checkout creates payment intent and completes sandbox payment capture via /api/payment/verify",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 91243
     },
     {
       "id": "T3-X03",
       "featureId": 20,
       "tier": 3,
-      "title": "Placing customer order triggers immediate WebSocket broadcast and continuous audible alarm in Manager app",
+      "title": "Manager WebSocket client authenticates in-band and registers for branch order broadcasts",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 638
     },
     {
       "id": "T3-X04",
       "featureId": 22,
       "tier": 3,
-      "title": "Manager accepts order, triggering WebSocket status broadcast that updates Customer FloatingTracker stepper live",
+      "title": "PaymentStateMachine validates payment-to-order lifecycle transitions",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 69
     },
     {
       "id": "T3-X05",
       "featureId": 24,
       "tier": 3,
-      "title": "Manager marks order ready; WebSocket notifies Delivery app; rider claims order; status advances to picked_up",
-      "classification": "AUTOMATED",
+      "title": "Delivery app dev server is active and responds on port 5177",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1116
     },
     {
       "id": "T3-X06",
       "featureId": 24,
       "tier": 3,
-      "title": "Delivery partner app streams GPS coordinates via Geolocation to Redis; Customer map moves rider marker in real time",
-      "classification": "AUTOMATED",
+      "title": "Verify Geolocation coordinates tracking API support in mobile browser context",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 95
     },
     {
       "id": "T3-X07",
-      "featureId": 6,
+      "featureId": 25,
       "tier": 3,
-      "title": "Rider marks order delivered; backend updates canonical_orders to DELIVERED, records transaction in operational_ledgers",
-      "classification": "AUTOMATED",
+      "title": "Franchise app dev server renders on port 5175 with mobile layout",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 314
     },
     {
       "id": "T3-X08",
-      "featureId": 21,
+      "featureId": 2,
       "tier": 3,
-      "title": "Restaurant Manager sends in-band auth, disconnects, reconnects with sync_request, and receives missed order events",
+      "title": "Live backend /health endpoint reports connected PostgreSQL database within 3000ms",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 81
     },
     {
       "id": "T3-X09",
-      "featureId": 23,
+      "featureId": 11,
       "tier": 3,
-      "title": "POS terminal places walk-in cash order, acquires print lock, prints 80mm thermal receipt, and updates branch inventory",
-      "classification": "AUTOMATED",
+      "title": "Customer app renders accessible HTML elements alongside WebGL canvas",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1023
     },
     {
       "id": "T3-X10",
-      "featureId": 25,
+      "featureId": 23,
       "tier": 3,
-      "title": "Franchise manager for fra_rajnandgaon accesses dashboard; API strictly restricts returned orders to fra_rajnandgaon",
-      "classification": "AUTOMATED",
+      "title": "POS application renders billing interface on port 5178",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 1006
     },
     {
       "id": "T3-X11",
       "featureId": 18,
       "tier": 3,
-      "title": "Customer closes tab mid-transaction; payment succeeds in sandbox; customer visits /recheck-order and session recovers",
+      "title": "Backend idempotency middleware intercepts duplicate requests with identical payload",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 68771
     },
     {
       "id": "T3-X12",
-      "featureId": 14,
+      "featureId": 8,
       "tier": 3,
-      "title": "Customer applies WELCOME50 coupon and address 6.5 km from store; backend recalculates subtotal, discount, fee, and 5% GST",
+      "title": "POST /api/phone/send-otp and /api/phone/verify-otp verify phone number in development mode",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 227
     },
     {
       "id": "T3-X13",
-      "featureId": 20,
+      "featureId": 6,
       "tier": 3,
-      "title": "Master owner logs in, registers wildcard branch listener, and observes real-time order events from multiple branches",
+      "title": "Authoritative cart bootstrap provides statutory 5% GST and standard packaging fee",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 14526
     },
     {
       "id": "T3-X14",
-      "featureId": 23,
+      "featureId": 26,
       "tier": 3,
-      "title": "POS operates offline with 5 provisional orders in IndexedDB; network reconnects; sync engine flushes to backend with permanent bill numbers",
-      "classification": "AUTOMATED",
+      "title": "Restaurant Manager DOM renders audio unlock trigger or root container",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 596
     },
     {
       "id": "T3-X15",
-      "featureId": 26,
+      "featureId": 24,
       "tier": 3,
-      "title": "Browser blocks audio on page load; user clicks Enable Audio banner; subsequent incoming order triggers audible playback without error",
+      "title": "Verify customer call action telephone protocol (tel:) format is valid",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 11
     },
     {
       "id": "T3-X16",
-      "featureId": 11,
+      "featureId": 28,
       "tier": 3,
-      "title": "Triggering WEBGL_lose_context on /product/:id seamlessly transitions to 2.5D CSS tilt, allowing customization and add to cart",
-      "classification": "AUTOMATED",
+      "title": "Verify independent localStorage isolation across localhost origins (3000 vs 5176)",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 89
     },
     {
       "id": "T3-X17",
-      "featureId": 29,
+      "featureId": 28,
       "tier": 3,
-      "title": "Capacitor Customer app on Samsung Galaxy S21 FE communicates with localhost backend API",
-      "classification": "PHYSICAL PHONE",
+      "title": "Verify backend CORS headers allow requests from Customer app (:3000)",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 3728
+      "durationMs": 34
     },
     {
       "id": "T3-X18",
-      "featureId": 24,
+      "featureId": 30,
       "tier": 3,
-      "title": "Rider app loses signal; GPS points buffer in SQLite; network restores; buffered coordinates flush to Redis location stream preserving timestamps",
+      "title": "Adversarial SQL injection probe in menu category query is properly escaped",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 841
     },
     {
       "id": "T3-X19",
-      "featureId": 6,
+      "featureId": 30,
       "tier": 3,
-      "title": "Customer selects COD; order delivered; POS cashier records cash settlement; financial ledger records cash collected",
+      "title": "Adversarial XSS payload in phone field is rejected with HTTP 400",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 28
     },
     {
       "id": "T3-X20",
-      "featureId": 17,
+      "featureId": 30,
       "tier": 3,
-      "title": "Manager rejects order; backend triggers payment refund via Mock sandbox, updates payment to REFUNDED, enqueues order.cancelled",
+      "title": "Adversarial tampered JWT token with alg: none is rejected with HTTP 401",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 18
     },
     {
       "id": "T3-X21",
       "featureId": 28,
       "tier": 3,
-      "title": "Customer web on localhost :3000 and physical phone app place orders concurrently; sequential bill numbers allocated without race condition",
-      "classification": "AUTOMATED",
+      "title": "Verify zero port collision across all 7 platform applications",
+      "classification": "LOCALHOST BROWSER",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 3
     },
     {
       "id": "T4-SCN-01",
@@ -3028,7 +3037,7 @@
       "title": "The Gourmet Customer Digital Order (Complete Happy Path Customer-to-Delivery)",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 68847
     },
     {
       "id": "T4-SCN-02",
@@ -3037,79 +3046,79 @@
       "title": "Payment Gateway Decline & Alternate Payment Recovery",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 57640
     },
     {
       "id": "T4-SCN-03",
-      "featureId": 17,
+      "featureId": 14,
       "tier": 4,
-      "title": "Item Out of Stock & Manager Kitchen Rejection with Automated Refund",
+      "title": "Dine-In QR Table Ordering to Kitchen Display",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 27322
     },
     {
       "id": "T4-SCN-04",
-      "featureId": 23,
+      "featureId": 6,
       "tier": 4,
-      "title": "POS Offline Rush Hour Billing & Cloud Sync to PostgreSQL",
+      "title": "Midnight Kitchen Rush: Concurrency & Order Sequencer",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 231
     },
     {
       "id": "T4-SCN-05",
-      "featureId": 14,
+      "featureId": 4,
       "tier": 4,
-      "title": "Dynamic Geofencing Boundary Violation & Store Pickup Handoff",
+      "title": "Franchise Out-of-Stock Item Mid-Cart Journey",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 42964
     },
     {
       "id": "T4-SCN-06",
-      "featureId": 24,
+      "featureId": 14,
       "tier": 4,
-      "title": "Rider Mid-Transit Breakdown & Saga Reassignment",
+      "title": "Coupon Hijack & Minimum Order Boundary Attempt",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 1
+      "durationMs": 34170
     },
     {
       "id": "T4-SCN-07",
-      "featureId": 25,
+      "featureId": 24,
       "tier": 4,
-      "title": "Concurrent Multi-Branch Peak Traffic with Zero Cross-Talk",
+      "title": "Network Loss During Real-Time Rider Tracking",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 131
     },
     {
       "id": "T4-SCN-08",
-      "featureId": 22,
+      "featureId": 23,
       "tier": 4,
-      "title": "Kitchen Terminal Reconnection with Ring Buffer Replay and Audible Catchup",
+      "title": "POS Offline Billing & Sync on Reconnect",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 144549
     },
     {
       "id": "T4-SCN-09",
-      "featureId": 26,
+      "featureId": 14,
       "tier": 4,
-      "title": "Mobile Browser Autoplay Unlocking & Sound Alert Verification",
+      "title": "Tampered Geofence Delivery Radius Exploitation",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 62353
     },
     {
       "id": "T4-SCN-10",
-      "featureId": 12,
+      "featureId": 28,
       "tier": 4,
-      "title": "Non-WebGL Mobile Device Full Purchase via 2.5D CSS Perspective Tilt",
+      "title": "Platform Crash Recovery: Multi-System Self-Healing",
       "classification": "AUTOMATED",
       "status": "PASS",
-      "durationMs": 0
+      "durationMs": 73
     }
   ]
 }

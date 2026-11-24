@@ -39,9 +39,13 @@ export class AdbController {
   }
 
   private resolveAdbPath(): string {
-    const defaultLocalPath = 'C:\\Users\\RYZEN\\Downloads\\platform-tools\\adb.exe';
-    if (fs.existsSync(defaultLocalPath)) {
-      return defaultLocalPath;
+    const candidates = [
+      'C:\\Users\\RYZEN\\Downloads\\platform-tools\\adb.exe',
+      'C:\\Android\\platform-tools\\adb.exe',
+      'adb',
+    ];
+    for (const p of candidates) {
+      if (fs.existsSync(p)) return p;
     }
     return 'adb';
   }
@@ -130,6 +134,40 @@ export class AdbController {
     } catch {
       return false;
     }
+  }
+
+  /**
+   * Queries device model via ro.product.model
+   */
+  public getDeviceModel(serial: string): string {
+    const out = this.exec(`-s ${serial} shell getprop ro.product.model`, 2000).trim();
+    if (!out || out.includes('error') || out.includes('device offline')) {
+      throw new DeviceOfflineError(`Device ${serial} dropped offline while querying model`);
+    }
+    return out;
+  }
+
+  /**
+   * Queries Android release version via ro.build.version.release
+   */
+  public getAndroidVersion(serial: string): string {
+    const out = this.exec(`-s ${serial} shell getprop ro.build.version.release`, 2000).trim();
+    if (!out || out.includes('error') || out.includes('device offline')) {
+      throw new DeviceOfflineError(`Device ${serial} dropped offline while querying Android version`);
+    }
+    return out;
+  }
+
+  /**
+   * Queries battery percentage via dumpsys battery
+   */
+  public getBatteryLevel(serial: string): number {
+    const out = this.exec(`-s ${serial} shell dumpsys battery`, 2000).trim();
+    if (!out || out.includes('error') || out.includes('device offline')) {
+      throw new DeviceOfflineError(`Device ${serial} dropped offline while querying battery`);
+    }
+    const match = out.match(/level:\s*(\d+)/i);
+    return match ? parseInt(match[1], 10) : 100;
   }
 
   /**
