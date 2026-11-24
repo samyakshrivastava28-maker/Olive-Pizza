@@ -431,6 +431,50 @@ export default function Checkout() {
       effectivePayment = 'cod';
       setSelectedPayment('cod');
     }
+
+    // Dedicated Online Payment Page Routing for non-COD payment flows
+    if (effectivePayment !== 'cod') {
+      const orderDraftId = `ord_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+      const cachedContext = OrderingContextService.getCachedContext();
+      const orderContext = {
+        orderId: orderDraftId,
+        serverValidatedAmount: finalTotal,
+        itemCount: items.reduce((sum, item) => sum + (item.quantity || 1), 0),
+        itemTotal: total,
+        discountAmount: discountAmount || 0,
+        deliveryFee: deliveryFee || 0,
+        taxes: taxes || 0,
+        finalTotal: finalTotal,
+        paymentMethod: effectivePayment,
+        paymentMethodLabel: effectivePayment.toUpperCase(),
+        items: items.map(item => ({
+          menuItemId: item.id || (item as any).menuItemId,
+          name: item.name,
+          quantity: item.quantity,
+          price: item.price,
+          size: item.variant || item.size || 'regular',
+          crust: item.crust || 'normal',
+          image: item.image || '',
+          addons: (item as any).addons || []
+        })),
+        deliveryAddress: deliveryType === 'delivery' ? address : 'Pickup',
+        deliveryType,
+        addressDetails: { houseNumber, apartment, landmark, instructions },
+        location: mapCenter,
+        couponCode: appliedPromo?.code || null,
+        customerName: auth.currentUser?.displayName || (user as any)?.name || 'Gourmet Customer',
+        customerPhone: auth.currentUser?.phoneNumber || (user as any)?.phone || '9999999999',
+        customerEmail: auth.currentUser?.email || (user as any)?.email || '',
+        currency: 'INR',
+        franchiseId: cachedContext?.franchiseId || (useCartStore.getState() as any).franchiseId || undefined,
+        branchId: cachedContext?.branchId || undefined
+      };
+
+      navigate('/online-payment', {
+        state: { orderContext }
+      });
+      return;
+    }
     
     navigate('/processing-order', {
       state: {

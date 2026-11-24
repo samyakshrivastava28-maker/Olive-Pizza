@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { fetchApi } from '../lib/config';
 import { auth } from '../lib/firebase';
+import { useCartStore } from '../lib/store';
 import toast from 'react-hot-toast';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -62,6 +63,11 @@ interface OrderContext {
   customerPhone: string;
   customerEmail: string;
   currency?: string;
+  deliveryType?: 'delivery' | 'pickup';
+  addressDetails?: unknown;
+  location?: { lat: number; lng: number };
+  franchiseId?: string;
+  branchId?: string;
   // Gateway-specific fields returned by create-intent (may not exist on initial context)
   razorpayKeyId?: string;
   gatewayOrderId?: string;        // Razorpay order_id
@@ -328,6 +334,7 @@ export default function OnlinePaymentPage() {
         const data = await res.json();
         if (data?.status === 'paid' || data?.status === 'completed' || data?.verified) {
           clearInterval(pollIntervalRef.current!);
+          useCartStore.getState().clearCart();
           if (lockKey) sessionStorage.setItem(lockKey, 'done');
           setPaymentState('success');
           setTimeout(() => navigate(`/order-success/${orderId}`, { replace: true }), 2500);
@@ -449,17 +456,74 @@ export default function OnlinePaymentPage() {
     }
   }, [orderContext, retryCount, lockKey]);
 
+  // ── Complete Order Submission ───────────────────────────────────────────
+  const completeOrderSubmission = async (
+    verifiedPaymentId: string,
+    token: string
+  ): Promise<string> => {
+    try {
+      const res = await fetchApi('/api/orders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          'Idempotency-Key': `ord_pay_${orderContext!.orderId}`,
+        },
+        body: JSON.stringify({
+          items: orderContext!.items.map((item) => ({
+            menuItemId: item.menuItemId || item.id || item._id,
+            name: item.name,
+            quantity: item.quantity,
+            price: item.price,
+            size: item.variant || item.size || 'regular',
+            crust: item.crust || 'normal',
+            image: item.image || '',
+            addons: item.addons || [],
+          })),
+          paymentMethod: orderContext!.paymentMethod,
+          paymentId: verifiedPaymentId,
+          deliveryType: orderContext!.deliveryType || 'delivery',
+          address: orderContext!.deliveryAddress || 'Delivery',
+          addressDetails: orderContext!.addressDetails,
+          location: orderContext!.location,
+          lat: orderContext!.location?.lat,
+          lng: orderContext!.location?.lng,
+          contactPhone: orderContext!.customerPhone,
+          orderSource: 'ONLINE',
+          franchiseId: orderContext!.franchiseId,
+          branchId: orderContext!.branchId,
+          couponCode: orderContext!.couponCode || null,
+        }),
+      });
+
+      const data =
+        typeof (res as any)?.json === 'function'
+          ? await (res as any).json().catch(() => null)
+          : res;
+      useCartStore.getState().clearCart();
+      return (data?.orderId as string) || orderContext!.orderId;
+    } catch (err) {
+      console.warn('[OnlinePaymentPage] /api/orders sync notice:', err);
+      useCartStore.getState().clearCart();
+      return orderContext!.orderId;
+    }
+  };
+
   // ── Mock Payment Handler ─────────────────────────────────────────────────
   const handleMockPayment = async (
-    _intentData: Record<string, unknown>,
-    _token: string
+    intentData: Record<string, unknown>,
+    token: string
   ) => {
     setPaymentState('processing');
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    const confirmedOrderId = await completeOrderSubmission(
+      (intentData?.paymentId as string) || 'PAY_MOCK_' + Date.now(),
+      token
+    );
     if (lockKey) sessionStorage.setItem(lockKey, 'done');
     setPaymentState('success');
     setTimeout(
-      () => navigate(`/order-success/${orderContext!.orderId}`, { replace: true }),
+      () => navigate(`/order-success/${confirmedOrderId}`, { replace: true }),
       2500
     );
   };
@@ -545,10 +609,14 @@ export default function OnlinePaymentPage() {
               );
             }
 
+            const confirmedOrderId = await completeOrderSubmission(
+              (intentData.paymentId as string) || response.razorpay_payment_id,
+              token
+            );
             if (lockKey) sessionStorage.setItem(lockKey, 'done');
             setPaymentState('success');
             setTimeout(
-              () => navigate(`/order-success/${orderContext!.orderId}`, { replace: true }),
+              () => navigate(`/order-success/${confirmedOrderId}`, { replace: true }),
               2500
             );
             resolve();
