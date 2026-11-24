@@ -122,13 +122,25 @@ export default function Aurora(props: any) {
 
     const prefersReducedMotion = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-    const renderer = new Renderer({
-      alpha: true,
-      premultipliedAlpha: true,
-      antialias: false,
-      dpr: Math.min(typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1, 1.5)
-    });
-    const gl = renderer.gl;
+    // WebGL capability guard to prevent white-screen crash on non-WebGL clients
+    let renderer: any;
+    let gl: any;
+    try {
+      const testCanvas = document.createElement('canvas');
+      const hasWebGL = Boolean(testCanvas.getContext('webgl2') || testCanvas.getContext('webgl'));
+      if (!hasWebGL) return;
+
+      renderer = new Renderer({
+        alpha: true,
+        premultipliedAlpha: true,
+        antialias: false,
+        dpr: Math.min(typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1, 1.5)
+      });
+      gl = renderer.gl;
+      if (!gl) return;
+    } catch {
+      return; // Fallback gracefully if WebGL fails
+    }
     gl.clearColor(0, 0, 0, 0);
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);

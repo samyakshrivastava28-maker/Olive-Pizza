@@ -198,7 +198,7 @@ export default function Cart() {
 
   const subtotal = total;
   const couponDiscount = appliedCoupon ? appliedCoupon.discount : 0;
-  const deliveryFee = 30;
+  const deliveryFee = subtotal >= 500 ? 0 : 40;
   const taxes = Math.round(subtotal * 0.05);
   const finalTotal = Math.max(0, subtotal - couponDiscount) + deliveryFee + taxes;
 

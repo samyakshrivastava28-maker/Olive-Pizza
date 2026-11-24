@@ -124,7 +124,13 @@ export default function ProductScene3D({
 
       // ── Renderer ──────────────────────────────────────────────────────────
       let renderer: import("three").WebGLRenderer;
+      const handleContextLost = (event: Event) => {
+        event.preventDefault();
+        if (!cancelled) setWebGLFailed(true);
+      };
+
       try {
+        canvas.addEventListener("webglcontextlost", handleContextLost);
         renderer = new THREE.WebGLRenderer({
           canvas,
           antialias: true,
@@ -160,6 +166,7 @@ export default function ProductScene3D({
 
       if (cancelled) {
         texture?.dispose();
+        canvas.removeEventListener("webglcontextlost", handleContextLost);
         renderer.dispose();
         return;
       }
@@ -179,7 +186,7 @@ export default function ProductScene3D({
             vUv = uv;
             vec4 worldPos = modelMatrix * vec4(position, 1.0);
             vViewDir = normalize(cameraPosition - worldPos.xyz);
-            vNormal = normalize(normalMatrix * normal);
+            vNormal = normalize((modelMatrix * vec4(normal, 0.0)).xyz);
             gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
           }
         `,

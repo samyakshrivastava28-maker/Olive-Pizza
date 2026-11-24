@@ -87,16 +87,16 @@ export default function ProductDetail() {
         if (data) {
           const productData: MenuItem = {
             id: data.id,
-            name: isCombo ? data.name : data.productName,
+            name: isCombo ? (data.name || data.productName || "Special Combo") : (data.name || data.productName || "Gourmet Pizza"),
             description: data.description,
             category: isCombo ? "combo" : data.category,
             pricingMode: data.pricingMode || "fixed",
             basePrice: data.basePrice,
             offerPrice: data.offerPrice || 0,
             discountPercentage: data.discountPercentage || 0,
-            image: data.imageUrl,
+            image: data.image || data.imageUrl || "/images/pizza-placeholder.webp",
             isVegetarian: isCombo ? false : data.isVegetarian,
-            isAvailable: data.isActive,
+            isAvailable: data.isAvailable !== undefined ? Boolean(data.isAvailable) : (data.isActive !== undefined ? Boolean(data.isActive) : true),
             productIds: data.productIds,
             variants: isCombo
               ? []
@@ -128,7 +128,7 @@ export default function ProductDetail() {
               ? [
                   { name: "Extra Cheese", price: 40 },
                   { name: "Black Olives", price: 30 },
-                  { name: "JalapeÃ±os", price: 30 },
+                  { name: "Jalape�os", price: 30 },
                   { name: "Sweet Corn", price: 20 },
                   { name: "Paneer", price: 50 },
                 ]
@@ -254,7 +254,7 @@ export default function ProductDetail() {
         addons: selectedAddOns,
       });
 
-      toast.success("Added to Cart!", { icon: "âœ¨" });
+      toast.success("Added to Cart!", { icon: "?" });
     });
 
     setTimeout(() => {
@@ -266,7 +266,7 @@ export default function ProductDetail() {
   if (notFound) {
     return (
       <NotFound 
-        title="Oops! This item got lost in the oven. ðŸ•"
+        title="Oops! This item got lost in the oven. ??"
         subtitle="The pizza, combo, or treat you're looking for doesn't exist, may have been retired, or is temporarily off our menu."
         isProductNotFound={true}
       />
@@ -326,11 +326,11 @@ export default function ProductDetail() {
             <div className="absolute top-6 left-6 z-20 flex gap-2">
               <span className="text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-md border shadow-xs backdrop-blur-md bg-dark-950/70">
                 {item.category === "combo" ? (
-                  <span className="text-champagne border-champagne/30">COMBO ðŸš€</span>
+                  <span className="text-champagne border-champagne/30">COMBO ??</span>
                 ) : item.isVegetarian ? (
-                  <span className="text-emerald-400 border-emerald-500/30">VEG ðŸŒ¿</span>
+                  <span className="text-emerald-400 border-emerald-500/30">VEG ??</span>
                 ) : (
-                  <span className="text-rose-400 border-rose-500/30">NON-VEG ðŸ—</span>
+                  <span className="text-rose-400 border-rose-500/30">NON-VEG ??</span>
                 )}
               </span>
             </div>
@@ -387,7 +387,7 @@ export default function ProductDetail() {
                   {item.category?.toUpperCase() || "PIZZA"}
                 </span>
                 <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
-                  Wood-Fired 450Â°C
+                  Wood-Fired 450�C
                 </span>
               </div>
               <h1 className="text-3xl lg:text-4xl font-black text-slate-900 tracking-tight">
@@ -431,7 +431,7 @@ export default function ProductDetail() {
                           }`}
                           style={{ width: circleSize, height: circleSize }}
                         >
-                          <span style={{ fontSize: circleSize * 0.5 }}>ðŸ•</span>
+                          <span style={{ fontSize: circleSize * 0.5 }}>??</span>
                         </motion.div>
 
                         <span className="text-xs leading-none">{v.name}</span>
@@ -442,7 +442,7 @@ export default function ProductDetail() {
                           <span className={`text-[10px] font-black ${
                             isActive ? 'text-champagne' : 'text-primary-700'
                           }`}>
-                            +â‚¹{v.price}
+                            +?{v.price}
                           </span>
                         )}
 
@@ -478,7 +478,7 @@ export default function ProductDetail() {
                     >
                       <span className="text-xs sm:text-sm">{c.name}</span>
                       {c.price > 0 && (
-                        <span className="text-xs text-primary-700 font-black">+â‚¹{c.price}</span>
+                        <span className="text-xs text-primary-700 font-black">+?{c.price}</span>
                       )}
                     </button>
                   ))}
@@ -526,7 +526,7 @@ export default function ProductDetail() {
                         </div>
                         <span>{addon.name}</span>
                         <span className="text-[10px] text-slate-500">
-                          +â‚¹{addon.price}
+                          +?{addon.price}
                         </span>
                       </button>
                     );
@@ -542,14 +542,14 @@ export default function ProductDetail() {
               <div className="flex flex-col">
                 {item.discountPercentage && item.discountPercentage > 0 ? (
                   <>
-                    <span className="text-xs text-slate-400 line-through font-medium">â‚¹{item.basePrice}</span>
+                    <span className="text-xs text-slate-400 line-through font-medium">?{item.basePrice}</span>
                     <span className="text-2xl md:text-4xl font-black text-primary-700 tracking-tight">
-                      â‚¹{calculateTotal()}
+                      ?{calculateTotal()}
                     </span>
                   </>
                 ) : (
                   <span className="text-2xl md:text-4xl font-black text-primary-700 tracking-tight">
-                    â‚¹{calculateTotal()}
+                    ?{calculateTotal()}
                   </span>
                 )}
               </div>

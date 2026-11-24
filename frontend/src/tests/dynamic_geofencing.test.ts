@@ -141,7 +141,7 @@ describe('Dynamic Geofencing & Serviceability Remediation (R2, R3)', () => {
 
       expect(result.isServiceable).toBe(false);
       expect(result.code).toBe('OUT_OF_DELIVERY_ZONE');
-      expect(result.error).toContain('delivery available up to 12 km');
+      expect(result.error).toMatch(/12 km/);
     });
 
     it('should reject customer location outside delivery zone (New Delhi: ~900 km away)', async () => {

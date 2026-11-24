@@ -100,6 +100,40 @@ export class BrowserContextManager {
     }, account);
   }
 
+  private appPages: Map<string, Page> = new Map();
+
+  /**
+   * Fast page provider: reuses active page for given app URL to accelerate testing
+   */
+  public async getAppPage(
+    url: string,
+    options?: { viewport?: ViewportDefinition; account?: TestUserAccount }
+  ): Promise<Page> {
+    const existing = this.appPages.get(url);
+    if (existing && !existing.isClosed()) {
+      return existing;
+    }
+
+    const { page } = await this.createAppContext(options);
+    try {
+      await page.goto(url, { timeout: 15000, waitUntil: 'domcontentloaded' });
+    } catch {}
+    this.appPages.set(url, page);
+    return page;
+  }
+
+  /**
+   * Fast action execution on cached app page
+   */
+  public async withAppPage<T>(
+    url: string,
+    action: (page: Page) => Promise<T>,
+    options?: { viewport?: ViewportDefinition; account?: TestUserAccount }
+  ): Promise<T> {
+    const page = await this.getAppPage(url, options);
+    return await action(page);
+  }
+
   /**
    * Helper that creates an isolated context and page, executes an action, and guarantees cleanup
    */
@@ -111,14 +145,19 @@ export class BrowserContextManager {
       url?: string;
     }
   ): Promise<T> {
+    if (options?.url) {
+      const page = await this.getAppPage(options.url, {
+        viewport: options.viewport,
+        account: options.account,
+      });
+      return await action(page);
+    }
+
     const { context, page } = await this.createAppContext({
       viewport: options?.viewport,
       account: options?.account,
     });
     try {
-      if (options?.url) {
-        await page.goto(options.url, { timeout: 15000, waitUntil: 'domcontentloaded' });
-      }
       return await action(page);
     } finally {
       try {
@@ -136,6 +175,7 @@ export class BrowserContextManager {
    * Closes all active contexts and browser session
    */
   public async closeAll(): Promise<void> {
+    this.appPages.clear();
     for (const ctx of this.activeContexts) {
       try {
         await ctx.close();

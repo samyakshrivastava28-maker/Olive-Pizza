@@ -40,13 +40,17 @@ export default memo(function ProductCard({
       ? Math.round(item.basePrice * (1 - appliedDiscount / 100))
       : item.basePrice;
 
-  const handleCardClick = () => {
-    if (item.isAvailable) {
-      if (onOpenCustomization) {
-        onOpenCustomization(item);
-      } else {
-        navigate(`/product/${item.id}`);
+  const productId = item.id || (item as any).productId || (item as any)._id;
+
+  const handleCardClick = (e?: React.MouseEvent) => {
+    if (e) {
+      const target = e.target as HTMLElement;
+      if (target.closest('button') || target.closest('[data-no-nav="true"]')) {
+        return;
       }
+    }
+    if (item.isAvailable && productId) {
+      navigate(`/product/${productId}`);
     }
   };
 
@@ -131,7 +135,7 @@ export default memo(function ProductCard({
       transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
       onClick={handleCardClick}
       data-product-card="true"
-      id={`product-card-${item.id}`}
+      id={`product-card-${productId}`}
       className={`rounded-2xl md:rounded-3xl bg-white border border-[#F8E7C9]/80 shadow-[0_4px_20px_rgba(6,78,59,0.06)] hover:shadow-[0_12px_28px_rgba(6,78,59,0.12)] hover:border-primary-600/40 overflow-hidden flex flex-col relative transition-all duration-300 group cursor-pointer ${
         !item.isAvailable ? 'opacity-65 grayscale cursor-not-allowed' : ''
       }`}

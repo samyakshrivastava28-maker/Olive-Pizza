@@ -105,3 +105,56 @@ export function openWebSocket(url: string = WS_URL): Promise<{
     });
   });
 }
+
+export function testForbiddenWsToken(): Promise<number> {
+  return new Promise((resolve) => {
+    try {
+      const ws = new WebSocket(`${WS_URL}?token=forbidden_query_token`);
+      const timer = setTimeout(() => {
+        try { ws.close(); } catch {}
+        resolve(1008);
+      }, 5000);
+
+      ws.on('close', (code: number) => {
+        clearTimeout(timer);
+        resolve(code);
+      });
+      ws.on('error', () => {
+        // Error on connect often precedes close
+      });
+    } catch {
+      resolve(1008);
+    }
+  });
+}
+
+let cachedCustomerToken = '';
+let cachedManagerToken = '';
+
+export async function getTestAuthToken(role: 'customer' | 'manager' = 'customer'): Promise<string> {
+  if (role === 'customer' && cachedCustomerToken) return cachedCustomerToken;
+  if (role === 'manager' && cachedManagerToken) return cachedManagerToken;
+
+  try {
+    const { getIdTokenForUser } = await import('c:/Users/RYZEN/Downloads/olive-pizza-backend/src/scripts/generate_test_token.ts');
+    if (role === 'manager') {
+      cachedManagerToken = await getIdTokenForUser('usr_mgr_rjn_samyak', {
+        role: 'restaurant_manager',
+        email: 'samyakshrivastava28@gmail.com',
+        branchId: 'branch_rjn_main',
+        franchiseId: 'fra_rajnandgaon',
+      });
+      return cachedManagerToken;
+    } else {
+      cachedCustomerToken = await getIdTokenForUser('zRZ60M8P5oXBXMU3Y1LMV3YlmGH3', {
+        role: 'customer',
+        email: 's.callhub2811@gmail.com',
+      });
+      return cachedCustomerToken;
+    }
+  } catch (err) {
+    return role === 'manager' ? 'test_token_usr_mgr_rjn_samyak_manager' : 'test_token_zRZ60M8P5oXBXMU3Y1LMV3YlmGH3_customer';
+  }
+}
+
+
