@@ -122,103 +122,112 @@ export default function Aurora(props: any) {
 
     const prefersReducedMotion = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-    // WebGL capability guard to prevent white-screen crash on non-WebGL clients
-    let renderer: any;
-    let gl: any;
+    let animateId = 0;
+    let onVisibilityChange: (() => void) | null = null;
+    let resize: (() => void) | null = null;
+    let gl: any = null;
+
     try {
       const testCanvas = document.createElement('canvas');
-      const hasWebGL = Boolean(testCanvas.getContext('webgl2') || testCanvas.getContext('webgl'));
+      const hasWebGL = Boolean(
+        typeof window !== 'undefined' &&
+        window.WebGLRenderingContext &&
+        (testCanvas.getContext('webgl2') || testCanvas.getContext('webgl') || testCanvas.getContext('experimental-webgl'))
+      );
       if (!hasWebGL) return;
 
-      renderer = new Renderer({
+      const renderer = new Renderer({
         alpha: true,
         premultipliedAlpha: true,
         antialias: false,
         dpr: Math.min(typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1, 1.5)
       });
       gl = renderer.gl;
-      if (!gl) return;
-    } catch {
-      return; // Fallback gracefully if WebGL fails
-    }
-    gl.clearColor(0, 0, 0, 0);
-    gl.enable(gl.BLEND);
-    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-    gl.canvas.style.backgroundColor = 'transparent';
+      if (!gl || !gl.canvas) return;
 
-    let program: any;
+      gl.clearColor(0, 0, 0, 0);
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+      gl.canvas.style.backgroundColor = 'transparent';
 
-    function resize() {
-      if (!ctn) return;
-      const width = ctn.offsetWidth;
-      const height = ctn.offsetHeight;
-      renderer.setSize(width, height);
-      if (program) {
-        program.uniforms.uResolution.value = [width, height];
+      let program: any;
+
+      resize = () => {
+        if (!ctn) return;
+        const width = ctn.offsetWidth;
+        const height = ctn.offsetHeight;
+        renderer.setSize(width, height);
+        if (program) {
+          program.uniforms.uResolution.value = [width, height];
+        }
+      };
+      window.addEventListener('resize', resize);
+
+      const geometry = new Triangle(gl);
+      if (geometry.attributes.uv) {
+        delete geometry.attributes.uv;
       }
-    }
-    window.addEventListener('resize', resize);
 
-    const geometry = new Triangle(gl);
-    if (geometry.attributes.uv) {
-      delete geometry.attributes.uv;
-    }
-
-    const colorStopsArray = colorStops.map((hex: string) => {
-      const c = new Color(hex);
-      return [c.r, c.g, c.b];
-    });
-
-    program = new Program(gl, {
-      vertex: VERT,
-      fragment: FRAG,
-      uniforms: {
-        uTime: { value: 0 },
-        uAmplitude: { value: amplitude },
-        uColorStops: { value: colorStopsArray },
-        uResolution: { value: [ctn.offsetWidth, ctn.offsetHeight] },
-        uBlend: { value: blend }
-      }
-    });
-
-    const mesh = new Mesh(gl, { geometry, program });
-    ctn.appendChild(gl.canvas);
-
-    let animateId = 0;
-    let isTabVisible = !document.hidden;
-
-    const onVisibilityChange = () => {
-      isTabVisible = !document.hidden;
-    };
-    document.addEventListener('visibilitychange', onVisibilityChange);
-
-    const update = (t: number) => {
-      animateId = requestAnimationFrame(update);
-      if (!isTabVisible) return;
-
-      const { time = t * 0.01, speed = prefersReducedMotion ? 0.2 : 1.0 } = propsRef.current;
-      program.uniforms.uTime.value = time * speed * 0.1;
-      program.uniforms.uAmplitude.value = propsRef.current.amplitude ?? 1.0;
-      program.uniforms.uBlend.value = propsRef.current.blend ?? blend;
-      const stops = propsRef.current.colorStops ?? colorStops;
-      program.uniforms.uColorStops.value = stops.map((hex: string) => {
+      const colorStopsArray = colorStops.map((hex: string) => {
         const c = new Color(hex);
         return [c.r, c.g, c.b];
       });
-      renderer.render({ scene: mesh });
-    };
-    animateId = requestAnimationFrame(update);
 
-    resize();
+      program = new Program(gl, {
+        vertex: VERT,
+        fragment: FRAG,
+        uniforms: {
+          uTime: { value: 0 },
+          uAmplitude: { value: amplitude },
+          uColorStops: { value: colorStopsArray },
+          uResolution: { value: [ctn.offsetWidth, ctn.offsetHeight] },
+          uBlend: { value: blend }
+        }
+      });
+
+      const mesh = new Mesh(gl, { geometry, program });
+      ctn.appendChild(gl.canvas);
+
+      let isTabVisible = !document.hidden;
+
+      onVisibilityChange = () => {
+        isTabVisible = !document.hidden;
+      };
+      document.addEventListener('visibilitychange', onVisibilityChange);
+
+      const update = (t: number) => {
+        animateId = requestAnimationFrame(update);
+        if (!isTabVisible) return;
+
+        const { time = t * 0.01, speed = prefersReducedMotion ? 0.2 : 1.0 } = propsRef.current;
+        program.uniforms.uTime.value = time * speed * 0.1;
+        program.uniforms.uAmplitude.value = propsRef.current.amplitude ?? 1.0;
+        program.uniforms.uBlend.value = propsRef.current.blend ?? blend;
+        const stops = propsRef.current.colorStops ?? colorStops;
+        program.uniforms.uColorStops.value = stops.map((hex: string) => {
+          const c = new Color(hex);
+          return [c.r, c.g, c.b];
+        });
+        renderer.render({ scene: mesh });
+      };
+      animateId = requestAnimationFrame(update);
+
+      resize();
+    } catch (err) {
+      console.warn('Aurora: WebGL initialization skipped or failed:', err);
+      return;
+    }
 
     return () => {
-      cancelAnimationFrame(animateId);
-      window.removeEventListener('resize', resize);
-      document.removeEventListener('visibilitychange', onVisibilityChange);
-      if (ctn && gl.canvas.parentNode === ctn) {
+      if (animateId) cancelAnimationFrame(animateId);
+      if (resize) window.removeEventListener('resize', resize);
+      if (onVisibilityChange) document.removeEventListener('visibilitychange', onVisibilityChange);
+      if (ctn && gl?.canvas && gl.canvas.parentNode === ctn) {
         ctn.removeChild(gl.canvas);
       }
-      gl.getExtension('WEBGL_lose_context')?.loseContext();
+      try {
+        gl?.getExtension?.('WEBGL_lose_context')?.loseContext();
+      } catch {}
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [amplitude]);

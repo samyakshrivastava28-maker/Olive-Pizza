@@ -136,7 +136,7 @@ export async function getTestAuthToken(role: 'customer' | 'manager' = 'customer'
   if (role === 'manager' && cachedManagerToken) return cachedManagerToken;
 
   try {
-    const { getIdTokenForUser } = await import('c:/Users/RYZEN/Downloads/olive-pizza-backend/src/scripts/generate_test_token.ts');
+    const { getIdTokenForUser } = await import('file:///C:/Users/RYZEN/Downloads/olive-pizza-backend/src/scripts/generate_test_token.ts');
     if (role === 'manager') {
       cachedManagerToken = await getIdTokenForUser('usr_mgr_rjn_samyak', {
         role: 'restaurant_manager',
@@ -152,7 +152,8 @@ export async function getTestAuthToken(role: 'customer' | 'manager' = 'customer'
       });
       return cachedCustomerToken;
     }
-  } catch (err) {
+  } catch (err: any) {
+    console.warn('[getTestAuthToken] Error generating token:', err.message);
     return role === 'manager' ? 'test_token_usr_mgr_rjn_samyak_manager' : 'test_token_zRZ60M8P5oXBXMU3Y1LMV3YlmGH3_customer';
   }
 }

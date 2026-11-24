@@ -35,6 +35,54 @@ function ProductSkeleton() {
   );
 }
 
+const normalizeVariants = (variants: any[]): { name: string; price: number }[] => {
+  if (!Array.isArray(variants)) return [];
+  return variants.map((v, idx) => {
+    if (typeof v === "string") {
+      return { name: v, price: 0 };
+    }
+    if (v && typeof v === "object") {
+      return {
+        name: String(v.name || v.size || `Size ${idx + 1}`),
+        price: typeof v.price === "number" ? v.price : 0,
+      };
+    }
+    return { name: `Option ${idx + 1}`, price: 0 };
+  });
+};
+
+const normalizeCrusts = (crusts: any[]): { name: string; price: number }[] => {
+  if (!Array.isArray(crusts)) return [];
+  return crusts.map((cr, idx) => {
+    if (typeof cr === "string") {
+      return { name: cr, price: cr.toLowerCase().includes("cheese burst") ? 99 : 0 };
+    }
+    if (cr && typeof cr === "object") {
+      return {
+        name: String(cr.name || `Crust ${idx + 1}`),
+        price: typeof cr.price === "number" ? cr.price : 0,
+      };
+    }
+    return { name: `Crust ${idx + 1}`, price: 0 };
+  });
+};
+
+const normalizeAddons = (addons: any[]): { name: string; price: number }[] => {
+  if (!Array.isArray(addons)) return [];
+  return addons.map((a, idx) => {
+    if (typeof a === "string") {
+      return { name: a, price: 30 };
+    }
+    if (a && typeof a === "object") {
+      return {
+        name: String(a.name || `Topping ${idx + 1}`),
+        price: typeof a.price === "number" ? a.price : 0,
+      };
+    }
+    return { name: `Topping ${idx + 1}`, price: 0 };
+  });
+};
+
 export default function ProductDetail() {
   const { productId } = useParams();
   const navigate = useNavigate();
@@ -85,54 +133,66 @@ export default function ProductDetail() {
         }
 
         if (data) {
+          const isAvailable = data.isActive ?? data.isAvailable ?? true;
+          const name = isCombo
+            ? (data.name || "Special Combo")
+            : (data.productName || data.name || "Special Pizza");
+          const image = data.imageUrl || data.image || "";
+
+          const parsedVariants = isCombo
+            ? []
+            : (data.variants && data.variants.length > 0)
+            ? normalizeVariants(data.variants)
+            : data.category === 'pizza'
+            ? [
+                { name: "Regular", price: 0 },
+                { name: "Medium", price: 99 },
+                { name: "Large", price: 199 },
+              ]
+            : [];
+
+          const parsedCrusts = isCombo
+            ? []
+            : data.category === 'pizza'
+            ? (data.crusts && data.crusts.length > 0)
+              ? normalizeCrusts(data.crusts)
+              : [
+                  { name: "Classic Hand Tossed", price: 0 },
+                  { name: "Cheese Burst", price: 99 },
+                  { name: "Wheat Thin Crust", price: 49 },
+                ]
+            : [];
+
+          const parsedAddons = isCombo
+            ? []
+            : (data.addons && data.addons.length > 0)
+            ? normalizeAddons(data.addons)
+            : data.category === 'pizza'
+            ? [
+                { name: "Extra Cheese", price: 40 },
+                { name: "Black Olives", price: 30 },
+                { name: "Jalapeños", price: 30 },
+                { name: "Sweet Corn", price: 20 },
+                { name: "Paneer", price: 50 },
+              ]
+            : [];
+
           const productData: MenuItem = {
             id: data.id,
-            name: isCombo ? (data.name || data.productName || "Special Combo") : (data.name || data.productName || "Gourmet Pizza"),
-            description: data.description,
-            category: isCombo ? "combo" : data.category,
+            name,
+            description: data.description || "",
+            category: isCombo ? "combo" : (data.category || "pizza"),
             pricingMode: data.pricingMode || "fixed",
-            basePrice: data.basePrice,
+            basePrice: data.basePrice || 0,
             offerPrice: data.offerPrice || 0,
             discountPercentage: data.discountPercentage || 0,
-            image: data.image || data.imageUrl || "/images/pizza-placeholder.webp",
-            isVegetarian: isCombo ? false : data.isVegetarian,
-            isAvailable: data.isAvailable !== undefined ? Boolean(data.isAvailable) : (data.isActive !== undefined ? Boolean(data.isActive) : true),
+            image: image || "/images/pizza-placeholder.webp",
+            isVegetarian: isCombo ? false : (data.isVegetarian !== undefined ? Boolean(data.isVegetarian) : true),
+            isAvailable: Boolean(isAvailable),
             productIds: data.productIds,
-            variants: isCombo
-              ? []
-              : (data.variants && data.variants.length > 0)
-              ? data.variants
-              : data.category === 'pizza'
-              ? [
-                  { name: "Regular", price: 0 },
-                  { name: "Medium", price: 99 },
-                  { name: "Large", price: 199 },
-                ]
-              : [],
-            crusts: isCombo
-              ? []
-              : data.category === 'pizza'
-              ? (data.crusts && data.crusts.length > 0)
-                ? data.crusts.map((cr: any) => typeof cr === 'string' ? { name: cr, price: cr.toLowerCase().includes('cheese burst') ? 60 : 0 } : cr)
-                : [
-                    { name: "Classic Hand Tossed", price: 0 },
-                    { name: "Cheese Burst", price: 99 },
-                    { name: "Wheat Thin Crust", price: 49 },
-                  ]
-              : [],
-            addons: isCombo
-              ? []
-              : (data.addons && data.addons.length > 0)
-              ? data.addons
-              : data.category === 'pizza'
-              ? [
-                  { name: "Extra Cheese", price: 40 },
-                  { name: "Black Olives", price: 30 },
-                  { name: "Jalape�os", price: 30 },
-                  { name: "Sweet Corn", price: 20 },
-                  { name: "Paneer", price: 50 },
-                ]
-              : [],
+            variants: parsedVariants,
+            crusts: parsedCrusts,
+            addons: parsedAddons,
           };
           setItem(productData);
 
@@ -254,7 +314,7 @@ export default function ProductDetail() {
         addons: selectedAddOns,
       });
 
-      toast.success("Added to Cart!", { icon: "?" });
+      toast.success("Added to Cart!", { icon: "🍕" });
     });
 
     setTimeout(() => {
@@ -266,7 +326,7 @@ export default function ProductDetail() {
   if (notFound) {
     return (
       <NotFound 
-        title="Oops! This item got lost in the oven. ??"
+        title="Oops! This item got lost in the oven. 🍕"
         subtitle="The pizza, combo, or treat you're looking for doesn't exist, may have been retired, or is temporarily off our menu."
         isProductNotFound={true}
       />
@@ -326,11 +386,11 @@ export default function ProductDetail() {
             <div className="absolute top-6 left-6 z-20 flex gap-2">
               <span className="text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-md border shadow-xs backdrop-blur-md bg-dark-950/70">
                 {item.category === "combo" ? (
-                  <span className="text-champagne border-champagne/30">COMBO ??</span>
+                  <span className="text-champagne border-champagne/30">COMBO ✨</span>
                 ) : item.isVegetarian ? (
-                  <span className="text-emerald-400 border-emerald-500/30">VEG ??</span>
+                  <span className="text-emerald-400 border-emerald-500/30">VEG 🌿</span>
                 ) : (
-                  <span className="text-rose-400 border-rose-500/30">NON-VEG ??</span>
+                  <span className="text-rose-400 border-rose-500/30">NON-VEG 🍗</span>
                 )}
               </span>
             </div>
@@ -387,7 +447,7 @@ export default function ProductDetail() {
                   {item.category?.toUpperCase() || "PIZZA"}
                 </span>
                 <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
-                  Wood-Fired 450�C
+                  Wood-Fired 450°C
                 </span>
               </div>
               <h1 className="text-3xl lg:text-4xl font-black text-slate-900 tracking-tight">
@@ -413,7 +473,7 @@ export default function ProductDetail() {
                     const diameter = SIZE_DIAMETERS[vi] || `${8 + vi * 2}"`;
                     return (
                       <motion.button
-                        key={v.name}
+                        key={`${v.name}-${vi}`}
                         onClick={() => setSelectedSize(v.name)}
                         whileTap={{ scale: 0.93 }}
                         whileHover={{ scale: 1.04 }}
@@ -431,7 +491,7 @@ export default function ProductDetail() {
                           }`}
                           style={{ width: circleSize, height: circleSize }}
                         >
-                          <span style={{ fontSize: circleSize * 0.5 }}>??</span>
+                          <span style={{ fontSize: circleSize * 0.5 }}>🍕</span>
                         </motion.div>
 
                         <span className="text-xs leading-none">{v.name}</span>
@@ -442,7 +502,7 @@ export default function ProductDetail() {
                           <span className={`text-[10px] font-black ${
                             isActive ? 'text-champagne' : 'text-primary-700'
                           }`}>
-                            +?{v.price}
+                            +₹{v.price}
                           </span>
                         )}
 
@@ -466,9 +526,9 @@ export default function ProductDetail() {
                   2. Choose Crust
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  {item.crusts.map((c) => (
+                  {item.crusts.map((c, ci) => (
                     <button
-                      key={c.name}
+                      key={`${c.name}-${ci}`}
                       onClick={() => setSelectedCrust(c.name)}
                       className={`flex items-center justify-between px-4 py-3.5 rounded-2xl font-bold transition-all duration-200 text-left cursor-pointer ${
                         selectedCrust === c.name
@@ -478,7 +538,7 @@ export default function ProductDetail() {
                     >
                       <span className="text-xs sm:text-sm">{c.name}</span>
                       {c.price > 0 && (
-                        <span className="text-xs text-primary-700 font-black">+?{c.price}</span>
+                        <span className="text-xs text-primary-700 font-black">+₹{c.price}</span>
                       )}
                     </button>
                   ))}
@@ -493,11 +553,11 @@ export default function ProductDetail() {
                   3. Extra Toppings
                 </h3>
                 <div className="flex flex-wrap gap-2">
-                  {item.addons.map((addon) => {
+                  {item.addons.map((addon, ai) => {
                     const isSelected = selectedAddOns.includes(addon.name);
                     return (
                       <button
-                        key={addon.name}
+                        key={`${addon.name}-${ai}`}
                         onClick={() => toggleAddOn(addon.name)}
                         className={`flex items-center gap-2 px-3.5 py-2 rounded-full font-bold text-xs transition-all duration-200 cursor-pointer ${
                           isSelected
@@ -526,7 +586,7 @@ export default function ProductDetail() {
                         </div>
                         <span>{addon.name}</span>
                         <span className="text-[10px] text-slate-500">
-                          +?{addon.price}
+                          +₹{addon.price}
                         </span>
                       </button>
                     );
@@ -542,14 +602,14 @@ export default function ProductDetail() {
               <div className="flex flex-col">
                 {item.discountPercentage && item.discountPercentage > 0 ? (
                   <>
-                    <span className="text-xs text-slate-400 line-through font-medium">?{item.basePrice}</span>
+                    <span className="text-xs text-slate-400 line-through font-medium">₹{item.basePrice}</span>
                     <span className="text-2xl md:text-4xl font-black text-primary-700 tracking-tight">
-                      ?{calculateTotal()}
+                      ₹{calculateTotal()}
                     </span>
                   </>
                 ) : (
                   <span className="text-2xl md:text-4xl font-black text-primary-700 tracking-tight">
-                    ?{calculateTotal()}
+                    ₹{calculateTotal()}
                   </span>
                 )}
               </div>

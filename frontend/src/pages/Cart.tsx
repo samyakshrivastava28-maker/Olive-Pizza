@@ -169,9 +169,12 @@ export default function Cart() {
     }
 
     const now = new Date();
-    if (matchingCoupon.expiresAt && new Date(matchingCoupon.expiresAt) < now) {
-      toast.error(`Coupon ${code} has expired.`);
-      return;
+    if (matchingCoupon.expiresAt) {
+      const expDate = new Date(matchingCoupon.expiresAt);
+      if (!isNaN(expDate.getTime()) && expDate < now) {
+        toast.error(`Coupon ${code} has expired.`);
+        return;
+      }
     }
 
     let discount = 0;
@@ -181,8 +184,10 @@ export default function Cart() {
         discount = matchingCoupon.maxDiscountAmount;
       }
     } else {
-      discount = Number(matchingCoupon.discountValue) || 50;
+      const flatDiscount = Number(matchingCoupon.discountValue) || 50;
+      discount = Math.min(flatDiscount, total);
     }
+    discount = Math.min(discount, total);
 
     setAppliedCoupon({ code, discount });
     setShowCouponInput(false);
@@ -197,8 +202,8 @@ export default function Cart() {
   };
 
   const subtotal = total;
-  const couponDiscount = appliedCoupon ? appliedCoupon.discount : 0;
-  const deliveryFee = subtotal >= 500 ? 0 : 40;
+  const couponDiscount = appliedCoupon ? Math.min(appliedCoupon.discount, subtotal) : 0;
+  const deliveryFee = subtotal >= 500 ? 0 : 30;
   const taxes = Math.round(subtotal * 0.05);
   const finalTotal = Math.max(0, subtotal - couponDiscount) + deliveryFee + taxes;
 

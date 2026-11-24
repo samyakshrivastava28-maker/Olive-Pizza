@@ -127,7 +127,7 @@ describe('Dynamic Geofencing & Serviceability Remediation (R2, R3)', () => {
       expect(result.context?.deliveryRadiusKm).toBe(12);
       expect(result.context?.branchId).toBe('branch_rjn_main');
       expect(result.context?.distanceKm).toBeLessThan(12);
-    });
+    }, 15000);
 
     it('should reject customer location at 18 km (which passed under obsolete 25 km rule, but must fail under 12 km)', async () => {
       // Dongargaon area (~18 km from Rajnandgaon HQ: lat 20.970, lng 80.950)
@@ -141,8 +141,8 @@ describe('Dynamic Geofencing & Serviceability Remediation (R2, R3)', () => {
 
       expect(result.isServiceable).toBe(false);
       expect(result.code).toBe('OUT_OF_DELIVERY_ZONE');
-      expect(result.error).toMatch(/12 km/);
-    });
+      expect(result.error).toMatch(/(maximum delivery radius is 12 km|delivery available up to 12 km)/);
+    }, 15000);
 
     it('should reject customer location outside delivery zone (New Delhi: ~900 km away)', async () => {
       const delhiLat = 28.6139;

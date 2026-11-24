@@ -124,19 +124,20 @@ export default function ProductScene3D({
 
       // ── Renderer ──────────────────────────────────────────────────────────
       let renderer: import("three").WebGLRenderer;
-      const handleContextLost = (event: Event) => {
+      const onContextLost = (event: Event) => {
         event.preventDefault();
         if (!cancelled) setWebGLFailed(true);
       };
 
       try {
-        canvas.addEventListener("webglcontextlost", handleContextLost);
+        canvas.addEventListener("webglcontextlost", onContextLost);
         renderer = new THREE.WebGLRenderer({
           canvas,
           antialias: true,
           alpha: true,
         });
       } catch {
+        canvas.removeEventListener("webglcontextlost", onContextLost);
         setWebGLFailed(true);
         return;
       }
@@ -166,7 +167,7 @@ export default function ProductScene3D({
 
       if (cancelled) {
         texture?.dispose();
-        canvas.removeEventListener("webglcontextlost", handleContextLost);
+        canvas.removeEventListener("webglcontextlost", onContextLost);
         renderer.dispose();
         return;
       }
@@ -180,14 +181,14 @@ export default function ProductScene3D({
         vertexShader: /* glsl */ `
           varying vec2 vUv;
           varying vec3 vNormal;
-          varying vec3 vViewDir;
+          varying vec3 vViewPosition;
 
           void main() {
             vUv = uv;
-            vec4 worldPos = modelMatrix * vec4(position, 1.0);
-            vViewDir = normalize(cameraPosition - worldPos.xyz);
-            vNormal = normalize((modelMatrix * vec4(normal, 0.0)).xyz);
-            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            vNormal = normalize(normalMatrix * normal);
+            vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+            vViewPosition = -mvPosition.xyz;
+            gl_Position = projectionMatrix * mvPosition;
           }
         `,
         fragmentShader: /* glsl */ `
@@ -196,13 +197,15 @@ export default function ProductScene3D({
 
           varying vec2 vUv;
           varying vec3 vNormal;
-          varying vec3 vViewDir;
+          varying vec3 vViewPosition;
 
           void main() {
             vec4 texColor = texture2D(uTexture, vUv);
 
-            // Rim/edge glow + subtle refraction
-            float rim = 1.0 - max(dot(normalize(vNormal), normalize(vViewDir)), 0.0);
+            // Rim/edge glow in consistent view-space coordinates
+            vec3 normal = normalize(vNormal);
+            vec3 viewDir = normalize(vViewPosition);
+            float rim = 1.0 - max(dot(normal, viewDir), 0.0);
             vec3 rimColor = vec3(0.83, 0.68, 0.21); // champagne gold
             
             // Animated shimmer pulse on rim
@@ -309,6 +312,7 @@ export default function ProductScene3D({
         canvas.removeEventListener("pointermove", onPointerMove);
         canvas.removeEventListener("pointerup", onPointerUp);
         canvas.removeEventListener("pointerleave", onPointerUp);
+        canvas.removeEventListener("webglcontextlost", onContextLost);
 
         // Dispose geometries, materials, textures
         discGeometry.dispose();
