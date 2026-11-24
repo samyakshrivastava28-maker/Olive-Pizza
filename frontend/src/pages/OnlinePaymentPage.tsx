@@ -246,6 +246,9 @@ export default function OnlinePaymentPage() {
   const orderContext = location.state?.orderContext as OrderContext | undefined;
 
   const [paymentState, setPaymentState] = useState<PaymentState>('idle');
+  const [activeMethod, setActiveMethod] = useState<string>(
+    orderContext?.paymentMethod || 'razorpay'
+  );
   const [errorMessage, setErrorMessage] = useState('');
   const [retryCount, setRetryCount] = useState(0);
   const MAX_RETRIES = 3;
@@ -392,7 +395,7 @@ export default function OnlinePaymentPage() {
             crust: item.crust || 'normal',
             image: item.image || '',
           })),
-          paymentMethod: orderContext.paymentMethod,
+          paymentMethod: activeMethod,
           deliveryAddress: orderContext.deliveryAddress,
           customerName: orderContext.customerName,
           customerPhone: orderContext.customerPhone,
@@ -413,7 +416,7 @@ export default function OnlinePaymentPage() {
       const intentData = await intentRes.json();
 
       // ── Route by provider ──────────────────────────────────────────────
-      const method = orderContext.paymentMethod;
+      const method = activeMethod;
 
       if (method === 'mock') {
         await handleMockPayment(intentData, token);
@@ -454,7 +457,7 @@ export default function OnlinePaymentPage() {
       setPaymentState('failed');
       if (lockKey) sessionStorage.removeItem(lockKey);
     }
-  }, [orderContext, retryCount, lockKey]);
+  }, [orderContext, retryCount, lockKey, activeMethod]);
 
   // ── Complete Order Submission ───────────────────────────────────────────
   const completeOrderSubmission = async (
@@ -480,7 +483,7 @@ export default function OnlinePaymentPage() {
             image: item.image || '',
             addons: item.addons || [],
           })),
-          paymentMethod: orderContext!.paymentMethod,
+          paymentMethod: activeMethod,
           paymentId: verifiedPaymentId,
           deliveryType: orderContext!.deliveryType || 'delivery',
           address: orderContext!.deliveryAddress || 'Delivery',
@@ -515,9 +518,29 @@ export default function OnlinePaymentPage() {
     token: string
   ) => {
     setPaymentState('processing');
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    const mockProviderPaymentId = 'mock_pay_' + Date.now();
+
+    // Verify on backend to confirm PostgreSQL capture
+    try {
+      if (intentData?.paymentId) {
+        await fetchApi('/api/payment/verify', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            paymentId: intentData.paymentId,
+            providerPaymentId: mockProviderPaymentId,
+          }),
+        });
+      }
+    } catch (vErr) {
+      console.warn('[OnlinePaymentPage] Mock payment verify note:', vErr);
+    }
+
     const confirmedOrderId = await completeOrderSubmission(
-      (intentData?.paymentId as string) || 'PAY_MOCK_' + Date.now(),
+      (intentData?.paymentId as string) || mockProviderPaymentId,
       token
     );
     if (lockKey) sessionStorage.setItem(lockKey, 'done');
@@ -704,8 +727,8 @@ export default function OnlinePaymentPage() {
           </div>
         </div>
         <PaymentBadge
-          method={orderContext.paymentMethod}
-          label={orderContext.paymentMethodLabel}
+          method={activeMethod}
+          label={activeMethod.toUpperCase()}
         />
       </div>
 
@@ -797,6 +820,43 @@ export default function OnlinePaymentPage() {
                   </div>
                 ))}
               </div>
+
+              {/* Gateway Switcher Tabs */}
+              <GlassCard className="p-3">
+                <div className="flex items-center justify-between mb-2 px-1">
+                  <span className="text-[11px] font-bold text-white/50 uppercase tracking-wider">
+                    Payment Gateway
+                  </span>
+                  <span className="text-[10px] text-champagne font-extrabold uppercase">
+                    {activeMethod}
+                  </span>
+                </div>
+                <div className="grid grid-cols-4 gap-1.5">
+                  {[
+                    { id: 'razorpay', label: 'Razorpay', emoji: '💳' },
+                    { id: 'phonepe', label: 'PhonePe', emoji: '📱' },
+                    { id: 'cashfree', label: 'Cashfree', emoji: '💸' },
+                    { id: 'mock', label: 'Test Mode', emoji: '🧪' },
+                  ].map((gw) => {
+                    const isSelected = activeMethod === gw.id;
+                    return (
+                      <button
+                        key={gw.id}
+                        type="button"
+                        onClick={() => setActiveMethod(gw.id)}
+                        className={`flex flex-col items-center justify-center p-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-champagne/20 text-champagne border border-champagne/50 shadow-sm'
+                            : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white border border-transparent'
+                        }`}
+                      >
+                        <span className="text-base mb-0.5">{gw.emoji}</span>
+                        <span className="text-[10px] truncate max-w-full">{gw.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </GlassCard>
 
               {/* Pay Now Button */}
               <motion.button

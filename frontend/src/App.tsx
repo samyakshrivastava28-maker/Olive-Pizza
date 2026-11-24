@@ -238,6 +238,7 @@ function AppContent() {
                 <Route path="/cart" element={<Cart />} />
                 <Route path="/offers" element={<Offers />} />
                 <Route path="/checkout" element={<Checkout />} />
+                <Route path="/checkout/payment" element={<Suspense fallback={<PizzaLoader />}><OnlinePaymentPage /></Suspense>} />
                 <Route path="/online-payment" element={<Suspense fallback={<PizzaLoader />}><OnlinePaymentPage /></Suspense>} />
                 <Route path="/recheck-order" element={<RecheckOrder />} />
                 <Route path="/processing-order" element={<ProcessingOrder />} />

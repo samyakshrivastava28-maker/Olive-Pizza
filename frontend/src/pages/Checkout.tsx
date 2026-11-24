@@ -470,7 +470,7 @@ export default function Checkout() {
         branchId: cachedContext?.branchId || undefined
       };
 
-      navigate('/online-payment', {
+      navigate('/checkout/payment', {
         state: { orderContext }
       });
       return;
