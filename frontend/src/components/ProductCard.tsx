@@ -114,7 +114,7 @@ export default memo(function ProductCard({
     }
   };
 
-  const isPizza = item.category === 'pizza' || item.name.toLowerCase().includes('pizza');
+  const isPizza = item.category === 'pizza' || ((item.name || '').toLowerCase().includes('pizza'));
   const ratingValue =
     typeof (item as any).rating === 'number' && (item as any).rating > 0
       ? (item as any).rating.toFixed(1)

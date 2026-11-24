@@ -156,16 +156,16 @@ export default function Menu() {
       .filter((data) => !data.isComboOnly)
       .map((data) => ({
         id: data.id,
-        name: data.productName,
+        name: (data as any).name || data.productName || 'Special Item',
         description: data.description,
         category: data.category,
         pricingMode: data.pricingMode || "fixed",
-        basePrice: data.basePrice,
+        basePrice: data.basePrice ?? (data as any).price ?? 0,
         offerPrice: data.offerPrice || 0,
         discountPercentage: data.discountPercentage || 0,
-        image: data.imageUrl,
+        image: (data as any).image || data.imageUrl || '',
         isVegetarian: data.isVegetarian,
-        isAvailable: data.isActive,
+        isAvailable: data.isActive !== undefined ? data.isActive : ((data as any).isAvailable !== undefined ? (data as any).isAvailable : true),
       } as MenuItem));
 
     const parsedCombos = combos.map((data) => ({
